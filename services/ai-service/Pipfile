@@ -1,0 +1,23 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+fastapi = "*"
+uvicorn = {extras = ["standard"], version = "*"}
+pydantic = "*"
+python-dotenv = "*"
+redis = "*"
+numpy = "*"
+scikit-learn = "*"
+aiohttp = "*"
+pika = "*"
+
+[dev-packages]
+pytest = "*"
+pytest-asyncio = "*"
+httpx = "*"
+
+[requires]
+python_version = "3.11"

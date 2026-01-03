@@ -1,0 +1,281 @@
+version: '3.8'
+
+# Docker Swarm Stack for Production Deployment
+# Deploy: docker stack deploy -c docker-stack.yml cab-booking
+
+services:
+  # ============ Infrastructure ============
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER_FILE: /run/secrets/postgres_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: cab_booking
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    secrets:
+      - postgres_user
+      - postgres_password
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  mongodb:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_user
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_password
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - backend
+    secrets:
+      - mongo_user
+      - mongo_password
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbit}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-rabbit123}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ============ Microservices ============
+  api-gateway:
+    image: ${REGISTRY:-localhost:5000}/cab-api-gateway:${TAG:-latest}
+    ports:
+      - "80:3000"
+      - "443:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    env_file:
+      - ./env/gateway.env
+    networks:
+      - frontend
+      - backend
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.api.rule=Host(`api.cabbooking.local`)"
+
+  auth-service:
+    image: ${REGISTRY:-localhost:5000}/cab-auth-service:${TAG:-latest}
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    env_file:
+      - ./env/auth.env
+    networks:
+      - backend
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  ride-service:
+    image: ${REGISTRY:-localhost:5000}/cab-ride-service:${TAG:-latest}
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+    env_file:
+      - ./env/ride.env
+    networks:
+      - backend
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  driver-service:
+    image: ${REGISTRY:-localhost:5000}/cab-driver-service:${TAG:-latest}
+    environment:
+      - NODE_ENV=production
+      - PORT=3003
+    env_file:
+      - ./env/driver.env
+    networks:
+      - backend
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  payment-service:
+    image: ${REGISTRY:-localhost:5000}/cab-payment-service:${TAG:-latest}
+    environment:
+      - NODE_ENV=production
+      - PORT=3004
+    env_file:
+      - ./env/payment.env
+    networks:
+      - backend
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  notification-service:
+    image: ${REGISTRY:-localhost:5000}/cab-notification-service:${TAG:-latest}
+    environment:
+      - NODE_ENV=production
+      - PORT=3005
+    env_file:
+      - ./env/notification.env
+    networks:
+      - backend
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  ai-service:
+    image: ${REGISTRY:-localhost:5000}/cab-ai-service:${TAG:-latest}
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3006
+    env_file:
+      - ./env/ai.env
+    networks:
+      - backend
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+  # ============ Monitoring ============
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - monitoring
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3100:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - monitoring
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+volumes:
+  postgres_data:
+  mongo_data:
+  redis_data:
+  rabbitmq_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  frontend:
+    driver: overlay
+  backend:
+    driver: overlay
+    internal: true
+  monitoring:
+    driver: overlay
+
+secrets:
+  postgres_user:
+    external: true
+  postgres_password:
+    external: true
+  mongo_user:
+    external: true
+  mongo_password:
+    external: true

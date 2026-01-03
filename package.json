@@ -1,0 +1,38 @@
+{
+  "name": "cab-booking-system",
+  "version": "1.0.0",
+  "description": "Cab Booking System - Microservices Architecture",
+  "private": true,
+  "workspaces": [
+    "services/*",
+    "frontend/*",
+    "shared/*"
+  ],
+  "scripts": {
+    "dev:auth": "npm -w services/auth-service run dev",
+    "dev:ride": "npm -w services/ride-service run dev",
+    "dev:driver": "npm -w services/driver-service run dev",
+    "dev:payment": "npm -w services/payment-service run dev",
+    "dev:notification": "npm -w services/notification-service run dev",
+    "dev:gateway": "npm -w services/api-gateway run dev",
+    "dev:ai": "cd services/ai-service && uvicorn app.main:app --reload --port 3006",
+    "dev:frontend:customer": "npm -w frontend/customer-app run dev",
+    "dev:frontend:driver": "npm -w frontend/driver-app run dev",
+    "dev:frontend:admin": "npm -w frontend/admin-dashboard run dev",
+    "test": "npm run test --workspaces --if-present",
+    "test:ride": "npm -w services/ride-service run test",
+    "test:auth": "npm -w services/auth-service run test",
+    "test:shared": "npm -w shared run test",
+    "test:coverage": "npm run test --workspaces --if-present -- --coverage",
+    "build": "npm run build --workspaces --if-present",
+    "build:services": "npm -w services/auth-service run build && npm -w services/ride-service run build && npm -w services/driver-service run build && npm -w services/payment-service run build && npm -w services/notification-service run build && npm -w services/api-gateway run build",
+    "lint": "eslint . --ext .ts,.tsx",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:build": "docker-compose build"
+  },
+  "keywords": ["microservices", "cab-booking", "nodejs", "fastapi", "docker"],
+  "author": "KLTN2025",
+  "license": "MIT"
+}
