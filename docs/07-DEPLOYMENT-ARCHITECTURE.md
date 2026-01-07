@@ -57,12 +57,13 @@ Network:
 ### 7.3.2. Network segmentation
 
 Trong Swarm:
-- `public_net`: dành cho gateway expose port
-- `internal_net` (overlay): services nội bộ giao tiếp
+- `frontend` (overlay): lớp edge, nơi gateway expose port
+- `backend` (overlay, internal): services nội bộ + databases giao tiếp
+- `monitoring` (overlay): observability stack (Prometheus/Grafana)
 
 Nguyên tắc:
-- Database không expose ra `public_net`
-- Chỉ API Gateway và Notification WS endpoint public
+- Database không expose ra network public
+- Chỉ API Gateway (và WebSocket endpoint nếu tách riêng) được publish port ra ngoài
 
 ---
 
@@ -161,9 +162,9 @@ Ví dụ lược giản `docker-stack.yml` (minh họa các ý chính):
 version: "3.8"
 
 networks:
-  public_net:
+  frontend:
     driver: overlay
-  internal_net:
+  backend:
     driver: overlay
 
 services:
@@ -171,7 +172,7 @@ services:
     image: your-registry/api-gateway:latest
     ports:
       - "80:8080"
-    networks: [public_net, internal_net]
+    networks: [frontend, backend]
     deploy:
       replicas: 2
       update_config:
@@ -182,23 +183,23 @@ services:
 
   ride-service:
     image: your-registry/ride-service:latest
-    networks: [internal_net]
+    networks: [backend]
     deploy:
       replicas: 2
 
   notification-service:
     image: your-registry/notification-service:latest
-    networks: [public_net, internal_net]
+    networks: [frontend, backend]
     deploy:
       replicas: 2
 
   redis:
     image: redis:7
-    networks: [internal_net]
+    networks: [backend]
 
   rabbitmq:
     image: rabbitmq:3-management
-    networks: [internal_net]
+    networks: [backend]
 ```
 
 Lưu ý: File trên dùng để mô tả kiến trúc; triển khai thực tế cần bổ sung volumes/secrets/healthchecks.

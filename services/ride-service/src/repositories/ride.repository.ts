@@ -1,4 +1,16 @@
-import { Ride, RideStatus, Prisma, PrismaClient } from '@prisma/client';
+import { Ride, RideStatus, Prisma } from '@prisma/client';
+
+type RideDelegateLike = {
+  findUnique: (...args: any[]) => Promise<any>;
+  findFirst: (...args: any[]) => Promise<any>;
+  findMany: (...args: any[]) => Promise<any>;
+  create: (...args: any[]) => Promise<any>;
+  update: (...args: any[]) => Promise<any>;
+  count: (...args: any[]) => Promise<any>;
+  aggregate: (...args: any[]) => Promise<any>;
+};
+
+type PrismaClientLike = { ride: RideDelegateLike };
 
 export interface IRideRepository {
   findById(id: string): Promise<Ride | null>;
@@ -13,7 +25,7 @@ export interface IRideRepository {
 }
 
 export class RideRepository implements IRideRepository {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaClientLike) {}
 
   async findById(id: string): Promise<Ride | null> {
     return this.prisma.ride.findUnique({

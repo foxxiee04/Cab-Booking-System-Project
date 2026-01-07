@@ -15,35 +15,40 @@
 ## 4.2. State Machine của Ride (CORE)
 
 Trạng thái chính:
-- `Pending` → `Accepted` → `InProgress` → `Completed`
-- `Pending` → `Cancelled`
-- `Accepted` → `Cancelled` (theo policy)
+- `PENDING` → `ASSIGNED` → `ACCEPTED` → `IN_PROGRESS` → `COMPLETED`
+- `PENDING/ASSIGNED/ACCEPTED` → `CANCELLED` (theo policy)
 
 ASCII state diagram:
 
 ```
           ┌──────────┐
-          │  Pending │
+    │  PENDING │
           └────┬─────┘
-               │ Assign + Accept
+      │ Assign driver
                ▼
+    ┌───────────┐
+    │ ASSIGNED  │
+    └────┬──────┘
+      │ Driver accepts
+      ▼
           ┌──────────┐
-          │ Accepted │
+    │ ACCEPTED │
           └────┬─────┘
                │ Start ride
                ▼
         ┌─────────────┐
-        │ InProgress  │
+     │ IN_PROGRESS │
         └──────┬──────┘
                │ Complete ride
                ▼
           ┌──────────┐
-          │ Completed│
+    │ COMPLETED│
           └──────────┘
 
 Cancel transitions:
-- Pending → Cancelled
-- Accepted → Cancelled
+- PENDING → CANCELLED
+- ASSIGNED → CANCELLED
+- ACCEPTED → CANCELLED
 ```
 
 ---
@@ -82,7 +87,7 @@ API Gateway (JWT verify)
   │ 2) forward request
   ▼
 Ride Service
-  │ 3) create Ride(Pending)
+  │ 3) create Ride(PENDING)
   │ 4) publish RideCreated
   │ 5) publish RideAssignmentRequested
   ├───────────────► RabbitMQ ────────────────┐
@@ -125,9 +130,9 @@ Nếu AI Service timeout/lỗi:
 
 1) Driver UI gửi `POST /api/rides/{rideId}/accept`
 2) Ride Service kiểm tra:
-- ride đang ở trạng thái `Pending/Assigned` (tùy mô hình)
+- ride đang ở trạng thái `PENDING/ASSIGNED`
 - driverId khớp với driver được assign
-3) Ride Service cập nhật `Accepted`, publish `RideAccepted`
+3) Ride Service cập nhật `ACCEPTED`, publish `RideAccepted`
 4) Notification push tới Customer: “Driver accepted”
 5) Driver Service set driver Busy (sync API) hoặc async event `DriverBecameBusy`
 
@@ -166,13 +171,13 @@ Nếu AI Service timeout/lỗi:
 ### 4.7.1. Start ride
 
 1) Driver UI gọi `POST /api/rides/{rideId}/start`
-2) Ride Service chuyển trạng thái `InProgress`, publish `RideStarted`
+2) Ride Service chuyển trạng thái `IN_PROGRESS`, publish `RideStarted`
 3) Notification push tới customer
 
 ### 4.7.2. Complete ride
 
 1) Driver UI gọi `POST /api/rides/{rideId}/complete`
-2) Ride Service chuyển `Completed`, publish `RideCompleted`
+2) Ride Service chuyển `COMPLETED`, publish `RideCompleted`
 3) Payment Service consume `RideCompleted`:
 - tính cước (fare)
 - tạo payment
@@ -215,7 +220,7 @@ Nếu payment gateway mô phỏng trả chậm:
 ### 4.9.1. Customer hủy khi Pending
 
 1) UI `POST /api/rides/{rideId}/cancel`
-2) Ride Service set `Cancelled`, publish `RideCancelled`
+2) Ride Service set `CANCELLED`, publish `RideCancelled`
 3) Driver Service nếu đã assign: release driver
 4) Notification push thông báo
 

@@ -45,6 +45,67 @@ async function main() {
   // Initialize services
   const driverService = new DriverService(redis, eventPublisher);
 
+  // Internal routes (service-to-service) protected by INTERNAL_SERVICE_TOKEN
+  app.use('/internal', (req, res, next) => {
+    const required = process.env.INTERNAL_SERVICE_TOKEN;
+    if (!required) {
+      return res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_TOKEN_NOT_CONFIGURED', message: 'INTERNAL_SERVICE_TOKEN not configured' },
+      });
+    }
+
+    const provided = req.header('x-internal-token');
+    if (provided !== required) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Invalid internal token' },
+      });
+    }
+
+    next();
+  });
+
+  app.get('/internal/drivers/by-user/:userId', async (req, res) => {
+    try {
+      const driver = await driverService.getDriverByUserId(req.params.userId);
+      if (!driver) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Driver not found' },
+        });
+      }
+
+      res.json({ success: true, data: { driver } });
+    } catch (err) {
+      logger.error('Internal get driver by user error:', err);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get driver' },
+      });
+    }
+  });
+
+  app.get('/internal/drivers/:driverId', async (req, res) => {
+    try {
+      const driver = await driverService.getDriverById(req.params.driverId);
+      if (!driver) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Driver not found' },
+        });
+      }
+
+      res.json({ success: true, data: { driver } });
+    } catch (err) {
+      logger.error('Internal get driver error:', err);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get driver' },
+      });
+    }
+  });
+
   // Initialize event consumer
   const eventConsumer = new EventConsumer(driverService);
   await eventConsumer.connect();

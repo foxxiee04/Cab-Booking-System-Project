@@ -7,6 +7,7 @@ import { logger } from './utils/logger';
 import { EventPublisher } from './events/publisher';
 import { AuthService } from './services/auth.service';
 import { createAuthRouter } from './routes/auth.routes';
+import { User } from './models/user.model';
 
 async function main() {
   const app = express();
@@ -19,6 +20,46 @@ async function main() {
   // Health check
   app.get('/health', (_, res) => {
     res.json({ status: 'ok', service: config.serviceName });
+  });
+
+  // Internal routes (service-to-service) protected by INTERNAL_SERVICE_TOKEN
+  app.use('/internal', (req, res, next) => {
+    const required = process.env.INTERNAL_SERVICE_TOKEN;
+    if (!required) {
+      return res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_TOKEN_NOT_CONFIGURED', message: 'INTERNAL_SERVICE_TOKEN not configured' },
+      });
+    }
+
+    const provided = req.header('x-internal-token');
+    if (!provided || provided !== required) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED_INTERNAL', message: 'Invalid internal token' },
+      });
+    }
+
+    next();
+  });
+
+  app.get('/internal/users/:userId', async (req, res) => {
+    try {
+      const user = await User.findById(req.params.userId).select('-passwordHash').lean();
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'USER_NOT_FOUND', message: 'User not found' },
+        });
+      }
+      return res.json({ success: true, data: { user } });
+    } catch (error) {
+      logger.error('Internal get user failed:', error);
+      return res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
+      });
+    }
   });
 
   // Connect to MongoDB

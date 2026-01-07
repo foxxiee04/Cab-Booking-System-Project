@@ -28,7 +28,7 @@ class RedisClient:
         
         try:
             results = await self.client.georadius(
-                "drivers:locations",
+                "drivers:geo:online",
                 lng, lat,
                 radius_km, unit="km",
                 withdist=True,

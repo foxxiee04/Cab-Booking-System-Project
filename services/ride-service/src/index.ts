@@ -40,6 +40,47 @@ async function main() {
   // Initialize services
   const rideService = new RideService(prisma, eventPublisher);
 
+  // Internal routes (service-to-service) protected by INTERNAL_SERVICE_TOKEN
+  app.use('/internal', (req, res, next) => {
+    const required = process.env.INTERNAL_SERVICE_TOKEN;
+    if (!required) {
+      return res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_TOKEN_NOT_CONFIGURED', message: 'INTERNAL_SERVICE_TOKEN not configured' },
+      });
+    }
+
+    const provided = req.header('x-internal-token');
+    if (provided !== required) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Invalid internal token' },
+      });
+    }
+
+    next();
+  });
+
+  app.get('/internal/rides/:rideId', async (req, res) => {
+    try {
+      const ride = await rideService.getRideById(req.params.rideId);
+      if (!ride) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Ride not found' },
+        });
+      }
+
+      res.json({ success: true, data: { ride } });
+    } catch (err) {
+      logger.error('Internal get ride error:', err);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get ride' },
+      });
+    }
+  });
+
   // Routes
   app.use('/api/rides', authenticate, createRideRouter(rideService));
 

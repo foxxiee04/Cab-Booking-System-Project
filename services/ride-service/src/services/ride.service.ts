@@ -48,7 +48,7 @@ export class RideService {
         `${config.services.ai}/api/ride/estimate`,
         {
           pickup: { lat: input.pickup.lat, lng: input.pickup.lng },
-          dropoff: { lat: input.dropoff.lat, lng: input.dropoff.lng },
+          destination: { lat: input.dropoff.lat, lng: input.dropoff.lng },
         },
         { timeout: 800 }
       );
@@ -56,7 +56,8 @@ export class RideService {
       surgeMultiplier = aiResponse.data.surge_multiplier || 1.0;
       estimatedFare = aiResponse.data.estimated_fare || 0;
       distance = aiResponse.data.distance_km || 0;
-      duration = aiResponse.data.duration_seconds || 0;
+      // AI returns minutes; Ride schema stores seconds
+      duration = (aiResponse.data.duration_minutes || 0) * 60;
     } catch (error) {
       logger.warn('AI service unavailable, using fallback calculation');
       // Fallback: simple distance calculation

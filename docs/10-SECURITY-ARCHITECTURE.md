@@ -68,8 +68,8 @@ Zero Trust nhấn mạnh:
 - mỗi service chỉ có quyền truy cập đúng dependency cần thiết
 
 3) **Segmentation**
-- public_net chỉ expose gateway/ws
-- internal_net cho service-to-service
+- `frontend` chỉ expose gateway/ws (publish ports)
+- `backend` cho service-to-service (internal overlay)
 - database không public
 
 4) **Continuous verification**
@@ -83,7 +83,7 @@ Trong Swarm, có thể mô tả 2 chiến lược:
 
 ### 10.6.1. Shared internal network + service authentication
 
-- Services chỉ giao tiếp qua `internal_net`
+- Services chỉ giao tiếp qua `backend`
 - Mỗi service gọi nhau kèm “service token” (JWT nội bộ) do Auth hoặc hệ thống cấp
 
 Ưu: dễ mô tả/triển khai.

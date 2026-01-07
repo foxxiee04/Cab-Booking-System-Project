@@ -1,5 +1,6 @@
 import { connect } from 'amqplib';
 import type { Channel, Connection, ConsumeMessage } from 'amqplib';
+import axios from 'axios';
 import { config } from '../config';
 import { SocketManager } from '../socket/socket-manager';
 import { logger } from '../utils/logger';
@@ -77,6 +78,63 @@ export class EventConsumer {
     });
   }
 
+  private getInternalHeaders(): Record<string, string> {
+    if (!config.internalToken) return {};
+    return { 'x-internal-token': config.internalToken };
+  }
+
+  private async fetchRideInternal(rideId: string): Promise<any | null> {
+    try {
+      const res = await axios.get(`${config.services.ride}/internal/rides/${rideId}`, {
+        headers: this.getInternalHeaders(),
+        timeout: 1500,
+      });
+      return res.data?.data?.ride ?? res.data?.ride ?? null;
+    } catch (err) {
+      logger.warn('Failed to fetch ride internal data', { rideId, error: err instanceof Error ? err.message : err });
+      return null;
+    }
+  }
+
+  private async fetchDriverInternal(driverIdOrUserId: string): Promise<any | null> {
+    const headers = this.getInternalHeaders();
+
+    // Try by userId first (most likely in this codebase)
+    try {
+      const res = await axios.get(`${config.services.driver}/internal/drivers/by-user/${driverIdOrUserId}`, {
+        headers,
+        timeout: 1500,
+      });
+      return res.data?.data?.driver ?? res.data?.driver ?? null;
+    } catch {
+      // ignore and try by driverId
+    }
+
+    try {
+      const res = await axios.get(`${config.services.driver}/internal/drivers/${driverIdOrUserId}`, {
+        headers,
+        timeout: 1500,
+      });
+      return res.data?.data?.driver ?? res.data?.driver ?? null;
+    } catch (err) {
+      logger.warn('Failed to fetch driver internal data', { driverIdOrUserId, error: err instanceof Error ? err.message : err });
+      return null;
+    }
+  }
+
+  private async fetchUserInternal(userId: string): Promise<any | null> {
+    try {
+      const res = await axios.get(`${config.services.auth}/internal/users/${userId}`, {
+        headers: this.getInternalHeaders(),
+        timeout: 1500,
+      });
+      return res.data?.data?.user ?? res.data?.user ?? null;
+    } catch (err) {
+      logger.warn('Failed to fetch user internal data', { userId, error: err instanceof Error ? err.message : err });
+      return null;
+    }
+  }
+
   private handleEvent(eventType: string, payload: any): void {
     switch (eventType) {
       case 'ride.created':
@@ -123,23 +181,54 @@ export class EventConsumer {
   }
 
   private handleRideAssigned(payload: any): void {
-    // Notify customer
-    this.socketManager.emitToUser(payload.customerId, 'ride:driver_assigned', {
-      rideId: payload.rideId,
-      driverId: payload.driverId,
-      driverName: payload.driverName,
-      driverPhone: payload.driverPhone,
-      vehicleInfo: payload.vehicleInfo,
-      eta: payload.eta,
-    });
+    // Enrich from Ride/Driver services (internal) then emit
+    void (async () => {
+      const rideId = payload.rideId;
+      const driverId = payload.driverId;
+      const customerId = payload.customerId;
 
-    // Notify driver
-    this.socketManager.emitToUser(payload.driverId, 'ride:assigned', {
-      rideId: payload.rideId,
-      customerId: payload.customerId,
-      pickup: payload.pickup,
-      destination: payload.destination,
-    });
+      const ridePromise = rideId ? this.fetchRideInternal(rideId) : Promise.resolve(null);
+      const driverPromise = driverId ? this.fetchDriverInternal(driverId) : Promise.resolve(null);
+
+      const [ride, driver] = await Promise.all([ridePromise, driverPromise]);
+
+      const user = driver?.userId ? await this.fetchUserInternal(driver.userId) : null;
+
+      const pickup = ride
+        ? { lat: ride.pickupLat, lng: ride.pickupLng, address: ride.pickupAddress }
+        : payload.pickup;
+
+      const dropoff = ride
+        ? { lat: ride.dropoffLat, lng: ride.dropoffLng, address: ride.dropoffAddress }
+        : payload.dropoff;
+
+      const driverName =
+        user?.profile?.firstName || user?.profile?.lastName
+          ? `${user?.profile?.firstName ?? ''} ${user?.profile?.lastName ?? ''}`.trim()
+          : user?.email || payload.driverName;
+
+      const driverPhone = user?.phone || payload.driverPhone;
+      const vehicleInfo = driver?.vehicle || payload.vehicleInfo;
+
+      // Notify customer
+      this.socketManager.emitToUser(customerId, 'ride:driver_assigned', {
+        rideId,
+        driverId,
+        driverName,
+        driverPhone,
+        vehicleInfo,
+        pickup,
+        dropoff,
+      });
+
+      // Notify driver
+      this.socketManager.emitToUser(driverId, 'ride:assigned', {
+        rideId,
+        customerId,
+        pickup,
+        dropoff,
+      });
+    })();
   }
 
   private handleRideAccepted(payload: any): void {
