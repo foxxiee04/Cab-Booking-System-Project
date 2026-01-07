@@ -4,9 +4,10 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 
 export interface JwtPayload {
-  userId: string;
-  email: string;
-  role: string;
+  userId?: string;
+  sub?: string;
+  email?: string;
+  role?: string;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -48,12 +49,21 @@ export const authMiddleware = (
 
   try {
     const decoded = jwt.verify(token, config.jwtSecret) as JwtPayload;
-    req.user = decoded;
+    const userId = decoded.userId || decoded.sub;
+    const email = decoded.email;
+    const role = decoded.role;
+
+    if (!userId || !role) {
+      res.status(401).json({ success: false, message: 'Invalid or expired token' });
+      return;
+    }
+
+    req.user = { userId, email: email || '', role };
     
     // Add user info to headers for downstream services
-    req.headers['x-user-id'] = decoded.userId;
-    req.headers['x-user-email'] = decoded.email;
-    req.headers['x-user-role'] = decoded.role;
+    req.headers['x-user-id'] = userId;
+    if (email) req.headers['x-user-email'] = email;
+    req.headers['x-user-role'] = role;
     
     next();
   } catch (error) {
@@ -70,7 +80,8 @@ export const requireRole = (...roles: string[]) => {
       return;
     }
 
-    if (!roles.includes(req.user.role)) {
+    const role = req.user.role;
+    if (!role || !roles.includes(role)) {
       res.status(403).json({ success: false, message: 'Insufficient permissions' });
       return;
     }

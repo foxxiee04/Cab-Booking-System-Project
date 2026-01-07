@@ -25,9 +25,6 @@ app.use(morgan('combined', {
 // Rate limiting
 app.use(generalLimiter);
 
-// Parse JSON for non-proxy routes
-app.use(express.json({ limit: '10mb' }));
-
 // Health check (before auth)
 app.get('/health', (req, res) => {
   res.json({
@@ -63,6 +60,9 @@ app.use(authMiddleware);
 
 // Proxy routes to microservices
 app.use(proxyRoutes);
+
+// Parse JSON for any non-proxy routes below (avoid consuming body before proxying)
+app.use(express.json({ limit: '10mb' }));
 
 // 404 handler
 app.use((req, res) => {

@@ -21,7 +21,7 @@ RUN npx prisma generate
 COPY . .
 
 # Build TypeScript
-RUN npm run build
+RUN npm run build && cp -r src/generated dist/
 
 EXPOSE 3004
 

@@ -27,8 +27,24 @@ export const authMiddleware = (
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, config.jwt.secret) as JwtPayload;
-    req.user = decoded;
+    const decoded = jwt.verify(token, config.jwt.secret) as jwt.JwtPayload & {
+      userId?: string;
+      sub?: string;
+      email?: string;
+      role?: string;
+    };
+
+    const userId = decoded.userId ?? (typeof decoded.sub === 'string' ? decoded.sub : undefined);
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Invalid or expired token' });
+      return;
+    }
+
+    req.user = {
+      userId,
+      email: decoded.email ?? '',
+      role: decoded.role ?? '',
+    };
     next();
   } catch {
     res.status(401).json({ success: false, message: 'Invalid or expired token' });
