@@ -1,4 +1,4 @@
-import { PrismaClient, PaymentStatus, PaymentMethod } from '@prisma/client';
+import { PrismaClient, PaymentStatus, PaymentMethod } from '../generated/prisma-client';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { EventPublisher } from '../events/publisher';

@@ -1,4 +1,4 @@
-import { RideStatus } from '@prisma/client';
+import { RideStatus } from '../../generated/prisma-client';
 
 jest.mock('uuid', () => ({
   v4: () => 'ride-1',

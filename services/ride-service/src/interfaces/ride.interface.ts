@@ -1,4 +1,4 @@
-import { RideStatus } from '@prisma/client';
+import { RideStatus } from '../generated/prisma-client';
 
 // Location interface
 export interface ILocation {

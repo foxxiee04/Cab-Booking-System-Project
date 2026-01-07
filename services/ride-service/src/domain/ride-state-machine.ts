@@ -1,4 +1,4 @@
-import { RideStatus } from '@prisma/client';
+import { RideStatus } from '../generated/prisma-client';
 
 // Valid state transitions
 const VALID_TRANSITIONS: Record<RideStatus, RideStatus[]> = {

@@ -122,6 +122,30 @@ export const createRideRouter = (rideService: RideService): Router => {
     }
   });
 
+  // Get driver's rides
+  router.get('/driver/history', async (req: AuthRequest, res: Response) => {
+    try {
+      if (req.user!.role !== 'DRIVER') {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only drivers can access driver rides' },
+        });
+      }
+
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+
+      const { rides, total } = await rideService.getDriverRides(req.user!.userId, page, limit);
+      res.json({ success: true, data: { rides }, meta: { page, limit, total } });
+    } catch (err) {
+      logger.error('Get driver rides error:', err);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get rides' },
+      });
+    }
+  });
+
   // Accept ride (Driver)
   router.post('/:rideId/accept', async (req: AuthRequest, res: Response) => {
     try {

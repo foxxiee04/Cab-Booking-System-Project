@@ -57,19 +57,19 @@ class ApiClient {
 
   // Driver
   async goOnline() {
-    return this.client.post('/api/drivers/online');
+    return this.client.post('/api/drivers/me/online');
   }
 
   async goOffline() {
-    return this.client.post('/api/drivers/offline');
+    return this.client.post('/api/drivers/me/offline');
   }
 
   async updateLocation(lat: number, lng: number) {
-    return this.client.put('/api/drivers/location', { lat, lng });
+    return this.client.post('/api/drivers/me/location', { lat, lng });
   }
 
   async getDriverStatus() {
-    return this.client.get('/api/drivers/status');
+    return this.client.get('/api/drivers/me');
   }
 
   // Rides
@@ -90,7 +90,11 @@ class ApiClient {
   }
 
   async getCurrentRide() {
-    return this.client.get('/api/rides/current');
+    return this.client.get('/api/rides/driver/active');
+  }
+
+  async getRideHistory(page = 1, limit = 20) {
+    return this.client.get(`/api/rides/driver/history?page=${page}&limit=${limit}`);
   }
 
   // Earnings

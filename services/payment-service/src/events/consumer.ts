@@ -1,5 +1,5 @@
 import amqp, { Channel, Connection, ConsumeMessage } from 'amqplib';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../generated/prisma-client';
 import { config } from '../config';
 import { PaymentService } from '../services/payment.service';
 import { EventPublisher } from './publisher';

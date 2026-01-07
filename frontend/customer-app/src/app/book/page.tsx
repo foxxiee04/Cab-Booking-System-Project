@@ -2,11 +2,16 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/stores/auth-store';
 import { useRideStore } from '@/stores/ride-store';
 import { apiClient } from '@/lib/api-client';
 import { socketClient } from '@/lib/socket-client';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { 
   MapPin, 
   Navigation, 
@@ -169,15 +174,19 @@ export default function BookPage() {
 
     try {
       const response = await apiClient.createRide({
-        pickupLat: ride.pickup.lat,
-        pickupLng: ride.pickup.lng,
-        pickupAddress: ride.pickup.address || pickupInput,
-        destinationLat: ride.destination.lat,
-        destinationLng: ride.destination.lng,
-        destinationAddress: ride.destination.address || destinationInput,
+        pickup: {
+          lat: ride.pickup.lat,
+          lng: ride.pickup.lng,
+          address: ride.pickup.address || pickupInput,
+        },
+        dropoff: {
+          lat: ride.destination.lat,
+          lng: ride.destination.lng,
+          address: ride.destination.address || destinationInput,
+        },
       });
 
-      ride.setRideCreated(response.data.data.id);
+      ride.setRideCreated(response.data.data.ride.id);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Không thể đặt xe');
       ride.reset();
@@ -235,14 +244,24 @@ export default function BookPage() {
           <Car className="w-6 h-6" />
           <span className="font-bold">CabBooking</span>
         </div>
+        <div className="flex items-center gap-2">
+          <Link href="/rides">
+            <Button variant="ghost" size="sm">Lịch sử chuyến</Button>
+          </Link>
+          <Link href="/payments">
+            <Button variant="ghost" size="sm">Thanh toán</Button>
+          </Link>
+        </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600">Xin chào, {user?.name}</span>
-          <button
+          <Button
             onClick={handleLogout}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition"
+            variant="ghost"
+            size="sm"
+            className="h-10 w-10 p-0 text-gray-500 hover:text-gray-700"
           >
             <LogOut className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -267,19 +286,21 @@ export default function BookPage() {
                 </label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-500" />
-                  <input
+                  <Input
                     type="text"
                     value={pickupInput}
                     onChange={(e) => setPickupInput(e.target.value)}
-                    className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                    className="pl-10 pr-10"
                     placeholder="Chọn điểm đón"
                   />
-                  <button
+                  <Button
                     onClick={getCurrentLocation}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-primary-500"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 p-0 text-gray-400 hover:text-primary-500"
                   >
                     <Navigation className="w-5 h-5" />
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -290,11 +311,11 @@ export default function BookPage() {
                 </label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red-500" />
-                  <input
+                  <Input
                     type="text"
                     value={destinationInput}
                     onChange={(e) => setDestinationInput(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                    className="pl-10"
                     placeholder="Nhập hoặc click trên bản đồ"
                   />
                 </div>
@@ -305,10 +326,11 @@ export default function BookPage() {
 
               {/* Estimate Button */}
               {!ride.estimate && (
-                <button
+                <Button
                   onClick={handleEstimate}
                   disabled={loading || !ride.destination}
-                  className="w-full py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition disabled:opacity-50 flex items-center justify-center gap-2 mb-4"
+                  variant="secondary"
+                  className="w-full mb-4"
                 >
                   {loading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -316,13 +338,14 @@ export default function BookPage() {
                     <Search className="w-5 h-5" />
                   )}
                   Ước tính giá
-                </button>
+                </Button>
               )}
 
               {/* Estimate Result */}
               {ride.estimate && (
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <h3 className="font-semibold text-gray-800 mb-3">Ước tính chuyến đi</h3>
+                <Card className="bg-gray-50 mb-4">
+                  <div className="p-4">
+                    <h3 className="font-semibold text-gray-800 mb-3">Ước tính chuyến đi</h3>
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Khoảng cách:</span>
@@ -345,14 +368,16 @@ export default function BookPage() {
                       </span>
                     </div>
                   </div>
-                </div>
+                  </div>
+                </Card>
               )}
 
               {/* Book Button */}
-              <button
+              <Button
                 onClick={handleBookRide}
                 disabled={loading || !ride.estimate}
-                className="w-full py-4 bg-primary-600 text-white rounded-xl font-bold text-lg hover:bg-primary-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                size="lg"
+                className="w-full rounded-xl font-bold"
               >
                 {ride.status === 'SEARCHING' ? (
                   <>
@@ -365,7 +390,7 @@ export default function BookPage() {
                     Đặt xe ngay
                   </>
                 )}
-              </button>
+              </Button>
             </>
           )}
 
@@ -381,12 +406,13 @@ export default function BookPage() {
               <p className="text-gray-600 mb-6">
                 Vui lòng chờ trong giây lát
               </p>
-              <button
+              <Button
                 onClick={handleCancelRide}
-                className="px-6 py-2 border border-red-500 text-red-500 rounded-lg hover:bg-red-50 transition"
+                variant="ghost"
+                className="border border-red-500 text-red-600 hover:bg-red-50"
               >
                 Hủy chuyến
-              </button>
+              </Button>
             </div>
           )}
 
@@ -394,13 +420,12 @@ export default function BookPage() {
           {(ride.status === 'DRIVER_ARRIVING' || ride.status === 'IN_PROGRESS') && ride.driver && (
             <div>
               <div className="text-center mb-6">
-                <div className={`inline-block px-4 py-1 rounded-full text-sm font-medium ${
-                  ride.status === 'DRIVER_ARRIVING' 
-                    ? 'bg-blue-100 text-blue-700' 
-                    : 'bg-green-100 text-green-700'
-                }`}>
+                <Badge
+                  variant={ride.status === 'DRIVER_ARRIVING' ? 'info' : 'success'}
+                  className="px-4 py-1 text-sm"
+                >
                   {ride.status === 'DRIVER_ARRIVING' ? 'Tài xế đang đến' : 'Đang di chuyển'}
-                </div>
+                </Badge>
               </div>
 
               {/* Driver Info */}
@@ -445,12 +470,13 @@ export default function BookPage() {
               )}
 
               {ride.status === 'DRIVER_ARRIVING' && (
-                <button
+                <Button
                   onClick={handleCancelRide}
-                  className="w-full py-3 border border-red-500 text-red-500 rounded-lg hover:bg-red-50 transition"
+                  variant="ghost"
+                  className="w-full border border-red-500 text-red-600 hover:bg-red-50"
                 >
                   Hủy chuyến
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -467,12 +493,12 @@ export default function BookPage() {
               <p className="text-3xl font-bold text-primary-600 mb-6">
                 {formatCurrency(ride.fare || 0)}
               </p>
-              <button
+              <Button
                 onClick={() => ride.reset()}
-                className="w-full py-3 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition"
+                className="w-full"
               >
                 Đặt chuyến mới
-              </button>
+              </Button>
             </div>
           )}
 
@@ -483,12 +509,13 @@ export default function BookPage() {
                 <X className="w-8 h-8 text-red-600" />
               </div>
               <h2 className="text-xl font-bold text-gray-800 mb-2">Chuyến đi đã hủy</h2>
-              <button
+              <Button
                 onClick={() => ride.reset()}
-                className="mt-4 px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
+                variant="secondary"
+                className="mt-4"
               >
                 Đặt chuyến mới
-              </button>
+              </Button>
             </div>
           )}
         </div>

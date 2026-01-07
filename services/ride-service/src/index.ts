@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from './generated/prisma-client';
 import { config } from './config';
 import { logger } from './utils/logger';
 import { EventPublisher } from './events/publisher';

@@ -2,11 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDriverStore } from '@/stores/driver-store';
 import { apiClient } from '@/lib/api-client';
 import { socketClient } from '@/lib/socket-client';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import {
   Car,
   Power,
@@ -214,21 +218,36 @@ export default function DashboardPage() {
           <Car className="w-6 h-6" />
           <span className="font-bold">Driver</span>
         </div>
+        <div className="flex items-center gap-2">
+          <Link href="/rides">
+            <Button variant="ghost" size="sm">Lịch sử chuyến</Button>
+          </Link>
+          <Link href="/earnings">
+            <Button variant="ghost" size="sm">Thu nhập</Button>
+          </Link>
+        </div>
         <div className="flex items-center gap-4">
-          <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-            driver.status === 'ONLINE' ? 'bg-green-100 text-green-700' :
-            driver.status === 'BUSY' ? 'bg-orange-100 text-orange-700' :
-            'bg-gray-100 text-gray-600'
-          }`}>
+          <Badge
+            variant={
+              driver.status === 'ONLINE'
+                ? 'success'
+                : driver.status === 'BUSY'
+                  ? 'warning'
+                  : 'default'
+            }
+            className="px-3 py-1 text-sm"
+          >
             {driver.status === 'ONLINE' ? 'Đang hoạt động' :
              driver.status === 'BUSY' ? 'Đang có khách' : 'Offline'}
-          </div>
-          <button
+          </Badge>
+          <Button
             onClick={handleLogout}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition"
+            variant="ghost"
+            size="sm"
+            className="h-10 w-10 p-0 text-gray-500 hover:text-gray-700"
           >
             <LogOut className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -237,35 +256,38 @@ export default function DashboardPage() {
         <div className="w-96 bg-white shadow-lg p-6 overflow-y-auto">
           {/* Stats */}
           <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-green-50 rounded-xl p-4">
-              <div className="flex items-center gap-2 text-green-600 mb-1">
-                <DollarSign className="w-5 h-5" />
-                <span className="text-sm">Hôm nay</span>
+            <Card className="bg-green-50 ring-0">
+              <div className="p-4">
+                <div className="flex items-center gap-2 text-green-600 mb-1">
+                  <DollarSign className="w-5 h-5" />
+                  <span className="text-sm">Hôm nay</span>
+                </div>
+                <p className="text-xl font-bold text-green-700">
+                  {formatCurrency(driver.todayEarnings)}
+                </p>
               </div>
-              <p className="text-xl font-bold text-green-700">
-                {formatCurrency(driver.todayEarnings)}
-              </p>
-            </div>
-            <div className="bg-blue-50 rounded-xl p-4">
-              <div className="flex items-center gap-2 text-blue-600 mb-1">
-                <TrendingUp className="w-5 h-5" />
-                <span className="text-sm">Chuyến</span>
+            </Card>
+            <Card className="bg-blue-50 ring-0">
+              <div className="p-4">
+                <div className="flex items-center gap-2 text-blue-600 mb-1">
+                  <TrendingUp className="w-5 h-5" />
+                  <span className="text-sm">Chuyến</span>
+                </div>
+                <p className="text-xl font-bold text-blue-700">
+                  {driver.todayTrips}
+                </p>
               </div>
-              <p className="text-xl font-bold text-blue-700">
-                {driver.todayTrips}
-              </p>
-            </div>
+            </Card>
           </div>
 
           {/* Online/Offline Toggle */}
           {driver.rideStatus === 'NONE' && (
-            <button
+            <Button
               onClick={handleToggleStatus}
               disabled={loading}
-              className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition ${
-                driver.status === 'OFFLINE'
-                  ? 'bg-primary-600 text-white hover:bg-primary-700'
-                  : 'bg-red-500 text-white hover:bg-red-600'
+              size="lg"
+              className={`w-full rounded-xl font-bold text-lg ${
+                driver.status === 'OFFLINE' ? '' : 'bg-red-500 hover:bg-red-600'
               }`}
             >
               {loading ? (
@@ -274,12 +296,12 @@ export default function DashboardPage() {
                 <Power className="w-6 h-6" />
               )}
               {driver.status === 'OFFLINE' ? 'BẮT ĐẦU NHẬN CHUYẾN' : 'KẾT THÚC'}
-            </button>
+            </Button>
           )}
 
           {/* Ride Request */}
           {driver.rideStatus === 'ASSIGNED' && driver.currentRide && (
-            <div className="bg-yellow-50 border-2 border-yellow-400 rounded-xl p-4 animate-pulse">
+            <Card className="bg-yellow-50 border-2 border-yellow-400 ring-0 p-4 animate-pulse">
               <h3 className="font-bold text-yellow-800 mb-3 text-center">
                 CHUYẾN ĐI MỚI!
               </h3>
@@ -308,17 +330,18 @@ export default function DashboardPage() {
               </div>
 
               <div className="flex gap-3">
-                <button
+                <Button
                   onClick={handleDeclineRide}
-                  className="flex-1 py-3 border-2 border-red-500 text-red-500 rounded-lg font-medium hover:bg-red-50 flex items-center justify-center gap-2"
+                  variant="ghost"
+                  className="flex-1 border-2 border-red-500 text-red-600 hover:bg-red-50"
                 >
                   <XCircle className="w-5 h-5" />
                   Từ chối
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleAcceptRide}
                   disabled={loading}
-                  className="flex-1 py-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 flex items-center justify-center gap-2"
+                  className="flex-1 bg-green-500 hover:bg-green-600"
                 >
                   {loading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -326,18 +349,18 @@ export default function DashboardPage() {
                     <CheckCircle className="w-5 h-5" />
                   )}
                   Nhận
-                </button>
+                </Button>
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Picking Up Customer */}
           {driver.rideStatus === 'PICKING_UP' && driver.currentRide && (
-            <div className="bg-blue-50 rounded-xl p-4">
+            <Card className="bg-blue-50 ring-0 p-4">
               <div className="text-center mb-4">
-                <div className="inline-block px-4 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                <Badge variant="info" className="px-4 py-1 text-sm">
                   Đang đón khách
-                </div>
+                </Badge>
               </div>
 
               <div className="bg-white rounded-lg p-4 mb-4">
@@ -366,10 +389,11 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <button
+              <Button
                 onClick={handleStartRide}
                 disabled={loading}
-                className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center gap-2"
+                size="lg"
+                className="w-full rounded-xl font-bold bg-blue-600 hover:bg-blue-700"
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -377,17 +401,17 @@ export default function DashboardPage() {
                   <Navigation className="w-5 h-5" />
                 )}
                 ĐÃ ĐÓN KHÁCH - BẮT ĐẦU
-              </button>
-            </div>
+              </Button>
+            </Card>
           )}
 
           {/* In Progress */}
           {driver.rideStatus === 'IN_PROGRESS' && driver.currentRide && (
-            <div className="bg-green-50 rounded-xl p-4">
+            <Card className="bg-green-50 ring-0 p-4">
               <div className="text-center mb-4">
-                <div className="inline-block px-4 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+                <Badge variant="success" className="px-4 py-1 text-sm">
                   Đang di chuyển
-                </div>
+                </Badge>
               </div>
 
               <div className="bg-white rounded-lg p-4 mb-4">
@@ -400,10 +424,11 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <button
+              <Button
                 onClick={handleCompleteRide}
                 disabled={loading}
-                className="w-full py-4 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 flex items-center justify-center gap-2"
+                size="lg"
+                className="w-full rounded-xl font-bold bg-green-600 hover:bg-green-700"
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -411,8 +436,8 @@ export default function DashboardPage() {
                   <CheckCircle className="w-5 h-5" />
                 )}
                 HOÀN THÀNH CHUYẾN
-              </button>
-            </div>
+              </Button>
+            </Card>
           )}
 
           {/* Completed */}
@@ -425,12 +450,11 @@ export default function DashboardPage() {
               <p className="text-3xl font-bold text-green-600 mb-6">
                 +{formatCurrency(driver.currentRide?.estimatedFare || 0)}
               </p>
-              <button
+              <Button
                 onClick={() => driver.clearRide()}
-                className="px-6 py-3 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700"
               >
                 Tiếp tục nhận chuyến
-              </button>
+              </Button>
             </div>
           )}
         </div>

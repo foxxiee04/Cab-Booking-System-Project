@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../generated/prisma-client';
 import { PaymentService } from '../services/payment.service';
 import { EventPublisher } from '../events/publisher';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth';

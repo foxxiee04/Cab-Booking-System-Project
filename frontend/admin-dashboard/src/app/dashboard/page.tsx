@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/auth-store';
 import { apiClient } from '@/lib/api-client';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 import {
   LayoutDashboard,
   Users,
@@ -69,22 +71,24 @@ export default function DashboardPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      COMPLETED: 'bg-green-100 text-green-700',
-      IN_PROGRESS: 'bg-blue-100 text-blue-700',
-      PENDING: 'bg-yellow-100 text-yellow-700',
-      CANCELLED: 'bg-red-100 text-red-700',
-    };
     const labels: Record<string, string> = {
       COMPLETED: 'Hoàn thành',
       IN_PROGRESS: 'Đang đi',
       PENDING: 'Chờ',
       CANCELLED: 'Đã hủy',
     };
+
+    const variant: Record<string, React.ComponentProps<typeof Badge>['variant']> = {
+      COMPLETED: 'success',
+      IN_PROGRESS: 'info',
+      PENDING: 'warning',
+      CANCELLED: 'danger',
+    };
+
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status]}`}>
-        {labels[status]}
-      </span>
+      <Badge variant={variant[status] ?? 'default'}>
+        {labels[status] ?? status}
+      </Badge>
     );
   };
 
@@ -93,7 +97,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen flex">
       {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 text-white">
+      <aside className="w-64 bg-gray-900 text-white flex flex-col">
         <div className="p-6">
           <div className="flex items-center gap-2 mb-8">
             <LayoutDashboard className="w-8 h-8 text-primary-500" />
@@ -153,7 +157,7 @@ export default function DashboardPage() {
           </nav>
         </div>
 
-        <div className="absolute bottom-0 left-0 w-64 p-6 border-t border-gray-800">
+        <div className="mt-auto p-6 border-t border-gray-800">
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 px-4 py-3 w-full hover:bg-gray-800 rounded-lg text-gray-300 hover:text-white transition"
@@ -165,7 +169,7 @@ export default function DashboardPage() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-8 overflow-auto">
+      <main className="flex-1 p-8 overflow-auto bg-gray-50">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
           <p className="text-gray-600">Xin chào, {user?.name}</p>
@@ -173,7 +177,7 @@ export default function DashboardPage() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl p-6 shadow-sm">
+          <Card className="p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-blue-100 rounded-lg">
                 <Users className="w-6 h-6 text-blue-600" />
@@ -185,9 +189,9 @@ export default function DashboardPage() {
             </div>
             <p className="text-2xl font-bold text-gray-800">{stats.totalUsers.toLocaleString()}</p>
             <p className="text-gray-500 text-sm">Tổng người dùng</p>
-          </div>
+          </Card>
 
-          <div className="bg-white rounded-xl p-6 shadow-sm">
+          <Card className="p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-green-100 rounded-lg">
                 <Car className="w-6 h-6 text-green-600" />
@@ -196,9 +200,9 @@ export default function DashboardPage() {
             </div>
             <p className="text-2xl font-bold text-gray-800">{stats.totalDrivers.toLocaleString()}</p>
             <p className="text-gray-500 text-sm">Tổng tài xế</p>
-          </div>
+          </Card>
 
-          <div className="bg-white rounded-xl p-6 shadow-sm">
+          <Card className="p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-purple-100 rounded-lg">
                 <MapPin className="w-6 h-6 text-purple-600" />
@@ -210,9 +214,9 @@ export default function DashboardPage() {
             </div>
             <p className="text-2xl font-bold text-gray-800">{stats.todayRides.toLocaleString()}</p>
             <p className="text-gray-500 text-sm">Chuyến hôm nay</p>
-          </div>
+          </Card>
 
-          <div className="bg-white rounded-xl p-6 shadow-sm">
+          <Card className="p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-yellow-100 rounded-lg">
                 <DollarSign className="w-6 h-6 text-yellow-600" />
@@ -224,11 +228,11 @@ export default function DashboardPage() {
             </div>
             <p className="text-2xl font-bold text-gray-800">{formatCurrency(stats.todayRevenue)}</p>
             <p className="text-gray-500 text-sm">Doanh thu hôm nay</p>
-          </div>
+          </Card>
         </div>
 
         {/* Recent Rides Table */}
-        <div className="bg-white rounded-xl shadow-sm">
+        <Card>
           <div className="p-6 border-b">
             <h2 className="text-lg font-semibold text-gray-800">Chuyến đi gần đây</h2>
           </div>
@@ -263,7 +267,7 @@ export default function DashboardPage() {
               Xem tất cả chuyến đi →
             </Link>
           </div>
-        </div>
+        </Card>
       </main>
     </div>
   );

@@ -1,4 +1,4 @@
-import { PrismaClient, Payment, PaymentStatus, PaymentMethod, Prisma } from '@prisma/client';
+import { PrismaClient, Payment, PaymentStatus, PaymentMethod, Prisma } from '../generated/prisma-client';
 
 export interface IPaymentRepository {
   findById(id: string): Promise<Payment | null>;

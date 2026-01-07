@@ -1,7 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from './generated/prisma-client';
 import { config } from './config';
 import { EventPublisher } from './events/publisher';
 import { EventConsumer } from './events/consumer';

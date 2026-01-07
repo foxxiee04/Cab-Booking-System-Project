@@ -19,6 +19,9 @@ pnpm-debug.log*
 .next/
 out/
 
+# Local documentation
+docs/
+
 # Coverage
 coverage/
 .nyc_output/

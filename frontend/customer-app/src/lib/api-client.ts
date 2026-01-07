@@ -58,7 +58,19 @@ class ApiClient {
 
   // Auth
   async register(data: { name: string; email: string; password: string; phone: string }) {
-    return this.client.post('/api/auth/register', data);
+    const trimmedName = data.name.trim();
+    const parts = trimmedName.split(/\s+/).filter(Boolean);
+    const firstName = parts[0] || trimmedName;
+    const lastName = parts.length > 1 ? parts.slice(1).join(' ') : undefined;
+
+    return this.client.post('/api/auth/register', {
+      email: data.email,
+      password: data.password,
+      phone: data.phone,
+      role: 'CUSTOMER',
+      firstName,
+      ...(lastName ? { lastName } : {}),
+    });
   }
 
   async login(data: { email: string; password: string }) {
@@ -80,12 +92,8 @@ class ApiClient {
   }
 
   async createRide(data: {
-    pickupLat: number;
-    pickupLng: number;
-    pickupAddress: string;
-    destinationLat: number;
-    destinationLng: number;
-    destinationAddress: string;
+    pickup: { lat: number; lng: number; address?: string };
+    dropoff: { lat: number; lng: number; address?: string };
   }) {
     return this.client.post('/api/rides', data);
   }
@@ -99,7 +107,11 @@ class ApiClient {
   }
 
   async getRideHistory(page = 1, limit = 10) {
-    return this.client.get(`/api/rides/history?page=${page}&limit=${limit}`);
+    return this.client.get(`/api/rides/customer/history?page=${page}&limit=${limit}`);
+  }
+
+  async getActiveRide() {
+    return this.client.get('/api/rides/customer/active');
   }
 
   // Payments

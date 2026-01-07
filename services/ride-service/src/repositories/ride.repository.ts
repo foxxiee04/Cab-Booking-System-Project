@@ -1,4 +1,4 @@
-import { Ride, RideStatus, Prisma } from '@prisma/client';
+import { Ride, RideStatus, Prisma } from '../generated/prisma-client';
 
 type RideDelegateLike = {
   findUnique: (...args: any[]) => Promise<any>;

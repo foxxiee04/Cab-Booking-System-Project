@@ -1,4 +1,4 @@
-import { PrismaClient, Ride, RideStatus } from '@prisma/client';
+import { PrismaClient, Ride, RideStatus } from '../generated/prisma-client';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
 import { config } from '../config';

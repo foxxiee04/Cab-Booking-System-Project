@@ -8,6 +8,9 @@ import { z } from 'zod';
 import Link from 'next/link';
 import { Car, User, Mail, Lock, Phone, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Tên ít nhất 2 ký tự'),
@@ -48,7 +51,11 @@ export default function RegisterPage() {
       });
       router.push('/login?registered=true');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Đăng ký thất bại');
+      setError(
+        err.response?.data?.error?.message ||
+          err.response?.data?.message ||
+          'Đăng ký thất bại'
+      );
     } finally {
       setLoading(false);
     }
@@ -66,7 +73,7 @@ export default function RegisterPage() {
         </div>
 
         {/* Form Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <Card className="p-8">
           <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">
             Tạo tài khoản
           </h1>
@@ -84,10 +91,10 @@ export default function RegisterPage() {
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
+                <Input
                   {...register('name')}
                   type="text"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
+                  className="pl-10"
                   placeholder="Nguyễn Văn A"
                 />
               </div>
@@ -102,10 +109,10 @@ export default function RegisterPage() {
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
+                <Input
                   {...register('email')}
                   type="email"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
+                  className="pl-10"
                   placeholder="email@example.com"
                 />
               </div>
@@ -120,10 +127,10 @@ export default function RegisterPage() {
               </label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
+                <Input
                   {...register('phone')}
                   type="tel"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
+                  className="pl-10"
                   placeholder="0901234567"
                 />
               </div>
@@ -138,10 +145,10 @@ export default function RegisterPage() {
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
+                <Input
                   {...register('password')}
                   type="password"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
+                  className="pl-10"
                   placeholder="••••••••"
                 />
               </div>
@@ -156,10 +163,10 @@ export default function RegisterPage() {
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
+                <Input
                   {...register('confirmPassword')}
                   type="password"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
+                  className="pl-10"
                   placeholder="••••••••"
                 />
               </div>
@@ -168,14 +175,14 @@ export default function RegisterPage() {
               )}
             </div>
 
-            <button
+            <Button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full"
             >
               {loading && <Loader2 className="w-5 h-5 animate-spin" />}
               {loading ? 'Đang đăng ký...' : 'Đăng ký'}
-            </button>
+            </Button>
           </form>
 
           <p className="mt-6 text-center text-gray-600">
@@ -184,7 +191,7 @@ export default function RegisterPage() {
               Đăng nhập
             </Link>
           </p>
-        </div>
+        </Card>
       </div>
     </div>
   );

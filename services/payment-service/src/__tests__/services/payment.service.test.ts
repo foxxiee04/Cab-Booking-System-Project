@@ -1,4 +1,4 @@
-import { PaymentMethod, PaymentStatus } from '@prisma/client';
+import { PaymentMethod, PaymentStatus } from '../../generated/prisma-client';
 import { PaymentService } from '../../services/payment.service';
 
 jest.mock('uuid', () => ({
