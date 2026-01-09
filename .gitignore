@@ -1,40 +1,116 @@
-# Node / TypeScript
+# =====================================================
+# Dependencies
+# =====================================================
 node_modules/
-dist/
-*.tsbuildinfo
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# Environment / secrets
-.env
-.env.*
-!.env.example
-
-# Next.js
-.next/
-out/
-
-# Local documentation
-docs/
-
-# Coverage
-coverage/
-.nyc_output/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .venv/
 venv/
+Pipfile.lock
 
-# OS
+# =====================================================
+# Build Outputs
+# =====================================================
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Next.js
+.next/
+.turbo/
+
+# =====================================================
+# Environment Variables & Secrets
+# =====================================================
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+
+# =====================================================
+# Logs
+# =====================================================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+logs/
+
+# =====================================================
+# Testing & Coverage
+# =====================================================
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# =====================================================
+# IDE & Editors
+# =====================================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
 .DS_Store
+
+# =====================================================
+# OS Files
+# =====================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
+
+# =====================================================
+# Docker
+# =====================================================
+*.env.docker
+.dockerignore
+
+# =====================================================
+# Databases (local development)
+# =====================================================
+*.db
+*.sqlite
+*.sqlite3
+postgres-data/
+mongo-data/
+redis-data/
+
+# =====================================================
+# Temporary Files
+# =====================================================
+*.tmp
+*.temp
+*.swp
+*.bak
+.cache/
+
+
+# Documentation (optional - remove if needed)
+docs/

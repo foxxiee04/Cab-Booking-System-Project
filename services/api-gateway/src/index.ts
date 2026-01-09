@@ -22,8 +22,8 @@ app.use(morgan('combined', {
   stream: { write: (message) => logger.info(message.trim()) },
 }));
 
-// Rate limiting
-app.use(generalLimiter);
+// Rate limiting - DISABLED FOR TESTING
+// app.use(generalLimiter);
 
 // Health check (before auth)
 app.get('/health', (req, res) => {

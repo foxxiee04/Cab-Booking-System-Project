@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/stores/auth-store';
-import { useDriverStore } from '@/stores/driver-store';
+import { useDriverStore, DriverStatus } from '@/stores/driver-store';
 import { apiClient } from '@/lib/api-client';
 import { socketClient } from '@/lib/socket-client';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +37,9 @@ export default function DashboardPage() {
   const { isAuthenticated, user, logout } = useAuthStore();
   const driver = useDriverStore();
   const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollRidesIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [loading, setLoading] = useState(false);
+  const [driverProfileId, setDriverProfileId] = useState<string | null>(null);
 
   // Auth check
   useEffect(() => {
@@ -50,9 +52,31 @@ export default function DashboardPage() {
   useEffect(() => {
     if (isAuthenticated) {
       socketClient.connect();
+      // Fetch driver profile to get MongoDB _id
+      fetchDriverProfile();
     }
     return () => socketClient.disconnect();
   }, [isAuthenticated]);
+
+  const fetchDriverProfile = async () => {
+    try {
+      const response = await apiClient.get('/drivers/me');
+      const profile = response.data?.data?.driver;
+      if (profile) {
+        setDriverProfileId(profile.id || profile._id);
+        
+        // Sync driver status from backend
+        if (profile.status) {
+          const backendStatus = profile.status.toUpperCase();
+          if (['OFFLINE', 'ONLINE', 'BUSY'].includes(backendStatus)) {
+            driver.setStatus(backendStatus as DriverStatus);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch driver profile:', err);
+    }
+  };
 
   // Listen for ride requests
   useEffect(() => {
@@ -77,6 +101,65 @@ export default function DashboardPage() {
       socketClient.off('ride:new_request', handleRideRequest);
     };
   }, [driver.status, driver.rideStatus]);
+
+  // Poll for assigned rides when online
+  useEffect(() => {
+    const pollAssignedRides = async () => {
+      if (driver.status === 'ONLINE' && driver.rideStatus === 'NONE' && driverProfileId) {
+        try {
+          // Check active ride from ride service
+          const response = await apiClient.get(`/rides/driver/active?driverId=${driverProfileId}`);
+          const assignedRide = response.data?.data?.ride;
+          
+          if (assignedRide && assignedRide.status === 'ASSIGNED') {
+            driver.setRideRequest({
+              rideId: assignedRide.id,
+              customer: {
+                id: assignedRide.customerId,
+                name: 'Khách hàng',
+                phone: '',
+              },
+              pickup: {
+                lat: assignedRide.pickup.coordinates[1],
+                lng: assignedRide.pickup.coordinates[0],
+                address: assignedRide.pickupAddress,
+              },
+              destination: {
+                lat: assignedRide.dropoff.coordinates[1],
+                lng: assignedRide.dropoff.coordinates[0],
+                address: assignedRide.dropoffAddress,
+              },
+              estimatedFare: assignedRide.fare || 0,
+              distance: assignedRide.distance || 0,
+            });
+          }
+        } catch (err: any) {
+          // 404 means no active ride - this is OK
+          if (err?.response?.status !== 404) {
+            console.error('Failed to poll assigned rides:', err);
+          }
+        }
+      }
+    };
+
+    if (driver.status === 'ONLINE' && driver.rideStatus === 'NONE' && driverProfileId) {
+      // Poll immediately
+      pollAssignedRides();
+      // Poll every 3 seconds
+      pollRidesIntervalRef.current = setInterval(pollAssignedRides, 3000);
+    } else {
+      if (pollRidesIntervalRef.current) {
+        clearInterval(pollRidesIntervalRef.current);
+        pollRidesIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (pollRidesIntervalRef.current) {
+        clearInterval(pollRidesIntervalRef.current);
+      }
+    };
+  }, [driver.status, driver.rideStatus, driverProfileId]);
 
   // Location tracking
   useEffect(() => {

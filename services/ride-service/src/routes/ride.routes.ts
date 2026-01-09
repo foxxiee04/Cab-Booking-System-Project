@@ -111,7 +111,26 @@ export const createRideRouter = (rideService: RideService): Router => {
   // Get driver's active ride
   router.get('/driver/active', async (req: AuthRequest, res: Response) => {
     try {
-      const ride = await rideService.getActiveRideForDriver(req.user!.userId);
+      // Note: This expects driverId (profile ID) in query or we need to fetch it from driver-service
+      // For now, return null if driverId not provided
+      const driverId = req.query.driverId as string;
+      
+      if (!driverId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'driverId query parameter required' },
+        });
+      }
+      
+      const ride = await rideService.getActiveRideForDriver(driverId);
+      
+      if (!ride) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'No active ride' },
+        });
+      }
+      
       res.json({ success: true, data: { ride } });
     } catch (err) {
       logger.error('Get driver active ride error:', err);

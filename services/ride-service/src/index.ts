@@ -81,6 +81,28 @@ async function main() {
     }
   });
 
+  app.post('/internal/rides/:rideId/assign', async (req, res) => {
+    try {
+      const { driverId } = req.body;
+      if (!driverId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'driverId required' },
+        });
+      }
+
+      const ride = await rideService.assignDriver(req.params.rideId, driverId);
+      res.json({ success: true, data: { ride } });
+    } catch (err) {
+      logger.error('Internal assign driver error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to assign driver';
+      res.status(400).json({
+        success: false,
+        error: { code: 'ASSIGN_FAILED', message },
+      });
+    }
+  });
+
   // Routes
   app.use('/api/rides', authenticate, createRideRouter(rideService));
 

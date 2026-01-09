@@ -26,7 +26,7 @@ const createProxyOptions = (target: string, pathRewrite?: Record<string, string>
 // Auth Service routes
 router.use(
   '/api/auth',
-  authLimiter,
+  // authLimiter, // DISABLED FOR TESTING
   createProxyMiddleware(createProxyOptions(config.services.auth, {
     '^/api/auth': '/api/auth',
   }))

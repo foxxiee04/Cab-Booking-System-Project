@@ -21,6 +21,8 @@ export const config = {
     secret: process.env.JWT_SECRET || 'default-secret',
   },
   
+  internalServiceToken: process.env.INTERNAL_SERVICE_TOKEN || 'default-internal-token',
+  
   services: {
     ride: process.env.RIDE_SERVICE_URL || 'http://localhost:3002',
   },

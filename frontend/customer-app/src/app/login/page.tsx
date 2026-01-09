@@ -40,10 +40,20 @@ export default function LoginPage() {
 
     try {
       const response = await apiClient.login(data);
-      const { user, accessToken, refreshToken } = response.data.data;
+      console.log('🔐 Login response:', response);
+      console.log('📦 Response data:', response.data);
+      
+      // Axios response.data = { success: true, data: { user, tokens } }
+      const { user, tokens } = response.data.data;
+      const { accessToken, refreshToken } = tokens;
+      console.log('✅ Extracted:', { user, accessToken: accessToken?.substring(0, 20) + '...', refreshToken: refreshToken?.substring(0, 20) + '...' });
+      
       login(user, accessToken, refreshToken);
+      console.log('💾 Saved to store');
+      
       router.push('/book');
     } catch (err: any) {
+      console.error('❌ Login error:', err);
       setError(
         err.response?.data?.error?.message ||
           err.response?.data?.message ||

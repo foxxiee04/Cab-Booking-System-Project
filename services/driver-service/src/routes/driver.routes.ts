@@ -116,6 +116,29 @@ export const createDriverRouter = (driverService: DriverService): Router => {
     }
   });
 
+  // Get driver's assigned ride
+  router.get('/me/rides/assigned', async (req: AuthRequest, res: Response) => {
+    try {
+      const driver = await driverService.getDriverByUserId(req.user!.userId);
+      if (!driver) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'DRIVER_NOT_FOUND', message: 'Driver profile not found' },
+        });
+      }
+
+      // For now, return null - ride-service should be queried for assigned rides
+      // This is a placeholder that returns the driver's current ride if stored
+      res.json({ success: true, data: { ride: null } });
+    } catch (err) {
+      logger.error('Get assigned ride error:', err);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get assigned ride' },
+      });
+    }
+  });
+
   // Find nearby drivers (internal/admin)
   router.get('/nearby', async (req: Request, res: Response) => {
     try {

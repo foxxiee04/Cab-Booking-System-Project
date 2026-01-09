@@ -36,6 +36,12 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'driver-auth-storage',
+      partialize: (state) => ({
+        user: state.user,
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
+        isAuthenticated: state.isAuthenticated,
+      }),
     }
   )
 );

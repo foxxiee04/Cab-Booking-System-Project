@@ -210,10 +210,20 @@ export default function BookPage() {
 
   // Handle map click for destination
   const handleMapClick = (lat: number, lng: number) => {
-    if (!ride.destination) {
-      ride.setDestination({ lat, lng, address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
-      setDestinationInput(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-    }
+    // Disable map click during ride search/active states
+    if (ride.status !== 'IDLE') return;
+    
+    ride.setDestination({ lat, lng, address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
+    setDestinationInput(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+    // Reset estimate when destination changes
+    ride.setEstimate(null);
+  };
+
+  // Handle clear destination
+  const handleClearDestination = () => {
+    ride.setDestination(null);
+    setDestinationInput('');
+    ride.setEstimate(null);
   };
 
   // Handle logout
@@ -315,12 +325,23 @@ export default function BookPage() {
                     type="text"
                     value={destinationInput}
                     onChange={(e) => setDestinationInput(e.target.value)}
-                    className="pl-10"
-                    placeholder="Nhập hoặc click trên bản đồ"
+                    className="pl-10 pr-10"
+                    placeholder="Click trên bản đồ để chọn"
+                    readOnly
                   />
+                  {ride.destination && (
+                    <Button
+                      onClick={handleClearDestination}
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 p-0 text-gray-400 hover:text-red-500"
+                    >
+                      <X className="w-5 h-5" />
+                    </Button>
+                  )}
                 </div>
                 <p className="mt-1 text-xs text-gray-500">
-                  Click trên bản đồ để chọn điểm đến
+                  {ride.status === 'IDLE' ? 'Click trên bản đồ để chọn điểm đến' : 'Không thể thay đổi khi đang tìm tài xế'}
                 </p>
               </div>
 

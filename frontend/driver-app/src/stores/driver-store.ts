@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export type DriverStatus = 'OFFLINE' | 'ONLINE' | 'BUSY';
 export type RideStatus = 'NONE' | 'ASSIGNED' | 'ACCEPTED' | 'PICKING_UP' | 'IN_PROGRESS' | 'COMPLETED';
@@ -42,6 +43,7 @@ interface DriverState {
   cancelRide: () => void;
   clearRide: () => void;
   updateEarnings: (earnings: number, trips: number) => void;
+  reset: () => void;
 }
 
 export const useDriverStore = create<DriverState>((set) => ({
@@ -75,4 +77,25 @@ export const useDriverStore = create<DriverState>((set) => ({
   clearRide: () => set({ currentRide: null, rideStatus: 'NONE' }),
 
   updateEarnings: (earnings, trips) => set({ todayEarnings: earnings, todayTrips: trips }),
-}));
+
+  reset: () => set({
+    status: 'OFFLINE',
+    rideStatus: 'NONE',
+    currentLocation: null,
+    currentRide: null,
+    todayEarnings: 0,
+    todayTrips: 0,
+  }),
+})),
+{
+  name: 'driver-storage',
+  partialize: (state) => ({
+    status: state.status,
+    rideStatus: state.rideStatus,
+    currentLocation: state.currentLocation,
+    currentRide: state.currentRide,
+    todayEarnings: state.todayEarnings,
+    todayTrips: state.todayTrips,
+  }),
+}
+);

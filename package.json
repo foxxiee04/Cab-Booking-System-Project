@@ -6,7 +6,8 @@
   "workspaces": [
     "services/*",
     "frontend/*",
-    "shared/*"
+    "shared/*",
+    "tests/*"
   ],
   "scripts": {
     "dev:auth": "npm -w services/auth-service run dev",
@@ -24,6 +25,9 @@
     "test:auth": "npm -w services/auth-service run test",
     "test:shared": "npm -w shared run test",
     "test:coverage": "npm run test --workspaces --if-present -- --coverage",
+    "test:e2e": "npm -w tests/e2e run test",
+    "test:e2e:api": "npm -w tests/e2e run test:api",
+    "test:e2e:playwright": "npm -w tests/e2e run test:playwright",
     "build": "npm run build --workspaces --if-present",
     "build:services": "npm -w services/auth-service run build && npm -w services/ride-service run build && npm -w services/driver-service run build && npm -w services/payment-service run build && npm -w services/notification-service run build && npm -w services/api-gateway run build",
     "lint": "eslint . --ext .ts,.tsx",

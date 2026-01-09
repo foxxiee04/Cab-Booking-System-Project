@@ -39,9 +39,11 @@ export default function LoginPage() {
 
     try {
       const response = await apiClient.login(data);
-      const { user, accessToken, refreshToken } = response.data.data;
+      // API returns: { success: true, data: { user, tokens: { accessToken, refreshToken } } }
+      const { user, tokens } = response.data.data;
+      const { accessToken, refreshToken } = tokens;
       
-      if (user.role !== 'driver') {
+      if (user.role !== 'DRIVER') {
         setError('Tài khoản này không phải là tài xế');
         return;
       }

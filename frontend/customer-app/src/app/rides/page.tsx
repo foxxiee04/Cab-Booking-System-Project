@@ -61,6 +61,7 @@ export default function CustomerRideHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [rides, setRides] = useState<Ride[]>([]);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) router.push('/login');
@@ -88,6 +89,20 @@ export default function CustomerRideHistoryPage() {
       mounted = false;
     };
   }, [isAuthenticated]);
+
+  const handleCancelRide = async (rideId: string) => {
+    setCancellingId(rideId);
+    try {
+      await apiClient.cancelRide(rideId, 'Khách hàng hủy từ lịch sử');
+      // Reload rides after cancellation
+      const res = await apiClient.getRideHistory(1, 20);
+      setRides(res.data?.data?.rides || []);
+    } catch (e: any) {
+      alert('Không thể hủy chuyến: ' + (e?.response?.data?.message || 'Lỗi không xác định'));
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   const content = useMemo(() => {
     if (loading) {
@@ -118,6 +133,8 @@ export default function CustomerRideHistoryPage() {
       <div className="space-y-4">
         {rides.map((ride) => {
           const badge = statusToBadge(ride.status);
+          const canCancel = ['PENDING', 'ASSIGNED'].includes(ride.status);
+          
           return (
             <Card key={ride.id}>
               <CardHeader className="flex flex-row items-center justify-between gap-3">
@@ -141,6 +158,20 @@ export default function CustomerRideHistoryPage() {
                       {typeof ride.fare === 'number' ? formatCurrency(ride.fare) : '—'}
                     </div>
                   </div>
+                  
+                  {canCancel && (
+                    <div className="pt-2">
+                      <Button
+                        onClick={() => handleCancelRide(ride.id)}
+                        disabled={cancellingId === ride.id}
+                        variant="danger"
+                        size="sm"
+                        className="w-full"
+                      >
+                        {cancellingId === ride.id ? 'Đang hủy...' : 'Hủy chuyến'}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

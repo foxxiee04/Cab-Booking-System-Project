@@ -86,9 +86,14 @@ export class EventConsumer {
     try {
       // Call ride service to assign driver
       await axios.post(
-        `${config.services.ride}/api/rides/${rideId}/assign`,
+        `${config.services.ride}/internal/rides/${rideId}/assign`,
         { driverId: selectedDriver.driverId },
-        { timeout: 5000 }
+        { 
+          timeout: 5000,
+          headers: {
+            'x-internal-token': config.internalServiceToken
+          }
+        }
       );
 
       logger.info(`Assigned driver ${selectedDriver.driverId} to ride ${rideId}`);
