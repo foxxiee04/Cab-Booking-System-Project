@@ -5,6 +5,7 @@ from app.models import (
     SurgePricingRequest, SurgePricingResponse
 )
 from app.services.ai_service import ai_service
+from app.services.geocoding_service import geocoding_service
 
 router = APIRouter(prefix="/api", tags=["AI"])
 
@@ -44,3 +45,20 @@ async def health_check():
     Health check endpoint.
     """
     return {"status": "healthy", "service": "ai-service"}
+
+# Geocoding / Place search
+@router.get("/geo/autocomplete")
+async def geo_autocomplete(q: str, lat: float | None = None, lng: float | None = None, limit: int = 5):
+    try:
+        results = await geocoding_service.autocomplete(q, lat, lng, limit)
+        return {"success": True, "data": {"results": results}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/geo/reverse")
+async def geo_reverse(lat: float, lng: float):
+    try:
+        result = await geocoding_service.reverse(lat, lng)
+        return {"success": True, "data": {"result": result}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

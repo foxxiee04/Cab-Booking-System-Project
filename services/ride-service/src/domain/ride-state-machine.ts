@@ -2,8 +2,10 @@ import { RideStatus } from '../generated/prisma-client';
 
 // Valid state transitions
 const VALID_TRANSITIONS: Record<RideStatus, RideStatus[]> = {
-  PENDING: [RideStatus.ASSIGNED, RideStatus.CANCELLED],
-  ASSIGNED: [RideStatus.ACCEPTED, RideStatus.PENDING, RideStatus.CANCELLED], // back to PENDING if driver rejects
+  CREATED: [RideStatus.FINDING_DRIVER, RideStatus.CANCELLED],
+  FINDING_DRIVER: [RideStatus.ASSIGNED, RideStatus.CANCELLED],
+  ASSIGNED: [RideStatus.PICKING_UP, RideStatus.FINDING_DRIVER, RideStatus.CANCELLED], // back to FINDING_DRIVER if driver rejects
+  PICKING_UP: [RideStatus.IN_PROGRESS, RideStatus.CANCELLED],
   ACCEPTED: [RideStatus.IN_PROGRESS, RideStatus.CANCELLED],
   IN_PROGRESS: [RideStatus.COMPLETED, RideStatus.CANCELLED],
   COMPLETED: [], // terminal state
@@ -12,9 +14,11 @@ const VALID_TRANSITIONS: Record<RideStatus, RideStatus[]> = {
 
 export class RideStateMachine {
   private static readonly CANCELLABLE_STATUSES: RideStatus[] = [
-    RideStatus.PENDING,
+    RideStatus.CREATED,
+    RideStatus.FINDING_DRIVER,
     RideStatus.ASSIGNED,
     RideStatus.ACCEPTED,
+    RideStatus.PICKING_UP,
   ];
 
   private static readonly DRIVER_REQUIRED_STATUSES: RideStatus[] = [

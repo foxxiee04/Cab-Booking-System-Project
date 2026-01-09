@@ -65,6 +65,14 @@ router.use(
   }))
 );
 
+// Geocoding routes (proxied to AI Service)
+router.use(
+  '/api/geo',
+  createProxyMiddleware(createProxyOptions(config.services.ai, {
+    '^/api/geo': '/api/geo',
+  }))
+);
+
 // WebSocket proxy for notifications
 router.use(
   '/socket.io',

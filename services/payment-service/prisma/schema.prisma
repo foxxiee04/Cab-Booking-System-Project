@@ -11,6 +11,7 @@ datasource db {
 enum PaymentStatus {
   PENDING
   PROCESSING
+  REQUIRES_ACTION
   COMPLETED
   FAILED
   REFUNDED
@@ -20,6 +21,13 @@ enum PaymentMethod {
   CASH
   CARD
   WALLET
+}
+
+enum PaymentProvider {
+  STRIPE
+  MOCK
+  MOMO
+  ZALOPAY
 }
 
 model Fare {
@@ -53,11 +61,17 @@ model Payment {
   currency        String        @default("VND")
   
   method          PaymentMethod @default(CASH)
+  provider        PaymentProvider @default(MOCK)
   status          PaymentStatus @default(PENDING)
   
   // Transaction details
   transactionId   String?
+  paymentIntentId String?
+  paymentMethodId String?
+  clientSecret    String?
+  idempotencyKey  String?
   gatewayResponse String?
+  metadata        Json?
   
   // Timestamps
   initiatedAt     DateTime      @default(now())

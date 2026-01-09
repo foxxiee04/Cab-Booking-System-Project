@@ -46,56 +46,59 @@ interface DriverState {
   reset: () => void;
 }
 
-export const useDriverStore = create<DriverState>((set) => ({
-  status: 'OFFLINE',
-  rideStatus: 'NONE',
-  currentLocation: null,
-  currentRide: null,
-  todayEarnings: 0,
-  todayTrips: 0,
+export const useDriverStore = create<DriverState>()(
+  persist(
+    (set) => ({
+      status: 'OFFLINE',
+      rideStatus: 'NONE',
+      currentLocation: null,
+      currentRide: null,
+      todayEarnings: 0,
+      todayTrips: 0,
 
-  setStatus: (status) => set({ status }),
+      setStatus: (status) => set({ status }),
 
-  setLocation: (location) => set({ currentLocation: location }),
+      setLocation: (location) => set({ currentLocation: location }),
 
-  setRideRequest: (ride) => set({ currentRide: ride, rideStatus: 'ASSIGNED' }),
+      setRideRequest: (ride) => set({ currentRide: ride, rideStatus: 'ASSIGNED' }),
 
-  acceptRide: () => set({ rideStatus: 'PICKING_UP', status: 'BUSY' }),
+      acceptRide: () => set({ rideStatus: 'PICKING_UP', status: 'BUSY' }),
 
-  startRide: () => set({ rideStatus: 'IN_PROGRESS' }),
+      startRide: () => set({ rideStatus: 'IN_PROGRESS' }),
 
-  completeRide: (fare) =>
-    set((state) => ({
-      rideStatus: 'COMPLETED',
-      status: 'ONLINE',
-      todayEarnings: state.todayEarnings + fare,
-      todayTrips: state.todayTrips + 1,
-    })),
+      completeRide: (fare) =>
+        set((state) => ({
+          rideStatus: 'COMPLETED',
+          status: 'ONLINE',
+          todayEarnings: state.todayEarnings + fare,
+          todayTrips: state.todayTrips + 1,
+        })),
 
-  cancelRide: () => set({ currentRide: null, rideStatus: 'NONE', status: 'ONLINE' }),
+      cancelRide: () => set({ currentRide: null, rideStatus: 'NONE', status: 'ONLINE' }),
 
-  clearRide: () => set({ currentRide: null, rideStatus: 'NONE' }),
+      clearRide: () => set({ currentRide: null, rideStatus: 'NONE' }),
 
-  updateEarnings: (earnings, trips) => set({ todayEarnings: earnings, todayTrips: trips }),
+      updateEarnings: (earnings, trips) => set({ todayEarnings: earnings, todayTrips: trips }),
 
-  reset: () => set({
-    status: 'OFFLINE',
-    rideStatus: 'NONE',
-    currentLocation: null,
-    currentRide: null,
-    todayEarnings: 0,
-    todayTrips: 0,
-  }),
-})),
-{
-  name: 'driver-storage',
-  partialize: (state) => ({
-    status: state.status,
-    rideStatus: state.rideStatus,
-    currentLocation: state.currentLocation,
-    currentRide: state.currentRide,
-    todayEarnings: state.todayEarnings,
-    todayTrips: state.todayTrips,
-  }),
-}
+      reset: () => set({
+        status: 'OFFLINE',
+        rideStatus: 'NONE',
+        currentLocation: null,
+        currentRide: null,
+        todayEarnings: 0,
+        todayTrips: 0,
+      }),
+    }),
+    {
+      name: 'driver-storage',
+      partialize: (state) => ({
+        status: state.status,
+        rideStatus: state.rideStatus,
+        currentLocation: state.currentLocation,
+        currentRide: state.currentRide,
+        todayEarnings: state.todayEarnings,
+        todayTrips: state.todayTrips,
+      }),
+    }
+  )
 );

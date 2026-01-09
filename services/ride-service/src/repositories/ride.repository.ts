@@ -49,7 +49,14 @@ export class RideRepository implements IRideRepository {
       where: {
         customerId,
         status: {
-          in: [RideStatus.PENDING, RideStatus.ASSIGNED, RideStatus.ACCEPTED, RideStatus.IN_PROGRESS],
+          in: [
+            RideStatus.CREATED,
+            RideStatus.FINDING_DRIVER,
+            RideStatus.ASSIGNED,
+            RideStatus.PICKING_UP,
+            RideStatus.ACCEPTED,
+            RideStatus.IN_PROGRESS,
+          ],
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -61,7 +68,7 @@ export class RideRepository implements IRideRepository {
       where: {
         driverId,
         status: {
-          in: [RideStatus.ASSIGNED, RideStatus.ACCEPTED, RideStatus.IN_PROGRESS],
+          in: [RideStatus.ASSIGNED, RideStatus.PICKING_UP, RideStatus.IN_PROGRESS],
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -145,7 +152,7 @@ export class RideRepository implements IRideRepository {
     
     return this.prisma.ride.findMany({
       where: {
-        status: RideStatus.PENDING,
+        status: RideStatus.FINDING_DRIVER,
         createdAt: { lt: threshold },
       },
     });

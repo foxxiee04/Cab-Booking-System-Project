@@ -18,6 +18,8 @@ interface CreateRideInput {
     lat: number;
     lng: number;
   };
+  vehicleType?: 'ECONOMY' | 'COMFORT' | 'PREMIUM';
+  paymentMethod?: 'CASH' | 'CARD' | 'WALLET';
 }
 
 interface Location {
@@ -74,7 +76,9 @@ export class RideService {
       data: {
         id: rideId,
         customerId: input.customerId,
-        status: RideStatus.PENDING,
+         status: RideStatus.CREATED,
+         vehicleType: input.vehicleType || 'ECONOMY',
+         paymentMethod: input.paymentMethod || 'CASH',
         pickupAddress: input.pickup.address,
         pickupLat: input.pickup.lat,
         pickupLng: input.pickup.lng,
@@ -88,7 +92,7 @@ export class RideService {
         transitions: {
           create: {
             fromStatus: null,
-            toStatus: RideStatus.PENDING,
+             toStatus: RideStatus.CREATED,
             actorId: input.customerId,
             actorType: 'CUSTOMER',
           },
@@ -100,14 +104,15 @@ export class RideService {
     await this.eventPublisher.publish('ride.created', {
       rideId: ride.id,
       customerId: ride.customerId,
+       vehicleType: ride.vehicleType,
       pickup: { lat: ride.pickupLat, lng: ride.pickupLng, address: ride.pickupAddress },
       dropoff: { lat: ride.dropoffLat, lng: ride.dropoffLng, address: ride.dropoffAddress },
       estimatedFare,
       surgeMultiplier,
     }, ride.id);
 
-    // Request driver assignment
-    await this.requestDriverAssignment(ride);
+     // Request driver suggestions (AI will find nearby drivers)
+     await this.requestDriverSuggestions(ride);
 
     return ride;
   }
@@ -116,20 +121,29 @@ export class RideService {
     const ride = await this.prisma.ride.findUnique({ where: { id: rideId } });
     if (!ride) throw new Error('Ride not found');
 
-    RideStateMachine.validateTransition(ride.status, RideStatus.ASSIGNED);
+     // Validate transition from FINDING_DRIVER to ASSIGNED
+     RideStateMachine.validateTransition(ride.status, RideStatus.ASSIGNED);
+   
+    // Hybrid mode: if suggested list exists and not empty, enforce; otherwise allow auto-assign
+    if (ride.suggestedDriverIds && ride.suggestedDriverIds.length > 0) {
+      if (!ride.suggestedDriverIds.includes(driverId)) {
+        throw new Error('Driver is not in suggested drivers list');
+      }
+    }
 
     const updatedRide = await this.prisma.ride.update({
       where: { id: rideId },
       data: {
         status: RideStatus.ASSIGNED,
         driverId,
+         acceptedDriverId: driverId,
         assignedAt: new Date(),
         transitions: {
           create: {
             fromStatus: ride.status,
             toStatus: RideStatus.ASSIGNED,
             actorId: driverId,
-            actorType: 'SYSTEM',
+             actorType: 'DRIVER',
           },
         },
       },
@@ -141,10 +155,33 @@ export class RideService {
       customerId: ride.customerId,
       pickup: { lat: ride.pickupLat, lng: ride.pickupLng },
     }, rideId);
+   
+     // Notify other drivers ride is no longer available
+     await this.eventPublisher.publish('ride.no_longer_available', {
+       rideId,
+       acceptedBy: driverId,
+     }, rideId);
 
     return updatedRide;
   }
 
+    async driverAcceptRide(rideId: string, driverId: string): Promise<Ride> {
+      const ride = await this.prisma.ride.findUnique({ where: { id: rideId } });
+      if (!ride) throw new Error('Ride not found');
+    
+      // Only allow if ride is in FINDING_DRIVER status
+      if (ride.status !== RideStatus.FINDING_DRIVER) {
+        throw new Error('Ride is not available for acceptance');
+      }
+    
+      // Verify driver is in suggested list
+      if (!ride.suggestedDriverIds.includes(driverId)) {
+        throw new Error('Driver is not eligible for this ride');
+      }
+    
+      // Assign driver (transitions to ASSIGNED)
+      return this.assignDriver(rideId, driverId);
+    }
   async acceptRide(rideId: string, driverId: string): Promise<Ride> {
     const ride = await this.prisma.ride.findUnique({ where: { id: rideId } });
     if (!ride) throw new Error('Ride not found');
@@ -182,17 +219,17 @@ export class RideService {
     if (!ride) throw new Error('Ride not found');
     if (ride.driverId !== driverId) throw new Error('Driver not assigned to this ride');
 
-    // Go back to PENDING and find another driver
+     // Go back to FINDING_DRIVER and find another driver
     const updatedRide = await this.prisma.ride.update({
       where: { id: rideId },
       data: {
-        status: RideStatus.PENDING,
+         status: RideStatus.FINDING_DRIVER,
         driverId: null,
         assignedAt: null,
         transitions: {
           create: {
             fromStatus: ride.status,
-            toStatus: RideStatus.PENDING,
+             toStatus: RideStatus.FINDING_DRIVER,
             actorId: driverId,
             actorType: 'DRIVER',
             reason: 'Driver rejected',
@@ -207,11 +244,43 @@ export class RideService {
       customerId: ride.customerId,
     }, rideId);
 
-    // Request new driver assignment
-    await this.requestDriverAssignment(updatedRide);
+     // Request new driver suggestions
+     await this.requestDriverSuggestions(updatedRide);
 
     return updatedRide;
   }
+  
+    async markPickedUp(rideId: string, driverId: string): Promise<Ride> {
+      const ride = await this.prisma.ride.findUnique({ where: { id: rideId } });
+      if (!ride) throw new Error('Ride not found');
+      if (ride.driverId !== driverId) throw new Error('Driver not assigned to this ride');
+    
+      RideStateMachine.validateTransition(ride.status, RideStatus.PICKING_UP);
+    
+      const updatedRide = await this.prisma.ride.update({
+        where: { id: rideId },
+        data: {
+          status: RideStatus.PICKING_UP,
+          pickupAt: new Date(),
+          transitions: {
+            create: {
+              fromStatus: ride.status,
+              toStatus: RideStatus.PICKING_UP,
+              actorId: driverId,
+              actorType: 'DRIVER',
+            },
+          },
+        },
+      });
+    
+      await this.eventPublisher.publish('ride.picking_up', {
+        rideId,
+        driverId,
+        customerId: ride.customerId,
+      }, rideId);
+    
+      return updatedRide;
+    }
 
   async startRide(rideId: string, driverId: string): Promise<Ride> {
     const ride = await this.prisma.ride.findUnique({ where: { id: rideId } });
@@ -365,7 +434,16 @@ export class RideService {
     return this.prisma.ride.findFirst({
       where: {
         customerId,
-        status: { in: [RideStatus.PENDING, RideStatus.ASSIGNED, RideStatus.ACCEPTED, RideStatus.IN_PROGRESS] },
+        status: {
+          in: [
+            RideStatus.CREATED,
+            RideStatus.FINDING_DRIVER,
+            RideStatus.ASSIGNED,
+            RideStatus.PICKING_UP,
+            RideStatus.ACCEPTED,
+            RideStatus.IN_PROGRESS,
+          ],
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -375,17 +453,66 @@ export class RideService {
     return this.prisma.ride.findFirst({
       where: {
         driverId,
-        status: { in: [RideStatus.ASSIGNED, RideStatus.ACCEPTED, RideStatus.IN_PROGRESS] },
+        status: { in: [RideStatus.ASSIGNED, RideStatus.PICKING_UP, RideStatus.IN_PROGRESS] },
       },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  private async requestDriverAssignment(ride: Ride): Promise<void> {
-    await this.eventPublisher.publish('ride.assignment.requested', {
+  async getAvailableRides(driverLat: number, driverLng: number, radiusKm: number, vehicleType?: string): Promise<any[]> {
+    // Fetch rides looking for drivers
+    const rides = await this.prisma.ride.findMany({
+      where: {
+        status: RideStatus.FINDING_DRIVER,
+        ...(vehicleType && { vehicleType }),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    // Compute distance and filter by radius
+    const availableRides = rides
+      .map((ride) => ({
+        ...ride,
+        distanceKm: this.calculateDistance(driverLat, driverLng, ride.pickupLat, ride.pickupLng),
+      }))
+      .filter((ride) => ride.distanceKm <= radiusKm)
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .map(({ distanceKm, ...ride }) => ({
+        ...ride,
+        distanceFromDriver: parseFloat(distanceKm.toFixed(2)),
+      }));
+
+    return availableRides;
+  }
+
+  private async requestDriverSuggestions(ride: Ride): Promise<void> {
+    // First, transition ride to FINDING_DRIVER if in CREATED state
+    if (ride.status === RideStatus.CREATED) {
+      await this.prisma.ride.update({
+        where: { id: ride.id },
+        data: {
+          status: RideStatus.FINDING_DRIVER,
+          transitions: {
+            create: {
+              fromStatus: RideStatus.CREATED,
+              toStatus: RideStatus.FINDING_DRIVER,
+              actorId: 'system',
+              actorType: 'SYSTEM',
+            },
+          },
+        },
+      });
+    }
+
+    // Request AI service to find nearby drivers
+    await this.eventPublisher.publish('ride.finding_driver_requested', {
       rideId: ride.id,
       customerId: ride.customerId,
       pickup: { lat: ride.pickupLat, lng: ride.pickupLng },
+     dropoff: { lat: ride.dropoffLat, lng: ride.dropoffLng },
+     vehicleType: ride.vehicleType,
+     fare: ride.fare,
       searchRadiusKm: config.ride.searchRadiusKm,
     }, ride.id);
   }

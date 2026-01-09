@@ -9,6 +9,53 @@ const router = Router();
 export const createPaymentRoutes = (prisma: PrismaClient, eventPublisher: EventPublisher) => {
   const paymentService = new PaymentService(prisma, eventPublisher);
 
+  // Create card payment intent (modern flow with client secret)
+  router.post(
+    '/intents',
+    authMiddleware,
+    async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+      try {
+        const idempotencyKey = req.header('Idempotency-Key') || undefined;
+        const { rideId, amount, currency = 'VND', paymentMethod = 'CARD' } = req.body;
+
+        if (!rideId || typeof amount !== 'number') {
+          return res.status(400).json({ success: false, message: 'rideId and amount are required' });
+        }
+
+        const intent = await paymentService.createPaymentIntent({
+          rideId,
+          customerId: req.user!.userId,
+          amount,
+          currency,
+          paymentMethod,
+          idempotencyKey,
+        });
+
+        res.status(intent.created ? 201 : 200).json({ success: true, data: intent });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  // Mock webhook endpoint (replace with provider-specific webhook in production)
+  router.post(
+    '/webhook/mock',
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { paymentIntentId, status, transactionId, failureReason } = req.body;
+        if (!paymentIntentId || !status) {
+          return res.status(400).json({ success: false, message: 'paymentIntentId and status are required' });
+        }
+
+        await paymentService.handleMockWebhook({ paymentIntentId, status, transactionId, failureReason });
+        res.json({ success: true });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
   // Get payment by ride ID
   router.get(
     '/ride/:rideId',

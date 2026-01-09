@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
-import { Driver, IDriver, DriverStatus } from '../models/driver.model';
+import { Driver, IDriver, DriverStatus, AvailabilityStatus } from '../models/driver.model';
 import { config } from '../config';
 import { EventPublisher } from '../events/publisher';
 import { logger } from '../utils/logger';
@@ -50,7 +50,8 @@ export class DriverService {
 
     const driver = new Driver({
       userId: input.userId,
-      status: DriverStatus.OFFLINE,
+      status: DriverStatus.PENDING,
+      availabilityStatus: AvailabilityStatus.OFFLINE,
       vehicle: input.vehicle,
       license: {
         ...input.license,
@@ -71,14 +72,40 @@ export class DriverService {
   }
 
   async goOnline(userId: string): Promise<IDriver> {
-    const driver = await Driver.findOneAndUpdate(
-      { userId, status: { $in: [DriverStatus.OFFLINE] } },
-      { status: DriverStatus.ONLINE },
+    // First, try to find and update existing driver
+    let driver = await Driver.findOneAndUpdate(
+      { userId, availabilityStatus: { $in: [AvailabilityStatus.OFFLINE] } },
+      { availabilityStatus: AvailabilityStatus.ONLINE },
       { new: true }
     );
 
+    // If driver profile doesn't exist, create a default one
     if (!driver) {
-      throw new Error('Driver not found or cannot go online');
+      const existingDriver = await Driver.findOne({ userId });
+      if (!existingDriver) {
+        logger.info(`Auto-creating driver profile for userId: ${userId}`);
+        driver = new Driver({
+          userId,
+          status: DriverStatus.PENDING,
+          availabilityStatus: AvailabilityStatus.ONLINE,
+          vehicle: {
+            type: 'CAR',
+            brand: 'Unknown',
+            model: 'Unknown',
+            plate: 'TEMP',
+            color: 'Unknown',
+            year: new Date().getFullYear(),
+          },
+          license: {
+            number: 'TEMP',
+            expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            verified: false,
+          },
+        });
+        await driver.save();
+      } else {
+        throw new Error('Driver found but cannot go online (check status)');
+      }
     }
 
     await this.eventPublisher.publish('driver.online', {
@@ -91,8 +118,8 @@ export class DriverService {
 
   async goOffline(userId: string): Promise<IDriver> {
     const driver = await Driver.findOneAndUpdate(
-      { userId, status: { $in: [DriverStatus.ONLINE, DriverStatus.BUSY] } },
-      { status: DriverStatus.OFFLINE, currentRideId: null },
+      { userId, availabilityStatus: { $in: [AvailabilityStatus.ONLINE, AvailabilityStatus.BUSY] } },
+      { availabilityStatus: AvailabilityStatus.OFFLINE, currentRideId: null },
       { new: true }
     );
 
@@ -117,7 +144,10 @@ export class DriverService {
       throw new Error('Driver not found');
     }
 
-    if (driver.status === DriverStatus.OFFLINE || driver.status === DriverStatus.SUSPENDED) {
+    if (
+      driver.availabilityStatus === AvailabilityStatus.OFFLINE ||
+      driver.status === DriverStatus.SUSPENDED
+    ) {
       throw new Error('Driver is not online');
     }
 
@@ -130,7 +160,7 @@ export class DriverService {
     await driver.save();
 
     // Update in Redis Geo (only if online/available)
-    if (driver.status === DriverStatus.ONLINE) {
+    if (driver.availabilityStatus === AvailabilityStatus.ONLINE) {
       await this.redis.geoadd(GEO_KEY, location.lng, location.lat, driver._id.toString());
       // Set TTL for the driver key
       await this.redis.set(`driver:${driver._id}:lastSeen`, Date.now().toString(), 'EX', config.driver.locationTTL);
@@ -167,7 +197,7 @@ export class DriverService {
       
       // Check if driver is still available
       const driver = await Driver.findById(driverId);
-      if (driver && driver.status === DriverStatus.ONLINE) {
+      if (driver && driver.availabilityStatus === AvailabilityStatus.ONLINE) {
         nearbyDrivers.push({
           driverId,
           distance: parseFloat(distanceStr),
@@ -180,8 +210,8 @@ export class DriverService {
 
   async markBusy(userId: string, rideId: string): Promise<IDriver> {
     const driver = await Driver.findOneAndUpdate(
-      { userId, status: DriverStatus.ONLINE },
-      { status: DriverStatus.BUSY, currentRideId: rideId },
+      { userId, availabilityStatus: AvailabilityStatus.ONLINE },
+      { availabilityStatus: AvailabilityStatus.BUSY, currentRideId: rideId },
       { new: true }
     );
 
@@ -203,8 +233,8 @@ export class DriverService {
 
   async markAvailable(userId: string): Promise<IDriver> {
     const driver = await Driver.findOneAndUpdate(
-      { userId, status: DriverStatus.BUSY },
-      { status: DriverStatus.ONLINE, currentRideId: null },
+      { userId, availabilityStatus: AvailabilityStatus.BUSY },
+      { availabilityStatus: AvailabilityStatus.ONLINE, currentRideId: null },
       { new: true }
     );
 

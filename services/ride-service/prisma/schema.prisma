@@ -10,9 +10,11 @@ datasource db {
 }
 
 enum RideStatus {
-  PENDING
+  CREATED
+  FINDING_DRIVER
   ASSIGNED
   ACCEPTED
+  PICKING_UP
   IN_PROGRESS
   COMPLETED
   CANCELLED
@@ -22,7 +24,11 @@ model Ride {
   id            String      @id @default(uuid())
   customerId    String
   driverId      String?
-  status        RideStatus  @default(PENDING)
+  status        RideStatus  @default(CREATED)
+  
+  // Booking preferences
+  vehicleType   String      @default("ECONOMY")    // ECONOMY, COMFORT, PREMIUM
+  paymentMethod String      @default("CASH")       // CASH, CARD, WALLET
   
   // Pickup location
   pickupAddress String
@@ -40,8 +46,13 @@ model Ride {
   fare          Float?
   surgeMultiplier Float     @default(1.0)
   
+  // Suggested & assigned drivers
+  suggestedDriverIds String[]  @default([])
+  acceptedDriverId   String?
+  
   // Timestamps
   requestedAt   DateTime    @default(now())
+  pickupAt      DateTime?
   assignedAt    DateTime?
   acceptedAt    DateTime?
   startedAt     DateTime?

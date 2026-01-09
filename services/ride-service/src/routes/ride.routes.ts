@@ -9,10 +9,44 @@ interface AuthRequest extends Request {
 export const createRideRouter = (rideService: RideService): Router => {
   const router = Router();
 
+  // Get available rides for driver (browse mode)
+  router.get('/available', async (req: AuthRequest, res: Response) => {
+    try {
+      if (req.user!.role !== 'DRIVER') {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only drivers can view available rides' },
+        });
+      }
+
+      const lat = parseFloat(req.query.lat as string);
+      const lng = parseFloat(req.query.lng as string);
+      const radius = parseInt(req.query.radius as string) || 5; // 5km default
+      const vehicleType = req.query.vehicleType as string; // optional filter
+
+      if (isNaN(lat) || isNaN(lng)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'lat and lng query parameters required' },
+        });
+      }
+
+      const availableRides = await rideService.getAvailableRides(lat, lng, radius, vehicleType);
+      res.json({ success: true, data: { rides: availableRides } });
+    } catch (err) {
+      logger.error('Get available rides error:', err);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get available rides' },
+      });
+    }
+  });
+
   // Create ride (Customer)
   router.post('/', async (req: AuthRequest, res: Response) => {
     try {
       const { pickup, dropoff } = req.body;
+      const { vehicleType, paymentMethod } = req.body;
       
       if (!pickup || !dropoff || !pickup.lat || !pickup.lng || !dropoff.lat || !dropoff.lng) {
         return res.status(400).json({
@@ -34,6 +68,8 @@ export const createRideRouter = (rideService: RideService): Router => {
         customerId: req.user!.userId,
         pickup,
         dropoff,
+        vehicleType,
+        paymentMethod,
       });
 
       res.status(201).json({ success: true, data: { ride } });
@@ -231,7 +267,51 @@ export const createRideRouter = (rideService: RideService): Router => {
     }
   });
 
+  // Driver accept ride from available rides list
+  router.post('/:rideId/driver-accept', async (req: AuthRequest, res: Response) => {
+    try {
+      if (req.user!.role !== 'DRIVER') {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only drivers can accept rides' },
+        });
+      }
+
+      // Pass driverId from body or user context
+      const driverId = req.body.driverId || req.user!.userId;
+      const ride = await rideService.driverAcceptRide(req.params.rideId, driverId);
+      res.json({ success: true, data: { ride } });
+    } catch (err) {
+      logger.error('Driver accept ride error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to accept ride';
+      res.status(400).json({
+        success: false,
+        error: { code: 'ACCEPT_FAILED', message },
+      });
+    }
+  });
   // Complete ride (Driver)
+  // Mark passenger picked up
+  router.post('/:rideId/pickup', async (req: AuthRequest, res: Response) => {
+    try {
+      if (req.user!.role !== 'DRIVER') {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only drivers can mark pickup' },
+        });
+      }
+
+      const ride = await rideService.markPickedUp(req.params.rideId, req.user!.userId);
+      res.json({ success: true, data: { ride } });
+    } catch (err) {
+      logger.error('Pickup error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to mark pickup';
+      res.status(400).json({
+        success: false,
+        error: { code: 'PICKUP_FAILED', message },
+      });
+    }
+  });
   router.post('/:rideId/complete', async (req: AuthRequest, res: Response) => {
     try {
       if (req.user!.role !== 'DRIVER') {

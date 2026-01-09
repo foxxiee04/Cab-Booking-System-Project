@@ -2,28 +2,27 @@ import Joi from 'joi';
 
 // Vehicle Info DTO
 export interface VehicleDto {
-  make: string;
+  type: 'CAR' | 'MOTORCYCLE' | 'SUV';
+  brand: string;
   model: string;
-  year: number;
+  plate: string;
   color: string;
-  plateNumber: string;
-  type: 'STANDARD' | 'PREMIUM' | 'XL';
+  year: number;
 }
 
 const vehicleSchema = Joi.object<VehicleDto>({
-  make: Joi.string().min(1).max(50).required(),
+  type: Joi.string().valid('CAR', 'MOTORCYCLE', 'SUV').required(),
+  brand: Joi.string().min(1).max(50).required(),
   model: Joi.string().min(1).max(50).required(),
-  year: Joi.number().integer().min(2000).max(new Date().getFullYear() + 1).required(),
+  plate: Joi.string().min(1).max(20).required(),
   color: Joi.string().min(1).max(30).required(),
-  plateNumber: Joi.string().min(1).max(20).required(),
-  type: Joi.string().valid('STANDARD', 'PREMIUM', 'XL').required(),
+  year: Joi.number().integer().min(2000).max(new Date().getFullYear() + 1).required(),
 });
 
 // License Info DTO
 export interface LicenseDto {
   number: string;
   expiryDate: Date;
-  issuedAt: string;
 }
 
 const licenseSchema = Joi.object<LicenseDto>({
@@ -31,7 +30,6 @@ const licenseSchema = Joi.object<LicenseDto>({
   expiryDate: Joi.date().greater('now').required().messages({
     'date.greater': 'License must not be expired',
   }),
-  issuedAt: Joi.string().min(1).max(100).required(),
 });
 
 // Register Driver DTO
@@ -89,7 +87,6 @@ export interface DriverResponseDto {
   license: {
     number: string;
     expiryDate: Date;
-    issuedAt: string;
   };
   rating: number;
   totalRides: number;

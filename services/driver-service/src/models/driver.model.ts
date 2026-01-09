@@ -1,10 +1,16 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export enum DriverStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  SUSPENDED = 'SUSPENDED',
+}
+
+export enum AvailabilityStatus {
   OFFLINE = 'OFFLINE',
   ONLINE = 'ONLINE',
   BUSY = 'BUSY',
-  SUSPENDED = 'SUSPENDED',
 }
 
 export interface IVehicle {
@@ -18,7 +24,8 @@ export interface IVehicle {
 
 export interface IDriver extends Document {
   userId: string;
-  status: DriverStatus;
+  status: DriverStatus; // lifecycle status (approval)
+  availabilityStatus: AvailabilityStatus; // real-time availability
   vehicle: IVehicle;
   license: {
     number: string;
@@ -49,7 +56,12 @@ const DriverSchema = new Schema<IDriver>(
     status: {
       type: String,
       enum: Object.values(DriverStatus),
-      default: DriverStatus.OFFLINE,
+      default: DriverStatus.PENDING,
+    },
+    availabilityStatus: {
+      type: String,
+      enum: Object.values(AvailabilityStatus),
+      default: AvailabilityStatus.OFFLINE,
     },
     vehicle: {
       type: {
@@ -87,6 +99,7 @@ const DriverSchema = new Schema<IDriver>(
 // Indexes
 DriverSchema.index({ userId: 1 });
 DriverSchema.index({ status: 1 });
+DriverSchema.index({ availabilityStatus: 1 });
 DriverSchema.index({ 'vehicle.plate': 1 });
 
 export const Driver = mongoose.model<IDriver>('Driver', DriverSchema);

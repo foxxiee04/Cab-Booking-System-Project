@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import axios from 'axios';
+import { config } from '../config';
 import { DriverService } from '../services/driver.service';
 import { logger } from '../utils/logger';
 
@@ -44,11 +46,25 @@ export const createDriverRouter = (driverService: DriverService): Router => {
   // Get current driver profile
   router.get('/me', async (req: AuthRequest, res: Response) => {
     try {
-      const driver = await driverService.getDriverByUserId(req.user!.userId);
+      let driver = await driverService.getDriverByUserId(req.user!.userId);
+      
+      // Auto-create driver profile if it doesn't exist
       if (!driver) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'NOT_FOUND', message: 'Driver profile not found' },
+        logger.info(`Auto-creating driver profile for userId: ${req.user!.userId}`);
+        driver = await driverService.registerDriver({
+          userId: req.user!.userId,
+          vehicle: {
+            type: 'CAR',
+            brand: 'Unknown',
+            model: 'Unknown',
+            plate: 'TEMP',
+            color: 'Unknown',
+            year: new Date().getFullYear(),
+          },
+          license: {
+            number: 'TEMP',
+            expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          },
         });
       }
 
@@ -112,6 +128,76 @@ export const createDriverRouter = (driverService: DriverService): Router => {
       res.status(400).json({
         success: false,
         error: { code: 'LOCATION_UPDATE_FAILED', message },
+      });
+    }
+  });
+
+  // Browse available rides (hybrid mode)
+  router.get('/me/available-rides', async (req: AuthRequest, res: Response) => {
+    try {
+      if (req.user!.role !== 'DRIVER') {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only drivers can view rides' },
+        });
+      }
+
+      const { lat, lng, radius, vehicleType } = req.query;
+      if (!lat || !lng) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'lat and lng are required' },
+        });
+      }
+
+      const response = await axios.get(`${process.env.RIDE_SERVICE_URL || config.services.ride}/api/rides/available`, {
+        params: { lat, lng, radius, vehicleType },
+        headers: { Authorization: req.header('authorization') || '' },
+        timeout: 5000,
+      });
+
+      res.json({ success: true, data: response.data.data });
+    } catch (err: any) {
+      logger.error('Get available rides error (proxy):', err.response?.data || err.message);
+      const message = err.response?.data?.error?.message || 'Failed to get available rides';
+      res.status(err.response?.status || 500).json({
+        success: false,
+        error: { code: 'AVAILABLE_RIDES_FAILED', message },
+      });
+    }
+  });
+
+  // Driver accepts a ride (hybrid manual accept)
+  router.post('/me/rides/:rideId/accept', async (req: AuthRequest, res: Response) => {
+    try {
+      if (req.user!.role !== 'DRIVER') {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only drivers can accept rides' },
+        });
+      }
+
+      const driver = await driverService.getDriverByUserId(req.user!.userId);
+      if (!driver) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'DRIVER_NOT_FOUND', message: 'Driver profile not found' },
+        });
+      }
+
+      const response = await axios.post(
+        `${process.env.RIDE_SERVICE_URL || config.services.ride}/api/rides/${req.params.rideId}/driver-accept`,
+        { driverId: driver._id.toString() },
+        { headers: { Authorization: req.header('authorization') || '' }, timeout: 5000 }
+      );
+
+      res.json({ success: true, data: response.data.data });
+    } catch (err: any) {
+      logger.error('Driver accept ride error (proxy):', err.response?.data || err.message);
+      const message = err.response?.data?.error?.message || 'Failed to accept ride';
+      res.status(err.response?.status || 500).json({
+        success: false,
+        error: { code: 'ACCEPT_RIDE_FAILED', message },
       });
     }
   });

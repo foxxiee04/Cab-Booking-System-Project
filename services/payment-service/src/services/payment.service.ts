@@ -1,4 +1,4 @@
-import { PrismaClient, PaymentStatus, PaymentMethod } from '../generated/prisma-client';
+import { PrismaClient, PaymentStatus, PaymentMethod, PaymentProvider } from '../generated/prisma-client';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { EventPublisher } from '../events/publisher';
@@ -21,6 +21,143 @@ export class PaymentService {
   constructor(prisma: PrismaClient, eventPublisher: EventPublisher) {
     this.prisma = prisma;
     this.eventPublisher = eventPublisher;
+  }
+
+  async handleMockWebhook(input: {
+    paymentIntentId: string;
+    status: string;
+    transactionId?: string;
+    failureReason?: string;
+  }): Promise<void> {
+    const payment = await this.prisma.payment.findFirst({ where: { paymentIntentId: input.paymentIntentId } });
+    if (!payment) {
+      throw new Error('Payment intent not found');
+    }
+
+    const normalizedStatus = input.status.toUpperCase();
+
+    if (normalizedStatus === 'SUCCEEDED') {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: PaymentStatus.COMPLETED,
+            completedAt: new Date(),
+            transactionId: input.transactionId ?? uuidv4(),
+          },
+        });
+
+        await tx.outboxEvent.create({
+          data: {
+            eventType: 'payment.completed',
+            payload: JSON.stringify({
+              paymentId: payment.id,
+              rideId: payment.rideId,
+              customerId: payment.customerId,
+              driverId: payment.driverId,
+              amount: payment.amount,
+            }),
+            correlationId: payment.rideId,
+          },
+        });
+      });
+
+      await this.eventPublisher.publish('payment.completed', {
+        paymentId: payment.id,
+        rideId: payment.rideId,
+        customerId: payment.customerId,
+        driverId: payment.driverId,
+        amount: payment.amount,
+      }, payment.rideId);
+    } else if (normalizedStatus === 'REQUIRES_ACTION') {
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { status: PaymentStatus.REQUIRES_ACTION },
+      });
+    } else {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: PaymentStatus.FAILED,
+            failedAt: new Date(),
+            failureReason: input.failureReason ?? 'Provider reported failure',
+          },
+        });
+
+        await tx.outboxEvent.create({
+          data: {
+            eventType: 'payment.failed',
+            payload: JSON.stringify({
+              paymentId: payment.id,
+              rideId: payment.rideId,
+              customerId: payment.customerId,
+              reason: input.failureReason ?? 'Provider reported failure',
+            }),
+            correlationId: payment.rideId,
+          },
+        });
+      });
+
+      await this.eventPublisher.publish('payment.failed', {
+        paymentId: payment.id,
+        rideId: payment.rideId,
+        customerId: payment.customerId,
+        reason: input.failureReason ?? 'Provider reported failure',
+      }, payment.rideId);
+    }
+  }
+
+  async createPaymentIntent(input: {
+    rideId: string;
+    customerId: string;
+    amount: number;
+    currency: string;
+    paymentMethod: string;
+    idempotencyKey?: string;
+  }) {
+    const { rideId, customerId, amount, currency, paymentMethod, idempotencyKey } = input;
+
+    // Idempotency: reuse existing intent for same ride + key
+    const existing = await this.prisma.payment.findFirst({
+      where: {
+        rideId,
+        idempotencyKey: idempotencyKey ?? null,
+      },
+    });
+
+    if (existing) {
+      return { created: false, paymentIntentId: existing.paymentIntentId, clientSecret: existing.clientSecret, status: existing.status };
+    }
+
+    const paymentIntentId = `pi_${uuidv4()}`;
+    const clientSecret = `cs_${uuidv4()}`;
+
+    const payment = await this.prisma.payment.create({
+      data: {
+        rideId,
+        customerId,
+        amount,
+        currency,
+        method: paymentMethod === 'CASH' ? PaymentMethod.CASH : PaymentMethod.CARD,
+        provider: PaymentProvider.MOCK,
+        status: PaymentStatus.REQUIRES_ACTION,
+        paymentIntentId,
+        clientSecret,
+        idempotencyKey,
+      },
+    });
+
+    await this.eventPublisher.publish('payment.intent.created', {
+      rideId,
+      customerId,
+      paymentIntentId,
+      amount,
+      currency,
+      provider: payment.provider,
+    }, rideId);
+
+    return { created: true, paymentIntentId: payment.paymentIntentId, clientSecret: payment.clientSecret, status: payment.status };
   }
 
   async processRideCompleted(payload: RideCompletedPayload): Promise<void> {
@@ -113,6 +250,7 @@ export class PaymentService {
             status: PaymentStatus.COMPLETED,
             completedAt: new Date(),
             transactionId: uuidv4(),
+            provider: payment.provider ?? PaymentProvider.MOCK,
           },
         });
 
@@ -240,6 +378,7 @@ export class PaymentService {
         data: {
           status: PaymentStatus.REFUNDED,
           refundedAt: new Date(),
+          gatewayResponse: reason,
         },
       });
 

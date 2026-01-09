@@ -2,45 +2,44 @@
 export interface IDriver {
   _id: string;
   userId: string;
-  status: DriverStatus;
-  availabilityStatus: AvailabilityStatus;
+  status: DriverStatus; // lifecycle status
+  availabilityStatus: AvailabilityStatus; // online/offline/busy
   vehicle: IVehicle;
   license: ILicense;
-  rating: number;
-  totalRides: number;
-  totalEarnings: number;
-  location?: IDriverLocation;
+  rating: {
+    average: number;
+    count: number;
+  };
+  currentRideId?: string;
+  lastLocation?: IDriverLocation;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface IVehicle {
-  make: string;
-  model: string;
-  year: number;
-  color: string;
-  plateNumber: string;
   type: VehicleType;
+  brand: string;
+  model: string;
+  plate: string;
+  color: string;
+  year: number;
 }
 
 export interface ILicense {
   number: string;
   expiryDate: Date;
-  issuedAt: string;
   verified: boolean;
 }
 
 export interface IDriverLocation {
   lat: number;
   lng: number;
-  heading?: number;
-  speed?: number;
   updatedAt: Date;
 }
 
 export type DriverStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
 export type AvailabilityStatus = 'OFFLINE' | 'ONLINE' | 'BUSY';
-export type VehicleType = 'STANDARD' | 'PREMIUM' | 'XL';
+export type VehicleType = 'CAR' | 'MOTORCYCLE' | 'SUV';
 
 // Driver service interfaces
 export interface IDriverService {

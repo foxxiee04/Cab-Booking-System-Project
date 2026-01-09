@@ -45,6 +45,11 @@ class ApiClient {
     );
   }
 
+  // Generic helpers
+  get<T = any>(url: string, config?: any) {
+    return this.client.get<T>(url, config);
+  }
+
   // Auth
   async login(data: { email: string; password: string }) {
     return this.client.post('/api/auth/login', data);
@@ -85,6 +90,14 @@ class ApiClient {
     return this.client.post(`/api/rides/${rideId}/complete`);
   }
 
+  async pickupRide(rideId: string) {
+    return this.client.post(`/api/rides/${rideId}/pickup`);
+  }
+
+  async rejectRide(rideId: string) {
+    return this.client.post(`/api/rides/${rideId}/reject`);
+  }
+
   async cancelRide(rideId: string, reason?: string) {
     return this.client.post(`/api/rides/${rideId}/cancel`, { reason });
   }
@@ -95,6 +108,17 @@ class ApiClient {
 
   async getRideHistory(page = 1, limit = 20) {
     return this.client.get(`/api/rides/driver/history?page=${page}&limit=${limit}`);
+  }
+
+  // Hybrid: driver browsing available rides
+  async getAvailableRides(lat: number, lng: number, radius = 5, vehicleType?: string) {
+    return this.client.get('/api/drivers/me/available-rides', {
+      params: { lat, lng, radius, vehicleType },
+    });
+  }
+
+  async acceptAvailableRide(rideId: string) {
+    return this.client.post(`/api/drivers/me/rides/${rideId}/accept`);
   }
 
   // Earnings
