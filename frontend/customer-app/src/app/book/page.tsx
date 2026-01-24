@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import VehicleTypeSelector from '@/components/VehicleTypeSelector';
+import PaymentMethodSelector from '@/components/PaymentMethodSelector';
 import { 
   MapPin, 
   Navigation, 
@@ -344,6 +346,20 @@ export default function BookPage() {
                   {ride.status === 'IDLE' ? 'Click trên bản đồ để chọn điểm đến' : 'Không thể thay đổi khi đang tìm tài xế'}
                 </p>
               </div>
+
+              {/* Vehicle Type Selector */}
+              <VehicleTypeSelector
+                selected={ride.vehicleType}
+                onChange={ride.setVehicleType}
+                disabled={ride.status !== 'IDLE'}
+              />
+
+              {/* Payment Method Selector */}
+              <PaymentMethodSelector
+                selected={ride.paymentMethod}
+                onChange={ride.setPaymentMethod}
+                disabled={ride.status !== 'IDLE'}
+              />
 
               {/* Estimate Button */}
               {!ride.estimate && (

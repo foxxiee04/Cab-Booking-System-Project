@@ -274,4 +274,43 @@ export class DriverService {
       { new: true }
     );
   }
+
+  /**
+   * Cleanup stale driver locations from Redis
+   * Should be called periodically (e.g., every minute)
+   */
+  async cleanupStaleLocations(): Promise<void> {
+    try {
+      const geoMembers = await this.redis.zrange(GEO_KEY, 0, -1);
+      const locationTTL = config.driver.locationTTL || 3600; // default 1 hour
+      const now = Date.now();
+      let cleaned = 0;
+
+      for (const driverId of geoMembers) {
+        const lastSeenStr = await this.redis.get(`driver:${driverId}:lastSeen`);
+        
+        if (!lastSeenStr) {
+          // No last seen timestamp, remove from geo
+          await this.redis.zrem(GEO_KEY, driverId);
+          cleaned++;
+          continue;
+        }
+
+        const lastSeen = parseInt(lastSeenStr);
+        const ageSeconds = (now - lastSeen) / 1000;
+
+        if (ageSeconds > locationTTL) {
+          // Location is stale, remove from geo
+          await this.redis.zrem(GEO_KEY, driverId);
+          cleaned++;
+        }
+      }
+
+      if (cleaned > 0) {
+        logger.info(`Cleaned up ${cleaned} stale driver locations`);
+      }
+    } catch (error) {
+      logger.error('Error cleaning up stale locations:', error);
+    }
+  }
 }

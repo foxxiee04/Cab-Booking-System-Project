@@ -24,8 +24,8 @@ describe('proxy router wiring', () => {
 
     const { createProxyMiddleware } = require('http-proxy-middleware');
 
-    // expected proxies: auth, rides, drivers, payments, ai, socket.io
-    expect(createProxyMiddleware).toHaveBeenCalledTimes(6);
+    // expected proxies: auth, rides, drivers, payments, ai (/api and /geo), socket.io
+    expect(createProxyMiddleware).toHaveBeenCalledTimes(7);
 
     const calls = createProxyMiddleware.mock.calls.map((c: any[]) => c[0]);
     const targets = calls.map((o: any) => o.target);
@@ -41,13 +41,12 @@ describe('proxy router wiring', () => {
       ])
     );
 
-    const aiOptions = calls.find((o: any) => o.target === 'http://ai:3006');
-    expect(aiOptions).toEqual(
-      expect.objectContaining({
-        changeOrigin: true,
-        pathRewrite: expect.objectContaining({ '^/api/ai': '/api' }),
-      })
-    );
+    const aiOptions = calls.filter((o: any) => o.target === 'http://ai:3006');
+    expect(aiOptions.length).toBeGreaterThanOrEqual(2);
+    const aiApiProxy = aiOptions.find((o: any) => o.pathRewrite && o.pathRewrite['^/api/ai'] === '/api');
+    expect(aiApiProxy).toBeDefined();
+    const aiGeoProxy = aiOptions.find((o: any) => o.pathRewrite && o.pathRewrite['^/api/geo'] === '/api/geo');
+    expect(aiGeoProxy).toBeDefined();
 
     const wsOptions = calls.find((o: any) => o.target === 'http://notification:3005');
     expect(wsOptions).toEqual(

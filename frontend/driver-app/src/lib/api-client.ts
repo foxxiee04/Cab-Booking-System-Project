@@ -50,6 +50,17 @@ class ApiClient {
     return this.client.get<T>(url, config);
   }
 
+  // Geocoding
+  async geoAutocomplete(q: string, lat?: number, lng?: number, limit: number = 5) {
+    return this.client.get('/api/geo/autocomplete', {
+      params: { q, lat, lng, limit },
+    });
+  }
+
+  async geoReverse(lat: number, lng: number) {
+    return this.client.get('/api/geo/reverse', { params: { lat, lng } });
+  }
+
   // Auth
   async login(data: { email: string; password: string }) {
     return this.client.post('/api/auth/login', data);

@@ -221,8 +221,9 @@ export class EventConsumer {
         dropoff,
       });
 
-      // Notify driver
-      this.socketManager.emitToUser(driverId, 'ride:assigned', {
+      // Notify driver (prefer driver.userId when available)
+      const driverEmitUserId = driver?.userId || driverId;
+      this.socketManager.emitToUser(driverEmitUserId, 'ride:assigned', {
         rideId,
         customerId,
         pickup,

@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException
 from app.models import (
     RideEstimateRequest, RideEstimateResponse,
     DriverMatchRequest, DriverMatchResponse,
-    SurgePricingRequest, SurgePricingResponse
+    SurgePricingRequest, SurgePricingResponse,
+    FindDriversRequest, FindDriversResponse
 )
 from app.services.ai_service import ai_service
 from app.services.geocoding_service import geocoding_service
@@ -36,6 +37,17 @@ async def get_surge_pricing(request: SurgePricingRequest):
     """
     try:
         return await ai_service.get_surge_pricing(request)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/ride/find-drivers", response_model=FindDriversResponse)
+async def find_drivers(request: FindDriversRequest):
+    """
+    Find available drivers near pickup location based on vehicle type.
+    Returns suggested drivers sorted by distance and rating.
+    """
+    try:
+        return await ai_service.find_drivers(request)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

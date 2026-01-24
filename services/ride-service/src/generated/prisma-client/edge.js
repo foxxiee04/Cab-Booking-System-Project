@@ -173,7 +173,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "E:\\Nam4 - Ki 2\\KLTN2025\\Cab-Booking-System-Project\\services\\ride-service\\src\\generated\\prisma-client",
+      "value": "e:\\Nam4 - Ki 2\\KLTN2025\\Cab-Booking-System-Project\\services\\ride-service\\src\\generated\\prisma-client",
       "fromEnvVar": null
     },
     "config": {
@@ -187,7 +187,7 @@ const config = {
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "E:\\Nam4 - Ki 2\\KLTN2025\\Cab-Booking-System-Project\\services\\ride-service\\prisma\\schema.prisma",
+    "sourceFilePath": "e:\\Nam4 - Ki 2\\KLTN2025\\Cab-Booking-System-Project\\services\\ride-service\\prisma\\schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {

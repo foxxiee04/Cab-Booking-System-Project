@@ -11,6 +11,7 @@ import { socketClient } from '@/lib/socket-client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import AvailableRidesList from '@/components/AvailableRidesList';
 import {
   Car,
   Power,
@@ -528,42 +529,31 @@ export default function DashboardPage() {
 
             {/* Available rides list (browse mode) */}
             {driver.status === 'ONLINE' && driver.rideStatus === 'NONE' && (
-              <div className="space-y-3 mb-6">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-gray-700">Cuốc xe gần bạn</h3>
-                  <span className="text-xs text-gray-500">Cập nhật mỗi 5s</span>
-                </div>
-                {loadingAvailable && (
-                  <div className="text-xs text-gray-500">Đang tải danh sách...</div>
-                )}
-                {!loadingAvailable && availableRides.length === 0 && (
-                  <div className="text-xs text-gray-500">Chưa có cuốc nào quanh bạn.</div>
-                )}
-                <div className="space-y-3 max-h-96 overflow-auto pr-1">
-                  {availableRides.map((ride) => (
-                    <Card key={ride.id} className="p-4 shadow-sm border border-gray-100">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="text-sm font-semibold text-gray-800">{formatCurrency(ride.fare || 0)}</div>
-                        <Badge variant="info" className="text-xs">{(ride.distanceFromDriver ?? ride.distance ?? 0).toFixed(1)} km</Badge>
-                      </div>
-                      <div className="text-xs text-gray-600 mb-1">Điểm đón</div>
-                      <div className="text-sm font-medium text-gray-900 truncate">{ride.pickupAddress}</div>
-                      <div className="text-xs text-gray-600 mt-2 mb-1">Điểm đến</div>
-                      <div className="text-sm font-medium text-gray-900 truncate">{ride.dropoffAddress}</div>
-                      <div className="flex gap-2 mt-3">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => handleAcceptAvailableRide(ride)}
-                          disabled={loading}
-                        >
-                          Nhận cuốc
-                        </Button>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
+              <div className="mt-6">
+                <AvailableRidesList
+                  rides={availableRides.map(ride => ({
+                    id: ride.id,
+                    pickupAddress: ride.pickupAddress,
+                    dropoffAddress: ride.dropoffAddress,
+                    pickupLat: ride.pickup?.coordinates?.[1] || 0,
+                    pickupLng: ride.pickup?.coordinates?.[0] || 0,
+                    dropoffLat: ride.dropoff?.coordinates?.[1] || 0,
+                    dropoffLng: ride.dropoff?.coordinates?.[0] || 0,
+                    distance: ride.distanceFromDriver || ride.distance || 0,
+                    estimatedFare: ride.fare || 0,
+                    customerRating: 4.5, // Mock, should come from customer profile
+                    vehicleType: ride.vehicleType || 'ECONOMY'
+                  }))}
+                  loading={loadingAvailable}
+                  onAccept={(rideId) => {
+                    const ride = availableRides.find(r => r.id === rideId);
+                    if (ride) handleAcceptAvailableRide(ride);
+                  }}
+                  onViewDetails={(ride) => {
+                    console.log('View details:', ride);
+                    // TODO: Show modal with detailed info
+                  }}
+                />
               </div>
             )}
 

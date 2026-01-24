@@ -73,7 +73,8 @@ export class SocketManager {
 
       // Driver location update (for drivers only)
       socket.on('driver:location', (data: { lat: number; lng: number }) => {
-        if (role === 'driver') {
+        const isDriver = role && role.toUpperCase() === 'DRIVER';
+        if (isDriver) {
           // Broadcast to subscribers tracking this driver
           socket.broadcast.to(`tracking:${userId}`).emit('driver:location:update', {
             driverId: userId,

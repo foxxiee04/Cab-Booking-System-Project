@@ -12,6 +12,7 @@ interface RideCompletedPayload {
   distance?: number;
   duration?: number;
   surgeMultiplier?: number;
+  vehicleType?: string; // ECONOMY, COMFORT, PREMIUM
 }
 
 export class PaymentService {
@@ -161,14 +162,25 @@ export class PaymentService {
   }
 
   async processRideCompleted(payload: RideCompletedPayload): Promise<void> {
-    const { rideId, customerId, driverId, distance, duration, surgeMultiplier = 1.0 } = payload;
+    const { rideId, customerId, driverId, distance, duration, surgeMultiplier = 1.0, vehicleType = 'ECONOMY' } = payload;
 
     try {
-      // Calculate fare
+      // Check if fare already processed (prevent duplicates)
+      const existingFare = await this.prisma.fare.findFirst({
+        where: { rideId }
+      });
+
+      if (existingFare) {
+        logger.warn(`Fare already processed for ride ${rideId}, skipping duplicate`);
+        return;
+      }
+
+      // Calculate fare with vehicle type
       const fareDetails = this.calculateFare(
         distance || 0,
         duration || 0,
-        surgeMultiplier
+        surgeMultiplier,
+        vehicleType
       );
 
       // Create fare and payment in transaction
@@ -408,8 +420,33 @@ export class PaymentService {
     logger.info(`Refund completed for ride ${rideId}`);
   }
 
-  private calculateFare(distanceKm: number, durationSeconds: number, surgeMultiplier: number) {
-    const { baseFare, perKmRate, perMinuteRate } = config.farePolicy;
+  private calculateFare(
+    distanceKm: number, 
+    durationSeconds: number, 
+    surgeMultiplier: number, 
+    vehicleType: string = 'ECONOMY'
+  ) {
+    // Vehicle type pricing
+    let baseFare: number;
+    let perKmRate: number;
+    
+    switch (vehicleType.toUpperCase()) {
+      case 'COMFORT':
+        baseFare = 25000;  // 25k base for COMFORT
+        perKmRate = 18000;  // 18k per km
+        break;
+      case 'PREMIUM':
+        baseFare = 35000;  // 35k base for PREMIUM
+        perKmRate = 25000;  // 25k per km
+        break;
+      case 'ECONOMY':
+      default:
+        baseFare = 15000;  // 15k base for ECONOMY
+        perKmRate = 12000;  // 12k per km
+        break;
+    }
+    
+    const perMinuteRate = 500; // 500 VND per minute (all vehicle types)
     
     const distanceFare = distanceKm * perKmRate;
     const timeFare = (durationSeconds / 60) * perMinuteRate;
@@ -422,6 +459,7 @@ export class PaymentService {
       timeFare: Math.round(timeFare),
       surgeMultiplier,
       totalFare,
+      vehicleType,
     };
   }
 

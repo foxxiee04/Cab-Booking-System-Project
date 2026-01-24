@@ -2,7 +2,8 @@ from typing import List
 from app.models import (
     RideEstimateRequest, RideEstimateResponse,
     DriverMatchRequest, DriverMatchResponse, DriverInfo,
-    SurgePricingRequest, SurgePricingResponse
+    SurgePricingRequest, SurgePricingResponse,
+    FindDriversRequest, FindDriversResponse, DriverSuggestion
 )
 from app.utils.geo import haversine_distance, estimate_duration, calculate_fare
 from app.services.redis_service import redis_client
@@ -99,6 +100,45 @@ class AIService:
             demand_level=demand_level,
             active_rides=active_rides,
             available_drivers=available_drivers
+        )
+    
+    async def find_drivers(self, request: FindDriversRequest) -> FindDriversResponse:
+        """
+        Find available drivers near pickup location based on vehicle type.
+        Returns suggested drivers sorted by distance and rating.
+        """
+        lat, lng = request.pickup.lat, request.pickup.lng
+        search_radius = request.search_radius_km
+        vehicle_type = request.vehicle_type.upper()
+        
+        # Get nearby drivers from Redis
+        # In production, filter by vehicle type and status (ONLINE)
+        nearby_drivers = await redis_client.get_nearby_drivers(lat, lng, search_radius)
+        
+        # Mock driver data - in production, fetch from driver-service
+        suggested_drivers: List[DriverSuggestion] = []
+        
+        for driver_id, distance_km in nearby_drivers[:10]:  # Top 10 closest
+            eta_minutes = estimate_duration(distance_km)
+            
+            # Mock rating and acceptance rate (in production: fetch from database)
+            rating = 4.0 + (hash(driver_id) % 10) / 10  # 4.0-4.9
+            acceptance_rate = 0.75 + (hash(driver_id) % 20) / 100  # 0.75-0.94
+            
+            suggested_drivers.append(DriverSuggestion(
+                driver_id=driver_id,
+                distance_km=round(distance_km, 2),
+                eta_minutes=eta_minutes,
+                rating=round(rating, 1),
+                acceptance_rate=round(acceptance_rate, 2)
+            ))
+        
+        # Sort by distance first, then by rating
+        suggested_drivers.sort(key=lambda d: (d.distance_km, -d.rating))
+        
+        return FindDriversResponse(
+            suggested_drivers=suggested_drivers[:5],  # Return top 5
+            total_found=len(nearby_drivers)
         )
     
     async def _calculate_surge(self, lat: float, lng: float) -> float:

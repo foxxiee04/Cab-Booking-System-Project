@@ -11,6 +11,9 @@ export type RideStatus =
   | 'COMPLETED' 
   | 'CANCELLED';
 
+export type VehicleType = 'ECONOMY' | 'COMFORT' | 'PREMIUM';
+export type PaymentMethod = 'CASH' | 'CARD' | 'WALLET';
+
 interface Location {
   lat: number;
   lng: number;
@@ -46,11 +49,15 @@ interface RideState {
   driver: Driver | null;
   eta: number | null;
   fare: number | null;
+  vehicleType: VehicleType;
+  paymentMethod: PaymentMethod;
 
   // Actions
   setPickup: (location: Location) => void;
   setDestination: (location: Location) => void;
   setEstimate: (estimate: RideEstimate) => void;
+  setVehicleType: (type: VehicleType) => void;
+  setPaymentMethod: (method: PaymentMethod) => void;
   startSearching: () => void;
   setRideCreated: (rideId: string) => void;
   setDriverAssigned: (driver: Driver, eta: number) => void;
@@ -71,6 +78,8 @@ const initialState = {
   driver: null,
   eta: null,
   fare: null,
+  vehicleType: 'ECONOMY' as VehicleType,
+  paymentMethod: 'CASH' as PaymentMethod,
 };
 
 export const useRideStore = create<RideState>((set) => ({
@@ -81,6 +90,10 @@ export const useRideStore = create<RideState>((set) => ({
   setDestination: (location) => set({ destination: location }),
 
   setEstimate: (estimate) => set({ estimate }),
+
+  setVehicleType: (vehicleType) => set({ vehicleType, estimate: null }),
+
+  setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
 
   startSearching: () => set({ status: 'SEARCHING' }),
 

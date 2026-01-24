@@ -37,6 +37,27 @@ export class RideService {
   }
 
   async createRide(input: CreateRideInput): Promise<Ride> {
+    // Check for existing active ride to prevent duplicates
+    const existingRide = await this.prisma.ride.findFirst({
+      where: {
+        customerId: input.customerId,
+        status: {
+          in: [
+            RideStatus.CREATED,
+            RideStatus.FINDING_DRIVER,
+            RideStatus.ASSIGNED,
+            RideStatus.ACCEPTED,
+            RideStatus.PICKING_UP,
+            RideStatus.IN_PROGRESS,
+          ],
+        },
+      },
+    });
+
+    if (existingRide) {
+      throw new Error('Customer already has an active ride. Please cancel it first.');
+    }
+
     const rideId = uuidv4();
 
     // Get ETA and surge from AI service (with fallback)
@@ -76,9 +97,9 @@ export class RideService {
       data: {
         id: rideId,
         customerId: input.customerId,
-         status: RideStatus.CREATED,
-         vehicleType: input.vehicleType || 'ECONOMY',
-         paymentMethod: input.paymentMethod || 'CASH',
+        status: RideStatus.CREATED,
+        vehicleType: input.vehicleType || 'ECONOMY',
+        paymentMethod: input.paymentMethod || 'CASH',
         pickupAddress: input.pickup.address,
         pickupLat: input.pickup.lat,
         pickupLng: input.pickup.lng,
@@ -89,6 +110,7 @@ export class RideService {
         duration,
         fare: estimatedFare,
         surgeMultiplier,
+        suggestedDriverIds: [],  // Initialize empty array
         transitions: {
           create: {
             fromStatus: null,
@@ -171,12 +193,14 @@ export class RideService {
     
       // Only allow if ride is in FINDING_DRIVER status
       if (ride.status !== RideStatus.FINDING_DRIVER) {
-        throw new Error('Ride is not available for acceptance');
+        throw new Error(`Ride is not available for acceptance. Current status: ${ride.status}`);
       }
     
-      // Verify driver is in suggested list
-      if (!ride.suggestedDriverIds.includes(driverId)) {
-        throw new Error('Driver is not eligible for this ride');
+      // Verify driver is in suggested list (if list is not empty)
+      if (ride.suggestedDriverIds && ride.suggestedDriverIds.length > 0) {
+        if (!ride.suggestedDriverIds.includes(driverId)) {
+          throw new Error('Driver is not eligible for this ride');
+        }
       }
     
       // Assign driver (transitions to ASSIGNED)
@@ -344,6 +368,9 @@ export class RideService {
       fare: ride.fare,
       distance: ride.distance,
       duration: ride.duration,
+      vehicleType: ride.vehicleType,
+      paymentMethod: ride.paymentMethod,
+      surgeMultiplier: ride.surgeMultiplier,
     }, rideId);
 
     return updatedRide;

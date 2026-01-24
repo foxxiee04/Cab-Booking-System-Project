@@ -44,3 +44,20 @@ class SurgePricingResponse(BaseModel):
     demand_level: str
     active_rides: int
     available_drivers: int
+
+# Find drivers models
+class FindDriversRequest(BaseModel):
+    pickup: Location
+    vehicle_type: Optional[str] = "ECONOMY"  # ECONOMY, COMFORT, PREMIUM
+    search_radius_km: Optional[float] = 5.0
+
+class DriverSuggestion(BaseModel):
+    driver_id: str
+    distance_km: float
+    eta_minutes: int
+    rating: float
+    acceptance_rate: float
+
+class FindDriversResponse(BaseModel):
+    suggested_drivers: List[DriverSuggestion]
+    total_found: int

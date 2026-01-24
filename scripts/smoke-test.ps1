@@ -63,4 +63,12 @@ $matchBody = @{ ride_id = "ride-smoke-001"; pickup = @{ lat = 10.762622; lng = 1
 $match = Invoke-Json -Method POST -Url "$BaseUrl/api/ai/match/drivers" -Body $matchBody -Headers $authHeaders
 $match | ConvertTo-Json -Depth 10 | Write-Host
 
+Write-Host "\n[extra] GET /api/geo/autocomplete?q=Hanoi (may require auth)" -ForegroundColor Yellow
+try {
+  $geo = Invoke-Json -Method GET -Url "$BaseUrl/api/geo/autocomplete?q=Hanoi" -Headers $authHeaders
+  $geo | ConvertTo-Json -Depth 10 | Write-Host
+} catch {
+  Write-Host "Geo autocomplete failed (likely due to auth): $($_.Exception.Message)" -ForegroundColor Yellow
+}
+
 Write-Host "\n✅ Smoke test completed." -ForegroundColor Green
