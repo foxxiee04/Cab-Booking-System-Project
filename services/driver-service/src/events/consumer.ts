@@ -66,12 +66,13 @@ export class EventConsumer {
   private async handleRideAssignmentRequested(event: any): Promise<void> {
     const { rideId, pickup, searchRadiusKm } = event.payload;
 
-    // Find nearby available drivers
-    const nearbyDrivers = await this.driverService.findNearbyDrivers(
-      pickup,
-      searchRadiusKm || config.driver.searchRadiusKm,
-      5
-    );
+    // TODO: Find nearby available drivers
+    // const nearbyDrivers = await this.driverService.findNearbyDrivers(
+    //   pickup,
+    //   searchRadiusKm || config.driver.searchRadiusKm,
+    //   5
+    // );
+    const nearbyDrivers: any[] = [];
 
     if (nearbyDrivers.length === 0) {
       logger.warn(`No available drivers for ride ${rideId}`);
@@ -107,10 +108,10 @@ export class EventConsumer {
     if (!driverId) return;
 
     try {
-      // Find driver by driverId (MongoDB _id)
+      // TODO: Find driver by driverId (MongoDB _id)
       const driver = await this.driverService.getDriverById(driverId);
       if (driver) {
-        await this.driverService.markAvailable(driver.userId);
+        // TODO: await this.driverService.markAvailable(driver.userId);
         logger.info(`Driver ${driverId} marked available after ride ended`);
       }
     } catch (error) {

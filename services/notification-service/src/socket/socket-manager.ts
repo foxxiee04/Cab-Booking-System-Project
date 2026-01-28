@@ -4,6 +4,7 @@ import { Redis } from 'ioredis';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { logger } from '../utils/logger';
+import { Notification, NotificationType, NotificationStatus } from '../models/notification.model';
 
 interface JwtPayload {
   userId: string;
@@ -104,27 +105,61 @@ export class SocketManager {
   }
 
   // Emit to specific user
-  emitToUser(userId: string, event: string, data: any): void {
+  async emitToUser(userId: string, event: string, data: any): Promise<void> {
     this.io.to(`user:${userId}`).emit(event, data);
     logger.debug(`Emitted ${event} to user:${userId}`);
+    
+    // Persist notification
+    await this.persistNotification(userId, event, data);
   }
 
   // Emit to ride room
-  emitToRide(rideId: string, event: string, data: any): void {
+  async emitToRide(rideId: string, event: string, data: any): Promise<void> {
     this.io.to(`ride:${rideId}`).emit(event, data);
     logger.debug(`Emitted ${event} to ride:${rideId}`);
   }
 
   // Emit to role
-  emitToRole(role: string, event: string, data: any): void {
+  async emitToRole(role: string, event: string, data: any): Promise<void> {
     this.io.to(`role:${role}`).emit(event, data);
     logger.debug(`Emitted ${event} to role:${role}`);
   }
 
   // Emit to all drivers in area (for ride requests)
-  emitToDrivers(event: string, data: any): void {
+  async emitToDrivers(event: string, data: any): Promise<void> {
     this.io.to('role:driver').emit(event, data);
     logger.debug(`Emitted ${event} to all drivers`);
+  }
+
+  // Persist notification to MongoDB
+  private async persistNotification(userId: string, event: string, data: any): Promise<void> {
+    try {
+      const notificationTypeMap: Record<string, NotificationType> = {
+        'ride:request': NotificationType.RIDE_REQUEST,
+        'ride:accepted': NotificationType.RIDE_ACCEPTED,
+        'ride:started': NotificationType.RIDE_STARTED,
+        'ride:completed': NotificationType.RIDE_COMPLETED,
+        'ride:cancelled': NotificationType.RIDE_CANCELLED,
+        'payment:success': NotificationType.PAYMENT_SUCCESS,
+        'payment:failed': NotificationType.PAYMENT_FAILED,
+        'driver:approved': NotificationType.DRIVER_APPROVED,
+        'driver:rejected': NotificationType.DRIVER_REJECTED,
+      };
+
+      const type = notificationTypeMap[event] || NotificationType.SYSTEM_MESSAGE;
+
+      await Notification.create({
+        userId,
+        type,
+        title: data.title || event,
+        message: data.message || JSON.stringify(data),
+        data,
+        status: NotificationStatus.SENT,
+        sentAt: new Date(),
+      });
+    } catch (error) {
+      logger.error('Failed to persist notification:', error);
+    }
   }
 
   async close(): Promise<void> {

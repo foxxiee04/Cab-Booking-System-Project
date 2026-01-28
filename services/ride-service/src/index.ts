@@ -5,6 +5,7 @@ import { PrismaClient } from './generated/prisma-client';
 import { config } from './config';
 import { logger } from './utils/logger';
 import { EventPublisher } from './events/publisher';
+import { EventConsumer } from './events/consumer';
 import { RideService } from './services/ride.service';
 import { createRideRouter } from './routes/ride.routes';
 import { authenticate } from './middleware/auth.middleware';
@@ -39,6 +40,10 @@ async function main() {
 
   // Initialize services
   const rideService = new RideService(prisma, eventPublisher);
+
+  // Initialize event consumer
+  const eventConsumer = new EventConsumer(rideService);
+  await eventConsumer.connect();
 
   // Internal routes (service-to-service) protected by INTERNAL_SERVICE_TOKEN
   app.use('/internal', (req, res, next) => {

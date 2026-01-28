@@ -146,6 +146,61 @@
   @apply shadow-md;
 }
 
+/* TrackAsia Map Styles */
+.trackasia-ctrl-attrib,
+.mapboxgl-ctrl-attrib {
+  @apply text-xs opacity-70;
+}
+
+.trackasia-popup-content,
+.mapboxgl-popup-content {
+  @apply rounded-lg shadow-lg !important;
+  padding: 0 !important;
+}
+
+.trackasia-popup-close-button,
+.mapboxgl-popup-close-button {
+  @apply text-gray-500 hover:text-gray-700 !important;
+  font-size: 20px !important;
+}
+
+/* Custom marker animation */
+@keyframes marker-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.custom-marker {
+  animation: marker-bounce 2s ease-in-out infinite;
+}
+
+/* Panel slide animation */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* Smooth gradient backgrounds */
+.bg-gradient-primary {
+  @apply bg-gradient-to-br from-primary-500 to-primary-700;
+}
+
+.bg-gradient-secondary {
+  @apply bg-gradient-to-br from-secondary-500 to-secondary-700;
+}
+
 /* Toast notifications position */
 .toast-container {
   @apply fixed top-4 right-4 z-50 flex flex-col gap-2;

@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import mongoose from 'mongoose';
+import { PrismaClient } from '@prisma/client';
 import Redis from 'ioredis';
 import { config } from './config';
 import { logger } from './utils/logger';
@@ -24,12 +24,13 @@ async function main() {
     res.json({ status: 'ok', service: config.serviceName });
   });
 
-  // Connect to MongoDB
+  // Connect to PostgreSQL
+  const prisma = new PrismaClient();
   try {
-    await mongoose.connect(config.mongodb.uri);
-    logger.info('Connected to MongoDB');
+    await prisma.$connect();
+    logger.info('Connected to PostgreSQL');
   } catch (error) {
-    logger.error('MongoDB connection error:', error);
+    logger.error('PostgreSQL connection error:', error);
     process.exit(1);
   }
 
@@ -132,7 +133,7 @@ async function main() {
     logger.info('SIGTERM received, shutting down...');
     await eventPublisher.close();
     await eventConsumer.close();
-    await mongoose.connection.close();
+    await prisma.$disconnect();
     redis.disconnect();
     process.exit(0);
   });

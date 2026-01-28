@@ -1,0 +1,310 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Gateway
+  api-gateway:
+    image: ${REGISTRY}/cab-booking-system-project/cab-api-gateway:${IMAGE_TAG:-latest}
+    container_name: cab-api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      PORT: 3000
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+      - rabbitmq
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cab-network
+    restart: unless-stopped
+
+  # Auth Service
+  auth-service:
+    image: ${REGISTRY}/cab-booking-system-project/cab-auth-service:${IMAGE_TAG:-latest}
+    container_name: cab-auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      PORT: 3001
+      MONGODB_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/cab_auth?authSource=admin
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRY: 24h
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cab-network
+    restart: unless-stopped
+
+  # Ride Service
+  ride-service:
+    image: ${REGISTRY}/cab-booking-system-project/cab-ride-service:${IMAGE_TAG:-latest}
+    container_name: cab-ride-service
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      PORT: 3002
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cab_rides
+      MONGODB_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/cab_rides?authSource=admin
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cab-network
+    restart: unless-stopped
+
+  # Driver Service
+  driver-service:
+    image: ${REGISTRY}/cab-booking-system-project/cab-driver-service:${IMAGE_TAG:-latest}
+    container_name: cab-driver-service
+    ports:
+      - "3003:3003"
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      PORT: 3003
+      MONGODB_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/cab_drivers?authSource=admin
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cab-network
+    restart: unless-stopped
+
+  # Payment Service
+  payment-service:
+    image: ${REGISTRY}/cab-booking-system-project/cab-payment-service:${IMAGE_TAG:-latest}
+    container_name: cab-payment-service
+    ports:
+      - "3004:3004"
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      PORT: 3004
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cab_payments
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cab-network
+    restart: unless-stopped
+
+  # Notification Service
+  notification-service:
+    image: ${REGISTRY}/cab-booking-system-project/cab-notification-service:${IMAGE_TAG:-latest}
+    container_name: cab-notification-service
+    ports:
+      - "3005:3005"
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      PORT: 3005
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cab-network
+    restart: unless-stopped
+
+  # AI Service
+  ai-service:
+    image: ${REGISTRY}/cab-booking-system-project/cab-ai-service:${IMAGE_TAG:-latest}
+    container_name: cab-ai-service
+    ports:
+      - "5000:5000"
+    environment:
+      PYTHONUNBUFFERED: 1
+      LOG_LEVEL: info
+      PORT: 5000
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cab-network
+    restart: unless-stopped
+
+  # Customer App
+  customer-app:
+    image: ${REGISTRY}/cab-booking-system-project/cab-customer-app:${IMAGE_TAG:-latest}
+    container_name: cab-customer-app
+    ports:
+      - "4000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NODE_ENV: production
+    depends_on:
+      - api-gateway
+    networks:
+      - cab-network
+    restart: unless-stopped
+
+  # Driver App
+  driver-app:
+    image: ${REGISTRY}/cab-booking-system-project/cab-driver-app:${IMAGE_TAG:-latest}
+    container_name: cab-driver-app
+    ports:
+      - "4001:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NODE_ENV: production
+    depends_on:
+      - api-gateway
+    networks:
+      - cab-network
+    restart: unless-stopped
+
+  # Admin Dashboard
+  admin-dashboard:
+    image: ${REGISTRY}/cab-booking-system-project/cab-admin-dashboard:${IMAGE_TAG:-latest}
+    container_name: cab-admin-dashboard
+    ports:
+      - "4002:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NODE_ENV: production
+    depends_on:
+      - api-gateway
+    networks:
+      - cab-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  mongo_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+
+networks:
+  cab-network:
+    driver: bridge

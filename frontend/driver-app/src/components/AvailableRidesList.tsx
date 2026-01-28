@@ -102,7 +102,7 @@ export default function AvailableRidesList({ rides, loading, onAccept, onViewDet
             </div>
             <div className="flex gap-2">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => onViewDetails(ride)}
               >

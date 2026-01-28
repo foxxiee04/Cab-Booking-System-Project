@@ -147,27 +147,44 @@ export const createRideRouter = (rideService: RideService): Router => {
   // Get driver's active ride
   router.get('/driver/active', async (req: AuthRequest, res: Response) => {
     try {
-      // Note: This expects driverId (profile ID) in query or we need to fetch it from driver-service
-      // For now, return null if driverId not provided
-      const driverId = req.query.driverId as string;
-      
-      if (!driverId) {
-        return res.status(400).json({
+      if (req.user!.role !== 'DRIVER') {
+        return res.status(403).json({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'driverId query parameter required' },
+          error: { code: 'FORBIDDEN', message: 'Only drivers can access this' },
         });
+      }
+
+      // Use userId from auth token - this is the driver's userId
+      const userId = req.user!.userId;
+      
+      // First, get driver profile to get driverId
+      const axios = require('axios');
+      let driverId = userId; // fallback
+      
+      try {
+        // Gọi endpoint nội bộ driver-service
+        const internalToken = process.env.INTERNAL_SERVICE_TOKEN || 'secret';
+        const driverRes = await axios.get(
+          `${process.env.DRIVER_SERVICE_URL || 'http://driver-service:3003'}/internal/drivers/by-user/${userId}`,
+          { headers: { 'x-internal-token': internalToken } }
+        );
+        if (driverRes.data?.data?.driver?.id) {
+          driverId = driverRes.data.data.driver.id;
+        }
+      } catch (err) {
+        logger.warn('Could not fetch driver profile, using userId as driverId');
       }
       
       const ride = await rideService.getActiveRideForDriver(driverId);
       
       if (!ride) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'NOT_FOUND', message: 'No active ride' },
+        return res.json({
+          success: true,
+          data: null,
         });
       }
       
-      res.json({ success: true, data: { ride } });
+      res.json({ success: true, data: ride });
     } catch (err) {
       logger.error('Get driver active ride error:', err);
       res.status(500).json({

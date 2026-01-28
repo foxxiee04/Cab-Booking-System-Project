@@ -184,6 +184,10 @@ services:
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
       - REDIS_URL=redis://redis:6379
       - AUTH_SERVICE_URL=http://auth-service:3001
+      - USER_SERVICE_URL=http://user-service:3007
+      - BOOKING_SERVICE_URL=http://booking-service:3008
+      - PRICING_SERVICE_URL=http://pricing-service:3009
+      - REVIEW_SERVICE_URL=http://review-service:3010
       - RIDE_SERVICE_URL=http://ride-service:3002
       - DRIVER_SERVICE_URL=http://driver-service:3003
       - PAYMENT_SERVICE_URL=http://payment-service:3004
@@ -191,6 +195,10 @@ services:
       - AI_SERVICE_URL=http://ai-service:3006
     depends_on:
       - auth-service
+      - user-service
+      - booking-service
+      - pricing-service
+      - review-service
       - ride-service
       - driver-service
       - payment-service
@@ -208,7 +216,7 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3001
-      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/cab_auth?authSource=admin
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/auth_db?schema=public
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
@@ -216,7 +224,7 @@ services:
       - REFRESH_TOKEN_EXPIRES_IN=7d
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
     depends_on:
-      mongodb:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -234,7 +242,7 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3002
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cab_rides?schema=public
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/ride_db?schema=public
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       - AI_SERVICE_URL=http://ai-service:3006
@@ -259,14 +267,14 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3003
-      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/cab_driver_service?authSource=admin
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/driver_db?schema=public
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
       - RIDE_SERVICE_URL=http://ride-service:3002
     depends_on:
-      mongodb:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -284,7 +292,7 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3004
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cab_payments?schema=public
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/payment_db?schema=public
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
@@ -307,6 +315,7 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3005
+      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/notification_db?authSource=admin
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
@@ -315,6 +324,8 @@ services:
       - RIDE_SERVICE_URL=${RIDE_SERVICE_URL:-http://ride-service:3002}
       - DRIVER_SERVICE_URL=${DRIVER_SERVICE_URL:-http://driver-service:3003}
     depends_on:
+      mongodb:
+        condition: service_healthy
       redis:
         condition: service_healthy
       rabbitmq:
@@ -333,9 +344,148 @@ services:
       - PORT=3006
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      - MAX_SURGE_MULTIPLIER=1.5
+      - SURGE_THRESHOLD=1.2
     depends_on:
       redis:
         condition: service_healthy
+    restart: unless-stopped
+
+  # ============ New Services ============
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: cab-user-service
+    ports:
+      - "3007:3007"
+    environment:
+      - NODE_ENV=development
+      - PORT=3007
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/user_db?schema=public
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  booking-service:
+    build:
+      context: ./services/booking-service
+      dockerfile: Dockerfile
+    container_name: cab-booking-service
+    ports:
+      - "3008:3008"
+    environment:
+      - NODE_ENV=development
+      - PORT=3008
+      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/booking_db?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      - PRICING_SERVICE_URL=http://pricing-service:3009
+      - RIDE_SERVICE_URL=http://ride-service:3002
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  pricing-service:
+    build:
+      context: ./services/pricing-service
+      dockerfile: Dockerfile
+    container_name: cab-pricing-service
+    ports:
+      - "3009:3009"
+    environment:
+      - NODE_ENV=development
+      - PORT=3009
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  review-service:
+    build:
+      context: ./services/review-service
+      dockerfile: Dockerfile
+    container_name: cab-review-service
+    ports:
+      - "3010:3010"
+    environment:
+      - NODE_ENV=development
+      - PORT=3010
+      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/review_db?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ============ Frontend Applications ============
+  customer-app:
+    build:
+      context: .
+      dockerfile: ./frontend/customer-app/Dockerfile
+      args:
+        NEXT_PUBLIC_TRACKASIA_KEY: ${NEXT_PUBLIC_TRACKASIA_KEY:?set NEXT_PUBLIC_TRACKASIA_KEY}
+    container_name: cab-customer-app
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:3000
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
+  driver-app:
+    build:
+      context: .
+      dockerfile: ./frontend/driver-app/Dockerfile
+      args:
+        NEXT_PUBLIC_TRACKASIA_KEY: ${NEXT_PUBLIC_TRACKASIA_KEY:?set NEXT_PUBLIC_TRACKASIA_KEY}
+    container_name: cab-driver-app
+    ports:
+      - "4001:4001"
+    environment:
+      - PORT=4001
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:3000
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
+  admin-dashboard:
+    build:
+      context: .
+      dockerfile: ./frontend/admin-dashboard/Dockerfile
+    container_name: cab-admin-dashboard
+    ports:
+      - "4002:4002"
+    environment:
+      - PORT=4002
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:3000
+    depends_on:
+      - api-gateway
     restart: unless-stopped
 
 volumes:

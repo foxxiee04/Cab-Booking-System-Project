@@ -29,10 +29,11 @@ export const createAuthRouter = (authService: AuthService): Router => {
         success: true,
         data: {
           user: {
-            id: user._id,
+            id: user.id,
             email: user.email,
             role: user.role,
-            profile: user.profile,
+            firstName: user.firstName,
+            lastName: user.lastName,
           },
           tokens,
         },
@@ -68,10 +69,11 @@ export const createAuthRouter = (authService: AuthService): Router => {
         success: true,
         data: {
           user: {
-            id: user._id,
+            id: user.id,
             email: user.email,
             role: user.role,
-            profile: user.profile,
+            firstName: user.firstName,
+            lastName: user.lastName,
           },
           tokens,
         },
@@ -142,12 +144,13 @@ export const createAuthRouter = (authService: AuthService): Router => {
         success: true,
         data: {
           user: {
-            id: user._id,
+            id: user.id,
             email: user.email,
             phone: user.phone,
             role: user.role,
             status: user.status,
-            profile: user.profile,
+            firstName: user.firstName,
+            lastName: user.lastName,
           },
         },
       });

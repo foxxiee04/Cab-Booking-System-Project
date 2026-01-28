@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BookingStatus {
+  PENDING           // Just created, waiting for pricing
+  CONFIRMED         // Pricing confirmed, ready to find driver
+  CANCELLED         // Cancelled by customer
+  EXPIRED           // Timeout without confirmation
+}
+
+enum VehicleType {
+  ECONOMY
+  COMFORT
+  PREMIUM
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  WALLET
+}
+
+model Booking {
+  id            String         @id @default(uuid())
+  customerId    String
+  
+  // Location details
+  pickupAddress String
+  pickupLat     Float
+  pickupLng     Float
+  
+  dropoffAddress String
+  dropoffLat     Float
+  dropoffLng     Float
+  
+  // Booking preferences
+  vehicleType   VehicleType    @default(ECONOMY)
+  paymentMethod PaymentMethod  @default(CASH)
+  
+  // Pricing (from Pricing Service)
+  estimatedFare Float?
+  estimatedDistance Float?       // km
+  estimatedDuration Int?          // seconds
+  surgeMultiplier   Float        @default(1.0)
+  
+  // Status
+  status        BookingStatus  @default(PENDING)
+  
+  // Metadata
+  notes         String?
+  customerPhone String?
+  
+  // Timestamps
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  confirmedAt   DateTime?
+  cancelledAt   DateTime?
+  
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
+}

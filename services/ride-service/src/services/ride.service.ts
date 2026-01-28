@@ -139,6 +139,72 @@ export class RideService {
     return ride;
   }
 
+  /**
+   * Create ride from booking (called by event consumer)
+   */
+  async createRideFromBooking(data: {
+    bookingId: string;
+    customerId: string;
+    pickupAddress: string;
+    pickupLat: number;
+    pickupLng: number;
+    dropoffAddress: string;
+    dropoffLat: number;
+    dropoffLng: number;
+    vehicleType: string;
+    paymentMethod: string;
+    fare?: number;
+    distance?: number;
+    duration?: number;
+    surgeMultiplier?: number;
+  }): Promise<Ride> {
+    const rideId = uuidv4();
+
+    const ride = await this.prisma.ride.create({
+      data: {
+        id: rideId,
+        customerId: data.customerId,
+        status: RideStatus.FINDING_DRIVER,
+        vehicleType: data.vehicleType as any,
+        paymentMethod: data.paymentMethod as any,
+        pickupAddress: data.pickupAddress,
+        pickupLat: data.pickupLat,
+        pickupLng: data.pickupLng,
+        dropoffAddress: data.dropoffAddress,
+        dropoffLat: data.dropoffLat,
+        dropoffLng: data.dropoffLng,
+        distance: data.distance || 0,
+        duration: data.duration || 0,
+        fare: data.fare || 0,
+        surgeMultiplier: data.surgeMultiplier || 1.0,
+        suggestedDriverIds: [],
+        transitions: {
+          create: {
+            fromStatus: null,
+            toStatus: RideStatus.FINDING_DRIVER,
+            actorId: data.customerId,
+            actorType: 'CUSTOMER',
+          },
+        },
+      },
+    });
+
+    logger.info('Ride created from booking', { rideId, bookingId: data.bookingId });
+
+    // Publish ride.assignment.requested event
+    await this.eventPublisher.publish('ride.assignment.requested', {
+      rideId: ride.id,
+      customerId: ride.customerId,
+      vehicleType: ride.vehicleType,
+      pickup: { lat: ride.pickupLat, lng: ride.pickupLng },
+    }, ride.id);
+
+    // Request driver suggestions
+    await this.requestDriverSuggestions(ride);
+
+    return ride;
+  }
+
   async assignDriver(rideId: string, driverId: string): Promise<Ride> {
     const ride = await this.prisma.ride.findUnique({ where: { id: rideId } });
     if (!ride) throw new Error('Ride not found');

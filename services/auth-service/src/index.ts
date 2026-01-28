@@ -1,13 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import mongoose from 'mongoose';
+import { PrismaClient } from '@prisma/client';
 import { config } from './config';
 import { logger } from './utils/logger';
 import { EventPublisher } from './events/publisher';
 import { AuthService } from './services/auth.service';
 import { createAuthRouter } from './routes/auth.routes';
-import { User } from './models/user.model';
+
+const prisma = new PrismaClient();
 
 async function main() {
   const app = express();
@@ -45,7 +46,22 @@ async function main() {
 
   app.get('/internal/users/:userId', async (req, res) => {
     try {
-      const user = await User.findById(req.params.userId).select('-passwordHash').lean();
+      const user = await prisma.user.findUnique({
+        where: { id: req.params.userId },
+        select: {
+          id: true,
+          email: true,
+          phone: true,
+          role: true,
+          status: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -62,12 +78,12 @@ async function main() {
     }
   });
 
-  // Connect to MongoDB
+  // Connect to PostgreSQL
   try {
-    await mongoose.connect(config.mongodb.uri);
-    logger.info('Connected to MongoDB');
+    await prisma.$connect();
+    logger.info('Connected to PostgreSQL');
   } catch (error) {
-    logger.error('MongoDB connection error:', error);
+    logger.error('PostgreSQL connection error:', error);
     process.exit(1);
   }
 
@@ -99,7 +115,7 @@ async function main() {
   process.on('SIGTERM', async () => {
     logger.info('SIGTERM received, shutting down...');
     await eventPublisher.close();
-    await mongoose.connection.close();
+    await prisma.$disconnect();
     process.exit(0);
   });
 }

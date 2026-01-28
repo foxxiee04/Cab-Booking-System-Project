@@ -41,7 +41,7 @@ export default function LoginPage() {
       const response = await apiClient.login(data);
       const { user, accessToken, refreshToken } = response.data.data;
 
-      if (user.role !== 'admin') {
+      if (user.role !== 'ADMIN') {
         setError('Bạn không có quyền truy cập trang quản trị');
         return;
       }

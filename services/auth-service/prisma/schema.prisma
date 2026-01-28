@@ -1,0 +1,63 @@
+// Auth Service - PostgreSQL Database Schema
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  CUSTOMER
+  DRIVER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique @db.VarChar(255)
+  phone        String?       @unique @db.VarChar(20)
+  passwordHash String        @map("password_hash") @db.VarChar(255)
+  role         UserRole      @default(CUSTOMER)
+  status       UserStatus    @default(ACTIVE)
+  
+  // Profile embedded as JSON
+  firstName    String?       @map("first_name") @db.VarChar(100)
+  lastName     String?       @map("last_name") @db.VarChar(100)
+  avatar       String?       @db.VarChar(500)
+  
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  
+  refreshTokens RefreshToken[]
+  
+  @@index([email])
+  @@index([phone])
+  @@index([role, status])
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  tokenId    String    @unique @map("token_id") @db.VarChar(255)
+  userId     String    @map("user_id")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  deviceInfo String?   @map("device_info") @db.VarChar(500)
+  ipAddress  String?   @map("ip_address") @db.VarChar(45)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([tokenId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}

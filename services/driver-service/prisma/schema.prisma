@@ -1,0 +1,70 @@
+// Driver Service - PostgreSQL Database Schema
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum DriverStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum AvailabilityStatus {
+  OFFLINE
+  ONLINE
+  BUSY
+}
+
+enum VehicleType {
+  CAR
+  MOTORCYCLE
+  SUV
+}
+
+model Driver {
+  id                 String             @id @default(uuid())
+  userId             String             @unique @map("user_id") @db.VarChar(255)
+  status             DriverStatus       @default(PENDING)
+  availabilityStatus AvailabilityStatus @default(OFFLINE) @map("availability_status")
+  
+  // Vehicle information
+  vehicleType        VehicleType        @map("vehicle_type")
+  vehicleBrand       String             @map("vehicle_brand") @db.VarChar(100)
+  vehicleModel       String             @map("vehicle_model") @db.VarChar(100)
+  vehiclePlate       String             @map("vehicle_plate") @db.VarChar(20)
+  vehicleColor       String             @map("vehicle_color") @db.VarChar(50)
+  vehicleYear        Int                @map("vehicle_year")
+  
+  // License information
+  licenseNumber      String             @map("license_number") @db.VarChar(50)
+  licenseExpiryDate  DateTime           @map("license_expiry_date")
+  licenseVerified    Boolean            @default(false) @map("license_verified")
+  
+  // Rating
+  ratingAverage      Float              @default(5.0) @map("rating_average") @db.DoublePrecision
+  ratingCount        Int                @default(0) @map("rating_count")
+  
+  // Current ride
+  currentRideId      String?            @map("current_ride_id") @db.VarChar(255)
+  
+  // Last location (for quick queries)
+  lastLocationLat    Float?             @map("last_location_lat") @db.DoublePrecision
+  lastLocationLng    Float?             @map("last_location_lng") @db.DoublePrecision
+  lastLocationTime   DateTime?          @map("last_location_time")
+  
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  
+  @@index([userId])
+  @@index([status])
+  @@index([availabilityStatus])
+  @@index([vehiclePlate])
+  @@index([status, availabilityStatus])
+  @@map("drivers")
+}

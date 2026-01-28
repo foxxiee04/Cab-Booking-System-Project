@@ -5,8 +5,8 @@ export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   
-  mongodb: {
-    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/cab_booking_auth',
+  database: {
+    url: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/auth_db',
   },
   
   jwt: {

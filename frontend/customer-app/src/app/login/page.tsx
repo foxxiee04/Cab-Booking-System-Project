@@ -2,80 +2,65 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import Link from 'next/link';
-import { Car, Mail, Lock, Loader2 } from 'lucide-react';
-import { apiClient } from '@/lib/api-client';
+import { Mail, Lock, Loader2, Car } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
+import { ApiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 
-const loginSchema = z.object({
-  email: z.string().email('Email không hợp lệ'),
-  password: z.string().min(6, 'Mật khẩu ít nhất 6 ký tự'),
-});
-
-type LoginForm = z.infer<typeof loginSchema>;
-
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuthStore();
-  const [error, setError] = useState('');
+  
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema),
+  const api = new ApiClient({
+    getTokens: () => null,
+    setTokens: () => {},
+    onLogout: () => {},
   });
 
-  const onSubmit = async (data: LoginForm) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const response = await apiClient.login(data);
-      console.log('🔐 Login response:', response);
-      console.log('📦 Response data:', response.data);
+      const res = await api.login({ email, password });
+      const { user, tokens } = res.data.data;
       
-      // Axios response.data = { success: true, data: { user, tokens } }
-      const { user, tokens } = response.data.data;
-      const { accessToken, refreshToken } = tokens;
-      console.log('✅ Extracted:', { user, accessToken: accessToken?.substring(0, 20) + '...', refreshToken: refreshToken?.substring(0, 20) + '...' });
-      
-      login(user, accessToken, refreshToken);
-      console.log('💾 Saved to store');
-      
+      if (user.role !== 'CUSTOMER') {
+        setError('Tài khoản này không phải là khách hàng');
+        return;
+      }
+
+      login(user, tokens.accessToken, tokens.refreshToken);
       router.push('/book');
     } catch (err: any) {
-      console.error('❌ Login error:', err);
-      setError(
-        err.response?.data?.error?.message ||
-          err.response?.data?.message ||
-          'Đăng nhập thất bại'
-      );
+      setError(err.response?.data?.message || 'Đăng nhập thất bại');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-blue-700 px-4">
       <div className="max-w-md w-full">
-        {/* Logo */}
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 text-primary-600">
-            <Car className="w-10 h-10" />
-            <span className="text-2xl font-bold">CabBooking</span>
-          </Link>
+          <div className="inline-flex items-center gap-2 text-white">
+            <Car className="w-12 h-12" />
+            <div className="text-left">
+              <span className="text-2xl font-bold block">CabBooking</span>
+              <span className="text-sm text-white/80">Customer App</span>
+            </div>
+          </div>
         </div>
 
-        {/* Form Card */}
         <Card className="p-8">
           <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">
             Đăng nhập
@@ -87,7 +72,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Email
@@ -95,15 +80,14 @@ export default function LoginPage() {
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <Input
-                  {...register('email')}
                   type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="pl-10"
-                  placeholder="email@example.com"
+                  placeholder="customer1@test.com"
+                  required
                 />
               </div>
-              {errors.email && (
-                <p className="mt-1 text-sm text-red-500">{errors.email.message}</p>
-              )}
             </div>
 
             <div>
@@ -113,33 +97,28 @@ export default function LoginPage() {
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <Input
-                  {...register('password')}
                   type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="pl-10"
                   placeholder="••••••••"
+                  required
                 />
               </div>
-              {errors.password && (
-                <p className="mt-1 text-sm text-red-500">{errors.password.message}</p>
-              )}
             </div>
 
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full"
-            >
-              {loading && <Loader2 className="w-5 h-5 animate-spin" />}
+            <Button type="submit" disabled={loading} className="w-full">
+              {loading && <Loader2 className="w-5 h-5 animate-spin mr-2" />}
               {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
             </Button>
           </form>
 
-          <p className="mt-6 text-center text-gray-600">
-            Chưa có tài khoản?{' '}
-            <Link href="/register" className="text-primary-600 font-medium hover:underline">
+          <div className="mt-6 text-center text-sm">
+            <span className="text-gray-600">Chưa có tài khoản? </span>
+            <Link href="/register" className="text-blue-600 hover:underline font-medium">
               Đăng ký ngay
             </Link>
-          </p>
+          </div>
         </Card>
       </div>
     </div>

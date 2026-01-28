@@ -53,9 +53,9 @@ interface RideState {
   paymentMethod: PaymentMethod;
 
   // Actions
-  setPickup: (location: Location) => void;
-  setDestination: (location: Location) => void;
-  setEstimate: (estimate: RideEstimate) => void;
+  setPickup: (location: Location | null) => void;
+  setDestination: (location: Location | null) => void;
+  setEstimate: (estimate: RideEstimate | null) => void;
   setVehicleType: (type: VehicleType) => void;
   setPaymentMethod: (method: PaymentMethod) => void;
   startSearching: () => void;

@@ -2,10 +2,11 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import type { SignOptions } from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
-import { User, IUser, UserRole, UserStatus } from '../models/user.model';
-import { RefreshToken } from '../models/refresh-token.model';
+import { PrismaClient, UserRole, UserStatus } from '@prisma/client';
 import { config } from '../config';
 import { EventPublisher } from '../events/publisher';
+
+const prisma = new PrismaClient();
 
 interface RegisterInput {
   email: string;
@@ -29,6 +30,19 @@ interface TokenPair {
   expiresIn: number;
 }
 
+interface UserResponse {
+  id: string;
+  email: string;
+  phone: string | null;
+  role: UserRole;
+  status: UserStatus;
+  firstName: string | null;
+  lastName: string | null;
+  avatar: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export class AuthService {
   private eventPublisher: EventPublisher;
 
@@ -36,9 +50,12 @@ export class AuthService {
     this.eventPublisher = eventPublisher;
   }
 
-  async register(input: RegisterInput): Promise<{ user: IUser; tokens: TokenPair }> {
+  async register(input: RegisterInput): Promise<{ user: UserResponse; tokens: TokenPair }> {
     // Check if user exists
-    const existingUser = await User.findOne({ email: input.email.toLowerCase() });
+    const existingUser = await prisma.user.findUnique({
+      where: { email: input.email.toLowerCase() },
+    });
+
     if (existingUser) {
       throw new Error('Email already registered');
     }
@@ -48,36 +65,38 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(input.password, salt);
 
     // Create user
-    const user = new User({
-      email: input.email.toLowerCase(),
-      phone: input.phone,
-      passwordHash,
-      role: input.role || UserRole.CUSTOMER,
-      status: UserStatus.ACTIVE,
-      profile: {
+    const user = await prisma.user.create({
+      data: {
+        email: input.email.toLowerCase(),
+        phone: input.phone,
+        passwordHash,
+        role: input.role || UserRole.CUSTOMER,
+        status: UserStatus.ACTIVE,
         firstName: input.firstName,
         lastName: input.lastName,
       },
     });
 
-    await user.save();
-
     // Generate tokens
-    const tokens = await this.generateTokenPair(user);
+    const tokens = await this.generateTokenPair(user.id);
 
     // Publish event
     await this.eventPublisher.publish('user.registered', {
-      userId: user._id.toString(),
+      userId: user.id,
       email: user.email,
       role: user.role,
     });
 
-    return { user, tokens };
+    const userResponse = this.toUserResponse(user);
+    return { user: userResponse, tokens };
   }
 
-  async login(input: LoginInput): Promise<{ user: IUser; tokens: TokenPair }> {
+  async login(input: LoginInput): Promise<{ user: UserResponse; tokens: TokenPair }> {
     // Find user
-    const user = await User.findOne({ email: input.email.toLowerCase() });
+    const user = await prisma.user.findUnique({
+      where: { email: input.email.toLowerCase() },
+    });
+
     if (!user) {
       throw new Error('Invalid credentials');
     }
@@ -94,15 +113,16 @@ export class AuthService {
     }
 
     // Generate tokens
-    const tokens = await this.generateTokenPair(user, input.deviceInfo, input.ipAddress);
+    const tokens = await this.generateTokenPair(user.id, input.deviceInfo, input.ipAddress);
 
     // Publish event
     await this.eventPublisher.publish('user.logged_in', {
-      userId: user._id.toString(),
+      userId: user.id,
       email: user.email,
     });
 
-    return { user, tokens };
+    const userResponse = this.toUserResponse(user);
+    return { user: userResponse, tokens };
   }
 
   async refreshToken(refreshTokenValue: string): Promise<TokenPair> {
@@ -115,10 +135,12 @@ export class AuthService {
     }
 
     // Find token in database
-    const storedToken = await RefreshToken.findOne({
-      tokenId: decoded.tokenId,
-      userId: decoded.sub,
-      revokedAt: null,
+    const storedToken = await prisma.refreshToken.findFirst({
+      where: {
+        tokenId: decoded.tokenId,
+        userId: decoded.sub,
+        revokedAt: null,
+      },
     });
 
     if (!storedToken || storedToken.expiresAt < new Date()) {
@@ -126,32 +148,37 @@ export class AuthService {
     }
 
     // Revoke old token (rotation)
-    storedToken.revokedAt = new Date();
-    await storedToken.save();
+    await prisma.refreshToken.update({
+      where: { id: storedToken.id },
+      data: { revokedAt: new Date() },
+    });
 
     // Get user
-    const user = await User.findById(decoded.sub);
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.sub },
+    });
+
     if (!user || user.status !== UserStatus.ACTIVE) {
       throw new Error('User not found or inactive');
     }
 
     // Generate new token pair
-    return this.generateTokenPair(user);
+    return this.generateTokenPair(user.id);
   }
 
   async logout(userId: string, tokenId?: string): Promise<void> {
     if (tokenId) {
       // Revoke specific token
-      await RefreshToken.updateOne(
-        { tokenId, userId },
-        { revokedAt: new Date() }
-      );
+      await prisma.refreshToken.updateMany({
+        where: { tokenId, userId },
+        data: { revokedAt: new Date() },
+      });
     } else {
       // Revoke all tokens for user
-      await RefreshToken.updateMany(
-        { userId, revokedAt: null },
-        { revokedAt: new Date() }
-      );
+      await prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
     }
   }
 
@@ -164,47 +191,61 @@ export class AuthService {
     }
   }
 
-  async getUserById(userId: string): Promise<IUser | null> {
-    return User.findById(userId).select('-passwordHash');
+  async getUserById(userId: string): Promise<UserResponse | null> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+    return user ? this.toUserResponse(user) : null;
   }
 
-  async getUsers(page = 1, limit = 20): Promise<{ users: IUser[]; total: number }> {
+  async getUsers(page = 1, limit = 20): Promise<{ users: UserResponse[]; total: number }> {
     const skip = (page - 1) * limit;
+    
     const [users, total] = await Promise.all([
-      User.find().select('-passwordHash').skip(skip).limit(limit).sort({ createdAt: -1 }),
-      User.countDocuments(),
+      prisma.user.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.user.count(),
     ]);
-    return { users, total };
+
+    return {
+      users: users.map(u => this.toUserResponse(u)),
+      total,
+    };
   }
 
-  async updateUserRole(userId: string, role: UserRole): Promise<IUser | null> {
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { role },
-      { new: true }
-    ).select('-passwordHash');
+  async updateUserRole(userId: string, role: UserRole): Promise<UserResponse | null> {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { role },
+    });
 
     if (user) {
       await this.eventPublisher.publish('user.role_changed', {
-        userId: user._id.toString(),
+        userId: user.id,
         newRole: role,
       });
     }
 
-    return user;
+    return this.toUserResponse(user);
   }
 
   private async generateTokenPair(
-    user: IUser,
+    userId: string,
     deviceInfo?: string,
     ipAddress?: string
   ): Promise<TokenPair> {
     const tokenId = uuidv4();
 
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error('User not found');
+
     // Access token (short-lived)
     const accessToken = jwt.sign(
       {
-        sub: user._id.toString(),
+        sub: user.id,
         role: user.role,
         email: user.email,
       },
@@ -219,7 +260,7 @@ export class AuthService {
     // Refresh token
     const refreshToken = jwt.sign(
       {
-        sub: user._id.toString(),
+        sub: user.id,
         tokenId,
       },
       config.jwt.refreshSecret,
@@ -227,12 +268,14 @@ export class AuthService {
     );
 
     // Store refresh token
-    await RefreshToken.create({
-      tokenId,
-      userId: user._id,
-      expiresAt,
-      deviceInfo,
-      ipAddress,
+    await prisma.refreshToken.create({
+      data: {
+        tokenId,
+        userId: user.id,
+        expiresAt,
+        deviceInfo,
+        ipAddress,
+      },
     });
 
     return {
@@ -257,4 +300,21 @@ export class AuthService {
       default: return 15 * 60 * 1000;
     }
   }
+
+  private toUserResponse(user: any): UserResponse {
+    return {
+      id: user.id,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      status: user.status,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      avatar: user.avatar,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+  }
 }
+
+export { prisma };

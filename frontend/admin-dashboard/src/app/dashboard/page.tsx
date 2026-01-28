@@ -1,274 +1,204 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { Users, Car, DollarSign, TrendingUp, Shield } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
-import { apiClient } from '@/lib/api-client';
-import { Badge } from '@/components/ui/badge';
+import { ApiClient } from '@/lib/api';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import {
-  LayoutDashboard,
-  Users,
-  Car,
-  MapPin,
-  DollarSign,
-  BarChart3,
-  Settings,
-  LogOut,
-  TrendingUp,
-  TrendingDown,
-  Clock,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-} from 'lucide-react';
-
-// Mock data for demonstration
-const mockStats = {
-  totalUsers: 15420,
-  totalDrivers: 892,
-  activeRides: 156,
-  todayRevenue: 45680000,
-  todayRides: 1234,
-  completionRate: 94.5,
-  avgRating: 4.7,
-  userGrowth: 12.5,
-  revenueGrowth: 8.3,
-};
-
-const mockRecentRides = [
-  { id: 'R001', customer: 'Nguyễn Văn A', driver: 'Trần Văn B', status: 'COMPLETED', fare: 125000, time: '10 phút trước' },
-  { id: 'R002', customer: 'Lê Thị C', driver: 'Phạm Văn D', status: 'IN_PROGRESS', fare: 85000, time: '15 phút trước' },
-  { id: 'R003', customer: 'Hoàng Văn E', driver: 'Ngô Thị F', status: 'PENDING', fare: 95000, time: '20 phút trước' },
-  { id: 'R004', customer: 'Đỗ Văn G', driver: 'Vũ Thị H', status: 'CANCELLED', fare: 0, time: '25 phút trước' },
-];
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { isAuthenticated, user, logout } = useAuthStore();
-  const [stats, setStats] = useState(mockStats);
+  const { isAuthenticated, user, accessToken, refreshToken, setTokens, logout } = useAuthStore();
+  
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [rides, setRides] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const api = new ApiClient({
+    getTokens: () => (accessToken && refreshToken ? { accessToken, refreshToken } : null),
+    setTokens: (tokens) => setTokens(tokens.accessToken, tokens.refreshToken),
+    onLogout: logout,
+  });
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || user?.role !== 'ADMIN') {
       router.push('/');
+      return;
     }
-  }, [isAuthenticated, router]);
+    loadData();
+  }, [isAuthenticated, user]);
 
-  const handleLogout = async () => {
+  const loadData = async () => {
     try {
-      await apiClient.logout();
-    } catch {}
-    logout();
-    router.push('/');
+      const [driversRes, ridesRes, usersRes] = await Promise.all([
+        api.getAllDrivers(1, 20).catch(() => ({ data: { data: [] } })),
+        api.getAllRides(1, 20).catch(() => ({ data: { data: [] } })),
+        api.getAllUsers(1, 20).catch(() => ({ data: { data: [] } })),
+      ]);
+
+      setDrivers(driversRes.data.data || []);
+      setRides(ridesRes.data.data || []);
+      setUsers(usersRes.data.data || []);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Không thể tải dữ liệu');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND',
-    }).format(amount);
+  const handleVerifyDriver = async (driverId: string, verified: boolean) => {
+    try {
+      await api.verifyDriver(driverId, verified);
+      loadData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Không thể cập nhật trạng thái');
+    }
   };
 
-  const getStatusBadge = (status: string) => {
-    const labels: Record<string, string> = {
-      COMPLETED: 'Hoàn thành',
-      IN_PROGRESS: 'Đang đi',
-      PENDING: 'Chờ',
-      CANCELLED: 'Đã hủy',
-    };
-
-    const variant: Record<string, React.ComponentProps<typeof Badge>['variant']> = {
-      COMPLETED: 'success',
-      IN_PROGRESS: 'info',
-      PENDING: 'warning',
-      CANCELLED: 'danger',
-    };
-
-    return (
-      <Badge variant={variant[status] ?? 'default'}>
-        {labels[status] ?? status}
-      </Badge>
-    );
-  };
-
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated || user?.role !== 'ADMIN') return null;
 
   return (
-    <div className="min-h-screen flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 text-white flex flex-col">
-        <div className="p-6">
-          <div className="flex items-center gap-2 mb-8">
-            <LayoutDashboard className="w-8 h-8 text-primary-500" />
-            <span className="text-xl font-bold">Admin</span>
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-2">
+            <Shield className="w-8 h-8 text-blue-600" />
+            <h1 className="text-2xl font-bold">Admin Dashboard</h1>
           </div>
-
-          <nav className="space-y-2">
-            <Link
-              href="/dashboard"
-              className="flex items-center gap-3 px-4 py-3 bg-gray-800 rounded-lg text-white"
-            >
-              <LayoutDashboard className="w-5 h-5" />
-              Dashboard
-            </Link>
-            <Link
-              href="/dashboard/users"
-              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 rounded-lg text-gray-300 hover:text-white transition"
-            >
-              <Users className="w-5 h-5" />
-              Người dùng
-            </Link>
-            <Link
-              href="/dashboard/drivers"
-              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 rounded-lg text-gray-300 hover:text-white transition"
-            >
-              <Car className="w-5 h-5" />
-              Tài xế
-            </Link>
-            <Link
-              href="/dashboard/rides"
-              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 rounded-lg text-gray-300 hover:text-white transition"
-            >
-              <MapPin className="w-5 h-5" />
-              Chuyến đi
-            </Link>
-            <Link
-              href="/dashboard/payments"
-              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 rounded-lg text-gray-300 hover:text-white transition"
-            >
-              <DollarSign className="w-5 h-5" />
-              Thanh toán
-            </Link>
-            <Link
-              href="/dashboard/reports"
-              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 rounded-lg text-gray-300 hover:text-white transition"
-            >
-              <BarChart3 className="w-5 h-5" />
-              Báo cáo
-            </Link>
-            <Link
-              href="/dashboard/settings"
-              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 rounded-lg text-gray-300 hover:text-white transition"
-            >
-              <Settings className="w-5 h-5" />
-              Cài đặt
-            </Link>
-          </nav>
-        </div>
-
-        <div className="mt-auto p-6 border-t border-gray-800">
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-3 w-full hover:bg-gray-800 rounded-lg text-gray-300 hover:text-white transition"
-          >
-            <LogOut className="w-5 h-5" />
+          <Button variant="secondary" onClick={() => { logout(); router.push('/'); }}>
             Đăng xuất
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 p-8 overflow-auto bg-gray-50">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
-          <p className="text-gray-600">Xin chào, {user?.name}</p>
+          </Button>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-4 gap-6 mb-8">
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Users className="w-6 h-6 text-blue-600" />
-              </div>
-              <div className="flex items-center gap-1 text-green-600 text-sm">
-                <TrendingUp className="w-4 h-4" />
-                +{stats.userGrowth}%
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-gray-800">{stats.totalUsers.toLocaleString()}</p>
-            <p className="text-gray-500 text-sm">Tổng người dùng</p>
-          </Card>
-
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <Car className="w-6 h-6 text-green-600" />
-              </div>
-              <span className="text-sm text-gray-500">{stats.activeRides} đang hoạt động</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-800">{stats.totalDrivers.toLocaleString()}</p>
-            <p className="text-gray-500 text-sm">Tổng tài xế</p>
-          </Card>
-
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <MapPin className="w-6 h-6 text-purple-600" />
-              </div>
-              <div className="flex items-center gap-1 text-green-600 text-sm">
-                <CheckCircle className="w-4 h-4" />
-                {stats.completionRate}%
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-gray-800">{stats.todayRides.toLocaleString()}</p>
-            <p className="text-gray-500 text-sm">Chuyến hôm nay</p>
-          </Card>
-
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-yellow-100 rounded-lg">
-                <DollarSign className="w-6 h-6 text-yellow-600" />
-              </div>
-              <div className="flex items-center gap-1 text-green-600 text-sm">
-                <TrendingUp className="w-4 h-4" />
-                +{stats.revenueGrowth}%
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-gray-800">{formatCurrency(stats.todayRevenue)}</p>
-            <p className="text-gray-500 text-sm">Doanh thu hôm nay</p>
-          </Card>
-        </div>
-
-        {/* Recent Rides Table */}
-        <Card>
-          <div className="p-6 border-b">
-            <h2 className="text-lg font-semibold text-gray-800">Chuyến đi gần đây</h2>
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600">
+            {error}
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Khách hàng</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tài xế</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trạng thái</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giá</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Thời gian</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {mockRecentRides.map((ride) => (
-                  <tr key={ride.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-primary-600">{ride.id}</td>
-                    <td className="px-6 py-4 text-sm text-gray-800">{ride.customer}</td>
-                    <td className="px-6 py-4 text-sm text-gray-800">{ride.driver}</td>
-                    <td className="px-6 py-4">{getStatusBadge(ride.status)}</td>
-                    <td className="px-6 py-4 text-sm text-gray-800">{formatCurrency(ride.fare)}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{ride.time}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="p-4 border-t">
-            <Link href="/dashboard/rides" className="text-primary-600 text-sm font-medium hover:underline">
-              Xem tất cả chuyến đi →
-            </Link>
-          </div>
-        </Card>
-      </main>
+        )}
+
+        {loading ? (
+          <div className="text-center py-12">Đang tải...</div>
+        ) : (
+          <>
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <Card className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Tổng chuyến đi</p>
+                    <p className="text-2xl font-bold">{rides.length}</p>
+                  </div>
+                  <TrendingUp className="w-8 h-8 text-blue-600" />
+                </div>
+              </Card>
+              <Card className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Tài xế</p>
+                    <p className="text-2xl font-bold">{drivers.length}</p>
+                  </div>
+                  <Car className="w-8 h-8 text-green-600" />
+                </div>
+              </Card>
+              <Card className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Người dùng</p>
+                    <p className="text-2xl font-bold">{users.length}</p>
+                  </div>
+                  <Users className="w-8 h-8 text-purple-600" />
+                </div>
+              </Card>
+              <Card className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Doanh thu</p>
+                    <p className="text-2xl font-bold">0 ₫</p>
+                  </div>
+                  <DollarSign className="w-8 h-8 text-yellow-600" />
+                </div>
+              </Card>
+            </div>
+
+            {/* Drivers */}
+            <Card className="p-6 mb-6">
+              <h2 className="text-lg font-semibold mb-4">Tài xế ({drivers.length})</h2>
+              {drivers.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">Chưa có tài xế</p>
+              ) : (
+                <div className="space-y-3">
+                  {drivers.map((driver) => (
+                    <div key={driver.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex-1">
+                        <div className="font-medium">{driver.vehiclePlate}</div>
+                        <div className="text-sm text-gray-600">
+                          {driver.vehicleBrand} {driver.vehicleModel} • {driver.vehicleType}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          driver.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
+                          driver.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {driver.status}
+                        </span>
+                        {driver.status === 'PENDING' && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleVerifyDriver(driver.id, true)}
+                          >
+                            Duyệt
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            {/* Recent Rides */}
+            <Card className="p-6">
+              <h2 className="text-lg font-semibold mb-4">Chuyến đi gần đây ({rides.length})</h2>
+              {rides.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">Chưa có chuyến đi</p>
+              ) : (
+                <div className="space-y-3">
+                  {rides.slice(0, 10).map((ride) => (
+                    <div key={ride.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">
+                          {ride.pickupAddress} → {ride.dropoffAddress}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(ride.createdAt).toLocaleString('vi-VN')}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-green-600">
+                          {ride.fare?.toLocaleString('vi-VN')} ₫
+                        </span>
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          ride.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
+                          ride.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {ride.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </>
+        )}
+      </div>
     </div>
   );
 }

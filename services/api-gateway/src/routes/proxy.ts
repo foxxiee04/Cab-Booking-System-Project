@@ -73,6 +73,38 @@ router.use(
   }))
 );
 
+// User Service routes
+router.use(
+  '/api/users',
+  createProxyMiddleware(createProxyOptions(config.services.user, {
+    '^/api/users': '/api/users',
+  }))
+);
+
+// Booking Service routes
+router.use(
+  '/api/bookings',
+  createProxyMiddleware(createProxyOptions(config.services.booking, {
+    '^/api/bookings': '/api/bookings',
+  }))
+);
+
+// Pricing Service routes
+router.use(
+  '/api/pricing',
+  createProxyMiddleware(createProxyOptions(config.services.pricing, {
+    '^/api/pricing': '/api/pricing',
+  }))
+);
+
+// Review Service routes
+router.use(
+  '/api/reviews',
+  createProxyMiddleware(createProxyOptions(config.services.review, {
+    '^/api/reviews': '/api/reviews',
+  }))
+);
+
 // WebSocket proxy for notifications
 router.use(
   '/socket.io',

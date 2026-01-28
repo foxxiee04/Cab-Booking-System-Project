@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 import cors from 'cors';
+import mongoose from 'mongoose';
 import { config } from './config';
 import { SocketManager } from './socket/socket-manager';
 import { EventConsumer } from './events/consumer';
@@ -47,6 +48,10 @@ app.get('/stats', (req, res) => {
 // Startup
 const start = async () => {
   try {
+    // Connect to MongoDB
+    await mongoose.connect(config.mongodbUri);
+    logger.info('Connected to MongoDB');
+
     await socketManager.initialize();
     await eventConsumer.connect();
 
@@ -63,6 +68,7 @@ const start = async () => {
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down...');
   await eventConsumer.close();
+  await mongoose.connection.close();
   await socketManager.close();
   httpServer.close();
   process.exit(0);

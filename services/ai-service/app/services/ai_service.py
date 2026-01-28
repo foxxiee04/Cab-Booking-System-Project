@@ -148,6 +148,10 @@ class AIService:
         active_rides = await redis_client.get_active_rides_count(lat, lng)
         available_drivers = await redis_client.get_available_drivers_count(lat, lng)
         
+        # Default to normal surge when no data available
+        if available_drivers == 0 and active_rides == 0:
+            return 1.0
+        
         if available_drivers == 0:
             return config.MAX_SURGE_MULTIPLIER
         

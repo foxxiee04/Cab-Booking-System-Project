@@ -1,176 +1,123 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeft, Car, MapPin } from 'lucide-react';
-
-import { apiClient } from '@/lib/api-client';
+import { MapPin, Navigation, Clock } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
-import { Badge } from '@/components/ui/badge';
+import { ApiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 
-type RideStatus = 'PENDING' | 'ASSIGNED' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | string;
-
-type Ride = {
-  id: string;
-  status: RideStatus;
-  pickupAddress: string;
-  dropoffAddress: string;
-  distance: number | null;
-  duration: number | null;
-  fare: number | null;
-  requestedAt?: string;
-  createdAt?: string;
-};
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
-}
-
-function formatDate(iso?: string) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('vi-VN');
-}
-
-function statusToBadge(status: RideStatus) {
-  switch (status) {
-    case 'COMPLETED':
-      return { variant: 'success' as const, label: 'Hoàn thành' };
-    case 'CANCELLED':
-      return { variant: 'danger' as const, label: 'Đã huỷ' };
-    case 'IN_PROGRESS':
-      return { variant: 'info' as const, label: 'Đang di chuyển' };
-    case 'ACCEPTED':
-      return { variant: 'info' as const, label: 'Đã nhận' };
-    case 'ASSIGNED':
-      return { variant: 'warning' as const, label: 'Đã gán' };
-    case 'PENDING':
-    default:
-      return { variant: 'default' as const, label: status === 'PENDING' ? 'Đang chờ' : String(status) };
-  }
-}
-
-export default function DriverRideHistoryPage() {
+export default function RidesPage() {
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
-
+  const { isAuthenticated, accessToken, refreshToken, setTokens, logout } = useAuthStore();
+  
+  const [rides, setRides] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [rides, setRides] = useState<Ride[]>([]);
+
+  const api = new ApiClient({
+    getTokens: () => (accessToken && refreshToken ? { accessToken, refreshToken } : null),
+    setTokens: (tokens) => setTokens(tokens.accessToken, tokens.refreshToken),
+    onLogout: logout,
+  });
 
   useEffect(() => {
-    if (!isAuthenticated) router.push('/');
-  }, [isAuthenticated, router]);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    let mounted = true;
-
-    (async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const res = await apiClient.getRideHistory(1, 20);
-        const list: Ride[] = res.data?.data?.rides || [];
-        if (mounted) setRides(list);
-      } catch (e: any) {
-        if (mounted) setError(e?.response?.data?.message || 'Không thể tải lịch sử chuyến');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
+    if (!isAuthenticated) {
+      router.push('/');
+      return;
+    }
+    loadRides();
   }, [isAuthenticated]);
 
-  const content = useMemo(() => {
-    if (loading) {
-      return (
-        <Card>
-          <CardContent className="p-6 text-sm text-gray-600">Đang tải...</CardContent>
-        </Card>
-      );
+  const loadRides = async () => {
+    try {
+      const res = await api.getRideHistory(1, 50);
+      setRides(res.data.data.rides || []);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Không thể tải lịch sử');
+    } finally {
+      setLoading(false);
     }
-
-    if (error) {
-      return (
-        <Card>
-          <CardContent className="p-6 text-sm text-red-600">{error}</CardContent>
-        </Card>
-      );
-    }
-
-    if (!rides.length) {
-      return (
-        <Card>
-          <CardContent className="p-6 text-sm text-gray-600">Chưa có chuyến nào.</CardContent>
-        </Card>
-      );
-    }
-
-    return (
-      <div className="space-y-4">
-        {rides.map((ride) => {
-          const badge = statusToBadge(ride.status);
-          return (
-            <Card key={ride.id}>
-              <CardHeader className="flex flex-row items-center justify-between gap-3">
-                <CardTitle className="text-base">Chuyến #{ride.id.slice(0, 8)}</CardTitle>
-                <Badge variant={badge.variant}>{badge.label}</Badge>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-start gap-2 text-gray-700">
-                    <MapPin className="mt-0.5 h-4 w-4 text-green-600" />
-                    <span>{ride.pickupAddress}</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-gray-700">
-                    <MapPin className="mt-0.5 h-4 w-4 text-red-600" />
-                    <span>{ride.dropoffAddress}</span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
-                    <div className="text-gray-600">{formatDate(ride.requestedAt || ride.createdAt)}</div>
-                    <div className="font-semibold text-gray-900">
-                      {typeof ride.fare === 'number' ? formatCurrency(ride.fare) : '—'}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-    );
-  }, [loading, error, rides]);
+  };
 
   if (!isAuthenticated) return null;
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-primary-600">
-          <Car className="w-6 h-6" />
-          <span className="font-bold">Driver</span>
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Lịch sử chuyến đi</h1>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => router.push('/dashboard')}>
+              Dashboard
+            </Button>
+            <Button variant="secondary" onClick={() => { logout(); router.push('/'); }}>
+              Đăng xuất
+            </Button>
+          </div>
         </div>
-        <Link href="/dashboard">
-          <Button variant="ghost" size="sm" className="gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            Quay lại
-          </Button>
-        </Link>
-      </header>
 
-      <main className="max-w-3xl mx-auto p-6">
-        <h1 className="text-xl font-bold text-gray-900 mb-4">Lịch sử chuyến</h1>
-        {content}
-      </main>
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="text-center py-12">Đang tải...</div>
+        ) : rides.length === 0 ? (
+          <Card className="p-12 text-center">
+            <p className="text-gray-500 mb-4">Bạn chưa có chuyến đi nào</p>
+            <Button onClick={() => router.push('/dashboard')}>Về Dashboard</Button>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {rides.map((ride) => (
+              <Card key={ride.id} className="p-4">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        ride.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
+                        ride.status === 'CANCELLED' ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {ride.status}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        {new Date(ride.createdAt).toLocaleString('vi-VN')}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-green-600">
+                      {ride.fare?.toLocaleString('vi-VN')} ₫
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-4 h-4 text-green-500 mt-1" />
+                    <div className="flex-1">
+                      <div className="text-sm text-gray-500">Điểm đón</div>
+                      <div className="text-sm">{ride.pickupAddress || 'N/A'}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Navigation className="w-4 h-4 text-red-500 mt-1" />
+                    <div className="flex-1">
+                      <div className="text-sm text-gray-500">Điểm đến</div>
+                      <div className="text-sm">{ride.dropoffAddress || 'N/A'}</div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

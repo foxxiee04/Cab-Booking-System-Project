@@ -38,6 +38,10 @@ out/
 .env.development.local
 .env.test.local
 .env.production.local
+# Non-local env files
+.env.development
+.env.test
+.env.production
 !.env.example
 
 # =====================================================
@@ -111,6 +115,9 @@ redis-data/
 *.bak
 .cache/
 
-
-# Documentation (optional - remove if needed)
-docs/
+# =====================================================
+# Generated Code
+# =====================================================
+**/generated/
+**/prisma/client/
+schema.prisma.client/
