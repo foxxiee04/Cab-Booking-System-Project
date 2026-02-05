@@ -18,7 +18,7 @@ export const config = {
   },
   
   services: {
-    ai: process.env.AI_SERVICE_URL || 'http://localhost:8000',
+    pricing: process.env.PRICING_SERVICE_URL || 'http://localhost:3009',
     driver: process.env.DRIVER_SERVICE_URL || 'http://localhost:3003',
   },
   

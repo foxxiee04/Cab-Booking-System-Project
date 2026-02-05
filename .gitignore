@@ -1,48 +1,83 @@
 # =====================================================
+# CAB BOOKING SYSTEM - GITIGNORE
+# =====================================================
+# Updated: 2026-02-05
+# Comprehensive gitignore for microservices backend + React frontend
+# =====================================================
+
+# =====================================================
 # Dependencies
 # =====================================================
 node_modules/
+jspm_packages/
+
+# Lock files (keep only one per project)
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+.pnpm-store/
 
-# Python
+# Python dependencies
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+*.egg
 *.egg-info/
+dist-python/
+.eggs/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .venv/
 venv/
+ENV/
+env/
 Pipfile.lock
+poetry.lock
 
 # =====================================================
-# Build Outputs
+# Build Outputs & Compiled Code
 # =====================================================
+# TypeScript/JavaScript builds
 dist/
 build/
 out/
 *.tsbuildinfo
+*.js.map
+*.d.ts.map
 
 # Next.js
 .next/
 .turbo/
 
+# React build
+apps/*/build/
+apps/*/dist/
+
+# Vite
+apps/*/.vite/
+
 # =====================================================
 # Environment Variables & Secrets
 # =====================================================
+# IMPORTANT: Never commit real secrets!
 .env
 .env.local
 .env.*.local
 .env.development.local
 .env.test.local
 .env.production.local
-# Non-local env files
-.env.development
-.env.test
-.env.production
+
+# Service-specific env files (sensitive)
+services/**/.env
+services/**/.env.local
+apps/**/.env.local
+
+# Keep example files
 !.env.example
+!**/.env.example
+!env/*.env.example
 
 # =====================================================
 # Logs
@@ -54,47 +89,106 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 logs/
+*.log.*
+
+# PM2 logs
+pm2-logs/
+.pm2/
 
 # =====================================================
 # Testing & Coverage
 # =====================================================
 coverage/
+*.lcov
 .nyc_output/
 test-results/
+junit.xml
 playwright-report/
 playwright/.cache/
+.jest-cache/
+
+# Test databases
+**/*.test.db
+**/*.test.sqlite
 
 # =====================================================
 # IDE & Editors
 # =====================================================
+# VSCode
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+*.code-workspace
+
+# IntelliJ IDEA
 .idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
 *.swp
 *.swo
 *~
-.DS_Store
+.vim/
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
 
 # =====================================================
 # OS Files
 # =====================================================
+# macOS
 .DS_Store
 .DS_Store?
+.AppleDouble
+.LSOverride
 ._*
 .Spotlight-V100
 .Trashes
-ehthumbs.db
+.DocumentRevisions-V100
+.fseventsd
+.TemporaryItems
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
 Thumbs.db
-desktop.ini
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+.directory
+.Trash-*
 
 # =====================================================
 # Docker
 # =====================================================
 *.env.docker
-.dockerignore
+.docker/
+docker-compose.override.yml
+
+# Docker volumes data (don't commit actual data)
+postgres-data/
+mongo-data/
+redis-data/
+rabbitmq-data/
 
 # =====================================================
 # Databases (local development)
@@ -102,22 +196,171 @@ desktop.ini
 *.db
 *.sqlite
 *.sqlite3
-postgres-data/
-mongo-data/
-redis-data/
+*.db-shm
+*.db-wal
+
+# PostgreSQL
+*.pgsql
+*.dump
+
+# MongoDB
+*.bson
+
+# =====================================================
+# Prisma
+# =====================================================
+# Keep schema, ignore generated client
+**/prisma/client/
+**/prisma/migrations/**/migration.sql.bak
+.prisma/
+
+# =====================================================
+# Generated Code
+# =====================================================
+**/generated/
+**/gen/
+**/.generated/
+schema.prisma.client/
+
+# GraphQL
+**/graphql/generated/
+**/__generated__/
 
 # =====================================================
 # Temporary Files
 # =====================================================
 *.tmp
 *.temp
-*.swp
 *.bak
+*.backup
 .cache/
+.temp/
+tmp/
 
 # =====================================================
-# Generated Code
+# Frontend Specific
 # =====================================================
-**/generated/
-**/prisma/client/
-schema.prisma.client/
+# React production build
+apps/*/build/
+
+# Static files (if auto-generated)
+apps/*/public/static/
+
+# Bundle analysis
+apps/*/.bundle-analyzer/
+apps/*/stats.json
+
+# Service workers cache
+apps/*/sw.js
+apps/*/workbox-*.js
+
+# =====================================================
+# Backend Specific
+# =====================================================
+# Uploaded files (if any)
+services/**/uploads/
+services/**/public/uploads/
+
+# Session files
+services/**/.sessions/
+
+# =====================================================
+# Monitoring & Performance
+# =====================================================
+# Heap dumps
+*.heapsnapshot
+*.cpuprofile
+
+# Performance logs
+perf.data
+perf.data.old
+
+# =====================================================
+# Security & Keys
+# =====================================================
+# Private keys
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Secrets
+secrets/
+.secrets/
+*.secret
+
+# =====================================================
+# CI/CD
+# =====================================================
+.gitlab-ci-local/
+.circleci/local/
+
+# =====================================================
+# Documentation Build
+# =====================================================
+docs/_build/
+docs/.docusaurus/
+.docz/
+
+# =====================================================
+# Miscellaneous
+# =====================================================
+# Debug files
+*.pid
+*.seed
+*.pid.lock
+
+# Runtime data
+pids/
+lib-cov/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm/
+
+# Optional eslint cache
+.eslintcache
+
+# Optional stylelint cache
+.stylelintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Yarn Integrity file
+.yarn-integrity
+
+# Serverless
+.serverless/
+.webpack/
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Stores VSCode versions used for testing
+.vscode-test
+
+# yarn v2
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*

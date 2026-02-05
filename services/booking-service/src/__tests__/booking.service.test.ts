@@ -158,6 +158,11 @@ describe('BookingService - Complete Test Suite', () => {
 
   describe('CANCEL BOOKING', () => {
     it('should cancel booking', async () => {
+      mockPrisma.booking.findUnique.mockResolvedValue({
+        id: 'booking-123',
+        customerId: 'customer-123',
+        status: 'PENDING',
+      });
       mockPrisma.booking.update.mockResolvedValue({
         id: 'booking-123',
         status: 'CANCELLED',

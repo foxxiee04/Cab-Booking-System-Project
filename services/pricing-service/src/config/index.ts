@@ -6,6 +6,10 @@ export const config = {
   redis: {
     url: process.env.REDIS_URL || 'redis://localhost:6379',
   },
+
+  osrm: {
+    baseUrl: process.env.OSRM_BASE_URL || 'http://router.project-osrm.org',
+  },
   
   rabbitmq: {
     url: process.env.RABBITMQ_URL || 'amqp://localhost:5672',

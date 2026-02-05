@@ -6,6 +6,7 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   jwtSecret: process.env.JWT_SECRET || 'dev-secret',
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+  rabbitmqUrl: process.env.RABBITMQ_URL || 'amqp://localhost:5672',
   
   services: {
     auth: process.env.AUTH_SERVICE_URL || 'http://localhost:3001',
@@ -17,7 +18,6 @@ export const config = {
     driver: process.env.DRIVER_SERVICE_URL || 'http://localhost:3003',
     payment: process.env.PAYMENT_SERVICE_URL || 'http://localhost:3004',
     notification: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3005',
-    ai: process.env.AI_SERVICE_URL || 'http://localhost:3006',
   },
   
   rateLimit: {

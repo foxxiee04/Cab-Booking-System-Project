@@ -36,38 +36,6 @@ services:
       timeout: 5s
       retries: 5
 
-  mongo-express:
-    image: mongo-express:latest
-    container_name: cab-mongo-express
-    ports:
-      - "8081:8081"
-    environment:
-      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_USER:?set MONGO_USER}
-      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_PASSWORD:?set MONGO_PASSWORD}
-      - ME_CONFIG_MONGODB_URL=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/
-      - ME_CONFIG_BASICAUTH_USERNAME=admin
-      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASSWORD:-admin123}
-    depends_on:
-      mongodb:
-        condition: service_healthy
-    restart: unless-stopped
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: cab-pgadmin
-    ports:
-      - "5050:80"
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@cabbooking.local}
-      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin123}
-      - PGADMIN_CONFIG_SERVER_MODE=False
-      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -100,81 +68,12 @@ services:
       timeout: 10s
       retries: 5
 
-  # ============ Monitoring Stack ============
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: cab-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./monitoring/alert-rules.yml:/etc/prometheus/alert-rules.yml
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: cab-grafana
-    ports:
-      - "3300:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
-      - GF_INSTALL_PLUGINS=grafana-piechart-panel
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
-    depends_on:
-      - prometheus
-    restart: unless-stopped
-
-  loki:
-    image: grafana/loki:latest
-    container_name: cab-loki
-    ports:
-      - "3100:3100"
-    volumes:
-      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml
-      - loki_data:/loki
-    command: -config.file=/etc/loki/local-config.yaml
-    restart: unless-stopped
-
-  promtail:
-    image: grafana/promtail:latest
-    container_name: cab-promtail
-    volumes:
-      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml
-      - /var/log:/var/log
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-    command: -config.file=/etc/promtail/config.yml
-    depends_on:
-      - loki
-    restart: unless-stopped
-
-  alertmanager:
-    image: prom/alertmanager:latest
-    container_name: cab-alertmanager
-    ports:
-      - "9093:9093"
-    volumes:
-      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
-      - alertmanager_data:/alertmanager
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-    restart: unless-stopped
-
   # ============ Microservices ============
   api-gateway:
     build:
       context: ./services/api-gateway
       dockerfile: Dockerfile
+    image: cab-api-gateway:latest
     container_name: cab-api-gateway
     ports:
       - "3000:3000"
@@ -192,7 +91,6 @@ services:
       - DRIVER_SERVICE_URL=http://driver-service:3003
       - PAYMENT_SERVICE_URL=http://payment-service:3004
       - NOTIFICATION_SERVICE_URL=http://notification-service:3005
-      - AI_SERVICE_URL=http://ai-service:3006
     depends_on:
       - auth-service
       - user-service
@@ -203,13 +101,13 @@ services:
       - driver-service
       - payment-service
       - notification-service
-      - ai-service
     restart: unless-stopped
 
   auth-service:
     build:
       context: ./services/auth-service
       dockerfile: Dockerfile
+    image: cab-auth-service:latest
     container_name: cab-auth-service
     ports:
       - "3001:3001"
@@ -217,7 +115,6 @@ services:
       - NODE_ENV=development
       - PORT=3001
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/auth_db?schema=public
-      - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
       - JWT_EXPIRES_IN=15m
@@ -226,9 +123,25 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    image: cab-user-service:latest
+    container_name: cab-user-service
+    ports:
+      - "3007:3007"
+    environment:
+      - NODE_ENV=development
+      - PORT=3007
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/user_db?schema=public
+      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
+    depends_on:
+      postgres:
         condition: service_healthy
     restart: unless-stopped
 
@@ -236,6 +149,7 @@ services:
     build:
       context: ./services/ride-service
       dockerfile: Dockerfile
+    image: cab-ride-service:latest
     container_name: cab-ride-service
     ports:
       - "3002:3002"
@@ -245,7 +159,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/ride_db?schema=public
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
-      - AI_SERVICE_URL=http://ai-service:3006
+      - PRICING_SERVICE_URL=http://pricing-service:3009
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
     depends_on:
@@ -261,6 +175,7 @@ services:
     build:
       context: ./services/driver-service
       dockerfile: Dockerfile
+    image: cab-driver-service:latest
     container_name: cab-driver-service
     ports:
       - "3003:3003"
@@ -286,6 +201,7 @@ services:
     build:
       context: ./services/payment-service
       dockerfile: Dockerfile
+    image: cab-payment-service:latest
     container_name: cab-payment-service
     ports:
       - "3004:3004"
@@ -293,13 +209,10 @@ services:
       - NODE_ENV=development
       - PORT=3004
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/payment_db?schema=public
-      - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -309,6 +222,7 @@ services:
     build:
       context: ./services/notification-service
       dockerfile: Dockerfile
+    image: cab-notification-service:latest
     container_name: cab-notification-service
     ports:
       - "3005:3005"
@@ -317,83 +231,50 @@ services:
       - PORT=3005
       - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/notification_db?authSource=admin
       - REDIS_URL=redis://redis:6379
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
-      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
-      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
-      - RIDE_SERVICE_URL=${RIDE_SERVICE_URL:-http://ride-service:3002}
-      - DRIVER_SERVICE_URL=${DRIVER_SERVICE_URL:-http://driver-service:3003}
     depends_on:
       mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
     restart: unless-stopped
 
-  ai-service:
+  review-service:
     build:
-      context: ./services/ai-service
+      context: ./services/review-service
       dockerfile: Dockerfile
-    container_name: cab-ai-service
+    image: cab-review-service:latest
+    container_name: cab-review-service
     ports:
-      - "3006:3006"
-    environment:
-      - HOST=0.0.0.0
-      - PORT=3006
-      - REDIS_URL=redis://redis:6379
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
-      - MAX_SURGE_MULTIPLIER=1.5
-      - SURGE_THRESHOLD=1.2
-    depends_on:
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-
-  # ============ New Services ============
-  user-service:
-    build:
-      context: ./services/user-service
-      dockerfile: Dockerfile
-    container_name: cab-user-service
-    ports:
-      - "3007:3007"
+      - "3010:3010"
     environment:
       - NODE_ENV=development
-      - PORT=3007
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/user_db?schema=public
-      - REDIS_URL=redis://redis:6379
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
-      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
+      - PORT=3010
+      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/review_db?authSource=admin
+      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
+      mongodb:
         condition: service_healthy
     restart: unless-stopped
+
 
   booking-service:
     build:
       context: ./services/booking-service
       dockerfile: Dockerfile
+    image: cab-booking-service:latest
     container_name: cab-booking-service
     ports:
       - "3008:3008"
     environment:
       - NODE_ENV=development
       - PORT=3008
-      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/booking_db?authSource=admin
-      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/booking_db?schema=public
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       - PRICING_SERVICE_URL=http://pricing-service:3009
       - RIDE_SERVICE_URL=http://ride-service:3002
     depends_on:
-      mongodb:
-        condition: service_healthy
-      redis:
+      postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -403,6 +284,7 @@ services:
     build:
       context: ./services/pricing-service
       dockerfile: Dockerfile
+    image: cab-pricing-service:latest
     container_name: cab-pricing-service
     ports:
       - "3009:3009"
@@ -411,93 +293,43 @@ services:
       - PORT=3009
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      - OSRM_BASE_URL=${OSRM_BASE_URL:-http://router.project-osrm.org}
+      - AI_SERVICE_URL=http://ai-service:8000
     depends_on:
       redis:
         condition: service_healthy
     restart: unless-stopped
 
-  review-service:
+  # ============ AI Service ============
+  ai-service:
     build:
-      context: ./services/review-service
+      context: ./services/ai-service
       dockerfile: Dockerfile
-    container_name: cab-review-service
+    image: cab-ai-service:latest
+    container_name: cab-ai-service
     ports:
-      - "3010:3010"
+      - "8000:8000"
     environment:
-      - NODE_ENV=development
-      - PORT=3010
-      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/review_db?authSource=admin
-      - REDIS_URL=redis://redis:6379
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - DEBUG=False
+      - HOST=0.0.0.0
+      - PORT=8000
+      - MODEL_PATH=app/models/eta_price_model.joblib
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     restart: unless-stopped
+    networks:
+      - default
 
-  # ============ Frontend Applications ============
-  customer-app:
-    build:
-      context: .
-      dockerfile: ./frontend/customer-app/Dockerfile
-      args:
-        NEXT_PUBLIC_TRACKASIA_KEY: ${NEXT_PUBLIC_TRACKASIA_KEY:?set NEXT_PUBLIC_TRACKASIA_KEY}
-    container_name: cab-customer-app
-    ports:
-      - "4000:4000"
-    environment:
-      - PORT=4000
-      - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=http://localhost:3000
-    depends_on:
-      - api-gateway
-    restart: unless-stopped
-
-  driver-app:
-    build:
-      context: .
-      dockerfile: ./frontend/driver-app/Dockerfile
-      args:
-        NEXT_PUBLIC_TRACKASIA_KEY: ${NEXT_PUBLIC_TRACKASIA_KEY:?set NEXT_PUBLIC_TRACKASIA_KEY}
-    container_name: cab-driver-app
-    ports:
-      - "4001:4001"
-    environment:
-      - PORT=4001
-      - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=http://localhost:3000
-    depends_on:
-      - api-gateway
-    restart: unless-stopped
-
-  admin-dashboard:
-    build:
-      context: .
-      dockerfile: ./frontend/admin-dashboard/Dockerfile
-    container_name: cab-admin-dashboard
-    ports:
-      - "4002:4002"
-    environment:
-      - PORT=4002
-      - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=http://localhost:3000
-    depends_on:
-      - api-gateway
-    restart: unless-stopped
 
 volumes:
   postgres_data:
   mongo_data:
   redis_data:
   rabbitmq_data:
-  prometheus_data:
-  grafana_data:
-  loki_data:
-  alertmanager_data:
-  pgadmin_data:
 
 networks:
   default:

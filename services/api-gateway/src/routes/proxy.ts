@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { authLimiter, expensiveLimiter } from '../middleware/rate-limit';
 
 const router = Router();
 
@@ -26,7 +25,6 @@ const createProxyOptions = (target: string, pathRewrite?: Record<string, string>
 // Auth Service routes
 router.use(
   '/api/auth',
-  // authLimiter, // DISABLED FOR TESTING
   createProxyMiddleware(createProxyOptions(config.services.auth, {
     '^/api/auth': '/api/auth',
   }))
@@ -56,30 +54,6 @@ router.use(
   }))
 );
 
-// AI Service routes
-router.use(
-  '/api/ai',
-  expensiveLimiter,
-  createProxyMiddleware(createProxyOptions(config.services.ai, {
-    '^/api/ai': '/api',
-  }))
-);
-
-// Geocoding routes (proxied to AI Service)
-router.use(
-  '/api/geo',
-  createProxyMiddleware(createProxyOptions(config.services.ai, {
-    '^/api/geo': '/api/geo',
-  }))
-);
-
-// User Service routes
-router.use(
-  '/api/users',
-  createProxyMiddleware(createProxyOptions(config.services.user, {
-    '^/api/users': '/api/users',
-  }))
-);
 
 // Booking Service routes
 router.use(
@@ -94,6 +68,14 @@ router.use(
   '/api/pricing',
   createProxyMiddleware(createProxyOptions(config.services.pricing, {
     '^/api/pricing': '/api/pricing',
+  }))
+);
+
+// User Service routes
+router.use(
+  '/api/users',
+  createProxyMiddleware(createProxyOptions(config.services.user, {
+    '^/api/users': '/api/users',
   }))
 );
 

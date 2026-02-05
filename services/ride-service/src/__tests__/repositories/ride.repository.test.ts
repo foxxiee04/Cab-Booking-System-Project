@@ -2,12 +2,15 @@ import { RideRepository } from '../../repositories/ride.repository';
 
 // Mock RideStatus enum
 const RideStatus = {
-  PENDING: 'PENDING',
+  CREATED: 'CREATED',
+  FINDING_DRIVER: 'FINDING_DRIVER',
   ASSIGNED: 'ASSIGNED',
   ACCEPTED: 'ACCEPTED',
+  PICKING_UP: 'PICKING_UP',
   IN_PROGRESS: 'IN_PROGRESS',
   COMPLETED: 'COMPLETED',
   CANCELLED: 'CANCELLED',
+  REJECTED: 'REJECTED',
 } as const;
 
 // Mock PrismaClient type
@@ -27,12 +30,15 @@ type PrismaClient = {
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn(),
   RideStatus: {
-    PENDING: 'PENDING',
+    CREATED: 'CREATED',
+    FINDING_DRIVER: 'FINDING_DRIVER',
     ASSIGNED: 'ASSIGNED',
     ACCEPTED: 'ACCEPTED',
+    PICKING_UP: 'PICKING_UP',
     IN_PROGRESS: 'IN_PROGRESS',
     COMPLETED: 'COMPLETED',
     CANCELLED: 'CANCELLED',
+    REJECTED: 'REJECTED',
   },
 }));
 
@@ -62,7 +68,7 @@ describe('RideRepository', () => {
       const mockRide = {
         id: 'ride-123',
         customerId: 'customer-1',
-        status: RideStatus.PENDING,
+        status: RideStatus.CREATED,
       };
       (mockPrisma.ride.findUnique as jest.Mock).mockResolvedValue(mockRide);
 
@@ -98,7 +104,14 @@ describe('RideRepository', () => {
         where: {
           customerId: 'customer-1',
           status: {
-            in: [RideStatus.PENDING, RideStatus.ASSIGNED, RideStatus.ACCEPTED, RideStatus.IN_PROGRESS],
+            in: [
+              RideStatus.CREATED,
+              RideStatus.FINDING_DRIVER,
+              RideStatus.ASSIGNED,
+              RideStatus.PICKING_UP,
+              RideStatus.ACCEPTED,
+              RideStatus.IN_PROGRESS,
+            ],
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -148,7 +161,7 @@ describe('RideRepository', () => {
       const createData = {
         id: 'ride-new',
         customerId: 'customer-1',
-        status: RideStatus.PENDING,
+        status: RideStatus.CREATED,
         pickupAddress: 'Address A',
         pickupLat: 10.0,
         pickupLng: 106.0,
@@ -169,10 +182,10 @@ describe('RideRepository', () => {
     it('should count rides by status', async () => {
       (mockPrisma.ride.count as jest.Mock).mockResolvedValue(15);
 
-      const result = await repository.countByStatus(RideStatus.PENDING);
+      const result = await repository.countByStatus(RideStatus.CREATED);
 
       expect(mockPrisma.ride.count).toHaveBeenCalledWith({
-        where: { status: RideStatus.PENDING },
+        where: { status: RideStatus.CREATED },
       });
       expect(result).toBe(15);
     });

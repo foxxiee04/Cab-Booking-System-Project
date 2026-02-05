@@ -5,6 +5,7 @@ import { config } from '../config';
 import { RideStateMachine } from '../domain/ride-state-machine';
 import { EventPublisher } from '../events/publisher';
 import { logger } from '../utils/logger';
+import { DriverOfferManager } from './driver-offer-manager';
 
 interface CreateRideInput {
   customerId: string;
@@ -30,10 +31,12 @@ interface Location {
 export class RideService {
   private prisma: PrismaClient;
   private eventPublisher: EventPublisher;
+  private offerManager: DriverOfferManager;
 
-  constructor(prisma: PrismaClient, eventPublisher: EventPublisher) {
+  constructor(prisma: PrismaClient, eventPublisher: EventPublisher, offerManager?: DriverOfferManager) {
     this.prisma = prisma;
     this.eventPublisher = eventPublisher;
+    this.offerManager = offerManager || new DriverOfferManager();
   }
 
   async createRide(input: CreateRideInput): Promise<Ride> {
@@ -60,29 +63,32 @@ export class RideService {
 
     const rideId = uuidv4();
 
-    // Get ETA and surge from AI service (with fallback)
+    // Get ETA and surge from Pricing service (with fallback)
     let surgeMultiplier = 1.0;
     let estimatedFare = 0;
     let distance = 0;
     let duration = 0;
 
     try {
-      const aiResponse = await axios.post(
-        `${config.services.ai}/api/ride/estimate`,
+      const pricingResponse = await axios.post(
+        `${config.services.pricing}/api/pricing/estimate`,
         {
-          pickup: { lat: input.pickup.lat, lng: input.pickup.lng },
-          destination: { lat: input.dropoff.lat, lng: input.dropoff.lng },
+          pickupLat: input.pickup.lat,
+          pickupLng: input.pickup.lng,
+          dropoffLat: input.dropoff.lat,
+          dropoffLng: input.dropoff.lng,
+          vehicleType: input.vehicleType || 'ECONOMY',
         },
-        { timeout: 800 }
+        { timeout: 1500 }
       );
-      
-      surgeMultiplier = aiResponse.data.surge_multiplier || 1.0;
-      estimatedFare = aiResponse.data.estimated_fare || 0;
-      distance = aiResponse.data.distance_km || 0;
-      // AI returns minutes; Ride schema stores seconds
-      duration = (aiResponse.data.duration_minutes || 0) * 60;
+
+      const payload = pricingResponse.data?.data ?? pricingResponse.data ?? {};
+      surgeMultiplier = payload.surgeMultiplier ?? payload.surge_multiplier ?? 1.0;
+      estimatedFare = payload.fare ?? payload.estimated_fare ?? 0;
+      distance = payload.distance ?? payload.distance_km ?? 0;
+      duration = payload.duration ?? (payload.duration_minutes ? payload.duration_minutes * 60 : 0);
     } catch (error) {
-      logger.warn('AI service unavailable, using fallback calculation');
+      logger.warn('Pricing service unavailable, using fallback calculation');
       // Fallback: simple distance calculation
       distance = this.calculateDistance(
         input.pickup.lat, input.pickup.lng,
@@ -577,6 +583,284 @@ export class RideService {
       }));
 
     return availableRides;
+  }
+
+  /**
+   * Offer a ride to a specific driver with TTL
+   * Creates OFFERED status and sets up automatic timeout
+   */
+  async offerRideToDriver(rideId: string, driverId: string, ttlSeconds: number = 20): Promise<Ride> {
+    const ride = await this.prisma.ride.findUnique({ where: { id: rideId } });
+    if (!ride) throw new Error('Ride not found');
+
+    // Check if driver has already been offered this ride
+    const hasBeenOffered = await this.offerManager.hasBeenOffered(rideId, driverId);
+    if (hasBeenOffered) {
+      throw new Error('Driver has already been offered this ride');
+    }
+
+    // Check reassignment limit
+    if (ride.reassignAttempts >= this.offerManager.getMaxReassignAttempts()) {
+      throw new Error('Maximum reassignment attempts reached');
+    }
+
+    // Validate transition
+    if (ride.status !== RideStatus.FINDING_DRIVER) {
+      throw new Error(`Cannot offer ride in status ${ride.status}`);
+    }
+
+    // Create offer in Redis with TTL
+    await this.offerManager.createOffer(rideId, driverId, ttlSeconds);
+
+    // Update ride status to OFFERED
+    const updatedRide = await this.prisma.ride.update({
+      where: { id: rideId },
+      data: {
+        status: RideStatus.OFFERED,
+        driverId, // Temporarily assign to track who was offered
+        offeredAt: new Date(),
+        offeredDriverIds: {
+          push: driverId,
+        },
+        reassignAttempts: { increment: 1 },
+        transitions: {
+          create: {
+            fromStatus: ride.status,
+            toStatus: RideStatus.OFFERED,
+            actorId: 'system',
+            actorType: 'SYSTEM',
+            reason: `Offered to driver ${driverId} with ${ttlSeconds}s timeout`,
+          },
+        },
+      },
+    });
+
+    // Publish ride.offered event
+    await this.eventPublisher.publish('ride.offered', {
+      rideId,
+      driverId,
+      customerId: ride.customerId,
+      pickup: { 
+        address: ride.pickupAddress,
+        lat: ride.pickupLat, 
+        lng: ride.pickupLng 
+      },
+      dropoff: {
+        address: ride.dropoffAddress,
+        lat: ride.dropoffLat,
+        lng: ride.dropoffLng
+      },
+      fare: ride.fare,
+      distance: ride.distance,
+      ttlSeconds,
+      expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
+    }, rideId);
+
+    logger.info(`Ride ${rideId} offered to driver ${driverId} with ${ttlSeconds}s timeout`);
+    return updatedRide;
+  }
+
+  /**
+   * Handle driver accepting an offered ride
+   */
+  async driverAcceptOfferedRide(rideId: string, driverId: string): Promise<Ride> {
+    const ride = await this.prisma.ride.findUnique({ where: { id: rideId } });
+    if (!ride) throw new Error('Ride not found');
+
+    // Check if this is the driver who was offered
+    if (ride.status !== RideStatus.OFFERED) {
+      throw new Error(`Ride is not in OFFERED status. Current status: ${ride.status}`);
+    }
+
+    if (ride.driverId !== driverId) {
+      throw new Error('This ride was not offered to you');
+    }
+
+    // Accept the offer in Redis (removes TTL)
+    const accepted = await this.offerManager.acceptOffer(rideId, driverId);
+    if (!accepted) {
+      throw new Error('Offer has expired or is no longer valid');
+    }
+
+    // Transition to ASSIGNED
+    const updatedRide = await this.prisma.ride.update({
+      where: { id: rideId },
+      data: {
+        status: RideStatus.ASSIGNED,
+        acceptedDriverId: driverId,
+        assignedAt: new Date(),
+        transitions: {
+          create: {
+            fromStatus: RideStatus.OFFERED,
+            toStatus: RideStatus.ASSIGNED,
+            actorId: driverId,
+            actorType: 'DRIVER',
+            reason: 'Driver accepted offer',
+          },
+        },
+      },
+    });
+
+    await this.eventPublisher.publish('ride.assigned', {
+      rideId,
+      driverId,
+      customerId: ride.customerId,
+      pickup: { lat: ride.pickupLat, lng: ride.pickupLng },
+    }, rideId);
+
+    logger.info(`Driver ${driverId} accepted offer for ride ${rideId}`);
+    return updatedRide;
+  }
+
+  /**
+   * Handle offer timeout - automatically triggered when Redis key expires
+   */
+  async handleOfferTimeout(rideId: string): Promise<void> {
+    const ride = await this.prisma.ride.findUnique({ where: { id: rideId } });
+    if (!ride) {
+      logger.warn(`Offer timeout called for non-existent ride ${rideId}`);
+      return;
+    }
+
+    // Only handle if still in OFFERED status
+    if (ride.status !== RideStatus.OFFERED) {
+      logger.debug(`Offer timeout for ride ${rideId} but status is ${ride.status}, ignoring`);
+      return;
+    }
+
+    const timedOutDriverId = ride.driverId;
+    logger.warn(`Offer timeout for ride ${rideId}, driver ${timedOutDriverId} did not respond`);
+
+    // Mark offer as cancelled (adds to rejected list)
+    await this.offerManager.cancelOffer(rideId, 'timeout');
+
+    // Update ride - add to rejected list and go back to FINDING_DRIVER
+    const updatedRide = await this.prisma.ride.update({
+      where: { id: rideId },
+      data: {
+        status: RideStatus.FINDING_DRIVER,
+        driverId: null, // Clear the driver
+        offeredAt: null,
+        rejectedDriverIds: {
+          push: timedOutDriverId!,
+        },
+        transitions: {
+          create: {
+            fromStatus: RideStatus.OFFERED,
+            toStatus: RideStatus.FINDING_DRIVER,
+            actorId: 'system',
+            actorType: 'SYSTEM',
+            reason: `Driver ${timedOutDriverId} timeout - no response`,
+          },
+        },
+      },
+    });
+
+    // Publish timeout event
+    await this.eventPublisher.publish('ride.offer_timeout', {
+      rideId,
+      timedOutDriverId,
+      customerId: ride.customerId,
+      reassignAttempts: updatedRide.reassignAttempts,
+    }, rideId);
+
+    // Try to re-assign to another driver
+    await this.autoReassignDriver(updatedRide);
+  }
+
+  /**
+   * Auto re-assign to another available driver
+   * Excludes drivers who have already been offered or rejected
+   */
+  async autoReassignDriver(ride: Ride): Promise<void> {
+    // Check if we've exceeded max attempts
+    if (ride.reassignAttempts >= this.offerManager.getMaxReassignAttempts()) {
+      logger.warn(`Max reassignment attempts (${ride.reassignAttempts}) reached for ride ${ride.id}`);
+      
+      await this.eventPublisher.publish('ride.reassignment_failed', {
+        rideId: ride.id,
+        customerId: ride.customerId,
+        reason: 'Max attempts reached',
+        attempts: ride.reassignAttempts,
+      }, ride.id);
+      return;
+    }
+
+    logger.info(`Auto re-assigning ride ${ride.id}, attempt ${ride.reassignAttempts + 1}`);
+
+    // Get list of drivers to exclude (already offered or rejected)
+    const excludedDrivers = [
+      ...ride.offeredDriverIds,
+      ...ride.rejectedDriverIds,
+    ];
+
+    // Request new driver suggestions with exclusion list
+    await this.eventPublisher.publish('ride.reassignment_requested', {
+      rideId: ride.id,
+      customerId: ride.customerId,
+      pickup: { lat: ride.pickupLat, lng: ride.pickupLng },
+      dropoff: { lat: ride.dropoffLat, lng: ride.dropoffLng },
+      vehicleType: ride.vehicleType,
+      fare: ride.fare,
+      excludeDriverIds: excludedDrivers,
+      attempt: ride.reassignAttempts + 1,
+      maxAttempts: this.offerManager.getMaxReassignAttempts(),
+    }, ride.id);
+
+    logger.info(`Reassignment request sent for ride ${ride.id}, excluding ${excludedDrivers.length} drivers`);
+  }
+
+  /**
+   * Driver rejects an offered ride
+   */
+  async driverRejectOffer(rideId: string, driverId: string, reason?: string): Promise<void> {
+    const ride = await this.prisma.ride.findUnique({ where: { id: rideId } });
+    if (!ride) throw new Error('Ride not found');
+
+    if (ride.status !== RideStatus.OFFERED) {
+      throw new Error(`Ride is not in OFFERED status`);
+    }
+
+    if (ride.driverId !== driverId) {
+      throw new Error('This ride was not offered to you');
+    }
+
+    // Cancel offer
+    await this.offerManager.cancelOffer(rideId, 'rejected');
+
+    // Update ride
+    const updatedRide = await this.prisma.ride.update({
+      where: { id: rideId },
+      data: {
+        status: RideStatus.FINDING_DRIVER,
+        driverId: null,
+        offeredAt: null,
+        rejectedDriverIds: {
+          push: driverId,
+        },
+        transitions: {
+          create: {
+            fromStatus: RideStatus.OFFERED,
+            toStatus: RideStatus.FINDING_DRIVER,
+            actorId: driverId,
+            actorType: 'DRIVER',
+            reason: reason || 'Driver rejected offer',
+          },
+        },
+      },
+    });
+
+    await this.eventPublisher.publish('ride.offer_rejected', {
+      rideId,
+      driverId,
+      customerId: ride.customerId,
+      reason: reason || 'Driver rejected',
+    }, rideId);
+
+    logger.info(`Driver ${driverId} rejected offer for ride ${rideId}`);
+
+    // Try to re-assign
+    await this.autoReassignDriver(updatedRide);
   }
 
   private async requestDriverSuggestions(ride: Ride): Promise<void> {

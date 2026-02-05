@@ -1,45 +1,29 @@
-generator client {
-  provider = "prisma-client-js"
-}
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
 }
 
 enum UserStatus {
   ACTIVE
   INACTIVE
   BANNED
-  SUSPENDED
 }
 
 model UserProfile {
-  id        String      @id @default(uuid())
-  userId    String      @unique // Reference to Auth Service userId
-  
-  // Personal info
-  firstName String?
-  lastName  String?
-  phone     String?     @unique
-  avatar    String?
-  dateOfBirth DateTime?
-  
-  // Address
-  address   String?
-  city      String?
-  country   String?     @default("Vietnam")
-  
-  // Status
-  status    UserStatus  @default(ACTIVE)
-  
-  // Metadata
-  metadata  Json?       // Additional flexible data
-  
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  
+  id        String     @id @default(uuid())
+  userId    String     @unique @map("user_id")
+  firstName String?    @map("first_name")
+  lastName  String?    @map("last_name")
+  phone     String?    @map("phone")
+  avatar    String?    @map("avatar")
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  @@map("user_profiles")
   @@index([userId])
-  @@index([phone])
-  @@index([status])
 }

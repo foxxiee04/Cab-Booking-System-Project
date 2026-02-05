@@ -72,7 +72,6 @@ services:
       PORT: 3000
     depends_on:
       - postgres
-      - mongodb
       - redis
       - rabbitmq
     healthcheck:
@@ -94,15 +93,39 @@ services:
       NODE_ENV: production
       LOG_LEVEL: info
       PORT: 3001
-      MONGODB_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/cab_auth?authSource=admin
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/auth_db
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRY: 24h
       REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
     depends_on:
-      mongodb:
+      postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cab-network
+    restart: unless-stopped
+
+  # User Service
+  user-service:
+    image: ${REGISTRY}/cab-booking-system-project/cab-user-service:${IMAGE_TAG:-latest}
+    container_name: cab-user-service
+    ports:
+      - "3007:3007"
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      PORT: 3007
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/user_db
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3007/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -120,14 +143,12 @@ services:
       NODE_ENV: production
       LOG_LEVEL: info
       PORT: 3002
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cab_rides
-      MONGODB_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/cab_rides?authSource=admin
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/ride_db
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      PRICING_SERVICE_URL: http://pricing-service:3009
     depends_on:
       postgres:
-        condition: service_healthy
-      mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -152,11 +173,11 @@ services:
       NODE_ENV: production
       LOG_LEVEL: info
       PORT: 3003
-      MONGODB_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/cab_drivers?authSource=admin
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/driver_db
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
     depends_on:
-      mongodb:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -181,14 +202,11 @@ services:
       NODE_ENV: production
       LOG_LEVEL: info
       PORT: 3004
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cab_payments
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/payment_db
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -211,12 +229,13 @@ services:
       NODE_ENV: production
       LOG_LEVEL: info
       PORT: 3005
+      MONGODB_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/notification_db?authSource=admin
       REDIS_URL: redis://redis:6379
-      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
-      redis:
+      mongodb:
         condition: service_healthy
-      rabbitmq:
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3005/health"]
@@ -227,22 +246,23 @@ services:
       - cab-network
     restart: unless-stopped
 
-  # AI Service
-  ai-service:
-    image: ${REGISTRY}/cab-booking-system-project/cab-ai-service:${IMAGE_TAG:-latest}
-    container_name: cab-ai-service
+  # Review Service
+  review-service:
+    image: ${REGISTRY}/cab-booking-system-project/cab-review-service:${IMAGE_TAG:-latest}
+    container_name: cab-review-service
     ports:
-      - "5000:5000"
+      - "3010:3010"
     environment:
-      PYTHONUNBUFFERED: 1
+      NODE_ENV: production
       LOG_LEVEL: info
-      PORT: 5000
-      REDIS_URL: redis://redis:6379
+      PORT: 3010
+      MONGODB_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/review_db?authSource=admin
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
-      redis:
+      mongodb:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3010/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -250,47 +270,80 @@ services:
       - cab-network
     restart: unless-stopped
 
-  # Customer App
-  customer-app:
-    image: ${REGISTRY}/cab-booking-system-project/cab-customer-app:${IMAGE_TAG:-latest}
-    container_name: cab-customer-app
+  # Booking Service
+  booking-service:
+    image: ${REGISTRY}/cab-booking-system-project/cab-booking-service:${IMAGE_TAG:-latest}
+    container_name: cab-booking-service
     ports:
-      - "4000:3000"
+      - "3008:3008"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3000
       NODE_ENV: production
+      LOG_LEVEL: info
+      PORT: 3008
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/booking_db
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      PRICING_SERVICE_URL: http://pricing-service:3009
+      RIDE_SERVICE_URL: http://ride-service:3002
     depends_on:
-      - api-gateway
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - cab-network
     restart: unless-stopped
 
-  # Driver App
-  driver-app:
-    image: ${REGISTRY}/cab-booking-system-project/cab-driver-app:${IMAGE_TAG:-latest}
-    container_name: cab-driver-app
+  # Pricing Service
+  pricing-service:
+    image: ${REGISTRY}/cab-booking-system-project/cab-pricing-service:${IMAGE_TAG:-latest}
+    container_name: cab-pricing-service
     ports:
-      - "4001:3000"
+      - "3009:3009"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3000
       NODE_ENV: production
+      LOG_LEVEL: info
+      PORT: 3009
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      OSRM_BASE_URL: ${OSRM_BASE_URL:-http://router.project-osrm.org}
+      AI_SERVICE_URL: http://ai-service:8000
     depends_on:
-      - api-gateway
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3009/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - cab-network
     restart: unless-stopped
 
-  # Admin Dashboard
-  admin-dashboard:
-    image: ${REGISTRY}/cab-booking-system-project/cab-admin-dashboard:${IMAGE_TAG:-latest}
-    container_name: cab-admin-dashboard
+  # ============ AI Service (Production) ============
+  ai-service:
+    image: ${REGISTRY}/cab-booking-system-project/cab-ai-service:${IMAGE_TAG:-latest}
+    container_name: cab-ai-service
     ports:
-      - "4002:3000"
+      - "8000:8000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3000
-      NODE_ENV: production
-    depends_on:
-      - api-gateway
+      DEBUG: "False"
+      HOST: 0.0.0.0
+      PORT: 8000
+      MODEL_PATH: app/models/eta_price_model.joblib
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - cab-network
     restart: unless-stopped

@@ -21,12 +21,15 @@ enum PaymentMethod {
   CASH
   CARD
   WALLET
+  MOMO
+  VISA
 }
 
 enum PaymentProvider {
   STRIPE
   MOCK
   MOMO
+  VISA
   ZALOPAY
 }
 
@@ -89,6 +92,7 @@ model Payment {
   @@index([customerId, createdAt(sort: Desc)])
   @@index([driverId, createdAt(sort: Desc)])
   @@index([status])
+  @@index([idempotencyKey])
 }
 
 // Outbox pattern for reliable event publishing

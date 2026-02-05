@@ -1,28 +1,8 @@
-FROM node:20-slim
-
+FROM node:18
 WORKDIR /app
-
-# Prisma needs OpenSSL at runtime
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends openssl ca-certificates \
-	&& rm -rf /var/lib/apt/lists/*
-
-# Install dependencies
 COPY package*.json ./
 RUN npm install
-
-# Copy Prisma schema
-COPY prisma ./prisma
-
-# Generate Prisma client
-RUN npx prisma generate
-
-# Copy source
 COPY . .
-
-# Build TypeScript
-RUN npm run build && cp -r src/generated dist/ 2>/dev/null || true
-
+RUN npm run build
 EXPOSE 3007
-
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+CMD ["node", "dist/index.js"]

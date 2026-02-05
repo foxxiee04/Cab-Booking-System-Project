@@ -1,28 +1,29 @@
-from contextlib import asynccontextmanager
+"""FastAPI application entry point"""
+
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
+from app.core.config import settings
+from app.api import predict
 
-from app.config import config
-from app.routes import router
-from app.services.redis_service import redis_client
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    await redis_client.connect()
-    yield
-    # Shutdown
-    await redis_client.close()
-
+# Create FastAPI app
 app = FastAPI(
-    title="Cab Booking AI Service",
-    description="AI-powered ride estimation, driver matching, and surge pricing",
-    version="1.0.0",
-    lifespan=lifespan
+    title=settings.APP_NAME,
+    description=settings.APP_DESCRIPTION,
+    version=settings.APP_VERSION,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
 )
 
-# CORS
+# Add CORS middleware to allow requests from other services
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,21 +32,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routes
-app.include_router(router)
+# Include routers
+app.include_router(predict.router)
 
-@app.get("/health")
-async def health():
-    return {"status": "healthy", "service": "ai-service"}
+
+@app.on_event("startup")
+async def startup_event():
+    """Run on application startup"""
+    logger.info(f"{settings.APP_NAME} v{settings.APP_VERSION} starting...")
+    logger.info(f"Model path: {settings.MODEL_PATH}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Run on application shutdown"""
+    logger.info(f"{settings.APP_NAME} shutting down...")
+
 
 @app.get("/")
 async def root():
-    return {"message": "AI Service is running", "version": "1.0.0"}
+    """Root endpoint"""
+    return {
+        "service": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "docs": "/docs",
+        "redoc": "/redoc"
+    }
+
 
 if __name__ == "__main__":
+    import uvicorn
     uvicorn.run(
-        "app.main:app",
-        host=config.HOST,
-        port=config.PORT,
-        reload=True
+        "main:app",
+        host=settings.HOST,
+        port=settings.PORT,
+        reload=settings.DEBUG
     )

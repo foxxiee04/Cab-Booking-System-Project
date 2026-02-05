@@ -7,6 +7,7 @@ import { logger } from './utils/logger';
 import { EventPublisher } from './events/publisher';
 import { EventConsumer } from './events/consumer';
 import { RideService } from './services/ride.service';
+import { DriverOfferManager } from './services/driver-offer-manager';
 import { createRideRouter } from './routes/ride.routes';
 import { authenticate } from './middleware/auth.middleware';
 
@@ -38,8 +39,18 @@ async function main() {
   const eventPublisher = new EventPublisher();
   await eventPublisher.connect();
 
+  // Initialize driver offer manager
+  const offerManager = new DriverOfferManager();
+  await offerManager.setupExpirationNotifications();
+
   // Initialize services
-  const rideService = new RideService(prisma, eventPublisher);
+  const rideService = new RideService(prisma, eventPublisher, offerManager);
+
+  // Subscribe to offer expirations (Redis keyspace notifications)
+  await offerManager.subscribeToExpirations(async (rideId: string) => {
+    logger.info(`Offer expired for ride ${rideId}, triggering timeout handler`);
+    await rideService.handleOfferTimeout(rideId);
+  });
 
   // Initialize event consumer
   const eventConsumer = new EventConsumer(rideService);

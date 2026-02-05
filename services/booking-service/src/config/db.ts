@@ -1,23 +1,24 @@
-import mongoose from 'mongoose';
-import { config } from './index';
+import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
+
+export const prisma = new PrismaClient();
 
 export async function connectDB() {
   try {
-    await mongoose.connect(config.mongodb.uri);
-    logger.info('Connected to MongoDB');
+    await prisma.$connect();
+    logger.info('Connected to PostgreSQL');
   } catch (error) {
-    logger.error('MongoDB connection error:', error);
+    logger.error('PostgreSQL connection error:', error);
     throw error;
   }
 }
 
 export async function disconnectDB() {
   try {
-    await mongoose.connection.close();
-    logger.info('Disconnected from MongoDB');
+    await prisma.$disconnect();
+    logger.info('Disconnected from PostgreSQL');
   } catch (error) {
-    logger.error('MongoDB disconnection error:', error);
+    logger.error('PostgreSQL disconnection error:', error);
     throw error;
   }
 }

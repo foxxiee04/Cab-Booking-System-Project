@@ -8,17 +8,16 @@ describe('Driver DTOs Validation', () => {
   describe('registerDriverSchema', () => {
     const validDriverData = {
       vehicle: {
-        make: 'Toyota',
+        brand: 'Toyota',
         model: 'Vios',
         year: 2022,
         color: 'White',
-        plateNumber: '51A-12345',
-        type: 'STANDARD',
+        plate: '51A-12345',
+        type: 'CAR',
       },
       license: {
         number: 'B2-123456789',
         expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
-        issuedAt: 'Ho Chi Minh City',
       },
     };
 
@@ -26,7 +25,7 @@ describe('Driver DTOs Validation', () => {
       const { error, value } = registerDriverSchema.validate(validDriverData);
 
       expect(error).toBeUndefined();
-      expect(value.vehicle.make).toBe('Toyota');
+      expect(value.vehicle.brand).toBe('Toyota');
     });
 
     it('should reject missing vehicle info', () => {

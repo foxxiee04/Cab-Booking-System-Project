@@ -3,12 +3,8 @@ export const config = {
   port: parseInt(process.env.PORT || '3008', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   
-  mongodb: {
-    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/booking_db',
-  },
-  
-  redis: {
-    url: process.env.REDIS_URL || 'redis://localhost:6379',
+  database: {
+    url: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/booking_db',
   },
   
   rabbitmq: {

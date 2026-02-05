@@ -129,6 +129,25 @@ services:
           cpus: '0.5'
           memory: 256M
 
+  user-service:
+    image: ${REGISTRY:-localhost:5000}/cab-user-service:${TAG:-latest}
+    environment:
+      - NODE_ENV=production
+      - PORT=3007
+    env_file:
+      - ./env/user.env
+    networks:
+      - backend
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
   ride-service:
     image: ${REGISTRY:-localhost:5000}/cab-ride-service:${TAG:-latest}
     environment:
@@ -205,13 +224,13 @@ services:
           cpus: '0.5'
           memory: 256M
 
-  ai-service:
-    image: ${REGISTRY:-localhost:5000}/cab-ai-service:${TAG:-latest}
+  review-service:
+    image: ${REGISTRY:-localhost:5000}/cab-review-service:${TAG:-latest}
     environment:
-      - HOST=0.0.0.0
-      - PORT=3006
+      - NODE_ENV=production
+      - PORT=3010
     env_file:
-      - ./env/ai.env
+      - ./env/review.env
     networks:
       - backend
     deploy:
@@ -221,45 +240,81 @@ services:
         delay: 10s
       resources:
         limits:
-          cpus: '1'
-          memory: 512M
+          cpus: '0.5'
+          memory: 256M
 
-  # ============ Monitoring ============
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
+  booking-service:
+    image: ${REGISTRY:-localhost:5000}/cab-booking-service:${TAG:-latest}
+    environment:
+      - NODE_ENV=production
+      - PORT=3008
+    env_file:
+      - ./env/booking.env
     networks:
-      - monitoring
       - backend
     deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3100:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
+  pricing-service:
+    image: ${REGISTRY:-localhost:5000}/cab-pricing-service:${TAG:-latest}
+    environment:
+      - NODE_ENV=production
+      - PORT=3009
+      - AI_SERVICE_URL=http://ai-service:8000
+    env_file:
+      - ./env/pricing.env
     networks:
-      - monitoring
+      - backend
+    depends_on:
+      - ai-service
     deploy:
-      replicas: 1
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # ============ AI Service (Swarm) ============
+  ai-service:
+    image: ${REGISTRY:-localhost:5000}/cab-ai-service:${TAG:-latest}
+    environment:
+      - DEBUG=False
+      - HOST=0.0.0.0
+      - PORT=8000
+      - MODEL_PATH=app/models/eta_price_model.joblib
+    networks:
+      - backend
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
       placement:
         constraints:
-          - node.role == manager
+          - node.labels.ml == true  # Optional: dedicated ML nodes
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
 volumes:
   postgres_data:
   mongo_data:
   redis_data:
   rabbitmq_data:
-  prometheus_data:
-  grafana_data:
 
 networks:
   frontend:
@@ -267,8 +322,6 @@ networks:
   backend:
     driver: overlay
     internal: true
-  monitoring:
-    driver: overlay
 
 secrets:
   postgres_user:

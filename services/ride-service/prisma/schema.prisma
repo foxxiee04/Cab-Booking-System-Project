@@ -12,6 +12,7 @@ datasource db {
 enum RideStatus {
   CREATED
   FINDING_DRIVER
+  OFFERED
   ASSIGNED
   ACCEPTED
   PICKING_UP
@@ -48,11 +49,15 @@ model Ride {
   
   // Suggested & assigned drivers
   suggestedDriverIds String[]  @default([])
+  offeredDriverIds   String[]  @default([])  // Track drivers who were offered the ride
+  rejectedDriverIds  String[]  @default([])  // Track drivers who rejected/timed out
+  reassignAttempts   Int       @default(0)    // Count re-assignment attempts
   acceptedDriverId   String?
   
   // Timestamps
   requestedAt   DateTime    @default(now())
   pickupAt      DateTime?
+  offeredAt     DateTime?   // When ride was offered to a driver
   assignedAt    DateTime?
   acceptedAt    DateTime?
   startedAt     DateTime?

@@ -19,7 +19,7 @@ async function main() {
     res.json({ status: 'ok', service: config.serviceName });
   });
 
-  // Connect to MongoDB
+  // Connect to PostgreSQL
   await connectDB();
 
   const eventPublisher = new EventPublisher();

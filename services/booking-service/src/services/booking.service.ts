@@ -1,8 +1,9 @@
-import { Booking, BookingStatus, VehicleType, PaymentMethod } from '../models/booking.model';
+import { BookingStatus } from '../models/booking.model';
 import { EventPublisher } from '../events/publisher';
 import { logger } from '../utils/logger';
 import axios from 'axios';
 import { config } from '../config';
+import { prisma } from '../config/db';
 
 export class BookingService {
   private eventPublisher: EventPublisher;
@@ -52,23 +53,25 @@ export class BookingService {
       }
 
       // Create booking
-      const booking = await Booking.create({
-        customerId: data.customerId,
-        pickupAddress: data.pickupAddress,
-        pickupLat: data.pickupLat,
-        pickupLng: data.pickupLng,
-        dropoffAddress: data.dropoffAddress,
-        dropoffLat: data.dropoffLat,
-        dropoffLng: data.dropoffLng,
-        vehicleType: data.vehicleType,
-        paymentMethod: data.paymentMethod,
-        estimatedFare,
-        estimatedDistance,
-        estimatedDuration,
-        surgeMultiplier,
-        notes: data.notes,
-        customerPhone: data.customerPhone,
-        status: BookingStatus.PENDING,
+      const booking = await prisma.booking.create({
+        data: {
+          customerId: data.customerId,
+          pickupAddress: data.pickupAddress,
+          pickupLat: data.pickupLat,
+          pickupLng: data.pickupLng,
+          dropoffAddress: data.dropoffAddress,
+          dropoffLat: data.dropoffLat,
+          dropoffLng: data.dropoffLng,
+          vehicleType: data.vehicleType,
+          paymentMethod: data.paymentMethod,
+          estimatedFare: estimatedFare ?? null,
+          estimatedDistance: estimatedDistance ?? null,
+          estimatedDuration: estimatedDuration ?? null,
+          surgeMultiplier,
+          notes: data.notes ?? null,
+          customerPhone: data.customerPhone ?? null,
+          status: BookingStatus.PENDING,
+        },
       });
 
       logger.info('Booking created', { bookingId: booking.id });
@@ -81,7 +84,9 @@ export class BookingService {
   }
 
   async confirmBooking(bookingId: string) {
-    const booking = await Booking.findById(bookingId);
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
 
     if (!booking) {
       throw new Error('Booking not found');
@@ -91,9 +96,13 @@ export class BookingService {
       throw new Error('Only pending bookings can be confirmed');
     }
 
-    booking.status = BookingStatus.CONFIRMED;
-    booking.confirmedAt = new Date();
-    const updatedBooking = await booking.save();
+    const updatedBooking = await prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: BookingStatus.CONFIRMED,
+        confirmedAt: new Date(),
+      },
+    });
 
     // Emit BookingCreated event for Ride Service to consume
     await this.eventPublisher.publish('booking.created', {
@@ -119,27 +128,35 @@ export class BookingService {
   }
 
   async cancelBooking(bookingId: string, reason?: string) {
-    const booking = await Booking.findById(bookingId);
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
 
     if (!booking) {
       throw new Error('Booking not found');
     }
 
-    booking.status = BookingStatus.CANCELLED;
-    booking.cancelledAt = new Date();
-    await booking.save();
+    const updatedBooking = await prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: BookingStatus.CANCELLED,
+        cancelledAt: new Date(),
+      },
+    });
 
     await this.eventPublisher.publish('booking.cancelled', {
-      bookingId: booking.id,
-      customerId: booking.customerId,
+      bookingId: updatedBooking.id,
+      customerId: updatedBooking.customerId,
       reason,
     }, bookingId);
 
-    return booking;
+    return updatedBooking;
   }
 
   async getBooking(bookingId: string) {
-    const booking = await Booking.findById(bookingId);
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
 
     if (!booking) {
       throw new Error('Booking not found');
@@ -149,8 +166,9 @@ export class BookingService {
   }
 
   async getCustomerBookings(customerId: string) {
-    return Booking.find({ customerId })
-      .sort({ createdAt: -1 })
-      .exec();
+    return prisma.booking.findMany({
+      where: { customerId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }

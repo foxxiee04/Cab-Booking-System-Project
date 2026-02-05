@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -7,8 +8,11 @@ import { authMiddleware } from './middleware/auth';
 import { generalLimiter } from './middleware/rate-limit';
 import proxyRoutes from './routes/proxy';
 import { logger } from './utils/logger';
+import { SocketServer } from './socket/socket-server';
+import { EventConsumer } from './events/consumer';
 
 const app = express();
+const httpServer = createServer(app);
 
 // Security middleware
 app.use(helmet());
@@ -82,8 +86,44 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
+// Initialize Socket.io server
+const socketServer = new SocketServer(httpServer);
+
+// Initialize event consumer
+const eventConsumer = new EventConsumer(socketServer);
+
 // Start server
-app.listen(config.port, () => {
-  logger.info(`API Gateway running on port ${config.port}`);
-  logger.info(`Environment: ${config.nodeEnv}`);
-});
+async function startServer() {
+  try {
+    // Connect to RabbitMQ
+    await eventConsumer.connect();
+    logger.info('Connected to RabbitMQ event bus');
+
+    // Start HTTP server
+    httpServer.listen(config.port, () => {
+      logger.info(`API Gateway running on port ${config.port}`);
+      logger.info(`WebSocket server ready`);
+      logger.info(`Environment: ${config.nodeEnv}`);
+    });
+
+    // Graceful shutdown
+    process.on('SIGTERM', async () => {
+      logger.info('SIGTERM received, shutting down gracefully');
+      await eventConsumer.close();
+      await socketServer.close();
+      process.exit(0);
+    });
+
+    process.on('SIGINT', async () => {
+      logger.info('SIGINT received, shutting down gracefully');
+      await eventConsumer.close();
+      await socketServer.close();
+      process.exit(0);
+    });
+  } catch (error) {
+    logger.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();

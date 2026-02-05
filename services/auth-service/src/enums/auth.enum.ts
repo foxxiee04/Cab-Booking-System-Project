@@ -1,0 +1,19 @@
+export enum UserRole {
+  CUSTOMER = 'CUSTOMER',
+  DRIVER = 'DRIVER',
+  ADMIN = 'ADMIN',
+}
+
+export enum UserStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  PENDING = 'PENDING',
+}
+
+export enum TokenType {
+  ACCESS = 'ACCESS',
+  REFRESH = 'REFRESH',
+  VERIFICATION = 'VERIFICATION',
+  RESET_PASSWORD = 'RESET_PASSWORD',
+}

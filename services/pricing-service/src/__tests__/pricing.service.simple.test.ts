@@ -12,6 +12,9 @@ jest.mock('../config/redis', () => ({
 
 jest.mock('../config', () => ({
   config: {
+    osrm: {
+      baseUrl: 'http://router.project-osrm.org',
+    },
     pricing: {
       baseFare: {
         ECONOMY: 10000,
@@ -38,12 +41,17 @@ jest.mock('../config', () => ({
   },
 }));
 
+jest.mock('axios', () => ({
+  get: jest.fn(),
+}));
+
 jest.mock('../utils/geo.utils', () => ({
   calculateDistance: jest.fn((lat1, lng1, lat2, lng2) => 5.5),
   estimateDuration: jest.fn((distance) => distance * 3 * 60),
 }));
 
 import { PricingService } from '../services/pricing.service';
+import axios from 'axios';
 
 describe('PricingService - Simple Test Suite', () => {
   let pricingService: PricingService;
@@ -54,6 +62,8 @@ describe('PricingService - Simple Test Suite', () => {
     mockRedis.set.mockReset();
     mockRedis.setex.mockReset();
     mockRedis.expire.mockReset();
+
+    (axios.get as jest.Mock).mockRejectedValue(new Error('OSRM unavailable'));
 
     pricingService = new PricingService();
   });

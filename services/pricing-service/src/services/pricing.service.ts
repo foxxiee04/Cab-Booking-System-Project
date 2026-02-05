@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { redisClient } from '../config/redis';
 import { config } from '../config';
 import { logger } from '../utils/logger';
@@ -19,11 +20,26 @@ export class PricingService {
   }) {
     const { pickupLat, pickupLng, dropoffLat, dropoffLng, vehicleType } = params;
 
-    // Calculate distance
-    const distance = calculateDistance(pickupLat, pickupLng, dropoffLat, dropoffLng);
-    
-    // Estimate duration
-    const duration = estimateDuration(distance);
+    // Calculate distance & duration via OSRM (fallback to Haversine)
+    let distance = 0;
+    let duration = 0;
+
+    try {
+      const osrmUrl = `${config.osrm.baseUrl}/route/v1/driving/${pickupLng},${pickupLat};${dropoffLng},${dropoffLat}?overview=false`;
+      const response = await axios.get(osrmUrl, { timeout: 2000 });
+      const route = response.data?.routes?.[0];
+
+      if (route) {
+        distance = Math.round((route.distance / 1000) * 100) / 100; // km
+        duration = Math.round(route.duration); // seconds
+      } else {
+        throw new Error('OSRM returned no routes');
+      }
+    } catch (error) {
+      logger.warn('OSRM unavailable, using fallback distance', error);
+      distance = calculateDistance(pickupLat, pickupLng, dropoffLat, dropoffLng);
+      duration = estimateDuration(distance);
+    }
     const durationMinutes = Math.ceil(duration / 60);
 
     // Get surge multiplier

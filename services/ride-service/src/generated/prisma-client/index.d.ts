@@ -31,6 +31,7 @@ export namespace $Enums {
   export const RideStatus: {
   CREATED: 'CREATED',
   FINDING_DRIVER: 'FINDING_DRIVER',
+  OFFERED: 'OFFERED',
   ASSIGNED: 'ASSIGNED',
   ACCEPTED: 'ACCEPTED',
   PICKING_UP: 'PICKING_UP',
@@ -1003,6 +1004,7 @@ export namespace Prisma {
     duration: number | null
     fare: number | null
     surgeMultiplier: number | null
+    reassignAttempts: number | null
   }
 
   export type RideSumAggregateOutputType = {
@@ -1014,6 +1016,7 @@ export namespace Prisma {
     duration: number | null
     fare: number | null
     surgeMultiplier: number | null
+    reassignAttempts: number | null
   }
 
   export type RideMinAggregateOutputType = {
@@ -1033,9 +1036,11 @@ export namespace Prisma {
     duration: number | null
     fare: number | null
     surgeMultiplier: number | null
+    reassignAttempts: number | null
     acceptedDriverId: string | null
     requestedAt: Date | null
     pickupAt: Date | null
+    offeredAt: Date | null
     assignedAt: Date | null
     acceptedAt: Date | null
     startedAt: Date | null
@@ -1064,9 +1069,11 @@ export namespace Prisma {
     duration: number | null
     fare: number | null
     surgeMultiplier: number | null
+    reassignAttempts: number | null
     acceptedDriverId: string | null
     requestedAt: Date | null
     pickupAt: Date | null
+    offeredAt: Date | null
     assignedAt: Date | null
     acceptedAt: Date | null
     startedAt: Date | null
@@ -1096,9 +1103,13 @@ export namespace Prisma {
     fare: number
     surgeMultiplier: number
     suggestedDriverIds: number
+    offeredDriverIds: number
+    rejectedDriverIds: number
+    reassignAttempts: number
     acceptedDriverId: number
     requestedAt: number
     pickupAt: number
+    offeredAt: number
     assignedAt: number
     acceptedAt: number
     startedAt: number
@@ -1121,6 +1132,7 @@ export namespace Prisma {
     duration?: true
     fare?: true
     surgeMultiplier?: true
+    reassignAttempts?: true
   }
 
   export type RideSumAggregateInputType = {
@@ -1132,6 +1144,7 @@ export namespace Prisma {
     duration?: true
     fare?: true
     surgeMultiplier?: true
+    reassignAttempts?: true
   }
 
   export type RideMinAggregateInputType = {
@@ -1151,9 +1164,11 @@ export namespace Prisma {
     duration?: true
     fare?: true
     surgeMultiplier?: true
+    reassignAttempts?: true
     acceptedDriverId?: true
     requestedAt?: true
     pickupAt?: true
+    offeredAt?: true
     assignedAt?: true
     acceptedAt?: true
     startedAt?: true
@@ -1182,9 +1197,11 @@ export namespace Prisma {
     duration?: true
     fare?: true
     surgeMultiplier?: true
+    reassignAttempts?: true
     acceptedDriverId?: true
     requestedAt?: true
     pickupAt?: true
+    offeredAt?: true
     assignedAt?: true
     acceptedAt?: true
     startedAt?: true
@@ -1214,9 +1231,13 @@ export namespace Prisma {
     fare?: true
     surgeMultiplier?: true
     suggestedDriverIds?: true
+    offeredDriverIds?: true
+    rejectedDriverIds?: true
+    reassignAttempts?: true
     acceptedDriverId?: true
     requestedAt?: true
     pickupAt?: true
+    offeredAt?: true
     assignedAt?: true
     acceptedAt?: true
     startedAt?: true
@@ -1333,9 +1354,13 @@ export namespace Prisma {
     fare: number | null
     surgeMultiplier: number
     suggestedDriverIds: string[]
+    offeredDriverIds: string[]
+    rejectedDriverIds: string[]
+    reassignAttempts: number
     acceptedDriverId: string | null
     requestedAt: Date
     pickupAt: Date | null
+    offeredAt: Date | null
     assignedAt: Date | null
     acceptedAt: Date | null
     startedAt: Date | null
@@ -1384,9 +1409,13 @@ export namespace Prisma {
     fare?: boolean
     surgeMultiplier?: boolean
     suggestedDriverIds?: boolean
+    offeredDriverIds?: boolean
+    rejectedDriverIds?: boolean
+    reassignAttempts?: boolean
     acceptedDriverId?: boolean
     requestedAt?: boolean
     pickupAt?: boolean
+    offeredAt?: boolean
     assignedAt?: boolean
     acceptedAt?: boolean
     startedAt?: boolean
@@ -1418,9 +1447,13 @@ export namespace Prisma {
     fare?: boolean
     surgeMultiplier?: boolean
     suggestedDriverIds?: boolean
+    offeredDriverIds?: boolean
+    rejectedDriverIds?: boolean
+    reassignAttempts?: boolean
     acceptedDriverId?: boolean
     requestedAt?: boolean
     pickupAt?: boolean
+    offeredAt?: boolean
     assignedAt?: boolean
     acceptedAt?: boolean
     startedAt?: boolean
@@ -1450,9 +1483,13 @@ export namespace Prisma {
     fare?: boolean
     surgeMultiplier?: boolean
     suggestedDriverIds?: boolean
+    offeredDriverIds?: boolean
+    rejectedDriverIds?: boolean
+    reassignAttempts?: boolean
     acceptedDriverId?: boolean
     requestedAt?: boolean
     pickupAt?: boolean
+    offeredAt?: boolean
     assignedAt?: boolean
     acceptedAt?: boolean
     startedAt?: boolean
@@ -1493,9 +1530,13 @@ export namespace Prisma {
       fare: number | null
       surgeMultiplier: number
       suggestedDriverIds: string[]
+      offeredDriverIds: string[]
+      rejectedDriverIds: string[]
+      reassignAttempts: number
       acceptedDriverId: string | null
       requestedAt: Date
       pickupAt: Date | null
+      offeredAt: Date | null
       assignedAt: Date | null
       acceptedAt: Date | null
       startedAt: Date | null
@@ -1916,9 +1957,13 @@ export namespace Prisma {
     readonly fare: FieldRef<"Ride", 'Float'>
     readonly surgeMultiplier: FieldRef<"Ride", 'Float'>
     readonly suggestedDriverIds: FieldRef<"Ride", 'String[]'>
+    readonly offeredDriverIds: FieldRef<"Ride", 'String[]'>
+    readonly rejectedDriverIds: FieldRef<"Ride", 'String[]'>
+    readonly reassignAttempts: FieldRef<"Ride", 'Int'>
     readonly acceptedDriverId: FieldRef<"Ride", 'String'>
     readonly requestedAt: FieldRef<"Ride", 'DateTime'>
     readonly pickupAt: FieldRef<"Ride", 'DateTime'>
+    readonly offeredAt: FieldRef<"Ride", 'DateTime'>
     readonly assignedAt: FieldRef<"Ride", 'DateTime'>
     readonly acceptedAt: FieldRef<"Ride", 'DateTime'>
     readonly startedAt: FieldRef<"Ride", 'DateTime'>
@@ -3277,9 +3322,13 @@ export namespace Prisma {
     fare: 'fare',
     surgeMultiplier: 'surgeMultiplier',
     suggestedDriverIds: 'suggestedDriverIds',
+    offeredDriverIds: 'offeredDriverIds',
+    rejectedDriverIds: 'rejectedDriverIds',
+    reassignAttempts: 'reassignAttempts',
     acceptedDriverId: 'acceptedDriverId',
     requestedAt: 'requestedAt',
     pickupAt: 'pickupAt',
+    offeredAt: 'offeredAt',
     assignedAt: 'assignedAt',
     acceptedAt: 'acceptedAt',
     startedAt: 'startedAt',
@@ -3431,9 +3480,13 @@ export namespace Prisma {
     fare?: FloatNullableFilter<"Ride"> | number | null
     surgeMultiplier?: FloatFilter<"Ride"> | number
     suggestedDriverIds?: StringNullableListFilter<"Ride">
+    offeredDriverIds?: StringNullableListFilter<"Ride">
+    rejectedDriverIds?: StringNullableListFilter<"Ride">
+    reassignAttempts?: IntFilter<"Ride"> | number
     acceptedDriverId?: StringNullableFilter<"Ride"> | string | null
     requestedAt?: DateTimeFilter<"Ride"> | Date | string
     pickupAt?: DateTimeNullableFilter<"Ride"> | Date | string | null
+    offeredAt?: DateTimeNullableFilter<"Ride"> | Date | string | null
     assignedAt?: DateTimeNullableFilter<"Ride"> | Date | string | null
     acceptedAt?: DateTimeNullableFilter<"Ride"> | Date | string | null
     startedAt?: DateTimeNullableFilter<"Ride"> | Date | string | null
@@ -3464,9 +3517,13 @@ export namespace Prisma {
     fare?: SortOrderInput | SortOrder
     surgeMultiplier?: SortOrder
     suggestedDriverIds?: SortOrder
+    offeredDriverIds?: SortOrder
+    rejectedDriverIds?: SortOrder
+    reassignAttempts?: SortOrder
     acceptedDriverId?: SortOrderInput | SortOrder
     requestedAt?: SortOrder
     pickupAt?: SortOrderInput | SortOrder
+    offeredAt?: SortOrderInput | SortOrder
     assignedAt?: SortOrderInput | SortOrder
     acceptedAt?: SortOrderInput | SortOrder
     startedAt?: SortOrderInput | SortOrder
@@ -3500,9 +3557,13 @@ export namespace Prisma {
     fare?: FloatNullableFilter<"Ride"> | number | null
     surgeMultiplier?: FloatFilter<"Ride"> | number
     suggestedDriverIds?: StringNullableListFilter<"Ride">
+    offeredDriverIds?: StringNullableListFilter<"Ride">
+    rejectedDriverIds?: StringNullableListFilter<"Ride">
+    reassignAttempts?: IntFilter<"Ride"> | number
     acceptedDriverId?: StringNullableFilter<"Ride"> | string | null
     requestedAt?: DateTimeFilter<"Ride"> | Date | string
     pickupAt?: DateTimeNullableFilter<"Ride"> | Date | string | null
+    offeredAt?: DateTimeNullableFilter<"Ride"> | Date | string | null
     assignedAt?: DateTimeNullableFilter<"Ride"> | Date | string | null
     acceptedAt?: DateTimeNullableFilter<"Ride"> | Date | string | null
     startedAt?: DateTimeNullableFilter<"Ride"> | Date | string | null
@@ -3533,9 +3594,13 @@ export namespace Prisma {
     fare?: SortOrderInput | SortOrder
     surgeMultiplier?: SortOrder
     suggestedDriverIds?: SortOrder
+    offeredDriverIds?: SortOrder
+    rejectedDriverIds?: SortOrder
+    reassignAttempts?: SortOrder
     acceptedDriverId?: SortOrderInput | SortOrder
     requestedAt?: SortOrder
     pickupAt?: SortOrderInput | SortOrder
+    offeredAt?: SortOrderInput | SortOrder
     assignedAt?: SortOrderInput | SortOrder
     acceptedAt?: SortOrderInput | SortOrder
     startedAt?: SortOrderInput | SortOrder
@@ -3573,9 +3638,13 @@ export namespace Prisma {
     fare?: FloatNullableWithAggregatesFilter<"Ride"> | number | null
     surgeMultiplier?: FloatWithAggregatesFilter<"Ride"> | number
     suggestedDriverIds?: StringNullableListFilter<"Ride">
+    offeredDriverIds?: StringNullableListFilter<"Ride">
+    rejectedDriverIds?: StringNullableListFilter<"Ride">
+    reassignAttempts?: IntWithAggregatesFilter<"Ride"> | number
     acceptedDriverId?: StringNullableWithAggregatesFilter<"Ride"> | string | null
     requestedAt?: DateTimeWithAggregatesFilter<"Ride"> | Date | string
     pickupAt?: DateTimeNullableWithAggregatesFilter<"Ride"> | Date | string | null
+    offeredAt?: DateTimeNullableWithAggregatesFilter<"Ride"> | Date | string | null
     assignedAt?: DateTimeNullableWithAggregatesFilter<"Ride"> | Date | string | null
     acceptedAt?: DateTimeNullableWithAggregatesFilter<"Ride"> | Date | string | null
     startedAt?: DateTimeNullableWithAggregatesFilter<"Ride"> | Date | string | null
@@ -3675,9 +3744,13 @@ export namespace Prisma {
     fare?: number | null
     surgeMultiplier?: number
     suggestedDriverIds?: RideCreatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideCreateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideCreaterejectedDriverIdsInput | string[]
+    reassignAttempts?: number
     acceptedDriverId?: string | null
     requestedAt?: Date | string
     pickupAt?: Date | string | null
+    offeredAt?: Date | string | null
     assignedAt?: Date | string | null
     acceptedAt?: Date | string | null
     startedAt?: Date | string | null
@@ -3708,9 +3781,13 @@ export namespace Prisma {
     fare?: number | null
     surgeMultiplier?: number
     suggestedDriverIds?: RideCreatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideCreateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideCreaterejectedDriverIdsInput | string[]
+    reassignAttempts?: number
     acceptedDriverId?: string | null
     requestedAt?: Date | string
     pickupAt?: Date | string | null
+    offeredAt?: Date | string | null
     assignedAt?: Date | string | null
     acceptedAt?: Date | string | null
     startedAt?: Date | string | null
@@ -3741,9 +3818,13 @@ export namespace Prisma {
     fare?: NullableFloatFieldUpdateOperationsInput | number | null
     surgeMultiplier?: FloatFieldUpdateOperationsInput | number
     suggestedDriverIds?: RideUpdatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideUpdateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideUpdaterejectedDriverIdsInput | string[]
+    reassignAttempts?: IntFieldUpdateOperationsInput | number
     acceptedDriverId?: NullableStringFieldUpdateOperationsInput | string | null
     requestedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     pickupAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    offeredAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     assignedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     acceptedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3774,9 +3855,13 @@ export namespace Prisma {
     fare?: NullableFloatFieldUpdateOperationsInput | number | null
     surgeMultiplier?: FloatFieldUpdateOperationsInput | number
     suggestedDriverIds?: RideUpdatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideUpdateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideUpdaterejectedDriverIdsInput | string[]
+    reassignAttempts?: IntFieldUpdateOperationsInput | number
     acceptedDriverId?: NullableStringFieldUpdateOperationsInput | string | null
     requestedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     pickupAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    offeredAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     assignedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     acceptedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3807,9 +3892,13 @@ export namespace Prisma {
     fare?: number | null
     surgeMultiplier?: number
     suggestedDriverIds?: RideCreatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideCreateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideCreaterejectedDriverIdsInput | string[]
+    reassignAttempts?: number
     acceptedDriverId?: string | null
     requestedAt?: Date | string
     pickupAt?: Date | string | null
+    offeredAt?: Date | string | null
     assignedAt?: Date | string | null
     acceptedAt?: Date | string | null
     startedAt?: Date | string | null
@@ -3839,9 +3928,13 @@ export namespace Prisma {
     fare?: NullableFloatFieldUpdateOperationsInput | number | null
     surgeMultiplier?: FloatFieldUpdateOperationsInput | number
     suggestedDriverIds?: RideUpdatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideUpdateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideUpdaterejectedDriverIdsInput | string[]
+    reassignAttempts?: IntFieldUpdateOperationsInput | number
     acceptedDriverId?: NullableStringFieldUpdateOperationsInput | string | null
     requestedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     pickupAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    offeredAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     assignedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     acceptedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3871,9 +3964,13 @@ export namespace Prisma {
     fare?: NullableFloatFieldUpdateOperationsInput | number | null
     surgeMultiplier?: FloatFieldUpdateOperationsInput | number
     suggestedDriverIds?: RideUpdatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideUpdateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideUpdaterejectedDriverIdsInput | string[]
+    reassignAttempts?: IntFieldUpdateOperationsInput | number
     acceptedDriverId?: NullableStringFieldUpdateOperationsInput | string | null
     requestedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     pickupAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    offeredAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     assignedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     acceptedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4039,6 +4136,17 @@ export namespace Prisma {
     isEmpty?: boolean
   }
 
+  export type IntFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntFilter<$PrismaModel> | number
+  }
+
   export type DateTimeFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -4094,9 +4202,13 @@ export namespace Prisma {
     fare?: SortOrder
     surgeMultiplier?: SortOrder
     suggestedDriverIds?: SortOrder
+    offeredDriverIds?: SortOrder
+    rejectedDriverIds?: SortOrder
+    reassignAttempts?: SortOrder
     acceptedDriverId?: SortOrder
     requestedAt?: SortOrder
     pickupAt?: SortOrder
+    offeredAt?: SortOrder
     assignedAt?: SortOrder
     acceptedAt?: SortOrder
     startedAt?: SortOrder
@@ -4117,6 +4229,7 @@ export namespace Prisma {
     duration?: SortOrder
     fare?: SortOrder
     surgeMultiplier?: SortOrder
+    reassignAttempts?: SortOrder
   }
 
   export type RideMaxOrderByAggregateInput = {
@@ -4136,9 +4249,11 @@ export namespace Prisma {
     duration?: SortOrder
     fare?: SortOrder
     surgeMultiplier?: SortOrder
+    reassignAttempts?: SortOrder
     acceptedDriverId?: SortOrder
     requestedAt?: SortOrder
     pickupAt?: SortOrder
+    offeredAt?: SortOrder
     assignedAt?: SortOrder
     acceptedAt?: SortOrder
     startedAt?: SortOrder
@@ -4167,9 +4282,11 @@ export namespace Prisma {
     duration?: SortOrder
     fare?: SortOrder
     surgeMultiplier?: SortOrder
+    reassignAttempts?: SortOrder
     acceptedDriverId?: SortOrder
     requestedAt?: SortOrder
     pickupAt?: SortOrder
+    offeredAt?: SortOrder
     assignedAt?: SortOrder
     acceptedAt?: SortOrder
     startedAt?: SortOrder
@@ -4190,6 +4307,7 @@ export namespace Prisma {
     duration?: SortOrder
     fare?: SortOrder
     surgeMultiplier?: SortOrder
+    reassignAttempts?: SortOrder
   }
 
   export type StringWithAggregatesFilter<$PrismaModel = never> = {
@@ -4286,6 +4404,22 @@ export namespace Prisma {
     _max?: NestedIntNullableFilter<$PrismaModel>
   }
 
+  export type IntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
+  }
+
   export type DateTimeWithAggregatesFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -4373,6 +4507,14 @@ export namespace Prisma {
     set: string[]
   }
 
+  export type RideCreateofferedDriverIdsInput = {
+    set: string[]
+  }
+
+  export type RideCreaterejectedDriverIdsInput = {
+    set: string[]
+  }
+
   export type RideStateTransitionCreateNestedManyWithoutRideInput = {
     create?: XOR<RideStateTransitionCreateWithoutRideInput, RideStateTransitionUncheckedCreateWithoutRideInput> | RideStateTransitionCreateWithoutRideInput[] | RideStateTransitionUncheckedCreateWithoutRideInput[]
     connectOrCreate?: RideStateTransitionCreateOrConnectWithoutRideInput | RideStateTransitionCreateOrConnectWithoutRideInput[]
@@ -4426,6 +4568,24 @@ export namespace Prisma {
   export type RideUpdatesuggestedDriverIdsInput = {
     set?: string[]
     push?: string | string[]
+  }
+
+  export type RideUpdateofferedDriverIdsInput = {
+    set?: string[]
+    push?: string | string[]
+  }
+
+  export type RideUpdaterejectedDriverIdsInput = {
+    set?: string[]
+    push?: string | string[]
+  }
+
+  export type IntFieldUpdateOperationsInput = {
+    set?: number
+    increment?: number
+    decrement?: number
+    multiply?: number
+    divide?: number
   }
 
   export type DateTimeFieldUpdateOperationsInput = {
@@ -4550,6 +4710,17 @@ export namespace Prisma {
     not?: NestedIntNullableFilter<$PrismaModel> | number | null
   }
 
+  export type NestedIntFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntFilter<$PrismaModel> | number
+  }
+
   export type NestedDateTimeFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -4587,17 +4758,6 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedStringFilter<$PrismaModel>
     _max?: NestedStringFilter<$PrismaModel>
-  }
-
-  export type NestedIntFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntFilter<$PrismaModel> | number
   }
 
   export type NestedStringNullableWithAggregatesFilter<$PrismaModel = never> = {
@@ -4673,6 +4833,22 @@ export namespace Prisma {
     _sum?: NestedIntNullableFilter<$PrismaModel>
     _min?: NestedIntNullableFilter<$PrismaModel>
     _max?: NestedIntNullableFilter<$PrismaModel>
+  }
+
+  export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
   }
 
   export type NestedDateTimeWithAggregatesFilter<$PrismaModel = never> = {
@@ -4798,9 +4974,13 @@ export namespace Prisma {
     fare?: number | null
     surgeMultiplier?: number
     suggestedDriverIds?: RideCreatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideCreateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideCreaterejectedDriverIdsInput | string[]
+    reassignAttempts?: number
     acceptedDriverId?: string | null
     requestedAt?: Date | string
     pickupAt?: Date | string | null
+    offeredAt?: Date | string | null
     assignedAt?: Date | string | null
     acceptedAt?: Date | string | null
     startedAt?: Date | string | null
@@ -4830,9 +5010,13 @@ export namespace Prisma {
     fare?: number | null
     surgeMultiplier?: number
     suggestedDriverIds?: RideCreatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideCreateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideCreaterejectedDriverIdsInput | string[]
+    reassignAttempts?: number
     acceptedDriverId?: string | null
     requestedAt?: Date | string
     pickupAt?: Date | string | null
+    offeredAt?: Date | string | null
     assignedAt?: Date | string | null
     acceptedAt?: Date | string | null
     startedAt?: Date | string | null
@@ -4878,9 +5062,13 @@ export namespace Prisma {
     fare?: NullableFloatFieldUpdateOperationsInput | number | null
     surgeMultiplier?: FloatFieldUpdateOperationsInput | number
     suggestedDriverIds?: RideUpdatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideUpdateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideUpdaterejectedDriverIdsInput | string[]
+    reassignAttempts?: IntFieldUpdateOperationsInput | number
     acceptedDriverId?: NullableStringFieldUpdateOperationsInput | string | null
     requestedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     pickupAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    offeredAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     assignedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     acceptedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4910,9 +5098,13 @@ export namespace Prisma {
     fare?: NullableFloatFieldUpdateOperationsInput | number | null
     surgeMultiplier?: FloatFieldUpdateOperationsInput | number
     suggestedDriverIds?: RideUpdatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideUpdateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideUpdaterejectedDriverIdsInput | string[]
+    reassignAttempts?: IntFieldUpdateOperationsInput | number
     acceptedDriverId?: NullableStringFieldUpdateOperationsInput | string | null
     requestedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     pickupAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    offeredAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     assignedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     acceptedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null

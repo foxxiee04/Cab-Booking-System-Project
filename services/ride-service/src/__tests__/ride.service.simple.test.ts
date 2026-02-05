@@ -30,9 +30,8 @@ jest.mock('../events/publisher');
 jest.mock('../config', () => ({
   config: {
     services: {
-      ai: 'http://ai-service:8000',
+      pricing: 'http://pricing-service:3009',
       driver: 'http://driver-service:3003',
-      payment: 'http://payment-service:3006',
     },
     ride: {
       searchRadiusKm: 5,
@@ -71,7 +70,7 @@ describe('RideService - Simple Test Suite', () => {
   });
 
   describe('CREATE RIDE', () => {
-    it('should create ride successfully with AI service', async () => {
+    it('should create ride successfully with Pricing service', async () => {
       const input = {
         customerId: 'customer-123',
         pickup: {
@@ -116,7 +115,7 @@ describe('RideService - Simple Test Suite', () => {
       );
     });
 
-    it('should use fallback calculation if AI service fails', async () => {
+    it('should use fallback calculation if Pricing service fails', async () => {
       const input = {
         customerId: 'customer-123',
         pickup: {
@@ -131,7 +130,7 @@ describe('RideService - Simple Test Suite', () => {
         },
       };
 
-      (axios.post as jest.Mock).mockRejectedValue(new Error('AI service unavailable'));
+      (axios.post as jest.Mock).mockRejectedValue(new Error('Pricing service unavailable'));
 
       mockPrisma.ride.findFirst.mockResolvedValue(null);
       mockPrisma.ride.create.mockResolvedValue({

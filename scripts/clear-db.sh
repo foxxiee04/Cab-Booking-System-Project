@@ -1,41 +1,44 @@
 #!/bin/bash
 
-# Clear all data from MongoDB and PostgreSQL
-# WARNING: This will DELETE ALL DATA - use only for development!
+# Complete database reset for Cab Booking System
+# WARNING: This will DELETE ALL DATA and REBUILD from scratch - use only for development!
 
-echo "🗑️  Clearing all database data..."
+set -e
 
-# MongoDB: Drop collections in cab_auth
-echo "📦 Clearing MongoDB (cab_auth)..."
-docker exec cab-mongodb mongosh cab_auth --eval "
-  db.users.deleteMany({});
-  db.refreshtokens.deleteMany({});
-  console.log('✅ cab_auth cleared');
-"
+echo "🗑️  Complete database reset starting..."
 
-# MongoDB: Drop collections in cab_driver_service
-echo "📦 Clearing MongoDB (cab_driver_service)..."
-docker exec cab-mongodb mongosh cab_driver_service --eval "
-  db.drivers.deleteMany({});
-  console.log('✅ cab_driver_service cleared');
-"
+# Stop and remove all containers and volumes
+echo "📦 Stopping containers and removing volumes..."
+docker compose down -v
 
-# PostgreSQL: Truncate all tables in cab_rides
-echo "📦 Clearing PostgreSQL (cab_rides)..."
-docker exec cab-postgres psql -U postgres -d cab_rides -c "
-  TRUNCATE TABLE \"RideStateTransition\" CASCADE;
-  TRUNCATE TABLE \"Ride\" CASCADE;
-  SELECT 'cab_rides cleared' as status;
-"
+# Wait for cleanup
+sleep 2
 
-# PostgreSQL: Truncate all tables in cab_payments
-echo "📦 Clearing PostgreSQL (cab_payments)..."
-docker exec cab-postgres psql -U postgres -d cab_payments -c "
-  TRUNCATE TABLE \"OutboxEvent\" CASCADE;
-  TRUNCATE TABLE \"Payment\" CASCADE;
-  TRUNCATE TABLE \"Fare\" CASCADE;
-  SELECT 'cab_payments cleared' as status;
-"
+echo "📦 Starting fresh infrastructure..."
+docker compose up -d postgres mongodb redis rabbitmq
 
-echo "✅ All database data cleared successfully!"
-echo "⚠️  All collections/tables are now EMPTY"
+# Wait for databases to be ready
+echo "⏳ Waiting for databases to initialize..."
+sleep 10
+
+# Verify PostgreSQL is ready
+echo "🔍 Verifying PostgreSQL..."
+docker compose exec -T postgres pg_isready -U postgres || exit 1
+
+# Verify MongoDB is ready
+echo "🔍 Verifying MongoDB..."
+docker compose exec -T mongodb mongosh --eval "db.adminCommand('ping')" > /dev/null 2>&1 || exit 1
+
+# Seed initial data
+echo "🌱 Seeding initial test data..."
+docker compose exec -T postgres psql -U postgres -f /docker-entrypoint-initdb.d/init.sql
+
+# Apply Prisma schemas for all PostgreSQL services
+echo "📐 Applying Prisma schemas..."
+for service in auth-service user-service driver-service booking-service ride-service payment-service; do
+  echo "  → Applying schema for $service..."
+  docker compose exec -T "$service" npx prisma db push --skip-generate || true
+done
+
+echo "✅ Database reset completed successfully!"
+echo "✅ All services ready for use"

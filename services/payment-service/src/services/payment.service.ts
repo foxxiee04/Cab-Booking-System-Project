@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { EventPublisher } from '../events/publisher';
 import { logger } from '../utils/logger';
+import { PaymentGatewayFactory, PaymentGatewayType } from './payment-gateway.mock';
 
 interface RideCompletedPayload {
   rideId: string;
@@ -13,6 +14,7 @@ interface RideCompletedPayload {
   duration?: number;
   surgeMultiplier?: number;
   vehicleType?: string; // ECONOMY, COMFORT, PREMIUM
+  paymentMethod?: string; // CASH, MOMO, VISA, CARD, WALLET
 }
 
 export class PaymentService {
@@ -162,10 +164,19 @@ export class PaymentService {
   }
 
   async processRideCompleted(payload: RideCompletedPayload): Promise<void> {
-    const { rideId, customerId, driverId, distance, duration, surgeMultiplier = 1.0, vehicleType = 'ECONOMY' } = payload;
+    const { 
+      rideId, 
+      customerId, 
+      driverId, 
+      distance, 
+      duration, 
+      surgeMultiplier = 1.0, 
+      vehicleType = 'ECONOMY',
+      paymentMethod = 'CASH'
+    } = payload;
 
     try {
-      // Check if fare already processed (prevent duplicates)
+      // Idempotency check: Check if fare already processed (prevent duplicates)
       const existingFare = await this.prisma.fare.findFirst({
         where: { rideId }
       });
@@ -182,6 +193,13 @@ export class PaymentService {
         surgeMultiplier,
         vehicleType
       );
+
+      // Generate idempotency key for payment
+      const idempotencyKey = `ride_${rideId}_${Date.now()}`;
+
+      // Map payment method string to enum
+      const mappedMethod = this.mapPaymentMethod(paymentMethod);
+      const mappedProvider = this.mapPaymentProvider(paymentMethod);
 
       // Create fare and payment in transaction
       await this.prisma.$transaction(async (tx) => {
@@ -200,7 +218,7 @@ export class PaymentService {
           },
         });
 
-        // Create payment record
+        // Create payment record with idempotency key
         const payment = await tx.payment.create({
           data: {
             rideId,
@@ -208,8 +226,10 @@ export class PaymentService {
             driverId,
             amount: fareDetails.totalFare,
             currency: 'VND',
-            method: PaymentMethod.CASH, // default
+            method: mappedMethod,
+            provider: mappedProvider,
             status: PaymentStatus.PENDING,
+            idempotencyKey, // For deduplication
           },
         });
 
@@ -222,16 +242,23 @@ export class PaymentService {
               customerId,
               fare: fareDetails.totalFare,
               breakdown: fareDetails,
+              paymentMethod: mappedMethod,
             }),
             correlationId: rideId,
           },
         });
 
-        logger.info(`Fare calculated for ride ${rideId}: ${fareDetails.totalFare} VND`);
+        logger.info(`Fare calculated for ride ${rideId}: ${fareDetails.totalFare} VND (Method: ${mappedMethod})`);
       });
 
-      // Process payment (mock)
-      await this.processPayment(rideId);
+      // Process payment asynchronously based on method
+      if (mappedMethod === PaymentMethod.CASH) {
+        // Cash payment: mark as completed immediately (COD)
+        await this.processPayment(rideId);
+      } else {
+        // Electronic payment (MOMO/VISA): process with gateway mock
+        await this.processElectronicPayment(rideId);
+      }
     } catch (error) {
       logger.error(`Error processing ride completed for ${rideId}:`, error);
       throw error;
@@ -251,7 +278,7 @@ export class PaymentService {
         data: { status: PaymentStatus.PROCESSING },
       });
 
-      // Simulate payment processing (mock gateway)
+      // Cash payment - immediate completion (COD)
       await this.mockPaymentGateway(payment.amount);
 
       // Mark as completed
@@ -276,6 +303,7 @@ export class PaymentService {
               customerId: payment.customerId,
               driverId: payment.driverId,
               amount: payment.amount,
+              method: payment.method,
             }),
             correlationId: payment.rideId,
           },
@@ -289,6 +317,7 @@ export class PaymentService {
         customerId: payment.customerId,
         driverId: payment.driverId,
         amount: payment.amount,
+        method: payment.method,
       }, payment.rideId);
 
       logger.info(`Payment completed for ride ${rideId}`);
@@ -326,6 +355,168 @@ export class PaymentService {
       }, payment.rideId);
 
       logger.error(`Payment failed for ride ${rideId}:`, error);
+    }
+  }
+
+  /**
+   * Process electronic payment (MoMo/Visa) with mock gateway
+   * Simulates async payment flow: PENDING → PROCESSING → SUCCESS/FAILED
+   */
+  async processElectronicPayment(rideId: string): Promise<void> {
+    const payment = await this.prisma.payment.findUnique({ where: { rideId } });
+    if (!payment) {
+      throw new Error('Payment not found');
+    }
+
+    try {
+      // Update to processing
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { 
+          status: PaymentStatus.PROCESSING,
+          paymentIntentId: `pi_${uuidv4()}`, // Simulate payment intent creation
+        },
+      });
+
+      logger.info(`Processing ${payment.method} payment for ride ${rideId}`);
+
+      // Get appropriate gateway based on payment method
+      let gatewayType: PaymentGatewayType;
+      if (payment.method === PaymentMethod.MOMO) {
+        gatewayType = PaymentGatewayType.MOMO;
+      } else if (payment.method === PaymentMethod.VISA || payment.method === PaymentMethod.CARD) {
+        gatewayType = PaymentGatewayType.VISA;
+      } else {
+        throw new Error(`Unsupported electronic payment method: ${payment.method}`);
+      }
+
+      const gateway = PaymentGatewayFactory.getGateway(gatewayType);
+
+      // Process payment through gateway (with delay and random success/failure)
+      const result = await gateway.processPayment(
+        payment.amount,
+        payment.currency,
+        rideId,
+        { customerId: payment.customerId }
+      );
+
+      if (result.success) {
+        // Payment succeeded
+        await this.prisma.$transaction(async (tx) => {
+          await tx.payment.update({
+            where: { id: payment.id },
+            data: {
+              status: PaymentStatus.COMPLETED,
+              completedAt: new Date(),
+              transactionId: result.transactionId,
+              gatewayResponse: JSON.stringify(result.providerResponse),
+            },
+          });
+
+          await tx.outboxEvent.create({
+            data: {
+              eventType: 'payment.completed',
+              payload: JSON.stringify({
+                paymentId: payment.id,
+                rideId: payment.rideId,
+                customerId: payment.customerId,
+                driverId: payment.driverId,
+                amount: payment.amount,
+                method: payment.method,
+                provider: payment.provider,
+                transactionId: result.transactionId,
+              }),
+              correlationId: payment.rideId,
+            },
+          });
+        });
+
+        await this.eventPublisher.publish('payment.completed', {
+          paymentId: payment.id,
+          rideId: payment.rideId,
+          customerId: payment.customerId,
+          driverId: payment.driverId,
+          amount: payment.amount,
+          method: payment.method,
+          provider: payment.provider,
+          transactionId: result.transactionId,
+        }, payment.rideId);
+
+        logger.info(`${payment.method} payment completed for ride ${rideId} - Transaction: ${result.transactionId}`);
+      } else {
+        // Payment failed
+        await this.prisma.$transaction(async (tx) => {
+          await tx.payment.update({
+            where: { id: payment.id },
+            data: {
+              status: PaymentStatus.FAILED,
+              failedAt: new Date(),
+              failureReason: result.message,
+              gatewayResponse: JSON.stringify(result.providerResponse),
+            },
+          });
+
+          await tx.outboxEvent.create({
+            data: {
+              eventType: 'payment.failed',
+              payload: JSON.stringify({
+                paymentId: payment.id,
+                rideId: payment.rideId,
+                customerId: payment.customerId,
+                method: payment.method,
+                provider: payment.provider,
+                reason: result.message,
+              }),
+              correlationId: payment.rideId,
+            },
+          });
+        });
+
+        await this.eventPublisher.publish('payment.failed', {
+          paymentId: payment.id,
+          rideId: payment.rideId,
+          customerId: payment.customerId,
+          method: payment.method,
+          provider: payment.provider,
+          reason: result.message,
+        }, payment.rideId);
+
+        logger.warn(`${payment.method} payment failed for ride ${rideId} - Reason: ${result.message}`);
+      }
+    } catch (error) {
+      // Handle unexpected errors
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: PaymentStatus.FAILED,
+            failedAt: new Date(),
+            failureReason: error instanceof Error ? error.message : 'Payment processing error',
+          },
+        });
+
+        await tx.outboxEvent.create({
+          data: {
+            eventType: 'payment.failed',
+            payload: JSON.stringify({
+              paymentId: payment.id,
+              rideId: payment.rideId,
+              customerId: payment.customerId,
+              reason: error instanceof Error ? error.message : 'Payment processing error',
+            }),
+            correlationId: payment.rideId,
+          },
+        });
+      });
+
+      await this.eventPublisher.publish('payment.failed', {
+        paymentId: payment.id,
+        rideId: payment.rideId,
+        customerId: payment.customerId,
+        reason: error instanceof Error ? error.message : 'Payment processing error',
+      }, payment.rideId);
+
+      logger.error(`Error processing ${payment.method} payment for ride ${rideId}:`, error);
     }
   }
 
@@ -470,6 +661,43 @@ export class PaymentService {
     // Simulate 5% failure rate
     if (Math.random() < 0.05) {
       throw new Error('Payment gateway timeout');
+    }
+  }
+
+  /**
+   * Map payment method string to PaymentMethod enum
+   */
+  private mapPaymentMethod(method: string): PaymentMethod {
+    const methodUpper = method.toUpperCase();
+    switch (methodUpper) {
+      case 'CASH':
+        return PaymentMethod.CASH;
+      case 'MOMO':
+        return PaymentMethod.MOMO;
+      case 'VISA':
+      case 'CARD':
+        return PaymentMethod.VISA;
+      case 'WALLET':
+        return PaymentMethod.WALLET;
+      default:
+        logger.warn(`Unknown payment method: ${method}, defaulting to CASH`);
+        return PaymentMethod.CASH;
+    }
+  }
+
+  /**
+   * Map payment method to provider
+   */
+  private mapPaymentProvider(method: string): PaymentProvider {
+    const methodUpper = method.toUpperCase();
+    switch (methodUpper) {
+      case 'MOMO':
+        return PaymentProvider.MOMO;
+      case 'VISA':
+      case 'CARD':
+        return PaymentProvider.VISA;
+      default:
+        return PaymentProvider.MOCK;
     }
   }
 }

@@ -1,6 +1,6 @@
 // Jest setup file for driver-service
 process.env.NODE_ENV = 'test';
-process.env.MONGODB_URI = 'mongodb://localhost:27017/test_drivers';
+process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/test_drivers';
 process.env.REDIS_URL = 'redis://localhost:6379';
 process.env.JWT_SECRET = 'test-jwt-secret';
 process.env.RABBITMQ_URL = 'amqp://localhost:5672';
