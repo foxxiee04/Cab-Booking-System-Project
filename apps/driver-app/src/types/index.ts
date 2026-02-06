@@ -93,7 +93,7 @@ export interface Ride {
   };
 }
 
-export type PaymentMethod = 'CASH' | 'MOMO' | 'VISA';
+export type PaymentMethod = 'CASH' | 'CARD' | 'WALLET';
 
 // Earnings Types
 export interface Earnings {

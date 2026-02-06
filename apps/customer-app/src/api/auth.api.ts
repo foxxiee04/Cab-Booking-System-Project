@@ -9,10 +9,10 @@ export interface LoginRequest {
 export interface RegisterRequest {
   email: string;
   password: string;
+  phone: string;
+  role: 'CUSTOMER';
   firstName: string;
   lastName: string;
-  phoneNumber?: string;
-  role: 'CUSTOMER';
 }
 
 export interface AuthResponse {

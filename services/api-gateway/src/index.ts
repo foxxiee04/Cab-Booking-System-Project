@@ -7,6 +7,7 @@ import { config } from './config';
 import { authMiddleware } from './middleware/auth';
 import { generalLimiter } from './middleware/rate-limit';
 import proxyRoutes from './routes/proxy';
+import mapRoutes from './routes/map';
 import { logger } from './utils/logger';
 import { SocketServer } from './socket/socket-server';
 import { EventConsumer } from './events/consumer';
@@ -58,6 +59,9 @@ app.get('/health/services', async (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Map proxy endpoints (public)
+app.use('/api/map', mapRoutes);
 
 // Authentication middleware
 app.use(authMiddleware);

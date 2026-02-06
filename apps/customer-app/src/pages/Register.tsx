@@ -15,13 +15,10 @@ import {
   Grid,
 } from '@mui/material';
 import { Visibility, VisibilityOff, DirectionsCar } from '@mui/icons-material';
-import { useAppDispatch } from '../store/hooks';
-import { setCredentials } from '../store/auth.slice';
 import { authApi } from '../api/auth.api';
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
-  const dispatch = useAppDispatch();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -34,13 +31,20 @@ const Register: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [field]: e.target.value });
   };
 
   const validateForm = (): string | null => {
-    if (!formData.email || !formData.password || !formData.firstName || !formData.lastName) {
+    if (
+      !formData.email ||
+      !formData.password ||
+      !formData.firstName ||
+      !formData.lastName ||
+      !formData.phoneNumber
+    ) {
       return 'Please fill in all required fields';
     }
 
@@ -69,12 +73,18 @@ const Register: React.FC = () => {
       return 'Passwords do not match';
     }
 
+    const phoneRegex = /^[0-9]{10,15}$/;
+    if (!phoneRegex.test(formData.phoneNumber)) {
+      return 'Phone number must be 10-15 digits';
+    }
+
     return null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
     const validationError = validateForm();
     if (validationError) {
@@ -88,15 +98,15 @@ const Register: React.FC = () => {
       const response = await authApi.register({
         email: formData.email,
         password: formData.password,
+        phone: formData.phoneNumber,
+        role: 'CUSTOMER',
         firstName: formData.firstName,
         lastName: formData.lastName,
-        phoneNumber: formData.phoneNumber || undefined,
-        role: 'CUSTOMER',
       });
 
       if (response.success) {
-        dispatch(setCredentials(response.data));
-        navigate('/home');
+        setSuccess('Registration successful. Please sign in.');
+        navigate('/login');
       }
     } catch (err: any) {
       const message = err.response?.data?.error?.message || 'Registration failed. Please try again.';
@@ -134,6 +144,11 @@ const Register: React.FC = () => {
             {error && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {error}
+              </Alert>
+            )}
+            {success && (
+              <Alert severity="success" sx={{ mb: 2 }}>
+                {success}
               </Alert>
             )}
 
@@ -174,11 +189,12 @@ const Register: React.FC = () => {
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label="Phone Number (Optional)"
+                    label="Phone Number"
                     value={formData.phoneNumber}
                     onChange={handleChange('phoneNumber')}
                     autoComplete="tel"
-                    placeholder="+84 123 456 789"
+                    placeholder="0123456789"
+                    required
                   />
                 </Grid>
                 <Grid item xs={12}>

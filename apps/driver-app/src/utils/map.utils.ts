@@ -1,21 +1,14 @@
-import { Location, NominatimResult, RouteData } from '../types';
-
-const NOMINATIM_URL = process.env.REACT_APP_NOMINATIM_URL || 'https://nominatim.openstreetmap.org';
-const OSRM_URL = process.env.REACT_APP_OSRM_URL || 'http://router.project-osrm.org';
+import { Location, RouteData } from '../types';
+import axiosInstance from '../api/axios.config';
 
 // Geocode address to coordinates
 export const geocodeAddress = async (address: string): Promise<Location[]> => {
   try {
-    const response = await fetch(
-      `${NOMINATIM_URL}/search?format=json&q=${encodeURIComponent(address)}&limit=5`
-    );
-    const data: NominatimResult[] = await response.json();
+    const response = await axiosInstance.get('/map/geocode', {
+      params: { q: address, limit: 7 },
+    });
 
-    return data.map((result) => ({
-      lat: parseFloat(result.lat),
-      lng: parseFloat(result.lon),
-      address: result.display_name,
-    }));
+    return response.data?.data?.results || [];
   } catch (error) {
     console.error('Geocoding error:', error);
     return [];
@@ -25,11 +18,11 @@ export const geocodeAddress = async (address: string): Promise<Location[]> => {
 // Reverse geocode coordinates to address
 export const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
   try {
-    const response = await fetch(
-      `${NOMINATIM_URL}/reverse?format=json&lat=${lat}&lon=${lng}`
-    );
-    const data: NominatimResult = await response.json();
-    return data.display_name;
+    const response = await axiosInstance.get('/map/reverse', {
+      params: { lat, lng },
+    });
+
+    return response.data?.data?.address || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
   } catch (error) {
     console.error('Reverse geocoding error:', error);
     return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
@@ -42,21 +35,25 @@ export const getRoute = async (
   end: Location
 ): Promise<RouteData | null> => {
   try {
-    const response = await fetch(
-      `${OSRM_URL}/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`
-    );
-    const data = await response.json();
+    const response = await axiosInstance.get('/map/route', {
+      params: {
+        fromLat: start.lat,
+        fromLng: start.lng,
+        toLat: end.lat,
+        toLng: end.lng,
+      },
+    });
 
-    if (data.routes && data.routes.length > 0) {
-      const route = data.routes[0];
-      return {
-        coordinates: route.geometry.coordinates,
-        distance: route.distance,
-        duration: route.duration,
-      };
+    const route = response.data?.data;
+    if (!route?.geometry?.coordinates) {
+      return null;
     }
 
-    return null;
+    return {
+      coordinates: route.geometry.coordinates,
+      distance: route.distance,
+      duration: route.duration,
+    };
   } catch (error) {
     console.error('Routing error:', error);
     return null;

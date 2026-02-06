@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -15,7 +15,7 @@ import {
   Step,
   StepLabel,
 } from '@mui/material';
-import { ArrowBack, Phone, Navigation } from '@mui/icons-material';
+import { ArrowBack, Phone } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { updateRideStatus, clearCurrentRide } from '../store/ride.slice';
 import MapView from '../components/map/MapView';

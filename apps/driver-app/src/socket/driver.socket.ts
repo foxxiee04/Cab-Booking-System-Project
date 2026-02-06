@@ -1,6 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { store } from '../store';
-import { setPendingRide, clearPendingRide, setCurrentRide, updateRideStatus } from '../store/ride.slice';
+import { setPendingRide, clearPendingRide, updateRideStatus } from '../store/ride.slice';
 import { showNotification } from '../store/ui.slice';
 import { Ride } from '../types';
 

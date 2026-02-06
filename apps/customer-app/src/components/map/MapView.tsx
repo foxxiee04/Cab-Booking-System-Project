@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import React, { useEffect } from 'react';
+import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Location } from '../../types';
 import 'leaflet/dist/leaflet.css';
@@ -86,6 +86,7 @@ export const MapView: React.FC<MapViewProps> = ({
       zoomControl={true}
       scrollWheelZoom={true}
     >
+      <MapCenter center={center} zoom={zoom} />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"

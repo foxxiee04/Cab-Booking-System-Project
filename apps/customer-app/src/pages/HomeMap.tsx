@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -38,8 +38,6 @@ import {
   setFareEstimate,
   setSurgeMultiplier,
   setCurrentRide,
-  setLoading,
-  setError,
 } from '../store/ride.slice';
 import { setCurrentLocation } from '../store/location.slice';
 import MapView from '../components/map/MapView';
@@ -72,7 +70,11 @@ const HomeMap: React.FC = () => {
   const [loading, setLoadingState] = useState(false);
   const [error, setErrorMessage] = useState('');
   const [vehicleType, setVehicleType] = useState<'ECONOMY' | 'COMFORT' | 'PREMIUM'>('ECONOMY');
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'MOMO' | 'VISA'>('CASH');
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'WALLET'>('CASH');
+  const pickupSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dropoffSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pickupAbort = useRef<AbortController | null>(null);
+  const dropoffAbort = useRef<AbortController | null>(null);
 
   // Get current location on mount
   useEffect(() => {
@@ -113,19 +115,57 @@ const HomeMap: React.FC = () => {
   // Search pickup locations
   const handlePickupSearch = async (value: string) => {
     setPickupSearch(value);
-    if (value.length > 2) {
-      const results = await geocodeAddress(value);
-      setPickupOptions(results);
+    if (pickupSearchTimer.current) {
+      clearTimeout(pickupSearchTimer.current);
     }
+    if (pickupAbort.current) {
+      pickupAbort.current.abort();
+    }
+    if (value.trim().length < 3) {
+      setPickupOptions([]);
+      return;
+    }
+    pickupSearchTimer.current = setTimeout(async () => {
+      const controller = new AbortController();
+      pickupAbort.current = controller;
+      try {
+        const results = await geocodeAddress(value.trim(), { signal: controller.signal });
+        setPickupOptions(results);
+      } catch (error: any) {
+        if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
+          return;
+        }
+        console.error('Pickup search failed:', error);
+      }
+    }, 350);
   };
 
   // Search dropoff locations
   const handleDropoffSearch = async (value: string) => {
     setDropoffSearch(value);
-    if (value.length > 2) {
-      const results = await geocodeAddress(value);
-      setDropoffOptions(results);
+    if (dropoffSearchTimer.current) {
+      clearTimeout(dropoffSearchTimer.current);
     }
+    if (dropoffAbort.current) {
+      dropoffAbort.current.abort();
+    }
+    if (value.trim().length < 3) {
+      setDropoffOptions([]);
+      return;
+    }
+    dropoffSearchTimer.current = setTimeout(async () => {
+      const controller = new AbortController();
+      dropoffAbort.current = controller;
+      try {
+        const results = await geocodeAddress(value.trim(), { signal: controller.signal });
+        setDropoffOptions(results);
+      } catch (error: any) {
+        if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
+          return;
+        }
+        console.error('Dropoff search failed:', error);
+      }
+    }, 350);
   };
 
   // Estimate fare
@@ -191,7 +231,7 @@ const HomeMap: React.FC = () => {
     navigate('/login');
   };
 
-  const mapCenter = pickupLocation || currentLocation || { lat: 10.762622, lng: 106.660172 };
+  const mapCenter = dropoffLocation || pickupLocation || currentLocation || { lat: 10.762622, lng: 106.660172 };
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -367,7 +407,7 @@ const HomeMap: React.FC = () => {
           <Box sx={{ mb: 2 }}>
             <Typography variant="body2" gutterBottom>Payment Method</Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
-              {['CASH', 'MOMO', 'VISA'].map((method) => (
+              {['CASH', 'CARD', 'WALLET'].map((method) => (
                 <Chip
                   key={method}
                   label={method}

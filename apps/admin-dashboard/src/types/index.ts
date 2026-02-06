@@ -78,7 +78,7 @@ export interface Ride {
   fare: number;
   distance: number;
   duration: number;
-  paymentMethod: 'CASH' | 'MOMO' | 'VISA';
+  paymentMethod: 'CASH' | 'CARD' | 'WALLET';
   paymentStatus: 'PENDING' | 'COMPLETED' | 'FAILED';
   createdAt: string;
   updatedAt: string;
@@ -139,7 +139,7 @@ export interface Payment {
   id: string;
   rideId: string;
   amount: number;
-  method: 'CASH' | 'MOMO' | 'VISA';
+  method: 'CASH' | 'CARD' | 'WALLET';
   status: 'PENDING' | 'COMPLETED' | 'FAILED';
   transactionId?: string;
   createdAt: string;

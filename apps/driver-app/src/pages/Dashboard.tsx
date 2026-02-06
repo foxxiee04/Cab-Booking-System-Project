@@ -16,8 +16,6 @@ import {
   CardContent,
   Chip,
   Alert,
-  Button,
-  Fab,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -26,7 +24,6 @@ import {
   History,
   Person,
   Logout,
-  LocationOn,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { logout } from '../store/auth.slice';
@@ -35,18 +32,15 @@ import {
   setOnlineStatus,
   setCurrentLocation,
 } from '../store/driver.slice';
-import { setPendingRide, clearPendingRide, setCurrentRide } from '../store/ride.slice';
+import { clearPendingRide, setCurrentRide } from '../store/ride.slice';
 import MapView from '../components/map/MapView';
 import DriverMarker from '../components/map/DriverMarker';
-import PickupMarker from '../components/map/PickupMarker';
-import DropoffMarker from '../components/map/DropoffMarker';
-import RouteLine from '../components/map/RouteLine';
 import RideRequestModal from '../components/ride-request/RideRequestModal';
 import { driverApi } from '../api/driver.api';
 import { rideApi } from '../api/ride.api';
 import { driverSocketService } from '../socket/driver.socket';
 import { watchPosition, clearWatch } from '../utils/map.utils';
-import { formatCurrency, formatEarnings } from '../utils/format.utils';
+import { formatCurrency } from '../utils/format.utils';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -56,7 +50,7 @@ const Dashboard: React.FC = () => {
   const { profile, isOnline, currentLocation, earnings } = useAppSelector(
     (state) => state.driver
   );
-  const { pendingRide, currentRide, timeoutSeconds } = useAppSelector(
+  const { pendingRide, timeoutSeconds } = useAppSelector(
     (state) => state.ride
   );
 
@@ -73,8 +67,7 @@ const Dashboard: React.FC = () => {
         dispatch(setProfile(response.data.driver));
 
         // Fetch earnings
-        const earningsResponse = await driverApi.getEarnings();
-        // Dispatch earnings if needed
+        await driverApi.getEarnings();
       } catch (error: any) {
         console.error('Failed to fetch profile:', error);
         if (error.response?.status === 404) {
@@ -245,7 +238,7 @@ const Dashboard: React.FC = () => {
               {profile?.vehicleMake} {profile?.vehicleModel}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              ⭐ {profile?.rating.toFixed(1)} • {profile?.totalRides} rides
+              ⭐ {(profile?.rating ?? 0).toFixed(1)} • {profile?.totalRides ?? 0} rides
             </Typography>
           </Box>
           <List>

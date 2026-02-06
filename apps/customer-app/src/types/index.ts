@@ -24,7 +24,7 @@ export interface Location {
 }
 
 export type VehicleType = 'ECONOMY' | 'COMFORT' | 'PREMIUM';
-export type PaymentMethod = 'CASH' | 'MOMO' | 'VISA';
+export type PaymentMethod = 'CASH' | 'CARD' | 'WALLET';
 
 export type RideStatus = 
   | 'PENDING' 

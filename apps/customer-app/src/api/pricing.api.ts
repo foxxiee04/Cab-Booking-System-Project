@@ -1,13 +1,10 @@
 import axiosInstance from './axios.config';
-import axios from 'axios';
-import { FareEstimate, Location } from '../types';
-
-const AI_API_URL = process.env.REACT_APP_AI_API_URL || 'http://localhost:8000/api';
+import { FareEstimate, Location, VehicleType } from '../types';
 
 export interface EstimateRequest {
   pickup: Location;
   dropoff: Location;
-  vehicleType?: string;
+  vehicleType?: VehicleType;
 }
 
 export interface EstimateResponse {
@@ -24,23 +21,15 @@ export interface SurgeResponse {
   };
 }
 
-export interface AIPredictionRequest {
-  distance_km: number;
-  time_of_day: 'PEAK' | 'OFF_PEAK';
-  day_type: 'WEEKDAY' | 'WEEKEND';
-}
-
-export interface AIPredictionResponse {
-  eta_minutes: number;
-  price_multiplier: number;
-  distance_km: number;
-  time_of_day: string;
-  day_type: string;
-}
-
 export const pricingApi = {
   estimateFare: async (data: EstimateRequest): Promise<EstimateResponse> => {
-    const response = await axiosInstance.post('/pricing/estimate', data);
+    const response = await axiosInstance.post('/pricing/estimate', {
+      pickupLat: data.pickup.lat,
+      pickupLng: data.pickup.lng,
+      dropoffLat: data.dropoff.lat,
+      dropoffLng: data.dropoff.lng,
+      vehicleType: data.vehicleType || 'ECONOMY',
+    });
     return response.data;
   },
 
@@ -49,8 +38,4 @@ export const pricingApi = {
     return response.data;
   },
 
-  predictWithAI: async (data: AIPredictionRequest): Promise<AIPredictionResponse> => {
-    const response = await axios.post(`${AI_API_URL}/predict`, data);
-    return response.data;
-  },
 };

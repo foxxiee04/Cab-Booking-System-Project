@@ -19,6 +19,7 @@ const PUBLIC_PATHS = [
   '/api/auth/register',
   '/api/auth/login',
   '/api/auth/refresh',
+  '/api/map',
   '/health',
   '/api/ai/ride/estimate', // Public estimate endpoint
   '/api/geo', // Geocoding endpoints are public

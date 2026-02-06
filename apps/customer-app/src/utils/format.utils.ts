@@ -54,8 +54,8 @@ export const getVehicleTypeLabel = (type: string): string => {
 export const getPaymentMethodLabel = (method: string): string => {
   const labels: Record<string, string> = {
     CASH: 'Cash',
-    MOMO: 'MoMo',
-    VISA: 'Visa',
+    CARD: 'Card',
+    WALLET: 'Wallet',
   };
   return labels[method] || method;
 };

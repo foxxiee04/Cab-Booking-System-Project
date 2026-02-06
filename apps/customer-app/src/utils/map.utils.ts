@@ -1,32 +1,20 @@
-import axios from 'axios';
-import { Location, NominatimResult, RouteData } from '../types';
-
-const NOMINATIM_URL = process.env.REACT_APP_NOMINATIM_URL || 'https://nominatim.openstreetmap.org';
-const OSRM_URL = process.env.REACT_APP_OSRM_URL || 'http://router.project-osrm.org';
+import { Location, RouteData } from '../types';
+import axiosInstance from '../api/axios.config';
 
 /**
  * Geocode address to coordinates (Forward Geocoding)
  */
-export const geocodeAddress = async (address: string): Promise<Location[]> => {
+export const geocodeAddress = async (
+  address: string,
+  options?: { signal?: AbortSignal }
+): Promise<Location[]> => {
   try {
-    const response = await axios.get(`${NOMINATIM_URL}/search`, {
-      params: {
-        q: address,
-        format: 'json',
-        limit: 5,
-        addressdetails: 1,
-      },
-      headers: {
-        'User-Agent': 'CabBookingCustomerApp/1.0',
-      },
+    const response = await axiosInstance.get('/map/geocode', {
+      params: { q: address, limit: 7 },
+      signal: options?.signal,
     });
 
-    const results: NominatimResult[] = response.data;
-    return results.map((result) => ({
-      lat: parseFloat(result.lat),
-      lng: parseFloat(result.lon),
-      address: result.display_name,
-    }));
+    return response.data?.data?.results || [];
   } catch (error) {
     console.error('Geocoding error:', error);
     return [];
@@ -38,18 +26,11 @@ export const geocodeAddress = async (address: string): Promise<Location[]> => {
  */
 export const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
   try {
-    const response = await axios.get(`${NOMINATIM_URL}/reverse`, {
-      params: {
-        lat,
-        lon: lng,
-        format: 'json',
-      },
-      headers: {
-        'User-Agent': 'CabBookingCustomerApp/1.0',
-      },
+    const response = await axiosInstance.get('/map/reverse', {
+      params: { lat, lng },
     });
 
-    return response.data.display_name || 'Unknown location';
+    return response.data?.data?.address || 'Unknown location';
   } catch (error) {
     console.error('Reverse geocoding error:', error);
     return 'Unknown location';
@@ -61,28 +42,21 @@ export const reverseGeocode = async (lat: number, lng: number): Promise<string> 
  */
 export const getRoute = async (
   from: Location,
-  to: Location
+  to: Location,
+  options?: { signal?: AbortSignal }
 ): Promise<RouteData | null> => {
   try {
-    const response = await axios.get(
-      `${OSRM_URL}/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}`,
-      {
-        params: {
-          overview: 'full',
-          geometries: 'geojson',
-        },
-      }
-    );
+    const response = await axiosInstance.get('/map/route', {
+      params: {
+        fromLat: from.lat,
+        fromLng: from.lng,
+        toLat: to.lat,
+        toLng: to.lng,
+      },
+      signal: options?.signal,
+    });
 
-    if (response.data.routes && response.data.routes.length > 0) {
-      return {
-        distance: response.data.routes[0].distance,
-        duration: response.data.routes[0].duration,
-        geometry: response.data.routes[0].geometry,
-      };
-    }
-
-    return null;
+    return response.data?.data || null;
   } catch (error) {
     console.error('Routing error:', error);
     return null;

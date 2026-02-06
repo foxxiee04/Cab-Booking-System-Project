@@ -48,7 +48,7 @@ const Register: React.FC = () => {
   };
 
   const validateForm = (): string | null => {
-    if (!formData.firstName || !formData.lastName) {
+    if (!formData.firstName || !formData.lastName || !formData.phoneNumber) {
       return 'Please enter your full name';
     }
 
@@ -77,6 +77,11 @@ const Register: React.FC = () => {
       return 'Passwords do not match';
     }
 
+    const phoneRegex = /^[0-9]{10,15}$/;
+    if (!phoneRegex.test(formData.phoneNumber)) {
+      return 'Phone number must be 10-15 digits';
+    }
+
     return null;
   };
 
@@ -96,10 +101,10 @@ const Register: React.FC = () => {
       const response = await authApi.register({
         email: formData.email,
         password: formData.password,
+        phone: formData.phoneNumber,
+        role: 'DRIVER',
         firstName: formData.firstName,
         lastName: formData.lastName,
-        phoneNumber: formData.phoneNumber,
-        role: 'DRIVER',
       });
 
       if (response.success) {
@@ -203,6 +208,7 @@ const Register: React.FC = () => {
                     label="Phone Number"
                     value={formData.phoneNumber}
                     onChange={handleChange('phoneNumber')}
+                    required
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">

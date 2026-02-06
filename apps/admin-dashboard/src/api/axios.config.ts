@@ -30,6 +30,7 @@ axiosInstance.interceptors.response.use(
     return response;
   },
   async (error) => {
+    console.error('API ERROR:', error.response?.data || error.message);
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest._retry) {

@@ -150,8 +150,8 @@ const Login: React.FC = () => {
                 Demo Admin Account:
               </Typography>
               <Typography variant="body2">
-                📧 admin@test.com<br />
-                🔒 Admin123!
+                📧 admin@cabsystem.com<br />
+                🔒 Password123!
               </Typography>
             </Box>
           </CardContent>

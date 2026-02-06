@@ -24,4 +24,13 @@ export const config = {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'),
     maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
   },
+
+  map: {
+    nominatimUrl: process.env.NOMINATIM_URL || 'https://nominatim.openstreetmap.org',
+    nominatimEmail: process.env.NOMINATIM_EMAIL || '',
+    nominatimLanguage: process.env.NOMINATIM_LANGUAGE || 'vi',
+    nominatimCountry: process.env.NOMINATIM_COUNTRY || 'vn',
+    osrmUrl: process.env.OSRM_URL || 'http://router.project-osrm.org',
+    timeoutMs: parseInt(process.env.MAP_TIMEOUT_MS || '10000'),
+  },
 };

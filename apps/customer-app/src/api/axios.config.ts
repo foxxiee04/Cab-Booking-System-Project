@@ -29,6 +29,7 @@ axiosInstance.interceptors.request.use(
 axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
+    console.error('API ERROR:', error.response?.data || error.message);
     const originalRequest = error.config;
 
     // Token expired
@@ -43,8 +44,9 @@ axiosInstance.interceptors.response.use(
             refreshToken,
           });
 
-          const { accessToken } = response.data;
+          const { accessToken, refreshToken: newRefreshToken } = response.data.data.tokens;
           localStorage.setItem('accessToken', accessToken);
+          localStorage.setItem('refreshToken', newRefreshToken);
 
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
           return axiosInstance(originalRequest);

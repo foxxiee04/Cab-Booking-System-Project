@@ -19,7 +19,6 @@ import {
   Badge,
   ColorLens,
   LocalOffer,
-  Description,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { setProfile } from '../store/driver.slice';

@@ -31,6 +31,7 @@ axiosInstance.interceptors.response.use(
     return response;
   },
   async (error) => {
+    console.error('API ERROR:', error.response?.data || error.message);
     const originalRequest = error.config;
 
     // If 401 and not already retried

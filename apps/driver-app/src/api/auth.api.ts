@@ -9,10 +9,10 @@ export interface LoginRequest {
 export interface RegisterRequest {
   email: string;
   password: string;
+  phone: string;
+  role: 'DRIVER';
   firstName: string;
   lastName: string;
-  phoneNumber?: string;
-  role: 'DRIVER';
 }
 
 export const authApi = {

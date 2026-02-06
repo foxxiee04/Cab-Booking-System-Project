@@ -162,7 +162,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 const App: React.FC = () => {
-  const dispatch = useAppDispatch();
   const { isAuthenticated, accessToken } = useAppSelector((state) => state.auth);
 
   useEffect(() => {

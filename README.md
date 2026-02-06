@@ -968,25 +968,4 @@ kill -9 <PID>
 
 ---
 
-## 📄 License
 
-This project is part of KLTN2025 - University Project.
-
----
-
-## 👥 Team
-
-Developed by Nam4 - Ki 2 Team
-
----
-
-## 📞 Support
-
-For issues or questions:
-- Check [Test Report](tests/comprehensive-test-report.txt) - 108/108 tests passing
-- Review [Frontend Guide](FRONTEND-DEVELOPMENT-GUIDE.txt)
-- Check service logs: `docker-compose logs -f [service-name]`
-
----
-
-**🎉 Happy Coding!**

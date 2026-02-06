@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff, DirectionsCar } from '@mui/icons-material';
 import { useAppDispatch } from '../store/hooks';
-import { setCredentials, setLoading, setError } from '../store/auth.slice';
+import { setCredentials } from '../store/auth.slice';
 import { authApi } from '../api/auth.api';
 
 const Login: React.FC = () => {
@@ -145,7 +145,7 @@ const Login: React.FC = () => {
                 Demo Account:
               </Typography>
               <Typography variant="caption" display="block">
-                📧 customer@test.com
+                📧 customer1@example.com
               </Typography>
               <Typography variant="caption" display="block">
                 🔒 Password123!

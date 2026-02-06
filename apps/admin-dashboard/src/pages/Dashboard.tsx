@@ -12,7 +12,6 @@ import {
   DirectionsCar,
   People,
   AttachMoney,
-  TrendingUp,
   DriveEta,
   Payment,
 } from '@mui/icons-material';
