@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import App from './App';
 import { store } from './store';
+import './i18n';
 
 // Create MUI theme
 const theme = createTheme({

@@ -28,11 +28,13 @@ import {
   getVehicleTypeLabel,
   getPaymentMethodLabel,
 } from '../utils/format.utils';
+import { useTranslation } from 'react-i18next';
 
 const RideTracking: React.FC = () => {
   const { rideId } = useParams();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const { t } = useTranslation();
 
   const { currentRide, driver } = useAppSelector((state) => state.ride);
   const [loading, setLoading] = useState(false);
@@ -49,7 +51,7 @@ const RideTracking: React.FC = () => {
         const response = await rideApi.getRide(rideId);
         dispatch(setCurrentRide(response.data.ride));
       } catch (err: any) {
-        setError(err.response?.data?.error?.message || 'Failed to load ride');
+        setError(err.response?.data?.error?.message || t('errors.loadRide'));
       } finally {
         setLoading(false);
       }
@@ -65,7 +67,7 @@ const RideTracking: React.FC = () => {
       dispatch(clearRide());
       navigate('/home');
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to cancel ride');
+      setError(err.response?.data?.error?.message || t('errors.cancelRide'));
     }
   };
 
@@ -86,7 +88,7 @@ const RideTracking: React.FC = () => {
   return (
     <Container sx={{ py: 3 }}>
       <Typography variant="h4" fontWeight="bold">
-        Ride Tracking
+        {t('rideTracking.title')}
       </Typography>
 
       {error && (
@@ -119,7 +121,7 @@ const RideTracking: React.FC = () => {
         <Card sx={{ mt: 2 }}>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="h6">Ride Details</Typography>
+              <Typography variant="h6">{t('rideTracking.details')}</Typography>
               <Chip
                 label={getRideStatusLabel(currentRide.status)}
                 sx={{ bgcolor: getRideStatusColor(currentRide.status), color: '#fff' }}
@@ -129,41 +131,43 @@ const RideTracking: React.FC = () => {
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="body2" color="text.secondary">
-              Ride ID: {currentRide.id}
+              {t('rideTracking.rideId')}: {currentRide.id}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Requested: {formatDate(currentRide.requestedAt)}
+              {t('rideTracking.requested')}: {formatDate(currentRide.requestedAt)}
             </Typography>
 
             <Box sx={{ mt: 2 }}>
-              <Typography variant="subtitle2">Pickup</Typography>
+              <Typography variant="subtitle2">{t('rideTracking.pickup')}</Typography>
               <Typography variant="body2" color="text.secondary">
-                {currentRide.pickup.address || `${currentRide.pickup.lat}, ${currentRide.pickup.lng}`}
+                {currentRide.pickup?.address ||
+                  (currentRide.pickup ? `${currentRide.pickup.lat}, ${currentRide.pickup.lng}` : t('common.na'))}
               </Typography>
             </Box>
 
             <Box sx={{ mt: 2 }}>
-              <Typography variant="subtitle2">Dropoff</Typography>
+              <Typography variant="subtitle2">{t('rideTracking.dropoff')}</Typography>
               <Typography variant="body2" color="text.secondary">
-                {currentRide.dropoff.address || `${currentRide.dropoff.lat}, ${currentRide.dropoff.lng}`}
+                {currentRide.dropoff?.address ||
+                  (currentRide.dropoff ? `${currentRide.dropoff.lat}, ${currentRide.dropoff.lng}` : t('common.na'))}
               </Typography>
             </Box>
 
             <Box sx={{ mt: 2, display: 'grid', gap: 1 }}>
               <Typography variant="body2">
-                Vehicle: {getVehicleTypeLabel(currentRide.vehicleType)}
+                {t('rideTracking.vehicle')}: {getVehicleTypeLabel(currentRide.vehicleType)}
               </Typography>
               <Typography variant="body2">
-                Payment: {getPaymentMethodLabel(currentRide.paymentMethod)}
+                {t('rideTracking.payment')}: {getPaymentMethodLabel(currentRide.paymentMethod)}
               </Typography>
               <Typography variant="body2">
-                Fare: {currentRide.fare ? formatCurrency(currentRide.fare) : 'Pending'}
+                {t('rideTracking.fare')}: {currentRide.fare ? formatCurrency(currentRide.fare) : t('common.pending')}
               </Typography>
             </Box>
 
             {driver && (
               <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle2">Driver</Typography>
+                <Typography variant="subtitle2">{t('rideTracking.driver')}</Typography>
                 <Typography variant="body2">
                   {driver.firstName} {driver.lastName}
                 </Typography>
@@ -180,7 +184,7 @@ const RideTracking: React.FC = () => {
                 sx={{ mt: 3 }}
                 onClick={handleCancel}
               >
-                Cancel Ride
+                {t('rideTracking.cancelRide')}
               </Button>
             )}
           </CardContent>

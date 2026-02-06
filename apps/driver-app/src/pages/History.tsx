@@ -20,10 +20,12 @@ import {
   getVehicleTypeLabel,
   getPaymentMethodLabel,
 } from '../utils/format.utils';
+import { useTranslation } from 'react-i18next';
 
 const PAGE_SIZE = 10;
 
 const History: React.FC = () => {
+  const { t } = useTranslation();
   const [rides, setRides] = useState<Ride[]>([]);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
@@ -42,7 +44,7 @@ const History: React.FC = () => {
         setRides(response.data.rides || []);
         setTotal(response.data.total || 0);
       } catch (err: any) {
-        setError(err.response?.data?.error?.message || 'Failed to load ride history');
+        setError(err.response?.data?.error?.message || t('errors.loadRideHistory'));
       } finally {
         setLoading(false);
       }
@@ -56,7 +58,7 @@ const History: React.FC = () => {
   return (
     <Container sx={{ py: 4 }}>
       <Typography variant="h4" fontWeight="bold">
-        Ride History
+        {t('history.title')}
       </Typography>
 
       {error && (
@@ -73,7 +75,7 @@ const History: React.FC = () => {
 
       {!loading && rides.length === 0 && (
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          No rides found.
+          {t('history.noRides')}
         </Typography>
       )}
 
@@ -97,10 +99,10 @@ const History: React.FC = () => {
               </Typography>
 
               <Typography variant="body2" sx={{ mt: 1 }}>
-                Fare: {ride.fare ? formatCurrency(ride.fare) : 'N/A'}
+                {t('history.fare')}: {ride.fare ? formatCurrency(ride.fare) : 'N/A'}
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5 }}>
-                Payment: {getPaymentMethodLabel(ride.paymentMethod)}
+                {t('history.payment')}: {getPaymentMethodLabel(ride.paymentMethod)}
               </Typography>
             </CardContent>
           </Card>
@@ -113,17 +115,17 @@ const History: React.FC = () => {
           disabled={page <= 0}
           onClick={() => setPage((prev) => Math.max(0, prev - 1))}
         >
-          Previous
+          {t('history.previous')}
         </Button>
         <Button
           variant="outlined"
           disabled={page >= totalPages - 1}
           onClick={() => setPage((prev) => Math.min(totalPages - 1, prev + 1))}
         >
-          Next
+          {t('history.next')}
         </Button>
         <Typography variant="body2" color="text.secondary" sx={{ alignSelf: 'center' }}>
-          Page {page + 1} / {totalPages}
+          {t('history.page', { page: page + 1, total: totalPages })}
         </Typography>
       </Box>
     </Container>

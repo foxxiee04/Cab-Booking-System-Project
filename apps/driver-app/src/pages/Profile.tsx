@@ -13,10 +13,12 @@ import {
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { driverApi } from '../api/driver.api';
 import { setProfile } from '../store/driver.slice';
+import { useTranslation } from 'react-i18next';
 
 const Profile: React.FC = () => {
   const dispatch = useAppDispatch();
   const { profile } = useAppSelector((state) => state.driver);
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -27,7 +29,7 @@ const Profile: React.FC = () => {
       const response = await driverApi.getProfile();
       dispatch(setProfile(response.data.driver));
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to load profile');
+      setError(err.response?.data?.error?.message || t('errors.loadProfile'));
     } finally {
       setLoading(false);
     }
@@ -40,7 +42,7 @@ const Profile: React.FC = () => {
   return (
     <Container sx={{ py: 4 }}>
       <Typography variant="h4" fontWeight="bold">
-        Profile
+        {t('profile.title')}
       </Typography>
 
       {error && (
@@ -58,20 +60,20 @@ const Profile: React.FC = () => {
       {profile && (
         <Card sx={{ mt: 2 }}>
           <CardContent>
-            <Typography variant="h6">Driver Profile</Typography>
+            <Typography variant="h6">{t('profile.driverProfile')}</Typography>
             <Divider sx={{ my: 2 }} />
-            <Typography variant="body2">Vehicle: {profile.vehicleMake} {profile.vehicleModel}</Typography>
+            <Typography variant="body2">{t('profile.vehicle')}: {profile.vehicleMake} {profile.vehicleModel}</Typography>
             <Typography variant="body2" sx={{ mt: 0.5 }}>
-              Plate: {profile.licensePlate}
+              {t('profile.plate')}: {profile.licensePlate}
             </Typography>
             <Typography variant="body2" sx={{ mt: 0.5 }}>
-              Color: {profile.vehicleColor}
+              {t('profile.color')}: {profile.vehicleColor}
             </Typography>
             <Typography variant="body2" sx={{ mt: 0.5 }}>
-              Rating: {profile.rating.toFixed(1)} ({profile.totalRides} rides)
+              {t('profile.rating')}: {profile.rating.toFixed(1)} ({profile.totalRides} {t('dashboard.rides')})
             </Typography>
             <Button variant="outlined" sx={{ mt: 2 }} onClick={fetchProfile}>
-              Refresh
+              {t('profile.refresh')}
             </Button>
           </CardContent>
         </Card>

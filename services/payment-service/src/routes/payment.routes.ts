@@ -31,6 +31,12 @@ export const createPaymentRoutes = (prisma: PrismaClient, eventPublisher: EventP
   // Get driver earnings
   router.get('/driver/earnings', authMiddleware, controller.getDriverEarnings);
 
+  // Admin: Get all payments
+  router.get('/admin', authMiddleware, controller.getAllPayments);
+
+  // Admin: Payment stats
+  router.get('/admin/stats', authMiddleware, controller.getAdminStats);
+
   // Refund payment (admin only)
   router.post('/ride/:rideId/refund', authMiddleware, validateRefund, controller.refundPayment);
 

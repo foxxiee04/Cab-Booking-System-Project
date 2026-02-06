@@ -23,6 +23,7 @@ import {
   Visibility,
   VisibilityOff,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { useAppDispatch } from '../store/hooks';
 import { setCredentials } from '../store/auth.slice';
 import { authApi } from '../api/auth.api';
@@ -30,6 +31,7 @@ import { authApi } from '../api/auth.api';
 const Register: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const { t } = useTranslation();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -49,37 +51,37 @@ const Register: React.FC = () => {
 
   const validateForm = (): string | null => {
     if (!formData.firstName || !formData.lastName || !formData.phoneNumber) {
-      return 'Please enter your full name';
+      return t('errors.fullName');
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      return 'Please enter a valid email address';
+      return t('errors.invalidEmail');
     }
 
     if (formData.password.length < 8) {
-      return 'Password must be at least 8 characters';
+      return t('errors.passwordMin');
     }
 
     if (!/[A-Z]/.test(formData.password)) {
-      return 'Password must contain at least one uppercase letter';
+      return t('errors.passwordUpper');
     }
 
     if (!/[a-z]/.test(formData.password)) {
-      return 'Password must contain at least one lowercase letter';
+      return t('errors.passwordLower');
     }
 
     if (!/[0-9]/.test(formData.password)) {
-      return 'Password must contain at least one number';
+      return t('errors.passwordNumber');
     }
 
     if (formData.password !== formData.confirmPassword) {
-      return 'Passwords do not match';
+      return t('errors.passwordMismatch');
     }
 
     const phoneRegex = /^[0-9]{10,15}$/;
     if (!phoneRegex.test(formData.phoneNumber)) {
-      return 'Phone number must be 10-15 digits';
+      return t('errors.phoneInvalid');
     }
 
     return null;
@@ -109,11 +111,10 @@ const Register: React.FC = () => {
 
       if (response.success) {
         dispatch(setCredentials(response.data));
-        // Redirect to profile setup
         navigate('/profile-setup');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Registration failed');
+      setError(err.response?.data?.error?.message || t('errors.registerFailed'));
     } finally {
       setLoading(false);
     }
@@ -125,38 +126,34 @@ const Register: React.FC = () => {
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
-        background: 'linear-gradient(135deg, #1976D2 0%, #2E7D32 100%)',
         py: 4,
       }}
     >
       <Container maxWidth="md">
         <Card elevation={10} sx={{ borderRadius: 3 }}>
           <CardContent sx={{ p: 4 }}>
-            {/* Header */}
             <Box sx={{ textAlign: 'center', mb: 4 }}>
               <DriveEta sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
               <Typography variant="h4" fontWeight="bold" gutterBottom>
-                Become a Driver
+                {t('register.title')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Join our platform and start earning
+                {t('register.subtitle')}
               </Typography>
             </Box>
 
-            {/* Error message */}
             {error && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {error}
               </Alert>
             )}
 
-            {/* Register form */}
             <form onSubmit={handleSubmit}>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
-                    label="First Name"
+                    label={t('register.firstName')}
                     value={formData.firstName}
                     onChange={handleChange('firstName')}
                     required
@@ -172,7 +169,7 @@ const Register: React.FC = () => {
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
-                    label="Last Name"
+                    label={t('register.lastName')}
                     value={formData.lastName}
                     onChange={handleChange('lastName')}
                     required
@@ -188,7 +185,7 @@ const Register: React.FC = () => {
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label="Email"
+                    label={t('register.email')}
                     type="email"
                     value={formData.email}
                     onChange={handleChange('email')}
@@ -205,7 +202,7 @@ const Register: React.FC = () => {
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label="Phone Number"
+                    label={t('register.phone')}
                     value={formData.phoneNumber}
                     onChange={handleChange('phoneNumber')}
                     required
@@ -221,12 +218,12 @@ const Register: React.FC = () => {
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label="Password"
+                    label={t('register.password')}
                     type={showPassword ? 'text' : 'password'}
                     value={formData.password}
                     onChange={handleChange('password')}
                     required
-                    helperText="Min 8 chars, uppercase, lowercase, number"
+                    helperText={t('register.passwordHelp')}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -249,7 +246,7 @@ const Register: React.FC = () => {
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label="Confirm Password"
+                    label={t('register.confirmPassword')}
                     type={showPassword ? 'text' : 'password'}
                     value={formData.confirmPassword}
                     onChange={handleChange('confirmPassword')}
@@ -273,16 +270,15 @@ const Register: React.FC = () => {
                 disabled={loading}
                 sx={{ py: 1.5, mt: 3 }}
               >
-                {loading ? <CircularProgress size={24} /> : 'Create Account'}
+                {loading ? <CircularProgress size={24} /> : t('register.submit')}
               </Button>
             </form>
 
-            {/* Login link */}
             <Box sx={{ textAlign: 'center', mt: 3 }}>
               <Typography variant="body2">
-                Already have an account?{' '}
+                {t('register.haveAccount')}{' '}
                 <Link to="/login" style={{ color: '#1976D2', textDecoration: 'none' }}>
-                  Login
+                  {t('login.signIn')}
                 </Link>
               </Typography>
             </Box>

@@ -24,11 +24,13 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { setProfile } from '../store/driver.slice';
 import { driverApi } from '../api/driver.api';
 import { VehicleType } from '../types';
+import { useTranslation } from 'react-i18next';
 
 const ProfileSetup: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
+  const { t } = useTranslation();
 
   const [formData, setFormData] = useState({
     vehicleType: 'ECONOMY' as VehicleType,
@@ -37,6 +39,7 @@ const ProfileSetup: React.FC = () => {
     vehicleColor: '',
     licensePlate: '',
     licenseNumber: '',
+    licenseExpiryDate: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -52,20 +55,17 @@ const ProfileSetup: React.FC = () => {
 
     try {
       if (!user) {
-        throw new Error('User not authenticated');
+        throw new Error(t('errors.authRequired'));
       }
 
-      const response = await driverApi.registerDriver({
-        userId: user.id,
-        ...formData,
-      });
+      const response = await driverApi.registerDriver(formData);
 
       if (response.success) {
         dispatch(setProfile(response.data.driver));
         navigate('/dashboard');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Profile setup failed');
+      setError(err.response?.data?.error?.message || t('errors.profileSetupFailed'));
     } finally {
       setLoading(false);
     }
@@ -88,10 +88,10 @@ const ProfileSetup: React.FC = () => {
             <Box sx={{ textAlign: 'center', mb: 4 }}>
               <DirectionsCar sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
               <Typography variant="h4" fontWeight="bold" gutterBottom>
-                Complete Your Profile
+                {t('profileSetup.title')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Tell us about your vehicle to start accepting rides
+                {t('profileSetup.subtitle')}
               </Typography>
             </Box>
 
@@ -110,7 +110,7 @@ const ProfileSetup: React.FC = () => {
                   <TextField
                     fullWidth
                     select
-                    label="Vehicle Type"
+                    label={t('profileSetup.vehicleType')}
                     value={formData.vehicleType}
                     onChange={handleChange('vehicleType')}
                     required
@@ -122,9 +122,9 @@ const ProfileSetup: React.FC = () => {
                       ),
                     }}
                   >
-                    <MenuItem value="ECONOMY">Economy (4 seats)</MenuItem>
-                    <MenuItem value="COMFORT">Comfort (4 seats, premium)</MenuItem>
-                    <MenuItem value="PREMIUM">Premium (luxury)</MenuItem>
+                    <MenuItem value="ECONOMY">{t('vehicle.ECONOMY')} (4 chỗ)</MenuItem>
+                    <MenuItem value="COMFORT">{t('vehicle.COMFORT')} (4 chỗ, cao cấp)</MenuItem>
+                    <MenuItem value="PREMIUM">{t('vehicle.PREMIUM')} (sang trọng)</MenuItem>
                   </TextField>
                 </Grid>
 
@@ -132,11 +132,11 @@ const ProfileSetup: React.FC = () => {
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
-                    label="Vehicle Make"
+                    label={t('profileSetup.vehicleMake')}
                     value={formData.vehicleMake}
                     onChange={handleChange('vehicleMake')}
                     required
-                    placeholder="e.g., Toyota, Honda, Hyundai"
+                    placeholder="VD: Toyota, Honda, Hyundai"
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -149,11 +149,11 @@ const ProfileSetup: React.FC = () => {
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
-                    label="Vehicle Model"
+                    label={t('profileSetup.vehicleModel')}
                     value={formData.vehicleModel}
                     onChange={handleChange('vehicleModel')}
                     required
-                    placeholder="e.g., Vios, City, Accent"
+                    placeholder="VD: Vios, City, Accent"
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -168,11 +168,11 @@ const ProfileSetup: React.FC = () => {
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
-                    label="Vehicle Color"
+                    label={t('profileSetup.vehicleColor')}
                     value={formData.vehicleColor}
                     onChange={handleChange('vehicleColor')}
                     required
-                    placeholder="e.g., White, Silver, Black"
+                    placeholder="VD: Trắng, Bạc, Đen"
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -185,11 +185,11 @@ const ProfileSetup: React.FC = () => {
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
-                    label="License Plate"
+                    label={t('profileSetup.licensePlate')}
                     value={formData.licensePlate}
                     onChange={handleChange('licensePlate')}
                     required
-                    placeholder="e.g., 29A-12345"
+                    placeholder="VD: 29A-12345"
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -204,11 +204,11 @@ const ProfileSetup: React.FC = () => {
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label="Driver License Number"
+                    label={t('profileSetup.licenseNumber')}
                     value={formData.licenseNumber}
                     onChange={handleChange('licenseNumber')}
                     required
-                    placeholder="Your driving license number"
+                    placeholder="Số giấy phép lái xe"
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -218,12 +218,24 @@ const ProfileSetup: React.FC = () => {
                     }}
                   />
                 </Grid>
+
+                {/* License Expiry Date */}
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label={t('profileSetup.licenseExpiry')}
+                    type="date"
+                    value={formData.licenseExpiryDate}
+                    onChange={handleChange('licenseExpiryDate')}
+                    required
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
               </Grid>
 
               <Alert severity="info" sx={{ mt: 3 }}>
                 <Typography variant="body2">
-                  All information will be verified before you can accept rides.
-                  Make sure all details are accurate.
+                  {t('profileSetup.info')}
                 </Typography>
               </Alert>
 
@@ -235,7 +247,7 @@ const ProfileSetup: React.FC = () => {
                 disabled={loading}
                 sx={{ py: 1.5, mt: 3 }}
               >
-                {loading ? <CircularProgress size={24} /> : 'Complete Profile'}
+                {loading ? <CircularProgress size={24} /> : t('profileSetup.submit')}
               </Button>
             </form>
           </CardContent>

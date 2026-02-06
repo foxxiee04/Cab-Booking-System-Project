@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 interface CountdownTimerProps {
   seconds: number;
@@ -14,6 +15,7 @@ const CountdownTimer: React.FC<CountdownTimerProps> = ({
   onTick,
   onComplete,
 }) => {
+  const { t } = useTranslation();
   const [timeLeft, setTimeLeft] = useState(seconds);
 
   useEffect(() => {
@@ -64,7 +66,7 @@ const CountdownTimer: React.FC<CountdownTimerProps> = ({
         {timeLeft}s
       </Typography>
       <Typography variant="caption" sx={{ opacity: 0.9 }}>
-        Time to accept
+        {t('rideRequest.timeToAccept')}
       </Typography>
     </Box>
   );

@@ -14,6 +14,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { Visibility, VisibilityOff, DirectionsCar } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { useAppDispatch } from '../store/hooks';
 import { setCredentials } from '../store/auth.slice';
 import { authApi } from '../api/auth.api';
@@ -21,6 +22,7 @@ import { authApi } from '../api/auth.api';
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const { t } = useTranslation();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,7 +43,7 @@ const Login: React.FC = () => {
         navigate('/home');
       }
     } catch (err: any) {
-      const message = err.response?.data?.error?.message || 'Login failed. Please try again.';
+      const message = err.response?.data?.error?.message || t('errors.loginFailed');
       setErrorMessage(message);
     } finally {
       setLoadingState(false);
@@ -64,10 +66,10 @@ const Login: React.FC = () => {
             <Box sx={{ textAlign: 'center', mb: 3 }}>
               <DirectionsCar sx={{ fontSize: 60, color: 'primary.main' }} />
               <Typography variant="h4" fontWeight="bold" color="primary" mt={1}>
-                Cab Booking
+                {t('app.title')}
               </Typography>
               <Typography variant="body2" color="text.secondary" mt={1}>
-                Professional Ride-Hailing Service
+                {t('login.subtitle')}
               </Typography>
             </Box>
 
@@ -82,7 +84,7 @@ const Login: React.FC = () => {
             <form onSubmit={handleSubmit}>
               <TextField
                 fullWidth
-                label="Email Address"
+                label={t('login.email')}
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -94,7 +96,7 @@ const Login: React.FC = () => {
 
               <TextField
                 fullWidth
-                label="Password"
+                label={t('login.password')}
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -123,17 +125,17 @@ const Login: React.FC = () => {
                 disabled={loading}
                 sx={{ mb: 2, py: 1.5 }}
               >
-                {loading ? <CircularProgress size={24} /> : 'Sign In'}
+                {loading ? <CircularProgress size={24} /> : t('login.signIn')}
               </Button>
 
               <Box sx={{ textAlign: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
-                  Don't have an account?{' '}
+                  {t('login.noAccount')}{' '}
                   <Link
                     to="/register"
                     style={{ color: '#2E7D32', textDecoration: 'none', fontWeight: 600 }}
                   >
-                    Sign Up
+                    {t('login.signUp')}
                   </Link>
                 </Typography>
               </Box>
@@ -142,7 +144,7 @@ const Login: React.FC = () => {
             {/* Demo Accounts */}
             <Box sx={{ mt: 3, p: 2, bgcolor: '#F5F5F5', borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                Demo Account:
+                {t('login.demoAccount')}:
               </Typography>
               <Typography variant="caption" display="block">
                 📧 customer1@example.com

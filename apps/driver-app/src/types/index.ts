@@ -39,16 +39,17 @@ export interface Driver {
   updatedAt: string;
 }
 
-export type VehicleType = 'ECONOMY' | 'COMFORT' | 'PREMIUM';
+export type VehicleType = 'ECONOMY' | 'COMFORT' | 'PREMIUM' | 'CAR' | 'SUV' | 'MOTORCYCLE';
 
 export interface DriverRegistration {
-  userId: string;
   vehicleType: VehicleType;
   vehicleMake: string;
   vehicleModel: string;
   vehicleColor: string;
+  vehicleYear?: number;
   licensePlate: string;
   licenseNumber: string;
+  licenseExpiryDate: string;
 }
 
 // Location Types

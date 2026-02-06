@@ -10,6 +10,55 @@ interface AuthRequest extends Request {
 export class RideController {
   constructor(private readonly rideService: RideService) {}
 
+  getAllRides = async (req: AuthRequest, res: Response) => {
+    try {
+      if (req.user!.role !== UserRole.ADMIN) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Admin access required' },
+        });
+      }
+
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const status = req.query.status as string | undefined;
+
+      const { rides, total } = await this.rideService.getAllRides(
+        page,
+        limit,
+        status as any
+      );
+
+      res.json({ success: true, data: { rides, total } });
+    } catch (err) {
+      logger.error('Get all rides error:', err);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get rides' },
+      });
+    }
+  };
+
+  getRideStats = async (req: AuthRequest, res: Response) => {
+    try {
+      if (req.user!.role !== UserRole.ADMIN) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Admin access required' },
+        });
+      }
+
+      const stats = await this.rideService.getRideStats();
+      res.json({ success: true, data: { stats } });
+    } catch (err) {
+      logger.error('Get ride stats error:', err);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get ride stats' },
+      });
+    }
+  };
+
   getAvailableRides = async (req: AuthRequest, res: Response) => {
     try {
       if (req.user!.role !== UserRole.DRIVER) {

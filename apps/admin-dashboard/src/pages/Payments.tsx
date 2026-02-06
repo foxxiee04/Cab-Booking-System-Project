@@ -4,6 +4,7 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { adminApi } from '../api/admin.api';
 import { Payment } from '../types';
 import { formatCurrency, formatDate, getPaymentStatusColor } from '../utils/format.utils';
+import { useTranslation } from 'react-i18next';
 
 const PAGE_SIZE = 10;
 
@@ -13,6 +14,7 @@ const Payments: React.FC = () => {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { t } = useTranslation();
 
   useEffect(() => {
     const fetchPayments = async () => {
@@ -26,7 +28,7 @@ const Payments: React.FC = () => {
         setRows(response.data.payments || []);
         setTotal(response.data.total || 0);
       } catch (err: any) {
-        setError(err.response?.data?.error?.message || 'Failed to load payments');
+        setError(err.response?.data?.error?.message || t('errors.loadPayments'));
       } finally {
         setLoading(false);
       }
@@ -36,18 +38,18 @@ const Payments: React.FC = () => {
   }, [page]);
 
   const columns: GridColDef<Payment>[] = [
-    { field: 'id', headerName: 'Payment ID', flex: 1, minWidth: 210 },
-    { field: 'rideId', headerName: 'Ride ID', flex: 1, minWidth: 210 },
+    { field: 'id', headerName: t('columns.paymentId'), flex: 1, minWidth: 210 },
+    { field: 'rideId', headerName: t('columns.rideId'), flex: 1, minWidth: 210 },
     {
       field: 'amount',
-      headerName: 'Amount',
+      headerName: t('columns.amount'),
       width: 140,
       valueFormatter: (params) => formatCurrency(params.value),
     },
-    { field: 'method', headerName: 'Method', width: 120 },
+    { field: 'method', headerName: t('columns.method'), width: 120 },
     {
       field: 'status',
-      headerName: 'Status',
+      headerName: t('columns.status'),
       width: 130,
       renderCell: (params) => (
         <Chip label={params.value} size="small" color={getPaymentStatusColor(params.value)} />
@@ -55,13 +57,13 @@ const Payments: React.FC = () => {
     },
     {
       field: 'transactionId',
-      headerName: 'Transaction',
+      headerName: t('columns.transaction'),
       width: 180,
-      valueFormatter: (params) => params.value || 'N/A',
+      valueFormatter: (params) => params.value || t('labels.na'),
     },
     {
       field: 'createdAt',
-      headerName: 'Created',
+      headerName: t('columns.created'),
       width: 170,
       valueFormatter: (params) => formatDate(params.value),
     },
@@ -70,7 +72,7 @@ const Payments: React.FC = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" fontWeight="bold">
-        Payments Management
+        {t('tables.payments')}
       </Typography>
 
       {error && (

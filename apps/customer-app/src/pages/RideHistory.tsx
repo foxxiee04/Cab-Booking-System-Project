@@ -20,11 +20,13 @@ import {
   getRideStatusColor,
   getVehicleTypeLabel,
 } from '../utils/format.utils';
+import { useTranslation } from 'react-i18next';
 
 const PAGE_SIZE = 10;
 
 const RideHistory: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [rides, setRides] = useState<Ride[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -40,7 +42,7 @@ const RideHistory: React.FC = () => {
         setRides(response.data.rides || []);
         setTotal(response.data.total || 0);
       } catch (err: any) {
-        setError(err.response?.data?.error?.message || 'Failed to load ride history');
+        setError(err.response?.data?.error?.message || t('errors.loadRideHistory'));
       } finally {
         setLoading(false);
       }
@@ -54,7 +56,7 @@ const RideHistory: React.FC = () => {
   return (
     <Container sx={{ py: 4 }}>
       <Typography variant="h4" fontWeight="bold">
-        Ride History
+        {t('rideHistory.title')}
       </Typography>
 
       {error && (
@@ -71,7 +73,7 @@ const RideHistory: React.FC = () => {
 
       {!loading && rides.length === 0 && (
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          No rides found.
+          {t('rideHistory.noRides')}
         </Typography>
       )}
 
@@ -95,14 +97,14 @@ const RideHistory: React.FC = () => {
               </Typography>
 
               <Typography variant="body2" sx={{ mt: 1 }}>
-                Pickup: {ride.pickup.address || `${ride.pickup.lat}, ${ride.pickup.lng}`}
+                {t('rideHistory.pickup')}: {ride.pickup.address || `${ride.pickup.lat}, ${ride.pickup.lng}`}
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5 }}>
-                Dropoff: {ride.dropoff.address || `${ride.dropoff.lat}, ${ride.dropoff.lng}`}
+                {t('rideHistory.dropoff')}: {ride.dropoff.address || `${ride.dropoff.lat}, ${ride.dropoff.lng}`}
               </Typography>
 
               <Typography variant="body2" sx={{ mt: 1 }}>
-                Fare: {ride.fare ? formatCurrency(ride.fare) : 'N/A'}
+                {t('rideHistory.fare')}: {ride.fare ? formatCurrency(ride.fare) : t('common.na')}
               </Typography>
 
               <Button
@@ -110,7 +112,7 @@ const RideHistory: React.FC = () => {
                 sx={{ mt: 1 }}
                 onClick={() => navigate(`/ride/${ride.id}`)}
               >
-                View Ride
+                {t('rideHistory.viewRide')}
               </Button>
             </CardContent>
           </Card>
@@ -123,17 +125,17 @@ const RideHistory: React.FC = () => {
           disabled={page <= 1}
           onClick={() => setPage((prev) => Math.max(1, prev - 1))}
         >
-          Previous
+          {t('common.previous')}
         </Button>
         <Button
           variant="outlined"
           disabled={page >= totalPages}
           onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
         >
-          Next
+          {t('common.next')}
         </Button>
         <Typography variant="body2" color="text.secondary" sx={{ alignSelf: 'center' }}>
-          Page {page} / {totalPages}
+          {t('rideHistory.page', { page, total: totalPages })}
         </Typography>
       </Box>
     </Container>

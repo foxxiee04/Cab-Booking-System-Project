@@ -1,0 +1,111 @@
+{
+  "app": {
+    "title": "Bảng điều khiển",
+    "admin": "Quản trị"
+  },
+  "menu": {
+    "dashboard": "Tổng quan",
+    "rides": "Chuyến đi",
+    "drivers": "Tài xế",
+    "customers": "Khách hàng",
+    "payments": "Thanh toán",
+    "pricing": "Định giá",
+    "logs": "Nhật ký",
+    "logout": "Đăng xuất"
+  },
+  "login": {
+    "title": "Đăng nhập quản trị",
+    "subtitle": "Truy cập hệ thống bằng tài khoản quản trị",
+    "email": "Email",
+    "password": "Mật khẩu",
+    "signIn": "Đăng nhập",
+    "demoAccount": "Tài khoản demo",
+    "accessDenied": "Từ chối truy cập. Cần quyền quản trị.",
+    "failed": "Đăng nhập thất bại. Vui lòng thử lại."
+  },
+  "dashboard": {
+    "title": "Tổng quan hệ thống",
+    "subtitle": "Chỉ số và thống kê thời gian thực",
+    "totalRides": "Tổng chuyến",
+    "today": "hôm nay",
+    "onlineDrivers": "Tài xế trực tuyến",
+    "ofTotal": "trên tổng",
+    "totalCustomers": "Tổng khách hàng",
+    "active": "đang hoạt động",
+    "todayRevenue": "Doanh thu hôm nay",
+    "month": "Tháng",
+    "rideStatus": "Trạng thái chuyến",
+    "pending": "Đang chờ",
+    "activeStatus": "Đang chạy",
+    "completed": "Hoàn tất",
+    "cancelled": "Đã hủy",
+    "paymentStatus": "Trạng thái thanh toán",
+    "failed": "Thất bại",
+    "noStats": "Không có dữ liệu thống kê",
+    "loadStatsFailed": "Không thể tải thống kê"
+  },
+  "tables": {
+    "drivers": "Quản lý tài xế",
+    "customers": "Quản lý khách hàng",
+    "rides": "Quản lý chuyến đi",
+    "payments": "Quản lý thanh toán",
+    "logs": "Nhật ký hệ thống"
+  },
+  "columns": {
+    "driverId": "Mã tài xế",
+    "customerId": "Mã khách hàng",
+    "rideId": "Mã chuyến",
+    "paymentId": "Mã thanh toán",
+    "logId": "Mã log",
+    "name": "Họ tên",
+    "email": "Email",
+    "vehicle": "Xe",
+    "rating": "Đánh giá",
+    "rides": "Số chuyến",
+    "online": "Trực tuyến",
+    "phone": "Điện thoại",
+    "amount": "Số tiền",
+    "method": "Phương thức",
+    "status": "Trạng thái",
+    "transaction": "Giao dịch",
+    "created": "Tạo lúc",
+    "level": "Mức",
+    "service": "Dịch vụ",
+    "message": "Thông điệp",
+    "time": "Thời gian",
+    "fare": "Cước",
+    "customer": "Khách",
+    "driver": "Tài xế",
+    "payment": "Thanh toán"
+  },
+  "labels": {
+    "online": "TRỰC TUYẾN",
+    "offline": "NGOẠI TUYẾN",
+    "na": "N/A",
+    "unknown": "KHÔNG RÕ"
+  },
+  "errors": {
+    "loadDrivers": "Không thể tải tài xế",
+    "loadCustomers": "Không thể tải khách hàng",
+    "loadRides": "Không thể tải chuyến đi",
+    "loadPayments": "Không thể tải thanh toán",
+    "loadLogs": "Không thể tải nhật ký"
+  },
+  "pricing": {
+    "title": "Quản lý giá tăng",
+    "subtitle": "Điều chỉnh giá theo nhu cầu",
+    "currentSurge": "Hệ số hiện tại",
+    "surgeMultiplier": "Hệ số tăng giá",
+    "example": "Ví dụ: Giá cơ bản {{amount}}",
+    "newFare": "Giá mới: {{amount}}",
+    "reason": "Lý do (tùy chọn)",
+    "reasonPlaceholder": "VD: Nhu cầu cao, thời tiết xấu",
+    "update": "Cập nhật hệ số",
+    "guidelines": "Hướng dẫn tăng giá",
+    "normal": "Nhu cầu bình thường",
+    "moderate": "Nhu cầu trung bình",
+    "high": "Nhu cầu cao",
+    "success": "Cập nhật hệ số thành công!",
+    "failed": "Không thể cập nhật hệ số"
+  }
+}

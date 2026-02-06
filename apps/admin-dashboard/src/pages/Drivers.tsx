@@ -3,6 +3,7 @@ import { Box, Typography, Chip, Alert } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { adminApi } from '../api/admin.api';
 import { Driver } from '../types';
+import { useTranslation } from 'react-i18next';
 
 const PAGE_SIZE = 10;
 
@@ -12,6 +13,7 @@ const Drivers: React.FC = () => {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { t } = useTranslation();
 
   useEffect(() => {
     const fetchDrivers = async () => {
@@ -25,7 +27,7 @@ const Drivers: React.FC = () => {
         setRows(response.data.drivers || []);
         setTotal(response.data.total || 0);
       } catch (err: any) {
-        setError(err.response?.data?.error?.message || 'Failed to load drivers');
+        setError(err.response?.data?.error?.message || t('errors.loadDrivers'));
       } finally {
         setLoading(false);
       }
@@ -35,37 +37,37 @@ const Drivers: React.FC = () => {
   }, [page]);
 
   const columns: GridColDef<Driver>[] = [
-    { field: 'id', headerName: 'Driver ID', flex: 1, minWidth: 200 },
+    { field: 'id', headerName: t('columns.driverId'), flex: 1, minWidth: 200 },
     {
       field: 'name',
-      headerName: 'Name',
+      headerName: t('columns.name'),
       flex: 1,
       minWidth: 180,
       valueGetter: (params) =>
-        params.row.user ? `${params.row.user.firstName} ${params.row.user.lastName}` : 'N/A',
+        params.row.user ? `${params.row.user.firstName} ${params.row.user.lastName}` : t('labels.na'),
     },
     {
       field: 'email',
-      headerName: 'Email',
+      headerName: t('columns.email'),
       flex: 1,
       minWidth: 200,
-      valueGetter: (params) => params.row.user?.email || 'N/A',
+      valueGetter: (params) => params.row.user?.email || t('labels.na'),
     },
-    { field: 'vehicleType', headerName: 'Vehicle', width: 120 },
+    { field: 'vehicleType', headerName: t('columns.vehicle'), width: 120 },
     {
       field: 'rating',
-      headerName: 'Rating',
+      headerName: t('columns.rating'),
       width: 100,
       valueFormatter: (params) => params.value?.toFixed(1),
     },
-    { field: 'totalRides', headerName: 'Rides', width: 100 },
+    { field: 'totalRides', headerName: t('columns.rides'), width: 100 },
     {
       field: 'isOnline',
-      headerName: 'Online',
+      headerName: t('columns.online'),
       width: 120,
       renderCell: (params) => (
         <Chip
-          label={params.value ? 'ONLINE' : 'OFFLINE'}
+          label={params.value ? t('labels.online') : t('labels.offline')}
           size="small"
           color={params.value ? 'success' : 'default'}
         />
@@ -76,7 +78,7 @@ const Drivers: React.FC = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" fontWeight="bold">
-        Drivers Management
+        {t('tables.drivers')}
       </Typography>
 
       {error && (

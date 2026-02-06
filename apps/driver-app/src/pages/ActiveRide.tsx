@@ -25,10 +25,13 @@ import DropoffMarker from '../components/map/DropoffMarker';
 import RouteLine from '../components/map/RouteLine';
 import { rideApi } from '../api/ride.api';
 import { formatCurrency, getRideStatusLabel } from '../utils/format.utils';
+import { useTranslation } from 'react-i18next';
+import { RideStatus } from '../types';
 
 const ActiveRide: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const { t } = useTranslation();
 
   const { currentLocation } = useAppSelector((state) => state.driver);
   const { currentRide } = useAppSelector((state) => state.ride);
@@ -44,7 +47,7 @@ const ActiveRide: React.FC = () => {
       const response = await rideApi.startRide(currentRide.id);
       dispatch(updateRideStatus(response.data.ride.status));
     } catch (error: any) {
-      setError(error.response?.data?.error?.message || 'Failed to start ride');
+      setError(error.response?.data?.error?.message || t('errors.startRide'));
     } finally {
       setLoading(false);
     }
@@ -59,14 +62,14 @@ const ActiveRide: React.FC = () => {
       dispatch(clearCurrentRide());
       navigate('/dashboard');
     } catch (error: any) {
-      setError(error.response?.data?.error?.message || 'Failed to complete ride');
+      setError(error.response?.data?.error?.message || t('errors.completeRide'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleCancelRide = async () => {
-    if (!currentRide || !window.confirm('Are you sure you want to cancel this ride?')) return;
+    if (!currentRide || !window.confirm(t('activeRide.confirmCancel'))) return;
 
     setLoading(true);
     try {
@@ -74,7 +77,7 @@ const ActiveRide: React.FC = () => {
       dispatch(clearCurrentRide());
       navigate('/dashboard');
     } catch (error: any) {
-      setError(error.response?.data?.error?.message || 'Failed to cancel ride');
+      setError(error.response?.data?.error?.message || t('errors.cancelRide'));
     } finally {
       setLoading(false);
     }
@@ -83,14 +86,28 @@ const ActiveRide: React.FC = () => {
   if (!currentRide) {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <Typography>No active ride</Typography>
+        <Typography>{t('activeRide.noActiveRide')}</Typography>
       </Box>
     );
   }
 
   const mapCenter = currentLocation || currentRide.pickupLocation;
-  const steps = ['Assigned', 'Accepted', 'Pickup', 'In Progress', 'Completed'];
-  const activeStep = steps.indexOf(getRideStatusLabel(currentRide.status));
+  const steps = [
+    t('status.ASSIGNED'),
+    t('status.ACCEPTED'),
+    t('activeRide.pickupStep'),
+    t('status.IN_PROGRESS'),
+    t('status.COMPLETED'),
+  ];
+  const stepIndexByStatus: Record<RideStatus, number> = {
+    PENDING: 0,
+    ASSIGNED: 0,
+    ACCEPTED: 1,
+    IN_PROGRESS: 3,
+    COMPLETED: 4,
+    CANCELLED: 0,
+  };
+  const activeStep = stepIndexByStatus[currentRide.status] ?? 0;
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -100,7 +117,7 @@ const ActiveRide: React.FC = () => {
             <ArrowBack />
           </IconButton>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Active Ride
+            {t('activeRide.title')}
           </Typography>
           <Chip label={getRideStatusLabel(currentRide.status)} color="primary" />
         </Toolbar>
@@ -148,7 +165,7 @@ const ActiveRide: React.FC = () => {
                 href={`tel:${currentRide.customer.phoneNumber}`}
                 sx={{ mb: 2 }}
               >
-                Call Customer
+                {t('activeRide.callCustomer')}
               </Button>
             )}
 
@@ -161,7 +178,7 @@ const ActiveRide: React.FC = () => {
             </Stepper>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-              <Typography variant="body2">Fare</Typography>
+              <Typography variant="body2">{t('activeRide.fare')}</Typography>
               <Typography variant="h6" color="success.main">
                 {formatCurrency(currentRide.fare)}
               </Typography>
@@ -175,7 +192,7 @@ const ActiveRide: React.FC = () => {
                 disabled={loading}
                 sx={{ mb: 1 }}
               >
-                Arrived - Start Ride
+                {t('activeRide.startRide')}
               </Button>
             )}
 
@@ -188,7 +205,7 @@ const ActiveRide: React.FC = () => {
                 disabled={loading}
                 sx={{ mb: 1 }}
               >
-                Complete Ride
+                {t('activeRide.completeRide')}
               </Button>
             )}
 
@@ -200,7 +217,7 @@ const ActiveRide: React.FC = () => {
                 onClick={handleCancelRide}
                 disabled={loading}
               >
-                Cancel Ride
+                {t('activeRide.cancelRide')}
               </Button>
             )}
           </CardContent>

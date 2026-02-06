@@ -60,7 +60,7 @@ for %%S in (%services%) do (
 REM Step 8: Seed test data
 echo.
 echo [8/9] Seeding initial test data...
-docker compose exec -T postgres psql -U postgres < scripts\seed-data-fixed.sql
+docker compose exec -T postgres psql -U postgres < scripts\seed-sample-data.sql
 
 REM Step 9: Verify services
 echo.

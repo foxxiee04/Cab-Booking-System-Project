@@ -1,5 +1,6 @@
 import { format, formatDistanceToNow } from 'date-fns';
 import { VehicleType, PaymentMethod, RideStatus } from '../types';
+import i18n from '../i18n';
 
 // Format currency (VND)
 export const formatCurrency = (amount: number): string => {
@@ -29,9 +30,12 @@ export const formatPhoneNumber = (phone: string): string => {
 // Get vehicle type label
 export const getVehicleTypeLabel = (type: VehicleType): string => {
   const labels: Record<VehicleType, string> = {
-    ECONOMY: 'Economy',
-    COMFORT: 'Comfort',
-    PREMIUM: 'Premium',
+    ECONOMY: i18n.t('vehicle.ECONOMY'),
+    COMFORT: i18n.t('vehicle.COMFORT'),
+    PREMIUM: i18n.t('vehicle.PREMIUM'),
+    CAR: i18n.t('vehicle.CAR'),
+    SUV: i18n.t('vehicle.SUV'),
+    MOTORCYCLE: i18n.t('vehicle.MOTORCYCLE'),
   };
   return labels[type] || type;
 };
@@ -39,9 +43,9 @@ export const getVehicleTypeLabel = (type: VehicleType): string => {
 // Get payment method label
 export const getPaymentMethodLabel = (method: PaymentMethod): string => {
   const labels: Record<PaymentMethod, string> = {
-    CASH: 'Cash',
-    CARD: 'Card',
-    WALLET: 'Wallet',
+    CASH: i18n.t('payment.CASH'),
+    CARD: i18n.t('payment.CARD'),
+    WALLET: i18n.t('payment.WALLET'),
   };
   return labels[method] || method;
 };
@@ -49,12 +53,12 @@ export const getPaymentMethodLabel = (method: PaymentMethod): string => {
 // Get ride status label
 export const getRideStatusLabel = (status: RideStatus): string => {
   const labels: Record<RideStatus, string> = {
-    PENDING: 'Finding driver...',
-    ASSIGNED: 'Driver assigned',
-    ACCEPTED: 'Driver on the way',
-    IN_PROGRESS: 'In progress',
-    COMPLETED: 'Completed',
-    CANCELLED: 'Cancelled',
+    PENDING: i18n.t('status.PENDING'),
+    ASSIGNED: i18n.t('status.ASSIGNED'),
+    ACCEPTED: i18n.t('status.ACCEPTED'),
+    IN_PROGRESS: i18n.t('status.IN_PROGRESS'),
+    COMPLETED: i18n.t('status.COMPLETED'),
+    CANCELLED: i18n.t('status.CANCELLED'),
   };
   return labels[status] || status;
 };

@@ -14,6 +14,7 @@ import {
 import { TrendingUp, Save } from '@mui/icons-material';
 import { pricingApi } from '../api/pricing.api';
 import { formatCurrency } from '../utils/format.utils';
+import { useTranslation } from 'react-i18next';
 
 const Pricing: React.FC = () => {
   const [multiplier, setMultiplier] = useState(1.0);
@@ -22,6 +23,7 @@ const Pricing: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const { t } = useTranslation();
 
   useEffect(() => {
     const fetchSurge = async () => {
@@ -45,10 +47,10 @@ const Pricing: React.FC = () => {
     try {
       await pricingApi.updateSurge({ multiplier, reason });
       setCurrentSurge(multiplier);
-      setSuccess('Surge pricing updated successfully!');
+      setSuccess(t('pricing.success'));
       setReason('');
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to update surge pricing');
+      setError(err.response?.data?.error?.message || t('pricing.failed'));
     } finally {
       setLoading(false);
     }
@@ -66,10 +68,10 @@ const Pricing: React.FC = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" fontWeight="bold" gutterBottom>
-        Surge Pricing Management
+        {t('pricing.title')}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Adjust dynamic pricing based on demand
+        {t('pricing.subtitle')}
       </Typography>
 
       {success && (
@@ -89,7 +91,7 @@ const Pricing: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
             <TrendingUp sx={{ fontSize: 32, color: 'primary.main', mr: 1 }} />
             <Box>
-              <Typography variant="h6">Current Surge</Typography>
+              <Typography variant="h6">{t('pricing.currentSurge')}</Typography>
               <Chip
                 label={`${currentSurge.toFixed(1)}x`}
                 color={getSurgeColor(currentSurge)}
@@ -100,7 +102,7 @@ const Pricing: React.FC = () => {
 
           <Box sx={{ mb: 4 }}>
             <Typography variant="body1" gutterBottom>
-              Surge Multiplier: <strong>{multiplier.toFixed(1)}x</strong>
+              {t('pricing.surgeMultiplier')}: <strong>{multiplier.toFixed(1)}x</strong>
             </Typography>
             <Slider
               value={multiplier}
@@ -122,19 +124,19 @@ const Pricing: React.FC = () => {
 
           <Box sx={{ mb: 3, p: 2, bgcolor: '#F5F5F5', borderRadius: 2 }}>
             <Typography variant="body2" color="text.secondary" gutterBottom>
-              Example: Base Fare {formatCurrency(baseFare)}
+              {t('pricing.example', { amount: formatCurrency(baseFare) })}
             </Typography>
             <Typography variant="h5" color="primary">
-              New Fare: {formatCurrency(exampleFare)}
+              {t('pricing.newFare', { amount: formatCurrency(exampleFare) })}
             </Typography>
           </Box>
 
           <TextField
             fullWidth
-            label="Reason (optional)"
+            label={t('pricing.reason')}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g., High demand, Weather conditions"
+            placeholder={t('pricing.reasonPlaceholder')}
             multiline
             rows={2}
             sx={{ mb: 3 }}
@@ -148,7 +150,7 @@ const Pricing: React.FC = () => {
             onClick={handleUpdateSurge}
             disabled={loading || multiplier === currentSurge}
           >
-            Update Surge Pricing
+            {t('pricing.update')}
           </Button>
         </CardContent>
       </Card>
@@ -156,20 +158,20 @@ const Pricing: React.FC = () => {
       <Card elevation={2} sx={{ mt: 3 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
-            Surge Pricing Guidelines
+            {t('pricing.guidelines')}
           </Typography>
           <Box sx={{ '& > div': { mb: 1 } }}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Chip label="1.0-1.2x" color="success" size="small" sx={{ mr: 1 }} />
-              <Typography variant="body2">Normal demand</Typography>
+              <Typography variant="body2">{t('pricing.normal')}</Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Chip label="1.3-1.7x" color="warning" size="small" sx={{ mr: 1 }} />
-              <Typography variant="body2">Moderate demand</Typography>
+              <Typography variant="body2">{t('pricing.moderate')}</Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Chip label="1.8-3.0x" color="error" size="small" sx={{ mr: 1 }} />
-              <Typography variant="body2">High demand</Typography>
+              <Typography variant="body2">{t('pricing.high')}</Typography>
             </Box>
           </Box>
         </CardContent>

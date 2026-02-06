@@ -529,6 +529,54 @@ export class RideService {
     return { rides, total };
   }
 
+  async getAllRides(page = 1, limit = 20, status?: RideStatus): Promise<{ rides: Ride[]; total: number }> {
+    const skip = (page - 1) * limit;
+    const where = status ? { status } : undefined;
+
+    const [rides, total] = await Promise.all([
+      this.prisma.ride.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.ride.count({ where }),
+    ]);
+
+    return { rides, total };
+  }
+
+  async getRideStats(): Promise<{
+    total: number;
+    today: number;
+    pending: number;
+    active: number;
+    completed: number;
+    cancelled: number;
+  }> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const pendingStatuses = [RideStatus.CREATED, RideStatus.FINDING_DRIVER];
+    const activeStatuses = [
+      RideStatus.ASSIGNED,
+      RideStatus.ACCEPTED,
+      RideStatus.PICKING_UP,
+      RideStatus.IN_PROGRESS,
+    ];
+
+    const [total, today, pending, active, completed, cancelled] = await Promise.all([
+      this.prisma.ride.count(),
+      this.prisma.ride.count({ where: { createdAt: { gte: startOfDay } } }),
+      this.prisma.ride.count({ where: { status: { in: pendingStatuses } } }),
+      this.prisma.ride.count({ where: { status: { in: activeStatuses } } }),
+      this.prisma.ride.count({ where: { status: RideStatus.COMPLETED } }),
+      this.prisma.ride.count({ where: { status: RideStatus.CANCELLED } }),
+    ]);
+
+    return { total, today, pending, active, completed, cancelled };
+  }
+
   async getActiveRideForCustomer(customerId: string): Promise<Ride | null> {
     return this.prisma.ride.findFirst({
       where: {

@@ -19,12 +19,14 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { setStats } from '../store/admin.slice';
 import { adminApi } from '../api/admin.api';
 import { formatCurrency, formatNumber } from '../utils/format.utils';
+import { useTranslation } from 'react-i18next';
 
 const Dashboard: React.FC = () => {
   const dispatch = useAppDispatch();
   const { stats } = useAppSelector((state) => state.admin);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { t } = useTranslation();
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -32,7 +34,7 @@ const Dashboard: React.FC = () => {
         const response = await adminApi.getStats();
         dispatch(setStats(response.data.stats));
       } catch (err: any) {
-        setError('Failed to load statistics');
+        setError(t('dashboard.loadStatsFailed'));
         console.error(err);
       } finally {
         setLoading(false);
@@ -64,7 +66,7 @@ const Dashboard: React.FC = () => {
   if (!stats) {
     return (
       <Alert severity="info" sx={{ m: 3 }}>
-        No statistics available
+        {t('dashboard.noStats')}
       </Alert>
     );
   }
@@ -72,10 +74,10 @@ const Dashboard: React.FC = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" fontWeight="bold" gutterBottom>
-        Dashboard Overview
+        {t('dashboard.title')}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Real-time system statistics and metrics
+        {t('dashboard.subtitle')}
       </Typography>
 
       <Grid container spacing={3}>
@@ -86,13 +88,13 @@ const Dashboard: React.FC = () => {
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Total Rides
+                    {t('dashboard.totalRides')}
                   </Typography>
                   <Typography variant="h4" fontWeight="bold" sx={{ my: 1 }}>
                     {formatNumber(stats.rides.total)}
                   </Typography>
                   <Typography variant="caption" color="success.main">
-                    +{stats.rides.today} today
+                    +{stats.rides.today} {t('dashboard.today')}
                   </Typography>
                 </Box>
                 <DirectionsCar sx={{ fontSize: 48, color: 'primary.main', opacity: 0.7 }} />
@@ -108,13 +110,13 @@ const Dashboard: React.FC = () => {
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Online Drivers
+                    {t('dashboard.onlineDrivers')}
                   </Typography>
                   <Typography variant="h4" fontWeight="bold" sx={{ my: 1 }}>
                     {stats.drivers.online}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    of {stats.drivers.total} total
+                    {t('dashboard.ofTotal')} {stats.drivers.total}
                   </Typography>
                 </Box>
                 <DriveEta sx={{ fontSize: 48, color: 'success.main', opacity: 0.7 }} />
@@ -130,13 +132,13 @@ const Dashboard: React.FC = () => {
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Total Customers
+                    {t('dashboard.totalCustomers')}
                   </Typography>
                   <Typography variant="h4" fontWeight="bold" sx={{ my: 1 }}>
                     {formatNumber(stats.customers.total)}
                   </Typography>
                   <Typography variant="caption" color="success.main">
-                    {stats.customers.active} active
+                    {stats.customers.active} {t('dashboard.active')}
                   </Typography>
                 </Box>
                 <People sx={{ fontSize: 48, color: 'info.main', opacity: 0.7 }} />
@@ -152,13 +154,13 @@ const Dashboard: React.FC = () => {
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Today's Revenue
+                    {t('dashboard.todayRevenue')}
                   </Typography>
                   <Typography variant="h4" fontWeight="bold" sx={{ my: 1 }}>
                     {formatCurrency(stats.revenue.today)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Month: {formatCurrency(stats.revenue.month)}
+                    {t('dashboard.month')}: {formatCurrency(stats.revenue.month)}
                   </Typography>
                 </Box>
                 <AttachMoney sx={{ fontSize: 48, color: 'warning.main', opacity: 0.7 }} />
@@ -172,7 +174,7 @@ const Dashboard: React.FC = () => {
           <Card elevation={2}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
-                Ride Status
+                {t('dashboard.rideStatus')}
               </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={6}>
@@ -180,7 +182,7 @@ const Dashboard: React.FC = () => {
                     <Typography variant="h5" fontWeight="bold">
                       {stats.rides.pending}
                     </Typography>
-                    <Typography variant="caption">Pending</Typography>
+                    <Typography variant="caption">{t('dashboard.pending')}</Typography>
                   </Box>
                 </Grid>
                 <Grid item xs={6}>
@@ -188,7 +190,7 @@ const Dashboard: React.FC = () => {
                     <Typography variant="h5" fontWeight="bold">
                       {stats.rides.active}
                     </Typography>
-                    <Typography variant="caption">Active</Typography>
+                    <Typography variant="caption">{t('dashboard.activeStatus')}</Typography>
                   </Box>
                 </Grid>
                 <Grid item xs={6}>
@@ -196,7 +198,7 @@ const Dashboard: React.FC = () => {
                     <Typography variant="h5" fontWeight="bold">
                       {stats.rides.completed}
                     </Typography>
-                    <Typography variant="caption">Completed</Typography>
+                    <Typography variant="caption">{t('dashboard.completed')}</Typography>
                   </Box>
                 </Grid>
                 <Grid item xs={6}>
@@ -204,7 +206,7 @@ const Dashboard: React.FC = () => {
                     <Typography variant="h5" fontWeight="bold">
                       {stats.rides.cancelled}
                     </Typography>
-                    <Typography variant="caption">Cancelled</Typography>
+                    <Typography variant="caption">{t('dashboard.cancelled')}</Typography>
                   </Box>
                 </Grid>
               </Grid>
@@ -217,7 +219,7 @@ const Dashboard: React.FC = () => {
           <Card elevation={2}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
-                Payment Status
+                {t('dashboard.paymentStatus')}
               </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={4}>
@@ -226,7 +228,7 @@ const Dashboard: React.FC = () => {
                     <Typography variant="h5" fontWeight="bold">
                       {stats.payments.pending}
                     </Typography>
-                    <Typography variant="caption">Pending</Typography>
+                    <Typography variant="caption">{t('dashboard.pending')}</Typography>
                   </Box>
                 </Grid>
                 <Grid item xs={4}>
@@ -235,7 +237,7 @@ const Dashboard: React.FC = () => {
                     <Typography variant="h5" fontWeight="bold">
                       {stats.payments.completed}
                     </Typography>
-                    <Typography variant="caption">Completed</Typography>
+                    <Typography variant="caption">{t('dashboard.completed')}</Typography>
                   </Box>
                 </Grid>
                 <Grid item xs={4}>
@@ -244,7 +246,7 @@ const Dashboard: React.FC = () => {
                     <Typography variant="h5" fontWeight="bold">
                       {stats.payments.failed}
                     </Typography>
-                    <Typography variant="caption">Failed</Typography>
+                    <Typography variant="caption">{t('dashboard.failed')}</Typography>
                   </Box>
                 </Grid>
               </Grid>

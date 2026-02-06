@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { PaymentService } from '../services/payment.service';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { PaymentStatus } from '../generated/prisma-client';
 
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
@@ -87,7 +88,7 @@ export class PaymentController {
 
   refundPayment = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      if (req.user!.role !== 'admin') {
+      if (req.user!.role !== 'ADMIN') {
         return res.status(403).json({ 
           success: false, 
           error: { code: 'FORBIDDEN', message: 'Admin access required' } 
@@ -98,6 +99,43 @@ export class PaymentController {
       await this.paymentService.refundPayment(req.params.rideId, reason || 'Admin refund');
       
       res.json({ success: true, message: 'Refund processed' });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getAllPayments = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      if (req.user!.role !== 'ADMIN') {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Admin access required' },
+        });
+      }
+
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const statusParam = (req.query.status as string | undefined)?.toUpperCase();
+      const status = statusParam ? (statusParam as PaymentStatus) : undefined;
+
+      const result = await this.paymentService.getAllPayments(page, limit, status);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getAdminStats = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      if (req.user!.role !== 'ADMIN') {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Admin access required' },
+        });
+      }
+
+      const stats = await this.paymentService.getAdminStats();
+      res.json({ success: true, data: stats });
     } catch (error) {
       next(error);
     }

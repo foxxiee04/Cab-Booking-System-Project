@@ -4,6 +4,7 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { adminApi } from '../api/admin.api';
 import { Customer } from '../types';
 import { formatDate } from '../utils/format.utils';
+import { useTranslation } from 'react-i18next';
 
 const PAGE_SIZE = 10;
 
@@ -13,6 +14,7 @@ const Customers: React.FC = () => {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { t } = useTranslation();
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -26,7 +28,7 @@ const Customers: React.FC = () => {
         setRows(response.data.customers || []);
         setTotal(response.data.total || 0);
       } catch (err: any) {
-        setError(err.response?.data?.error?.message || 'Failed to load customers');
+        setError(err.response?.data?.error?.message || t('errors.loadCustomers'));
       } finally {
         setLoading(false);
       }
@@ -36,31 +38,31 @@ const Customers: React.FC = () => {
   }, [page]);
 
   const columns: GridColDef<Customer>[] = [
-    { field: 'id', headerName: 'Customer ID', flex: 1, minWidth: 200 },
+    { field: 'id', headerName: t('columns.customerId'), flex: 1, minWidth: 200 },
     {
       field: 'name',
-      headerName: 'Name',
+      headerName: t('columns.name'),
       flex: 1,
       minWidth: 180,
       valueGetter: (params) => `${params.row.firstName} ${params.row.lastName}`,
     },
-    { field: 'email', headerName: 'Email', flex: 1, minWidth: 220 },
+    { field: 'email', headerName: t('columns.email'), flex: 1, minWidth: 220 },
     {
       field: 'phoneNumber',
-      headerName: 'Phone',
+      headerName: t('columns.phone'),
       width: 140,
-      valueFormatter: (params) => params.value || 'N/A',
+      valueFormatter: (params) => params.value || t('labels.na'),
     },
-    { field: 'totalRides', headerName: 'Rides', width: 100 },
+    { field: 'totalRides', headerName: t('columns.rides'), width: 100 },
     {
       field: 'rating',
-      headerName: 'Rating',
+      headerName: t('columns.rating'),
       width: 110,
-      valueFormatter: (params) => (params.value ? params.value.toFixed(1) : 'N/A'),
+      valueFormatter: (params) => (params.value ? params.value.toFixed(1) : t('labels.na')),
     },
     {
       field: 'createdAt',
-      headerName: 'Created',
+      headerName: t('columns.created'),
       width: 170,
       valueFormatter: (params) => formatDate(params.value),
     },
@@ -69,7 +71,7 @@ const Customers: React.FC = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" fontWeight="bold">
-        Customers Management
+        {t('tables.customers')}
       </Typography>
 
       {error && (

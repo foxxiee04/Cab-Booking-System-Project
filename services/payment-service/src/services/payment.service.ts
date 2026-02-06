@@ -611,6 +611,73 @@ export class PaymentService {
     logger.info(`Refund completed for ride ${rideId}`);
   }
 
+  async getAllPayments(page = 1, limit = 20, status?: PaymentStatus) {
+    const skip = (page - 1) * limit;
+    const where = status ? { status } : undefined;
+
+    const [payments, total] = await Promise.all([
+      this.prisma.payment.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.payment.count({ where }),
+    ]);
+
+    return { payments, total };
+  }
+
+  async getAdminStats() {
+    const now = new Date();
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - 6);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [totalRevenue, todayRevenue, weekRevenue, monthRevenue, pending, completed, failed] = await Promise.all([
+      this.prisma.payment.aggregate({
+        where: { status: PaymentStatus.COMPLETED },
+        _sum: { amount: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { status: PaymentStatus.COMPLETED, createdAt: { gte: startOfDay } },
+        _sum: { amount: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { status: PaymentStatus.COMPLETED, createdAt: { gte: startOfWeek } },
+        _sum: { amount: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { status: PaymentStatus.COMPLETED, createdAt: { gte: startOfMonth } },
+        _sum: { amount: true },
+      }),
+      this.prisma.payment.count({
+        where: { status: { in: [PaymentStatus.PENDING, PaymentStatus.PROCESSING, PaymentStatus.REQUIRES_ACTION] } },
+      }),
+      this.prisma.payment.count({ where: { status: PaymentStatus.COMPLETED } }),
+      this.prisma.payment.count({ where: { status: PaymentStatus.FAILED } }),
+    ]);
+
+    return {
+      revenue: {
+        total: totalRevenue._sum.amount || 0,
+        today: todayRevenue._sum.amount || 0,
+        week: weekRevenue._sum.amount || 0,
+        month: monthRevenue._sum.amount || 0,
+      },
+      payments: {
+        pending,
+        completed,
+        failed,
+      },
+    };
+  }
+
   private calculateFare(
     distanceKm: number, 
     durationSeconds: number, 

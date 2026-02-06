@@ -1,0 +1,149 @@
+{
+  "login": {
+    "title": "Đăng nhập tài xế",
+    "subtitle": "Đăng nhập để bắt đầu kiếm tiền",
+    "email": "Email",
+    "password": "Mật khẩu",
+    "signIn": "Đăng nhập",
+    "demoAccount": "Tài khoản demo",
+    "noAccount": "Tài xế mới?",
+    "signUp": "Đăng ký"
+  },
+  "register": {
+    "title": "Đăng ký làm tài xế",
+    "subtitle": "Tham gia nền tảng và bắt đầu kiếm tiền",
+    "firstName": "Tên",
+    "lastName": "Họ",
+    "email": "Email",
+    "phone": "Số điện thoại",
+    "password": "Mật khẩu",
+    "confirmPassword": "Xác nhận mật khẩu",
+    "passwordHelp": "Tối thiểu 8 ký tự, có chữ hoa, chữ thường, số",
+    "submit": "Đăng ký",
+    "haveAccount": "Đã có tài khoản?"
+  },
+  "profileSetup": {
+    "title": "Hoàn tất hồ sơ",
+    "subtitle": "Cung cấp thông tin xe để bắt đầu nhận chuyến",
+    "vehicleType": "Loại xe",
+    "vehicleMake": "Hãng xe",
+    "vehicleModel": "Dòng xe",
+    "vehicleColor": "Màu xe",
+    "licensePlate": "Biển số",
+    "licenseNumber": "Số GPLX",
+    "licenseExpiry": "Ngày hết hạn GPLX",
+    "info": "Tất cả thông tin sẽ được xác minh trước khi nhận chuyến. Vui lòng nhập chính xác.",
+    "submit": "Hoàn tất"
+  },
+  "dashboard": {
+    "title": "Bảng điều khiển",
+    "online": "TRỰC TUYẾN",
+    "offline": "NGOẠI TUYẾN",
+    "earnings": "Thu nhập",
+    "rideHistory": "Lịch sử chuyến đi",
+    "profile": "Hồ sơ",
+    "logout": "Đăng xuất",
+    "rides": "chuyến",
+    "youOnline": "Bạn đang trực tuyến",
+    "youOffline": "Bạn đang ngoại tuyến",
+    "readyToAccept": "Sẵn sàng nhận chuyến",
+    "goOnlineHint": "Bật trực tuyến để bắt đầu nhận chuyến",
+    "todayEarnings": "Thu nhập hôm nay",
+    "ridesCompleted": "{{count}} chuyến hoàn tất",
+    "gpsError": "Không lấy được vị trí. Vui lòng bật GPS.",
+    "statusChangeFailed": "Không thể thay đổi trạng thái",
+    "acceptRideFailed": "Không thể nhận chuyến"
+  },
+  "rideRequest": {
+    "title": "Yêu cầu chuyến mới",
+    "customer": "Khách hàng",
+    "pickup": "Điểm đón",
+    "dropoff": "Điểm đến",
+    "vehicle": "Loại xe",
+    "distance": "Quãng đường",
+    "duration": "Thời gian",
+    "estimatedEarnings": "Thu nhập ước tính",
+    "reject": "Từ chối",
+    "accept": "Nhận chuyến",
+    "accepting": "Đang nhận...",
+    "locationProvided": "Đã có vị trí",
+    "timeToAccept": "Thời gian phản hồi"
+  },
+  "activeRide": {
+    "title": "Chuyến đang chạy",
+    "callCustomer": "Gọi khách",
+    "fare": "Cước",
+    "startRide": "Đã đến - Bắt đầu",
+    "completeRide": "Hoàn tất chuyến",
+    "cancelRide": "Hủy chuyến",
+    "noActiveRide": "Không có chuyến đang chạy",
+    "confirmCancel": "Bạn có chắc chắn muốn hủy chuyến này?",
+    "pickupStep": "Đón khách"
+  },
+  "earnings": {
+    "title": "Thu nhập",
+    "today": "Hôm nay",
+    "week": "Tuần này",
+    "month": "Tháng này",
+    "totalRides": "Tổng chuyến"
+  },
+  "history": {
+    "title": "Lịch sử chuyến đi",
+    "noRides": "Chưa có chuyến đi nào.",
+    "fare": "Cước",
+    "payment": "Thanh toán",
+    "previous": "Trước",
+    "next": "Sau",
+    "page": "Trang {{page}} / {{total}}"
+  },
+  "profile": {
+    "title": "Hồ sơ",
+    "driverProfile": "Hồ sơ tài xế",
+    "vehicle": "Xe",
+    "plate": "Biển số",
+    "color": "Màu sắc",
+    "rating": "Đánh giá",
+    "refresh": "Làm mới"
+  },
+  "vehicle": {
+    "ECONOMY": "Phổ thông",
+    "COMFORT": "Tiện nghi",
+    "PREMIUM": "Cao cấp",
+    "CAR": "Ô tô",
+    "SUV": "SUV",
+    "MOTORCYCLE": "Xe máy"
+  },
+  "payment": {
+    "CASH": "Tiền mặt",
+    "CARD": "Thẻ",
+    "WALLET": "Ví"
+  },
+  "status": {
+    "PENDING": "Đang tìm tài xế...",
+    "ASSIGNED": "Đã gán",
+    "ACCEPTED": "Đã nhận",
+    "IN_PROGRESS": "Đang chạy",
+    "COMPLETED": "Hoàn tất",
+    "CANCELLED": "Đã hủy"
+  },
+  "errors": {
+    "loginFailed": "Đăng nhập thất bại. Vui lòng thử lại.",
+    "registerFailed": "Đăng ký thất bại",
+    "profileSetupFailed": "Không thể cập nhật hồ sơ",
+    "loadEarnings": "Không thể tải thu nhập",
+    "loadRideHistory": "Không thể tải lịch sử chuyến đi",
+    "loadProfile": "Không thể tải hồ sơ",
+    "startRide": "Không thể bắt đầu chuyến",
+    "completeRide": "Không thể hoàn tất chuyến",
+    "cancelRide": "Không thể hủy chuyến",
+    "fullName": "Vui lòng nhập đầy đủ họ tên",
+    "invalidEmail": "Vui lòng nhập email hợp lệ",
+    "passwordMin": "Mật khẩu phải có ít nhất 8 ký tự",
+    "passwordUpper": "Mật khẩu phải có ít nhất 1 chữ hoa",
+    "passwordLower": "Mật khẩu phải có ít nhất 1 chữ thường",
+    "passwordNumber": "Mật khẩu phải có ít nhất 1 chữ số",
+    "passwordMismatch": "Mật khẩu không khớp",
+    "phoneInvalid": "Số điện thoại phải từ 10-15 chữ số",
+    "authRequired": "Chưa xác thực người dùng"
+  }
+}

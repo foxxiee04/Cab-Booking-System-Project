@@ -28,6 +28,7 @@ import {
   AccountCircle,
   AdminPanelSettings,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { useAppSelector, useAppDispatch } from './store/hooks';
 import { logout } from './store/auth.slice';
 import { adminSocketService } from './socket/admin.socket';
@@ -57,6 +58,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const { t } = useTranslation();
 
   const handleLogout = () => {
     dispatch(logout());
@@ -65,13 +67,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
 
   const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-    { text: 'Rides', icon: <DirectionsCar />, path: '/rides' },
-    { text: 'Drivers', icon: <DriveEta />, path: '/drivers' },
-    { text: 'Customers', icon: <People />, path: '/customers' },
-    { text: 'Payments', icon: <AttachMoney />, path: '/payments' },
-    { text: 'Pricing', icon: <TrendingUp />, path: '/pricing' },
-    { text: 'Logs', icon: <Article />, path: '/logs' },
+    { text: t('menu.dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
+    { text: t('menu.rides'), icon: <DirectionsCar />, path: '/rides' },
+    { text: t('menu.drivers'), icon: <DriveEta />, path: '/drivers' },
+    { text: t('menu.customers'), icon: <People />, path: '/customers' },
+    { text: t('menu.payments'), icon: <AttachMoney />, path: '/payments' },
+    { text: t('menu.pricing'), icon: <TrendingUp />, path: '/pricing' },
+    { text: t('menu.logs'), icon: <Article />, path: '/logs' },
   ];
 
   return (
@@ -85,7 +87,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       >
         <Toolbar>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Admin Dashboard
+            {t('app.title')}
           </Typography>
           <IconButton
             onClick={(e) => setAnchorEl(e.currentTarget)}
@@ -107,7 +109,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <Divider />
             <MenuItem onClick={handleLogout}>
               <Logout sx={{ mr: 1 }} />
-              Logout
+              {t('menu.logout')}
             </MenuItem>
           </Menu>
         </Toolbar>
@@ -128,7 +130,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <Toolbar sx={{ justifyContent: 'center', py: 2 }}>
           <AdminPanelSettings sx={{ fontSize: 32, color: 'primary.main', mr: 1 }} />
           <Typography variant="h6" fontWeight="bold">
-            Admin
+            {t('app.admin')}
           </Typography>
         </Toolbar>
         <Divider />

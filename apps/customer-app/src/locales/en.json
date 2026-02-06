@@ -1,0 +1,121 @@
+{
+  "app": {
+    "title": "Cab Booking",
+    "welcome": "Welcome, {{name}}!"
+  },
+  "menu": {
+    "rideHistory": "Ride History",
+    "profile": "Profile",
+    "logout": "Logout"
+  },
+  "home": {
+    "bookRide": "Book a Ride",
+    "pickupLocation": "Pickup Location",
+    "pickupPlaceholder": "Search for pickup location",
+    "dropoffLocation": "Dropoff Location",
+    "dropoffPlaceholder": "Where to?",
+    "estimatedFare": "Estimated Fare",
+    "surgePricing": "{{multiplier}}x Surge Pricing",
+    "vehicleType": "Vehicle Type",
+    "paymentMethod": "Payment Method",
+    "requestRide": "Request Ride"
+  },
+  "login": {
+    "title": "Sign In",
+    "subtitle": "Professional Ride-Hailing Service",
+    "email": "Email Address",
+    "password": "Password",
+    "signIn": "Sign In",
+    "noAccount": "Don't have an account?",
+    "signUp": "Sign Up",
+    "demoAccount": "Demo Account"
+  },
+  "register": {
+    "title": "Create Account",
+    "subtitle": "Join Cab Booking - Start your journey",
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "email": "Email Address",
+    "phone": "Phone Number",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "passwordHelp": "Min 8 chars, uppercase, lowercase, number",
+    "createAccount": "Create Account",
+    "haveAccount": "Already have an account?",
+    "signIn": "Sign In"
+  },
+  "profile": {
+    "title": "Profile",
+    "role": "Role",
+    "phone": "Phone",
+    "refresh": "Refresh"
+  },
+  "rideHistory": {
+    "title": "Ride History",
+    "noRides": "No rides found.",
+    "pickup": "Pickup",
+    "dropoff": "Dropoff",
+    "fare": "Fare",
+    "viewRide": "View Ride",
+    "page": "Page {{page}} / {{total}}"
+  },
+  "rideTracking": {
+    "title": "Ride Tracking",
+    "details": "Ride Details",
+    "rideId": "Ride ID",
+    "requested": "Requested",
+    "pickup": "Pickup",
+    "dropoff": "Dropoff",
+    "vehicle": "Vehicle",
+    "payment": "Payment",
+    "fare": "Fare",
+    "driver": "Driver",
+    "cancelRide": "Cancel Ride"
+  },
+  "vehicle": {
+    "ECONOMY": "Economy",
+    "COMFORT": "Comfort",
+    "PREMIUM": "Premium"
+  },
+  "payment": {
+    "CASH": "Cash",
+    "CARD": "Card",
+    "WALLET": "Wallet"
+  },
+  "status": {
+    "PENDING": "Finding driver...",
+    "ASSIGNED": "Driver assigned",
+    "ACCEPTED": "Driver on the way",
+    "IN_PROGRESS": "In progress",
+    "COMPLETED": "Completed",
+    "CANCELLED": "Cancelled",
+    "NO_DRIVER_AVAILABLE": "No driver available"
+  },
+  "common": {
+    "pending": "Pending",
+    "na": "N/A",
+    "previous": "Previous",
+    "next": "Next",
+    "refresh": "Refresh"
+  },
+  "errors": {
+    "fillRequired": "Please fill in all required fields",
+    "invalidEmail": "Please enter a valid email address",
+    "passwordMin": "Password must be at least 8 characters",
+    "passwordUpper": "Password must contain at least one uppercase letter",
+    "passwordLower": "Password must contain at least one lowercase letter",
+    "passwordNumber": "Password must contain at least one number",
+    "passwordMismatch": "Passwords do not match",
+    "phoneInvalid": "Phone number must be 10-15 digits",
+    "selectLocations": "Please select pickup and dropoff locations",
+    "estimateFare": "Failed to estimate fare. Please try again.",
+    "requestRide": "Failed to request ride",
+    "loginFailed": "Login failed. Please try again.",
+    "registerFailed": "Registration failed. Please try again.",
+    "registerSuccess": "Registration successful. Please sign in.",
+    "loadProfile": "Failed to load profile",
+    "loadRideHistory": "Failed to load ride history",
+    "loadRide": "Failed to load ride",
+    "cancelRide": "Failed to cancel ride"
+  }
+}

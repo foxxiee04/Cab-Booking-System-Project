@@ -18,14 +18,42 @@ export const adminApi = {
     return response.data;
   },
 
-  // Get all drivers
+  // Get all drivers with normalized user data
   getDrivers: async (params?: {
     isOnline?: boolean;
     limit?: number;
     offset?: number;
   }): Promise<ApiResponse<{ drivers: Driver[]; total: number }>> => {
     const response = await axiosInstance.get('/admin/drivers', { params });
-    return response.data;
+    
+    // Backend returns drivers with flat structure (userId instead of user object)
+    // We need to normalize the data for frontend consumption
+    const driversData = response.data.data || response.data;
+    let drivers = driversData.drivers || [];
+    
+    // Transform backend format to frontend format
+    // Backend: { id, userId, vehicleType, rating, totalRides, isOnline }
+    // Frontend needs: { id, user: { firstName, lastName, email }, vehicleType, rating, totalRides, isOnline }
+    
+    // For now, we'll use userId as placeholder for user object
+    // Ideally, backend should JOIN user data, but if not available, we normalize here
+    drivers = drivers.map((driver: any) => ({
+      ...driver,
+      user: driver.user || {
+        id: driver.userId,
+        firstName: 'Driver',
+        lastName: driver.id?.substring(0, 8) || 'N/A',
+        email: driver.userId ? `driver-${driver.userId.substring(0, 8)}@system.local` : 'N/A',
+      }
+    }));
+    
+    return {
+      ...response.data,
+      data: {
+        drivers,
+        total: driversData.total || 0,
+      }
+    };
   },
 
   // Get all customers

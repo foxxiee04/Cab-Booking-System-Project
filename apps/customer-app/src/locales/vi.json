@@ -1,0 +1,121 @@
+{
+  "app": {
+    "title": "Đặt xe",
+    "welcome": "Xin chào, {{name}}!"
+  },
+  "menu": {
+    "rideHistory": "Lịch sử chuyến đi",
+    "profile": "Hồ sơ",
+    "logout": "Đăng xuất"
+  },
+  "home": {
+    "bookRide": "Đặt chuyến",
+    "pickupLocation": "Điểm đón",
+    "pickupPlaceholder": "Tìm điểm đón",
+    "dropoffLocation": "Điểm đến",
+    "dropoffPlaceholder": "Bạn muốn đi đâu?",
+    "estimatedFare": "Giá ước tính",
+    "surgePricing": "Hệ số tăng giá {{multiplier}}x",
+    "vehicleType": "Loại xe",
+    "paymentMethod": "Phương thức thanh toán",
+    "requestRide": "Đặt xe"
+  },
+  "login": {
+    "title": "Đăng nhập",
+    "subtitle": "Dịch vụ gọi xe chuyên nghiệp",
+    "email": "Email",
+    "password": "Mật khẩu",
+    "signIn": "Đăng nhập",
+    "noAccount": "Chưa có tài khoản?",
+    "signUp": "Đăng ký",
+    "demoAccount": "Tài khoản demo"
+  },
+  "register": {
+    "title": "Tạo tài khoản",
+    "subtitle": "Tham gia Đặt xe - Bắt đầu hành trình",
+    "firstName": "Tên",
+    "lastName": "Họ",
+    "email": "Email",
+    "phone": "Số điện thoại",
+    "password": "Mật khẩu",
+    "confirmPassword": "Xác nhận mật khẩu",
+    "passwordHelp": "Tối thiểu 8 ký tự, có chữ hoa, chữ thường, số",
+    "createAccount": "Tạo tài khoản",
+    "haveAccount": "Đã có tài khoản?",
+    "signIn": "Đăng nhập"
+  },
+  "profile": {
+    "title": "Hồ sơ",
+    "role": "Vai trò",
+    "phone": "Điện thoại",
+    "refresh": "Làm mới"
+  },
+  "rideHistory": {
+    "title": "Lịch sử chuyến đi",
+    "noRides": "Chưa có chuyến đi nào.",
+    "pickup": "Điểm đón",
+    "dropoff": "Điểm đến",
+    "fare": "Cước",
+    "viewRide": "Xem chuyến",
+    "page": "Trang {{page}} / {{total}}"
+  },
+  "rideTracking": {
+    "title": "Theo dõi chuyến đi",
+    "details": "Chi tiết chuyến",
+    "rideId": "Mã chuyến",
+    "requested": "Thời điểm đặt",
+    "pickup": "Điểm đón",
+    "dropoff": "Điểm đến",
+    "vehicle": "Loại xe",
+    "payment": "Thanh toán",
+    "fare": "Cước",
+    "driver": "Tài xế",
+    "cancelRide": "Hủy chuyến"
+  },
+  "vehicle": {
+    "ECONOMY": "Phổ thông",
+    "COMFORT": "Tiện nghi",
+    "PREMIUM": "Cao cấp"
+  },
+  "payment": {
+    "CASH": "Tiền mặt",
+    "CARD": "Thẻ",
+    "WALLET": "Ví"
+  },
+  "status": {
+    "PENDING": "Đang tìm tài xế...",
+    "ASSIGNED": "Đã gán tài xế",
+    "ACCEPTED": "Tài xế đang đến",
+    "IN_PROGRESS": "Đang di chuyển",
+    "COMPLETED": "Hoàn tất",
+    "CANCELLED": "Đã hủy",
+    "NO_DRIVER_AVAILABLE": "Không có tài xế"
+  },
+  "common": {
+    "pending": "Đang xử lý",
+    "na": "N/A",
+    "previous": "Trước",
+    "next": "Sau",
+    "refresh": "Làm mới"
+  },
+  "errors": {
+    "fillRequired": "Vui lòng nhập đầy đủ các trường bắt buộc",
+    "invalidEmail": "Vui lòng nhập email hợp lệ",
+    "passwordMin": "Mật khẩu phải có ít nhất 8 ký tự",
+    "passwordUpper": "Mật khẩu phải có ít nhất 1 chữ hoa",
+    "passwordLower": "Mật khẩu phải có ít nhất 1 chữ thường",
+    "passwordNumber": "Mật khẩu phải có ít nhất 1 chữ số",
+    "passwordMismatch": "Mật khẩu không khớp",
+    "phoneInvalid": "Số điện thoại phải từ 10-15 chữ số",
+    "selectLocations": "Vui lòng chọn điểm đón và điểm đến",
+    "estimateFare": "Không thể ước tính cước. Vui lòng thử lại.",
+    "requestRide": "Không thể đặt chuyến",
+    "loginFailed": "Đăng nhập thất bại. Vui lòng thử lại.",
+    "registerFailed": "Đăng ký thất bại. Vui lòng thử lại.",
+    "registerSuccess": "Đăng ký thành công. Vui lòng đăng nhập.",
+    "loadProfile": "Không thể tải hồ sơ",
+    "loadRideHistory": "Không thể tải lịch sử chuyến đi",
+    "loadRide": "Không thể tải chuyến đi",
+    "cancelRide": "Không thể hủy chuyến"
+  }
+}

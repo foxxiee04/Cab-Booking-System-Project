@@ -30,6 +30,7 @@ import {
   MyLocation,
   Search,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { logout } from '../store/auth.slice';
 import {
@@ -56,6 +57,7 @@ import { Location } from '../types';
 const HomeMap: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const { t } = useTranslation();
 
   const { user } = useAppSelector((state) => state.auth);
   const { currentLocation } = useAppSelector((state) => state.location);
@@ -171,7 +173,7 @@ const HomeMap: React.FC = () => {
   // Estimate fare
   const handleEstimateFare = async () => {
     if (!pickupLocation || !dropoffLocation) {
-      setErrorMessage('Please select pickup and dropoff locations');
+      setErrorMessage(t('errors.selectLocations'));
       return;
     }
 
@@ -192,7 +194,7 @@ const HomeMap: React.FC = () => {
 
       dispatch(setFareEstimate(estimateResponse.data.fare));
     } catch (error: any) {
-      setErrorMessage('Failed to estimate fare. Please try again.');
+      setErrorMessage(t('errors.estimateFare'));
     } finally {
       setLoadingState(false);
     }
@@ -201,7 +203,7 @@ const HomeMap: React.FC = () => {
   // Request ride
   const handleRequestRide = async () => {
     if (!pickupLocation || !dropoffLocation) {
-      setErrorMessage('Please select pickup and dropoff locations');
+      setErrorMessage(t('errors.selectLocations'));
       return;
     }
 
@@ -219,7 +221,7 @@ const HomeMap: React.FC = () => {
       dispatch(setCurrentRide(response.data.ride));
       navigate(`/ride/${response.data.ride.id}`);
     } catch (error: any) {
-      setErrorMessage(error.response?.data?.error?.message || 'Failed to request ride');
+      setErrorMessage(error.response?.data?.error?.message || t('errors.requestRide'));
     } finally {
       setLoadingState(false);
     }
@@ -248,10 +250,10 @@ const HomeMap: React.FC = () => {
           </IconButton>
           <DirectionsCar sx={{ mr: 1 }} />
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Cab Booking
+            {t('app.title')}
           </Typography>
           <Typography variant="body2">
-            Welcome, {user?.firstName}!
+            {t('app.welcome', { name: user?.firstName || '' })}
           </Typography>
         </Toolbar>
       </AppBar>
@@ -266,15 +268,15 @@ const HomeMap: React.FC = () => {
           <List>
             <ListItemButton onClick={() => { navigate('/history'); setSidebarOpen(false); }}>
               <ListItemIcon><History /></ListItemIcon>
-              <ListItemText primary="Ride History" />
+              <ListItemText primary={t('menu.rideHistory')} />
             </ListItemButton>
             <ListItemButton onClick={() => { navigate('/profile'); setSidebarOpen(false); }}>
               <ListItemIcon><Person /></ListItemIcon>
-              <ListItemText primary="Profile" />
+              <ListItemText primary={t('menu.profile')} />
             </ListItemButton>
             <ListItemButton onClick={handleLogout}>
               <ListItemIcon><Logout /></ListItemIcon>
-              <ListItemText primary="Logout" />
+              <ListItemText primary={t('menu.logout')} />
             </ListItemButton>
           </List>
         </Box>
@@ -303,7 +305,7 @@ const HomeMap: React.FC = () => {
           }}
         >
           <Typography variant="h6" gutterBottom>
-            Book a Ride
+            {t('home.bookRide')}
           </Typography>
 
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -324,8 +326,8 @@ const HomeMap: React.FC = () => {
             renderInput={(params) => (
               <TextField
                 {...params}
-                label="Pickup Location"
-                placeholder="Search for pickup location"
+                label={t('home.pickupLocation')}
+                placeholder={t('home.pickupPlaceholder')}
                 InputProps={{
                   ...params.InputProps,
                   startAdornment: <MyLocation sx={{ mr: 1, color: 'action.active' }} />,
@@ -352,8 +354,8 @@ const HomeMap: React.FC = () => {
             renderInput={(params) => (
               <TextField
                 {...params}
-                label="Dropoff Location"
-                placeholder="Where to?"
+                label={t('home.dropoffLocation')}
+                placeholder={t('home.dropoffPlaceholder')}
                 InputProps={{
                   ...params.InputProps,
                   startAdornment: <Search sx={{ mr: 1, color: 'action.active' }} />,
@@ -369,7 +371,7 @@ const HomeMap: React.FC = () => {
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="body2" color="text.secondary">
-                    Estimated Fare
+                    {t('home.estimatedFare')}
                   </Typography>
                   <Typography variant="h5" color="primary" fontWeight="bold">
                     {formatCurrency(fareEstimate)}
@@ -377,7 +379,7 @@ const HomeMap: React.FC = () => {
                 </Box>
                 {surgeMultiplier > 1 && (
                   <Chip
-                    label={`${surgeMultiplier}x Surge Pricing`}
+                    label={t('home.surgePricing', { multiplier: surgeMultiplier })}
                     size="small"
                     color="warning"
                     sx={{ mt: 1 }}
@@ -389,12 +391,12 @@ const HomeMap: React.FC = () => {
 
           {/* Vehicle Type */}
           <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" gutterBottom>Vehicle Type</Typography>
+            <Typography variant="body2" gutterBottom>{t('home.vehicleType')}</Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
               {['ECONOMY', 'COMFORT', 'PREMIUM'].map((type) => (
                 <Chip
                   key={type}
-                  label={type}
+                  label={t(`vehicle.${type}`)}
                   onClick={() => setVehicleType(type as any)}
                   color={vehicleType === type ? 'primary' : 'default'}
                   variant={vehicleType === type ? 'filled' : 'outlined'}
@@ -405,12 +407,12 @@ const HomeMap: React.FC = () => {
 
           {/* Payment Method */}
           <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" gutterBottom>Payment Method</Typography>
+            <Typography variant="body2" gutterBottom>{t('home.paymentMethod')}</Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
               {['CASH', 'CARD', 'WALLET'].map((method) => (
                 <Chip
                   key={method}
-                  label={method}
+                  label={t(`payment.${method}`)}
                   onClick={() => setPaymentMethod(method as any)}
                   color={paymentMethod === method ? 'secondary' : 'default'}
                   variant={paymentMethod === method ? 'filled' : 'outlined'}
@@ -428,7 +430,7 @@ const HomeMap: React.FC = () => {
             disabled={loading || !pickupLocation || !dropoffLocation}
             sx={{ py: 1.5 }}
           >
-            {loading ? <CircularProgress size={24} /> : 'Request Ride'}
+            {loading ? <CircularProgress size={24} /> : t('home.requestRide')}
           </Button>
         </Paper>
       </Box>

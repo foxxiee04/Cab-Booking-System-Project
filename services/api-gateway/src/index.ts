@@ -8,6 +8,7 @@ import { authMiddleware } from './middleware/auth';
 import { generalLimiter } from './middleware/rate-limit';
 import proxyRoutes from './routes/proxy';
 import mapRoutes from './routes/map';
+import adminRoutes from './routes/admin';
 import { logger } from './utils/logger';
 import { SocketServer } from './socket/socket-server';
 import { EventConsumer } from './events/consumer';
@@ -65,6 +66,9 @@ app.use('/api/map', mapRoutes);
 
 // Authentication middleware
 app.use(authMiddleware);
+
+// Admin aggregation routes
+app.use('/api/admin', adminRoutes);
 
 // Proxy routes to microservices
 app.use(proxyRoutes);

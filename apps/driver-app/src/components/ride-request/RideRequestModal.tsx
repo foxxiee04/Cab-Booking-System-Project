@@ -22,6 +22,7 @@ import { Ride } from '../../types';
 import { formatCurrency, getVehicleTypeLabel } from '../../utils/format.utils';
 import { formatDistance, formatDuration } from '../../utils/map.utils';
 import CountdownTimer from './CountdownTimer';
+import { useTranslation } from 'react-i18next';
 
 interface RideRequestModalProps {
   ride: Ride | null;
@@ -40,6 +41,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
   onReject,
   loading = false,
 }) => {
+  const { t } = useTranslation();
   const [timeLeft, setTimeLeft] = useState(timeoutSeconds);
 
   useEffect(() => {
@@ -78,7 +80,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
         >
           <Timer sx={{ fontSize: 48, mb: 1 }} />
           <Typography variant="h5" fontWeight="bold">
-            New Ride Request
+            {t('rideRequest.title')}
           </Typography>
           <CountdownTimer
             seconds={timeLeft}
@@ -101,7 +103,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
             <Card variant="outlined" sx={{ mb: 2 }}>
               <CardContent>
                 <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                  Customer
+                  {t('rideRequest.customer')}
                 </Typography>
                 <Typography variant="h6">
                   {ride.customer.firstName} {ride.customer.lastName}
@@ -128,10 +130,10 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
             <LocationOn sx={{ color: 'success.main', mr: 1 }} />
             <Box sx={{ flex: 1 }}>
               <Typography variant="subtitle2" color="text.secondary">
-                Pickup
+                {t('rideRequest.pickup')}
               </Typography>
               <Typography variant="body1">
-                {ride.pickupLocation.address || 'Location provided'}
+                {ride.pickupLocation.address || t('rideRequest.locationProvided')}
               </Typography>
             </Box>
           </Box>
@@ -141,10 +143,10 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
             <Flag sx={{ color: 'error.main', mr: 1 }} />
             <Box sx={{ flex: 1 }}>
               <Typography variant="subtitle2" color="text.secondary">
-                Dropoff
+                {t('rideRequest.dropoff')}
               </Typography>
               <Typography variant="body1">
-                {ride.dropoffLocation.address || 'Location provided'}
+                {ride.dropoffLocation.address || t('rideRequest.locationProvided')}
               </Typography>
             </Box>
           </Box>
@@ -155,7 +157,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
               <Card variant="outlined" sx={{ textAlign: 'center', p: 1 }}>
                 <DirectionsCar sx={{ color: 'primary.main', mb: 0.5 }} />
                 <Typography variant="caption" color="text.secondary">
-                  Vehicle
+                  {t('rideRequest.vehicle')}
                 </Typography>
                 <Typography variant="body2" fontWeight="bold">
                   {getVehicleTypeLabel(ride.vehicleType)}
@@ -165,7 +167,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
             <Grid item xs={4}>
               <Card variant="outlined" sx={{ textAlign: 'center', p: 1 }}>
                 <Typography variant="caption" color="text.secondary">
-                  Distance
+                  {t('rideRequest.distance')}
                 </Typography>
                 <Typography variant="body2" fontWeight="bold">
                   {formatDistance(ride.distance)}
@@ -175,7 +177,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
             <Grid item xs={4}>
               <Card variant="outlined" sx={{ textAlign: 'center', p: 1 }}>
                 <Typography variant="caption" color="text.secondary">
-                  Duration
+                  {t('rideRequest.duration')}
                 </Typography>
                 <Typography variant="body2" fontWeight="bold">
                   {formatDuration(ride.duration)}
@@ -188,7 +190,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
           <Card variant="outlined" sx={{ bgcolor: 'success.50', mb: 3 }}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="subtitle2" color="text.secondary">
-                Estimated Earnings
+                {t('rideRequest.estimatedEarnings')}
               </Typography>
               <Typography variant="h4" color="success.main" fontWeight="bold">
                 {formatCurrency(ride.fare)}
@@ -207,7 +209,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
               disabled={loading}
               sx={{ py: 1.5 }}
             >
-              Reject
+              {t('rideRequest.reject')}
             </Button>
             <Button
               variant="contained"
@@ -218,7 +220,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
               disabled={loading}
               sx={{ py: 1.5 }}
             >
-              {loading ? 'Accepting...' : 'Accept Ride'}
+              {loading ? t('rideRequest.accepting') : t('rideRequest.accept')}
             </Button>
           </Box>
         </Box>

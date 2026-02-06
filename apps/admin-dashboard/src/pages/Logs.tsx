@@ -3,6 +3,7 @@ import { Box, Typography, Alert, Chip } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { adminApi } from '../api/admin.api';
 import { formatDate } from '../utils/format.utils';
+import { useTranslation } from 'react-i18next';
 
 type SystemLog = {
   id?: string;
@@ -30,6 +31,7 @@ const Logs: React.FC = () => {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { t } = useTranslation();
 
   useEffect(() => {
     const fetchLogs = async () => {
@@ -47,7 +49,7 @@ const Logs: React.FC = () => {
         setRows(logs);
         setTotal(response.data.total || 0);
       } catch (err: any) {
-        setError(err.response?.data?.error?.message || 'Failed to load logs');
+        setError(err.response?.data?.error?.message || t('errors.loadLogs'));
       } finally {
         setLoading(false);
       }
@@ -59,38 +61,38 @@ const Logs: React.FC = () => {
   const columns: GridColDef<SystemLog>[] = [
     {
       field: 'id',
-      headerName: 'Log ID',
+      headerName: t('columns.logId'),
       flex: 1,
       minWidth: 180,
-      valueFormatter: (params) => params.value || 'N/A',
+      valueFormatter: (params) => params.value || t('labels.na'),
     },
     {
       field: 'level',
-      headerName: 'Level',
+      headerName: t('columns.level'),
       width: 120,
       renderCell: (params) => (
         <Chip
-          label={(params.value || 'UNKNOWN').toUpperCase()}
+          label={(params.value || t('labels.unknown')).toUpperCase()}
           size="small"
           color={getLogLevelColor(params.value)}
         />
       ),
     },
-    { field: 'service', headerName: 'Service', width: 160 },
-    { field: 'message', headerName: 'Message', flex: 1, minWidth: 300 },
+    { field: 'service', headerName: t('columns.service'), width: 160 },
+    { field: 'message', headerName: t('columns.message'), flex: 1, minWidth: 300 },
     {
       field: 'timestamp',
-      headerName: 'Time',
+      headerName: t('columns.time'),
       width: 180,
       valueGetter: (params) => params.row.timestamp || params.row.createdAt,
-      valueFormatter: (params) => (params.value ? formatDate(params.value) : 'N/A'),
+      valueFormatter: (params) => (params.value ? formatDate(params.value) : t('labels.na')),
     },
   ];
 
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" fontWeight="bold">
-        System Logs
+        {t('tables.logs')}
       </Typography>
 
       {error && (

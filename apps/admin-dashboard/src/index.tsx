@@ -4,6 +4,7 @@ import { Provider } from 'react-redux';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { store } from './store';
 import App from './App';
+import './i18n';
 
 const theme = createTheme({
   palette: {

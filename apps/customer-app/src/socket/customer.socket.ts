@@ -56,7 +56,33 @@ class SocketService {
       );
     });
 
-    // Ride events
+    // Ride events - matching backend event names
+    this.socket.on('RIDE_STATUS_UPDATE', (data: { rideId: string; status: string; message?: string; driverId?: string }) => {
+      console.log('📝 Ride status update:', data);
+      store.dispatch(updateRideStatus({ rideId: data.rideId, status: data.status }));
+
+      if (data.message) {
+        store.dispatch(
+          showNotification({
+            type: data.status === 'CANCELLED' ? 'warning' : data.status === 'COMPLETED' ? 'success' : 'info',
+            message: data.message,
+          })
+        );
+      }
+    });
+
+    this.socket.on('RIDE_COMPLETED', (data: { rideId: string; status: string; fare?: number; message: string }) => {
+      console.log('✅ Ride completed:', data);
+      store.dispatch(updateRideStatus({ rideId: data.rideId, status: 'COMPLETED' }));
+      store.dispatch(
+        showNotification({
+          type: 'success',
+          message: data.message || 'Ride completed successfully!',
+        })
+      );
+    });
+
+    // Legacy event names for backward compatibility
     this.socket.on('ride:assigned', (data: { ride: any; driver: any }) => {
       console.log('🚗 Ride assigned:', data);
       store.dispatch(setCurrentRide(data.ride));
@@ -67,37 +93,6 @@ class SocketService {
           message: `Driver ${data.driver.firstName} has been assigned to your ride!`,
         })
       );
-    });
-
-    this.socket.on('ride:accepted', (data: { rideId: string }) => {
-      console.log('✅ Ride accepted:', data);
-      store.dispatch(updateRideStatus({ rideId: data.rideId, status: 'ACCEPTED' }));
-      store.dispatch(
-        showNotification({
-          type: 'success',
-          message: 'Driver is on the way!',
-        })
-      );
-    });
-
-    this.socket.on('ride:status', (data: { rideId: string; status: string }) => {
-      console.log('📝 Ride status update:', data);
-      store.dispatch(updateRideStatus(data));
-
-      const statusMessages: Record<string, string> = {
-        IN_PROGRESS: 'Ride has started',
-        COMPLETED: 'Ride completed',
-        CANCELLED: 'Ride was cancelled',
-      };
-
-      if (statusMessages[data.status]) {
-        store.dispatch(
-          showNotification({
-            type: data.status === 'CANCELLED' ? 'warning' : 'info',
-            message: statusMessages[data.status],
-          })
-        );
-      }
     });
 
     this.socket.on('driver:location', (data: { lat: number; lng: number }) => {

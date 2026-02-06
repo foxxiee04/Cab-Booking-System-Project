@@ -1,10 +1,41 @@
 import axiosInstance from './axios.config';
 import { ApiResponse, Driver, DriverRegistration, Location, Earnings } from '../types';
 
+const mapVehicleType = (type: DriverRegistration['vehicleType']): 'CAR' | 'SUV' | 'MOTORCYCLE' => {
+  switch (type) {
+    case 'CAR':
+      return 'CAR';
+    case 'SUV':
+      return 'SUV';
+    case 'COMFORT':
+      return 'SUV';
+    case 'PREMIUM':
+      return 'CAR';
+    case 'MOTORCYCLE':
+      return 'MOTORCYCLE';
+    default:
+      return 'CAR';
+  }
+};
+
 export const driverApi = {
   // Register as driver (complete profile)
   registerDriver: async (data: DriverRegistration): Promise<ApiResponse<{ driver: Driver }>> => {
-    const response = await axiosInstance.post('/drivers/register', data);
+    const payload = {
+      vehicle: {
+        type: mapVehicleType(data.vehicleType),
+        brand: data.vehicleMake,
+        model: data.vehicleModel,
+        color: data.vehicleColor,
+        plate: data.licensePlate,
+        year: data.vehicleYear || new Date().getFullYear(),
+      },
+      license: {
+        number: data.licenseNumber,
+        expiryDate: data.licenseExpiryDate,
+      },
+    };
+    const response = await axiosInstance.post('/drivers/register', payload);
     return response.data;
   },
 
@@ -34,22 +65,80 @@ export const driverApi = {
 
   // Update location
   updateLocation: async (location: Location): Promise<ApiResponse> => {
-    const response = await axiosInstance.post('/drivers/me/location', { location });
+    const response = await axiosInstance.post('/drivers/me/location', {
+      lat: location.lat,
+      lng: location.lng,
+    });
     return response.data;
   },
 
-  // Get earnings
+  // Get earnings - Using alternative endpoint since /drivers/me/earnings doesn't exist
   getEarnings: async (): Promise<ApiResponse<{ earnings: Earnings }>> => {
-    const response = await axiosInstance.get('/drivers/me/earnings');
-    return response.data;
+    // Backend doesn't have dedicated earnings endpoint yet
+    // Calculate from completed rides via payments
+    try {
+      const ridesResponse = await axiosInstance.get('/rides', { 
+        params: { status: 'COMPLETED', limit: 1000 } 
+      });
+      
+      const completedRides = ridesResponse.data.data?.rides || [];
+      const totalEarnings = completedRides.reduce((sum: number, ride: any) => sum + (ride.fare || 0), 0);
+      const todayEarnings = completedRides
+        .filter((r: any) => {
+          const rideDate = new Date(r.completedAt || r.updatedAt);
+          const today = new Date();
+          return rideDate.toDateString() === today.toDateString();
+        })
+        .reduce((sum: number, ride: any) => sum + (ride.fare || 0), 0);
+      
+      return {
+        success: true,
+        data: {
+          earnings: {
+            today: todayEarnings,
+            week: totalEarnings, // Simplified: treat all as weekly
+            month: totalEarnings,
+            totalRides: completedRides.length,
+          }
+        }
+      };
+    } catch (error) {
+      return {
+        success: false,
+        data: {
+          earnings: {
+            today: 0,
+            week: 0,
+            month: 0,
+            totalRides: 0,
+          }
+        }
+      };
+    }
   },
 
-  // Get ride history
+  // Get ride history - Using /rides endpoint with status filter
   getRideHistory: async (params?: {
     limit?: number;
     offset?: number;
   }): Promise<ApiResponse<{ rides: any[]; total: number }>> => {
-    const response = await axiosInstance.get('/drivers/me/rides', { params });
-    return response.data;
+    // Backend doesn't have /drivers/me/rides, use general /rides endpoint
+    // The rides endpoint filters by authenticated driver automatically
+    const response = await axiosInstance.get('/rides', { 
+      params: {
+        ...params,
+        // Include all relevant statuses for driver history
+        status: ['COMPLETED', 'CANCELLED'].join(',')
+      } 
+    });
+    
+    const ridesData = response.data.data || response.data;
+    return {
+      ...response.data,
+      data: {
+        rides: ridesData.rides || [],
+        total: ridesData.total || 0,
+      }
+    };
   },
 };

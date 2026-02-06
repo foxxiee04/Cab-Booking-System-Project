@@ -5,7 +5,7 @@
 -- ========================================
 -- 
 -- Password for all users: Password123
--- (bcrypt hash: $2b$10$rJZpYKZm5xNKp.r4vHVkOuZP7N8p1qQvT9V7kJXlZOqHxY9Vz9.3W)
+-- (bcrypt hash: $2a$10$r9kXVLmMEh9568Gjl5NMAuGh6Ud3oR2zfvx5F8gf1QPg3X7lgODJC)
 --
 -- ========================================
 
@@ -17,19 +17,19 @@
 -- Insert users (embedded profiles in auth)
 INSERT INTO users (id, email, phone, password_hash, role, status, first_name, last_name, avatar, created_at, updated_at) VALUES
 -- Customers
-('c1000001-0000-0000-0000-000000000001', 'customer1@example.com', '+84901234001', '$2b$10$rJZpYKZm5xNKp.r4vHVkOuZP7N8p1qQvT9V7kJXlZOqHxY9Vz9.3W', 'CUSTOMER', 'ACTIVE', 'John', 'Doe', 'https://i.pravatar.cc/150?img=1', NOW() - INTERVAL '30 days', NOW()),
-('c1000002-0000-0000-0000-000000000002', 'customer2@example.com', '+84901234002', '$2b$10$rJZpYKZm5xNKp.r4vHVkOuZP7N8p1qQvT9V7kJXlZOqHxY9Vz9.3W', 'CUSTOMER', 'ACTIVE', 'Jane', 'Smith', 'https://i.pravatar.cc/150?img=2', NOW() - INTERVAL '25 days', NOW()),
-('c1000003-0000-0000-0000-000000000003', 'nguyen.van.a@gmail.com', '+84901234003', '$2b$10$rJZpYKZm5xNKp.r4vHVkOuZP7N8p1qQvT9V7kJXlZOqHxY9Vz9.3W', 'CUSTOMER', 'ACTIVE', 'Nguyễn', 'Văn A', 'https://i.pravatar.cc/150?img=3', NOW() - INTERVAL '20 days', NOW()),
-('c1000004-0000-0000-0000-000000000004', 'tran.thi.b@gmail.com', '+84901234004', '$2b$10$rJZpYKZm5xNKp.r4vHVkOuZP7N8p1qQvT9V7kJXlZOqHxY9Vz9.3W', 'CUSTOMER', 'ACTIVE', 'Trần', 'Thị B', 'https://i.pravatar.cc/150?img=4', NOW() - INTERVAL '15 days', NOW()),
+('c1000001-0000-0000-0000-000000000001', 'customer1@example.com', '+84901234001', '$2a$10$r9kXVLmMEh9568Gjl5NMAuGh6Ud3oR2zfvx5F8gf1QPg3X7lgODJC', 'CUSTOMER', 'ACTIVE', 'John', 'Doe', 'https://i.pravatar.cc/150?img=1', NOW() - INTERVAL '30 days', NOW()),
+('c1000002-0000-0000-0000-000000000002', 'customer2@example.com', '+84901234002', '$2a$10$r9kXVLmMEh9568Gjl5NMAuGh6Ud3oR2zfvx5F8gf1QPg3X7lgODJC', 'CUSTOMER', 'ACTIVE', 'Jane', 'Smith', 'https://i.pravatar.cc/150?img=2', NOW() - INTERVAL '25 days', NOW()),
+('c1000003-0000-0000-0000-000000000003', 'nguyen.van.a@gmail.com', '+84901234003', '$2a$10$r9kXVLmMEh9568Gjl5NMAuGh6Ud3oR2zfvx5F8gf1QPg3X7lgODJC', 'CUSTOMER', 'ACTIVE', 'Nguyễn', 'Văn A', 'https://i.pravatar.cc/150?img=3', NOW() - INTERVAL '20 days', NOW()),
+('c1000004-0000-0000-0000-000000000004', 'tran.thi.b@gmail.com', '+84901234004', '$2a$10$r9kXVLmMEh9568Gjl5NMAuGh6Ud3oR2zfvx5F8gf1QPg3X7lgODJC', 'CUSTOMER', 'ACTIVE', 'Trần', 'Thị B', 'https://i.pravatar.cc/150?img=4', NOW() - INTERVAL '15 days', NOW()),
 
 -- Drivers
-('d2000001-0000-0000-0000-000000000001', 'driver1@example.com', '+84902345001', '$2b$10$rJZpYKZm5xNKp.r4vHVkOuZP7N8p1qQvT9V7kJXlZOqHxY9Vz9.3W', 'DRIVER', 'ACTIVE', 'Mike', 'Johnson', 'https://i.pravatar.cc/150?img=11', NOW() - INTERVAL '60 days', NOW()),
-('d2000002-0000-0000-0000-000000000002', 'driver2@example.com', '+84902345002', '$2b$10$rJZpYKZm5xNKp.r4vHVkOuZP7N8p1qQvT9V7kJXlZOqHxY9Vz9.3W', 'DRIVER', 'ACTIVE', 'Sarah', 'Williams', 'https://i.pravatar.cc/150?img=12', NOW() - INTERVAL '55 days', NOW()),
-('d2000003-0000-0000-0000-000000000003', 'le.van.c@gmail.com', '+84902345003', '$2b$10$rJZpYKZm5xNKp.r4vHVkOuZP7N8p1qQvT9V7kJXlZOqHxY9Vz9.3W', 'DRIVER', 'ACTIVE', 'Lê', 'Văn C', 'https://i.pravatar.cc/150?img=13', NOW() - INTERVAL '50 days', NOW()),
-('d2000004-0000-0000-0000-000000000004', 'pham.van.d@gmail.com', '+84902345004', '$2b$10$rJZpYKZm5xNKp.r4vHVkOuZP7N8p1qQvT9V7kJXlZOqHxY9Vz9.3W', 'DRIVER', 'ACTIVE', 'Phạm', 'Văn D', 'https://i.pravatar.cc/150?img=14', NOW() - INTERVAL '45 days', NOW()),
+('d2000001-0000-0000-0000-000000000001', 'driver1@example.com', '+84902345001', '$2a$10$r9kXVLmMEh9568Gjl5NMAuGh6Ud3oR2zfvx5F8gf1QPg3X7lgODJC', 'DRIVER', 'ACTIVE', 'Mike', 'Johnson', 'https://i.pravatar.cc/150?img=11', NOW() - INTERVAL '60 days', NOW()),
+('d2000002-0000-0000-0000-000000000002', 'driver2@example.com', '+84902345002', '$2a$10$r9kXVLmMEh9568Gjl5NMAuGh6Ud3oR2zfvx5F8gf1QPg3X7lgODJC', 'DRIVER', 'ACTIVE', 'Sarah', 'Williams', 'https://i.pravatar.cc/150?img=12', NOW() - INTERVAL '55 days', NOW()),
+('d2000003-0000-0000-0000-000000000003', 'le.van.c@gmail.com', '+84902345003', '$2a$10$r9kXVLmMEh9568Gjl5NMAuGh6Ud3oR2zfvx5F8gf1QPg3X7lgODJC', 'DRIVER', 'ACTIVE', 'Lê', 'Văn C', 'https://i.pravatar.cc/150?img=13', NOW() - INTERVAL '50 days', NOW()),
+('d2000004-0000-0000-0000-000000000004', 'pham.van.d@gmail.com', '+84902345004', '$2a$10$r9kXVLmMEh9568Gjl5NMAuGh6Ud3oR2zfvx5F8gf1QPg3X7lgODJC', 'DRIVER', 'ACTIVE', 'Phạm', 'Văn D', 'https://i.pravatar.cc/150?img=14', NOW() - INTERVAL '45 days', NOW()),
 
 -- Admin
-('a3000001-0000-0000-0000-000000000001', 'admin@cabsystem.com', '+84900000000', '$2b$10$rJZpYKZm5xNKp.r4vHVkOuZP7N8p1qQvT9V7kJXlZOqHxY9Vz9.3W', 'ADMIN', 'ACTIVE', 'System', 'Administrator', 'https://i.pravatar.cc/150?img=99', NOW() - INTERVAL '90 days', NOW());
+('a3000001-0000-0000-0000-000000000001', 'admin@cabsystem.com', '+84900000000', '$2a$10$r9kXVLmMEh9568Gjl5NMAuGh6Ud3oR2zfvx5F8gf1QPg3X7lgODJC', 'ADMIN', 'ACTIVE', 'System', 'Administrator', 'https://i.pravatar.cc/150?img=99', NOW() - INTERVAL '90 days', NOW());
 
 
 -- ========================================

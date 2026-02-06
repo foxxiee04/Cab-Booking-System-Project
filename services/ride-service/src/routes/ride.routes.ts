@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { RideService } from '../services/ride.service';
 import { RideController } from '../controllers/ride.controller';
-import { 
-  validateCreateRide, 
-  validateAvailableRides, 
-  validateAssignDriver 
+import {
+  validateCreateRide,
+  validateAvailableRides,
+  validateAssignDriver,
 } from '../validators/ride.validator';
+import { authorize } from '../middleware/auth.middleware';
+import { UserRole } from '../enums/ride-status.enum';
 
 export const createRideRouter = (rideService: RideService): Router => {
   const router = Router();
@@ -16,6 +18,12 @@ export const createRideRouter = (rideService: RideService): Router => {
 
   // Create ride (Customer)
   router.post('/', validateCreateRide, controller.createRide);
+
+  // Admin: Ride stats
+  router.get('/admin/stats', authorize(UserRole.ADMIN), controller.getRideStats);
+
+  // Admin: Get all rides
+  router.get('/admin', authorize(UserRole.ADMIN), controller.getAllRides);
 
   // Get ride by ID
   router.get('/:rideId', controller.getRideById);

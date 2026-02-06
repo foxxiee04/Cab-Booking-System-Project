@@ -13,10 +13,12 @@ import {
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { authApi } from '../api/auth.api';
 import { updateUser } from '../store/auth.slice';
+import { useTranslation } from 'react-i18next';
 
 const Profile: React.FC = () => {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,7 +31,7 @@ const Profile: React.FC = () => {
         dispatch(updateUser(response.data.user));
       }
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to load profile');
+      setError(err.response?.data?.error?.message || t('errors.loadProfile'));
     } finally {
       setLoading(false);
     }
@@ -42,7 +44,7 @@ const Profile: React.FC = () => {
   return (
     <Container sx={{ py: 4 }}>
       <Typography variant="h4" fontWeight="bold">
-        Profile
+        {t('profile.title')}
       </Typography>
 
       {error && (
@@ -67,14 +69,14 @@ const Profile: React.FC = () => {
               {user.email}
             </Typography>
             <Divider sx={{ my: 2 }} />
-            <Typography variant="body2">Role: {user.role}</Typography>
+            <Typography variant="body2">{t('profile.role')}: {user.role}</Typography>
             {user.phoneNumber && (
               <Typography variant="body2" sx={{ mt: 0.5 }}>
-                Phone: {user.phoneNumber}
+                {t('profile.phone')}: {user.phoneNumber}
               </Typography>
             )}
             <Button variant="outlined" sx={{ mt: 2 }} onClick={refreshProfile}>
-              Refresh
+              {t('profile.refresh')}
             </Button>
           </CardContent>
         </Card>

@@ -49,20 +49,37 @@ class DriverSocketService {
       }
     });
 
-    // Listen for new ride requests
-    this.socket.on('ride:new-request', (data: { ride: Ride; timeoutSeconds: number }) => {
-      console.log('🚗 New ride request:', data);
+    // Listen for new ride requests - match backend event name
+    this.socket.on('NEW_RIDE_AVAILABLE', (data: { rideId: string; customerId: string; pickup: any; dropoff: any; estimatedFare: number; timeoutSeconds?: number }) => {
+      console.log('🚗 New ride available:', data);
       
-      store.dispatch(setPendingRide(data));
+      // Convert backend format to frontend Ride format
+      const ride: Partial<Ride> = {
+        id: data.rideId,
+        customerId: data.customerId,
+        pickupLocation: data.pickup,
+        dropoffLocation: data.dropoff,
+        fare: data.estimatedFare,
+        status: 'PENDING',
+      };
+      
+      store.dispatch(setPendingRide({ ride: ride as Ride, timeoutSeconds: data.timeoutSeconds || 30 }));
       
       store.dispatch(
         showNotification({
           type: 'info',
-          message: `New ride request! ${data.timeoutSeconds}s to accept`,
+          message: `New ride request! ${data.timeoutSeconds || 30}s to accept`,
         })
       );
 
       // Play notification sound
+      this.playNotificationSound();
+    });
+
+    // Legacy event name for backward compatibility
+    this.socket.on('ride:new-request', (data: { ride: Ride; timeoutSeconds: number }) => {
+      console.log('🚗 New ride request (legacy):', data);
+      store.dispatch(setPendingRide(data));
       this.playNotificationSound();
     });
 

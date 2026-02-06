@@ -12,10 +12,12 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { driverApi } from '../api/driver.api';
 import { setEarnings } from '../store/driver.slice';
 import { formatCurrency, formatEarnings } from '../utils/format.utils';
+import { useTranslation } from 'react-i18next';
 
 const Earnings: React.FC = () => {
   const dispatch = useAppDispatch();
   const { earnings } = useAppSelector((state) => state.driver);
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -27,7 +29,7 @@ const Earnings: React.FC = () => {
         const response = await driverApi.getEarnings();
         dispatch(setEarnings(response.data.earnings));
       } catch (err: any) {
-        setError(err.response?.data?.error?.message || 'Failed to load earnings');
+        setError(err.response?.data?.error?.message || t('errors.loadEarnings'));
       } finally {
         setLoading(false);
       }
@@ -39,7 +41,7 @@ const Earnings: React.FC = () => {
   return (
     <Container sx={{ py: 4 }}>
       <Typography variant="h4" fontWeight="bold">
-        Earnings
+        {t('earnings.title')}
       </Typography>
 
       {error && (
@@ -59,7 +61,7 @@ const Earnings: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="body2" color="text.secondary">
-                Today
+                {t('earnings.today')}
               </Typography>
               <Typography variant="h5" fontWeight="bold">
                 {formatCurrency(earnings.today)}
@@ -69,7 +71,7 @@ const Earnings: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="body2" color="text.secondary">
-                This Week
+                {t('earnings.week')}
               </Typography>
               <Typography variant="h5" fontWeight="bold">
                 {formatEarnings(earnings.week)}
@@ -79,7 +81,7 @@ const Earnings: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="body2" color="text.secondary">
-                This Month
+                {t('earnings.month')}
               </Typography>
               <Typography variant="h5" fontWeight="bold">
                 {formatEarnings(earnings.month)}
@@ -89,7 +91,7 @@ const Earnings: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="body2" color="text.secondary">
-                Total Rides
+                {t('earnings.totalRides')}
               </Typography>
               <Typography variant="h5" fontWeight="bold">
                 {earnings.totalRides}

@@ -4,6 +4,7 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { adminApi } from '../api/admin.api';
 import { Ride } from '../types';
 import { formatCurrency, formatDate, getRideStatusColor } from '../utils/format.utils';
+import { useTranslation } from 'react-i18next';
 
 const PAGE_SIZE = 10;
 
@@ -13,6 +14,7 @@ const Rides: React.FC = () => {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { t } = useTranslation();
 
   useEffect(() => {
     const fetchRides = async () => {
@@ -26,7 +28,7 @@ const Rides: React.FC = () => {
         setRows(response.data.rides || []);
         setTotal(response.data.total || 0);
       } catch (err: any) {
-        setError(err.response?.data?.error?.message || 'Failed to load rides');
+        setError(err.response?.data?.error?.message || t('errors.loadRides'));
       } finally {
         setLoading(false);
       }
@@ -36,10 +38,10 @@ const Rides: React.FC = () => {
   }, [page]);
 
   const columns: GridColDef<Ride>[] = [
-    { field: 'id', headerName: 'Ride ID', flex: 1, minWidth: 220 },
+    { field: 'id', headerName: t('columns.rideId'), flex: 1, minWidth: 220 },
     {
       field: 'status',
-      headerName: 'Status',
+      headerName: t('columns.status'),
       width: 130,
       renderCell: (params) => (
         <Chip
@@ -51,7 +53,7 @@ const Rides: React.FC = () => {
     },
     {
       field: 'customer',
-      headerName: 'Customer',
+      headerName: t('columns.customer'),
       flex: 1,
       minWidth: 160,
       valueGetter: (params) =>
@@ -59,22 +61,22 @@ const Rides: React.FC = () => {
     },
     {
       field: 'driver',
-      headerName: 'Driver',
+      headerName: t('columns.driver'),
       flex: 1,
       minWidth: 160,
       valueGetter: (params) =>
-        params.row.driver ? `${params.row.driver.firstName} ${params.row.driver.lastName}` : params.row.driverId || 'N/A',
+        params.row.driver ? `${params.row.driver.firstName} ${params.row.driver.lastName}` : params.row.driverId || t('labels.na'),
     },
     {
       field: 'fare',
-      headerName: 'Fare',
+      headerName: t('columns.fare'),
       width: 140,
-      valueFormatter: (params) => (params.value ? formatCurrency(params.value) : 'N/A'),
+      valueFormatter: (params) => (params.value ? formatCurrency(params.value) : t('labels.na')),
     },
-    { field: 'paymentMethod', headerName: 'Payment', width: 120 },
+    { field: 'paymentMethod', headerName: t('columns.payment'), width: 120 },
     {
       field: 'createdAt',
-      headerName: 'Created',
+      headerName: t('columns.created'),
       width: 170,
       valueFormatter: (params) => formatDate(params.value),
     },
@@ -83,7 +85,7 @@ const Rides: React.FC = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" fontWeight="bold">
-        Rides Management
+        {t('tables.rides')}
       </Typography>
 
       {error && (

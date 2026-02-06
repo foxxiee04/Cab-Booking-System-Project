@@ -1,0 +1,111 @@
+{
+  "app": {
+    "title": "Admin Dashboard",
+    "admin": "Admin"
+  },
+  "menu": {
+    "dashboard": "Dashboard",
+    "rides": "Rides",
+    "drivers": "Drivers",
+    "customers": "Customers",
+    "payments": "Payments",
+    "pricing": "Pricing",
+    "logs": "Logs",
+    "logout": "Logout"
+  },
+  "login": {
+    "title": "Admin Login",
+    "subtitle": "Access dashboard with admin credentials",
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Login",
+    "demoAccount": "Demo Admin Account",
+    "accessDenied": "Access denied. Admin privileges required.",
+    "failed": "Login failed. Please try again."
+  },
+  "dashboard": {
+    "title": "Dashboard Overview",
+    "subtitle": "Real-time system statistics and metrics",
+    "totalRides": "Total Rides",
+    "today": "today",
+    "onlineDrivers": "Online Drivers",
+    "ofTotal": "of total",
+    "totalCustomers": "Total Customers",
+    "active": "active",
+    "todayRevenue": "Today's Revenue",
+    "month": "Month",
+    "rideStatus": "Ride Status",
+    "pending": "Pending",
+    "activeStatus": "Active",
+    "completed": "Completed",
+    "cancelled": "Cancelled",
+    "paymentStatus": "Payment Status",
+    "failed": "Failed",
+    "noStats": "No statistics available",
+    "loadStatsFailed": "Failed to load statistics"
+  },
+  "tables": {
+    "drivers": "Drivers Management",
+    "customers": "Customers Management",
+    "rides": "Rides Management",
+    "payments": "Payments Management",
+    "logs": "System Logs"
+  },
+  "columns": {
+    "driverId": "Driver ID",
+    "customerId": "Customer ID",
+    "rideId": "Ride ID",
+    "paymentId": "Payment ID",
+    "logId": "Log ID",
+    "name": "Name",
+    "email": "Email",
+    "vehicle": "Vehicle",
+    "rating": "Rating",
+    "rides": "Rides",
+    "online": "Online",
+    "phone": "Phone",
+    "amount": "Amount",
+    "method": "Method",
+    "status": "Status",
+    "transaction": "Transaction",
+    "created": "Created",
+    "level": "Level",
+    "service": "Service",
+    "message": "Message",
+    "time": "Time",
+    "fare": "Fare",
+    "customer": "Customer",
+    "driver": "Driver",
+    "payment": "Payment"
+  },
+  "labels": {
+    "online": "ONLINE",
+    "offline": "OFFLINE",
+    "na": "N/A",
+    "unknown": "UNKNOWN"
+  },
+  "errors": {
+    "loadDrivers": "Failed to load drivers",
+    "loadCustomers": "Failed to load customers",
+    "loadRides": "Failed to load rides",
+    "loadPayments": "Failed to load payments",
+    "loadLogs": "Failed to load logs"
+  },
+  "pricing": {
+    "title": "Surge Pricing Management",
+    "subtitle": "Adjust dynamic pricing based on demand",
+    "currentSurge": "Current Surge",
+    "surgeMultiplier": "Surge Multiplier",
+    "example": "Example: Base Fare {{amount}}",
+    "newFare": "New Fare: {{amount}}",
+    "reason": "Reason (optional)",
+    "reasonPlaceholder": "e.g., High demand, Weather conditions",
+    "update": "Update Surge Pricing",
+    "guidelines": "Surge Pricing Guidelines",
+    "normal": "Normal demand",
+    "moderate": "Moderate demand",
+    "high": "High demand",
+    "success": "Surge pricing updated successfully!",
+    "failed": "Failed to update surge pricing"
+  }
+}

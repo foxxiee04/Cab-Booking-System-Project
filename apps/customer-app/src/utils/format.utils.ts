@@ -1,4 +1,5 @@
 import { format, formatDistanceToNow } from 'date-fns';
+import i18n from '../i18n';
 
 /**
  * Format currency (VND)
@@ -41,9 +42,9 @@ export const formatPhoneNumber = (phone: string): string => {
  */
 export const getVehicleTypeLabel = (type: string): string => {
   const labels: Record<string, string> = {
-    ECONOMY: 'Economy',
-    COMFORT: 'Comfort',
-    PREMIUM: 'Premium',
+    ECONOMY: i18n.t('vehicle.ECONOMY'),
+    COMFORT: i18n.t('vehicle.COMFORT'),
+    PREMIUM: i18n.t('vehicle.PREMIUM'),
   };
   return labels[type] || type;
 };
@@ -53,9 +54,9 @@ export const getVehicleTypeLabel = (type: string): string => {
  */
 export const getPaymentMethodLabel = (method: string): string => {
   const labels: Record<string, string> = {
-    CASH: 'Cash',
-    CARD: 'Card',
-    WALLET: 'Wallet',
+    CASH: i18n.t('payment.CASH'),
+    CARD: i18n.t('payment.CARD'),
+    WALLET: i18n.t('payment.WALLET'),
   };
   return labels[method] || method;
 };
@@ -65,13 +66,13 @@ export const getPaymentMethodLabel = (method: string): string => {
  */
 export const getRideStatusLabel = (status: string): string => {
   const labels: Record<string, string> = {
-    PENDING: 'Finding driver...',
-    ASSIGNED: 'Driver assigned',
-    ACCEPTED: 'Driver on the way',
-    IN_PROGRESS: 'In progress',
-    COMPLETED: 'Completed',
-    CANCELLED: 'Cancelled',
-    NO_DRIVER_AVAILABLE: 'No driver available',
+    PENDING: i18n.t('status.PENDING'),
+    ASSIGNED: i18n.t('status.ASSIGNED'),
+    ACCEPTED: i18n.t('status.ACCEPTED'),
+    IN_PROGRESS: i18n.t('status.IN_PROGRESS'),
+    COMPLETED: i18n.t('status.COMPLETED'),
+    CANCELLED: i18n.t('status.CANCELLED'),
+    NO_DRIVER_AVAILABLE: i18n.t('status.NO_DRIVER_AVAILABLE'),
   };
   return labels[status] || status;
 };

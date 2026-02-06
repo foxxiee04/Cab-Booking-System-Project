@@ -15,10 +15,12 @@ import {
   Grid,
 } from '@mui/material';
 import { Visibility, VisibilityOff, DirectionsCar } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { authApi } from '../api/auth.api';
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -45,37 +47,37 @@ const Register: React.FC = () => {
       !formData.lastName ||
       !formData.phoneNumber
     ) {
-      return 'Please fill in all required fields';
+      return t('errors.fillRequired');
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      return 'Please enter a valid email address';
+      return t('errors.invalidEmail');
     }
 
     if (formData.password.length < 8) {
-      return 'Password must be at least 8 characters';
+      return t('errors.passwordMin');
     }
 
     if (!/[A-Z]/.test(formData.password)) {
-      return 'Password must contain at least one uppercase letter';
+      return t('errors.passwordUpper');
     }
 
     if (!/[a-z]/.test(formData.password)) {
-      return 'Password must contain at least one lowercase letter';
+      return t('errors.passwordLower');
     }
 
     if (!/[0-9]/.test(formData.password)) {
-      return 'Password must contain at least one number';
+      return t('errors.passwordNumber');
     }
 
     if (formData.password !== formData.confirmPassword) {
-      return 'Passwords do not match';
+      return t('errors.passwordMismatch');
     }
 
     const phoneRegex = /^[0-9]{10,15}$/;
     if (!phoneRegex.test(formData.phoneNumber)) {
-      return 'Phone number must be 10-15 digits';
+      return t('errors.phoneInvalid');
     }
 
     return null;
@@ -105,11 +107,11 @@ const Register: React.FC = () => {
       });
 
       if (response.success) {
-        setSuccess('Registration successful. Please sign in.');
+        setSuccess(t('errors.registerSuccess'));
         navigate('/login');
       }
     } catch (err: any) {
-      const message = err.response?.data?.error?.message || 'Registration failed. Please try again.';
+      const message = err.response?.data?.error?.message || t('errors.registerFailed');
       setError(message);
     } finally {
       setLoading(false);
@@ -133,10 +135,10 @@ const Register: React.FC = () => {
             <Box sx={{ textAlign: 'center', mb: 3 }}>
               <DirectionsCar sx={{ fontSize: 50, color: 'primary.main' }} />
               <Typography variant="h4" fontWeight="bold" color="primary" mt={1}>
-                Create Account
+                {t('register.title')}
               </Typography>
               <Typography variant="body2" color="text.secondary" mt={1}>
-                Join Cab Booking - Start your journey
+                {t('register.subtitle')}
               </Typography>
             </Box>
 
@@ -158,7 +160,7 @@ const Register: React.FC = () => {
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
-                    label="First Name"
+                    label={t('register.firstName')}
                     value={formData.firstName}
                     onChange={handleChange('firstName')}
                     required
@@ -168,7 +170,7 @@ const Register: React.FC = () => {
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
-                    label="Last Name"
+                    label={t('register.lastName')}
                     value={formData.lastName}
                     onChange={handleChange('lastName')}
                     required
@@ -178,7 +180,7 @@ const Register: React.FC = () => {
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label="Email Address"
+                    label={t('register.email')}
                     type="email"
                     value={formData.email}
                     onChange={handleChange('email')}
@@ -189,7 +191,7 @@ const Register: React.FC = () => {
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label="Phone Number"
+                    label={t('register.phone')}
                     value={formData.phoneNumber}
                     onChange={handleChange('phoneNumber')}
                     autoComplete="tel"
@@ -200,13 +202,13 @@ const Register: React.FC = () => {
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label="Password"
+                    label={t('register.password')}
                     type={showPassword ? 'text' : 'password'}
                     value={formData.password}
                     onChange={handleChange('password')}
                     required
                     autoComplete="new-password"
-                    helperText="Min 8 chars, uppercase, lowercase, number"
+                    helperText={t('register.passwordHelp')}
                     InputProps={{
                       endAdornment: (
                         <InputAdornment position="end">
@@ -224,7 +226,7 @@ const Register: React.FC = () => {
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label="Confirm Password"
+                    label={t('register.confirmPassword')}
                     type={showPassword ? 'text' : 'password'}
                     value={formData.confirmPassword}
                     onChange={handleChange('confirmPassword')}
@@ -242,17 +244,17 @@ const Register: React.FC = () => {
                 disabled={loading}
                 sx={{ mt: 3, mb: 2, py: 1.5 }}
               >
-                {loading ? <CircularProgress size={24} /> : 'Create Account'}
+                {loading ? <CircularProgress size={24} /> : t('register.createAccount')}
               </Button>
 
               <Box sx={{ textAlign: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
-                  Already have an account?{' '}
+                  {t('register.haveAccount')}{' '}
                   <Link
                     to="/login"
                     style={{ color: '#2E7D32', textDecoration: 'none', fontWeight: 600 }}
                   >
-                    Sign In
+                    {t('register.signIn')}
                   </Link>
                 </Typography>
               </Box>

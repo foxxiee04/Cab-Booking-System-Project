@@ -1,0 +1,149 @@
+{
+  "login": {
+    "title": "Driver Login",
+    "subtitle": "Sign in to start earning",
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Login",
+    "demoAccount": "Demo Account",
+    "noAccount": "New driver?",
+    "signUp": "Sign Up"
+  },
+  "register": {
+    "title": "Become a Driver",
+    "subtitle": "Join our platform and start earning",
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "email": "Email",
+    "phone": "Phone Number",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "passwordHelp": "Min 8 chars, uppercase, lowercase, number",
+    "submit": "Sign Up",
+    "haveAccount": "Already have an account?"
+  },
+  "profileSetup": {
+    "title": "Complete Your Profile",
+    "subtitle": "Tell us about your vehicle to start accepting rides",
+    "vehicleType": "Vehicle Type",
+    "vehicleMake": "Vehicle Make",
+    "vehicleModel": "Vehicle Model",
+    "vehicleColor": "Vehicle Color",
+    "licensePlate": "License Plate",
+    "licenseNumber": "Driver License Number",
+    "licenseExpiry": "License Expiry Date",
+    "info": "All information will be verified before you can accept rides. Make sure all details are accurate.",
+    "submit": "Complete Profile"
+  },
+  "dashboard": {
+    "title": "Driver Dashboard",
+    "online": "ONLINE",
+    "offline": "OFFLINE",
+    "earnings": "Earnings",
+    "rideHistory": "Ride History",
+    "profile": "Profile",
+    "logout": "Logout",
+    "rides": "rides",
+    "youOnline": "You are Online",
+    "youOffline": "You are Offline",
+    "readyToAccept": "Ready to accept rides",
+    "goOnlineHint": "Go online to start accepting rides",
+    "todayEarnings": "Today's Earnings",
+    "ridesCompleted": "{{count}} rides completed",
+    "gpsError": "Failed to get location. Please enable GPS.",
+    "statusChangeFailed": "Failed to change status",
+    "acceptRideFailed": "Failed to accept ride"
+  },
+  "rideRequest": {
+    "title": "New Ride Request",
+    "customer": "Customer",
+    "pickup": "Pickup",
+    "dropoff": "Dropoff",
+    "vehicle": "Vehicle",
+    "distance": "Distance",
+    "duration": "Duration",
+    "estimatedEarnings": "Estimated Earnings",
+    "reject": "Reject",
+    "accept": "Accept Ride",
+    "accepting": "Accepting...",
+    "locationProvided": "Location provided",
+    "timeToAccept": "Time to accept"
+  },
+  "activeRide": {
+    "title": "Active Ride",
+    "callCustomer": "Call Customer",
+    "fare": "Fare",
+    "startRide": "Arrived - Start Ride",
+    "completeRide": "Complete Ride",
+    "cancelRide": "Cancel Ride",
+    "noActiveRide": "No active ride",
+    "confirmCancel": "Are you sure you want to cancel this ride?",
+    "pickupStep": "Pickup"
+  },
+  "earnings": {
+    "title": "Earnings",
+    "today": "Today",
+    "week": "This Week",
+    "month": "This Month",
+    "totalRides": "Total Rides"
+  },
+  "history": {
+    "title": "Ride History",
+    "noRides": "No rides found.",
+    "fare": "Fare",
+    "payment": "Payment",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {{page}} / {{total}}"
+  },
+  "profile": {
+    "title": "Profile",
+    "driverProfile": "Driver Profile",
+    "vehicle": "Vehicle",
+    "plate": "Plate",
+    "color": "Color",
+    "rating": "Rating",
+    "refresh": "Refresh"
+  },
+  "vehicle": {
+    "ECONOMY": "Economy",
+    "COMFORT": "Comfort",
+    "PREMIUM": "Premium",
+    "CAR": "Car",
+    "SUV": "SUV",
+    "MOTORCYCLE": "Motorcycle"
+  },
+  "payment": {
+    "CASH": "Cash",
+    "CARD": "Card",
+    "WALLET": "Wallet"
+  },
+  "status": {
+    "PENDING": "Finding driver...",
+    "ASSIGNED": "Assigned",
+    "ACCEPTED": "Accepted",
+    "IN_PROGRESS": "In progress",
+    "COMPLETED": "Completed",
+    "CANCELLED": "Cancelled"
+  },
+  "errors": {
+    "loginFailed": "Login failed. Please try again.",
+    "registerFailed": "Registration failed",
+    "profileSetupFailed": "Profile setup failed",
+    "loadEarnings": "Failed to load earnings",
+    "loadRideHistory": "Failed to load ride history",
+    "loadProfile": "Failed to load profile",
+    "startRide": "Failed to start ride",
+    "completeRide": "Failed to complete ride",
+    "cancelRide": "Failed to cancel ride",
+    "fullName": "Please enter your full name",
+    "invalidEmail": "Please enter a valid email address",
+    "passwordMin": "Password must be at least 8 characters",
+    "passwordUpper": "Password must contain at least one uppercase letter",
+    "passwordLower": "Password must contain at least one lowercase letter",
+    "passwordNumber": "Password must contain at least one number",
+    "passwordMismatch": "Passwords do not match",
+    "phoneInvalid": "Phone number must be 10-15 digits",
+    "authRequired": "User not authenticated"
+  }
+}
