@@ -33,7 +33,8 @@
     "licenseNumber": "Driver License Number",
     "licenseExpiry": "License Expiry Date",
     "info": "All information will be verified before you can accept rides. Make sure all details are accurate.",
-    "submit": "Complete Profile"
+    "submit": "Complete Profile",
+    "successMessage": "Profile completed successfully! Your profile is pending admin approval. You will be notified once approved."
   },
   "dashboard": {
     "title": "Driver Dashboard",
@@ -52,7 +53,8 @@
     "ridesCompleted": "{{count}} rides completed",
     "gpsError": "Failed to get location. Please enable GPS.",
     "statusChangeFailed": "Failed to change status",
-    "acceptRideFailed": "Failed to accept ride"
+    "acceptRideFailed": "Failed to accept ride",
+    "needApproval": "Your driver profile is pending admin approval. You cannot go online until approved. Please wait for admin notification."
   },
   "rideRequest": {
     "title": "New Ride Request",

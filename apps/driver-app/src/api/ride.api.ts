@@ -38,9 +38,9 @@ export const rideApi = {
     return response.data;
   },
 
-  // Get active ride
+  // Get active ride for driver
   getActiveRide: async (): Promise<ApiResponse<{ ride: Ride | null }>> => {
-    const response = await axiosInstance.get('/rides/active');
+    const response = await axiosInstance.get('/rides/driver/active');
     return response.data;
   },
 };

@@ -1,50 +1,119 @@
 import { Location, RouteData } from '../types';
 import axiosInstance from '../api/axios.config';
 
+// Simple in-memory cache for geocoding results
+// This reduces external API calls and improves performance
+const geocodeCache = new Map<string, { results: Location[]; timestamp: number }>();
+const reverseGeocodeCache = new Map<string, { address: string; timestamp: number }>();
+const routeCache = new Map<string, { route: RouteData; timestamp: number }>();
+
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
+const MAX_CACHE_SIZE = 100; // Limit cache size to prevent memory issues
+
+// Clear old cache entries
+const cleanCache = (cache: Map<string, any>) => {
+  if (cache.size > MAX_CACHE_SIZE) {
+    const now = Date.now();
+    for (const [key, value] of cache.entries()) {
+      if (now - value.timestamp > CACHE_TTL) {
+        cache.delete(key);
+      }
+    }
+    // If still too large, remove oldest entries
+    if (cache.size > MAX_CACHE_SIZE) {
+      const entries = Array.from(cache.entries());
+      entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+      const toRemove = entries.slice(0, cache.size - MAX_CACHE_SIZE);
+      toRemove.forEach(([key]) => cache.delete(key));
+    }
+  }
+};
+
 /**
  * Geocode address to coordinates (Forward Geocoding)
+ * NOW WITH CACHING to reduce external API calls
  */
 export const geocodeAddress = async (
   address: string,
   options?: { signal?: AbortSignal }
 ): Promise<Location[]> => {
+  const cacheKey = address.toLowerCase().trim();
+
+  // Check cache first
+  const cached = geocodeCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.results;
+  }
+
   try {
     const response = await axiosInstance.get('/map/geocode', {
       params: { q: address, limit: 7 },
       signal: options?.signal,
     });
 
-    return response.data?.data?.results || [];
+    const results = response.data?.data?.results || [];
+
+    // Store in cache
+    geocodeCache.set(cacheKey, { results, timestamp: Date.now() });
+    cleanCache(geocodeCache);
+
+    return results;
   } catch (error) {
     console.error('Geocoding error:', error);
-    return [];
+    // Return cached result if available, even if expired
+    return cached?.results || [];
   }
 };
 
 /**
  * Reverse geocode coordinates to address
+ * NOW WITH CACHING to reduce external API calls
  */
 export const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+  const cacheKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+
+  // Check cache first
+  const cached = reverseGeocodeCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.address;
+  }
+
   try {
     const response = await axiosInstance.get('/map/reverse', {
       params: { lat, lng },
     });
 
-    return response.data?.data?.address || 'Unknown location';
+    const address = response.data?.data?.display_name || 'Unknown location';
+
+    // Store in cache
+    reverseGeocodeCache.set(cacheKey, { address, timestamp: Date.now() });
+    cleanCache(reverseGeocodeCache);
+
+    return address;
   } catch (error) {
     console.error('Reverse geocoding error:', error);
-    return 'Unknown location';
+    // Return cached result if available, even if expired
+    return cached?.address || 'Unknown location';
   }
 };
 
 /**
  * Get route between two locations
+ * NOW WITH CACHING to reduce external API calls
  */
 export const getRoute = async (
   from: Location,
   to: Location,
   options?: { signal?: AbortSignal }
 ): Promise<RouteData | null> => {
+  const cacheKey = `${from.lat.toFixed(6)},${from.lng.toFixed(6)}-${to.lat.toFixed(6)},${to.lng.toFixed(6)}`;
+
+  // Check cache first
+  const cached = routeCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.route;
+  }
+
   try {
     const response = await axiosInstance.get('/map/route', {
       params: {
@@ -56,10 +125,19 @@ export const getRoute = async (
       signal: options?.signal,
     });
 
-    return response.data?.data || null;
+    const route = response.data?.data || null;
+
+    // Store in cache
+    if (route) {
+      routeCache.set(cacheKey, { route, timestamp: Date.now() });
+      cleanCache(routeCache);
+    }
+
+    return route;
   } catch (error) {
     console.error('Routing error:', error);
-    return null;
+    // Return cached result if available, even if expired
+    return cached?.route || null;
   }
 };
 

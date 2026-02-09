@@ -1,16 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 
 export const validateCreateBooking = (req: Request, res: Response, next: NextFunction) => {
-  const { customerId, pickupLocation, dropoffLocation } = req.body;
+  const { pickupLocation, dropoffLocation, pickupAddress, dropoffAddress, pickupLat, pickupLng, dropoffLat, dropoffLng } = req.body;
 
-  if (!customerId) {
-    return res.status(400).json({
-      success: false,
-      error: { code: 'VALIDATION_ERROR', message: 'customerId is required' },
-    });
-  }
+  // Accept either location objects or individual lat/lng/address fields
+  const hasPickup = pickupLocation || (pickupAddress && pickupLat != null && pickupLng != null);
+  const hasDropoff = dropoffLocation || (dropoffAddress && dropoffLat != null && dropoffLng != null);
 
-  if (!pickupLocation || !dropoffLocation) {
+  if (!hasPickup || !hasDropoff) {
     return res.status(400).json({
       success: false,
       error: { code: 'VALIDATION_ERROR', message: 'Pickup and dropoff locations are required' },

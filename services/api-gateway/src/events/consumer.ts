@@ -34,6 +34,16 @@ interface RideEventPayload {
   duration?: number;
 }
 
+interface RideCreatedPayload {
+  rideId: string;
+  customerId: string;
+  vehicleType: string;
+  pickup: { lat: number; lng: number; address: string };
+  dropoff: { lat: number; lng: number; address: string };
+  estimatedFare: number;
+  surgeMultiplier: number;
+}
+
 export class EventConsumer {
   private connection: Connection | null = null;
   private channel: Channel | null = null;
@@ -56,6 +66,7 @@ export class EventConsumer {
 
       // Bind to events we care about
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'booking.created');
+      await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.created');
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.accepted');
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.started');
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.completed');
@@ -82,6 +93,9 @@ export class EventConsumer {
       switch (eventType) {
         case 'booking.created':
           await this.handleBookingCreated(content.payload);
+          break;
+        case 'ride.created':
+          await this.handleRideCreated(content.payload);
           break;
         case 'ride.accepted':
           await this.handleRideAccepted(content.payload);
@@ -139,6 +153,43 @@ export class EventConsumer {
       );
     } catch (error) {
       logger.error('Error handling booking.created:', error);
+    }
+  }
+
+  private async handleRideCreated(payload: RideCreatedPayload): Promise<void> {
+    logger.info(`Processing ride.created for ride ${payload.rideId}`);
+
+    try {
+      // Find nearby online drivers
+      const nearbyDrivers = await this.findNearbyOnlineDrivers(
+        { lat: payload.pickup.lat, lng: payload.pickup.lng },
+        5000 // 5km radius
+      );
+
+      if (nearbyDrivers.length === 0) {
+        logger.warn(`No online drivers found for ride ${payload.rideId}`);
+        return;
+      }
+
+      // Push notification to all nearby drivers
+      const notificationData = {
+        rideId: payload.rideId,
+        customerId: payload.customerId,
+        vehicleType: payload.vehicleType,
+        pickup: payload.pickup,
+        dropoff: payload.dropoff,
+        estimatedFare: payload.estimatedFare,
+        surgeMultiplier: payload.surgeMultiplier,
+        createdAt: new Date().toISOString(),
+      };
+
+      this.socketServer.emitToDrivers(nearbyDrivers, 'NEW_RIDE_AVAILABLE', notificationData);
+
+      logger.info(
+        `Pushed NEW_RIDE_AVAILABLE to ${nearbyDrivers.length} drivers for ride ${payload.rideId}`
+      );
+    } catch (error) {
+      logger.error('Error handling ride.created:', error);
     }
   }
 

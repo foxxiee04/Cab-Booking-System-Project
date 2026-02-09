@@ -40,5 +40,8 @@ export const createPaymentRoutes = (prisma: PrismaClient, eventPublisher: EventP
   // Refund payment (admin only)
   router.post('/ride/:rideId/refund', authMiddleware, validateRefund, controller.refundPayment);
 
+  // Get available payment methods
+  router.get('/methods', authMiddleware, controller.getPaymentMethods);
+
   return router;
 };

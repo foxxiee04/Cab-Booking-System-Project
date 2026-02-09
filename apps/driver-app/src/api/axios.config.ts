@@ -31,6 +31,11 @@ axiosInstance.interceptors.response.use(
     return response;
   },
   async (error) => {
+    // Suppress POI endpoint 404 errors (optional feature)
+    if (error.response?.status === 404 && error.config?.url?.includes('/map/pois')) {
+      return Promise.reject(error);
+    }
+    
     console.error('API ERROR:', error.response?.data || error.message);
     const originalRequest = error.config;
 

@@ -2,7 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { store } from '../store';
 import { setPendingRide, clearPendingRide, updateRideStatus } from '../store/ride.slice';
 import { showNotification } from '../store/ui.slice';
-import { Ride } from '../types';
+import { Ride, VehicleType } from '../types';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
 
@@ -50,20 +50,39 @@ class DriverSocketService {
     });
 
     // Listen for new ride requests - match backend event name
-    this.socket.on('NEW_RIDE_AVAILABLE', (data: { rideId: string; customerId: string; pickup: any; dropoff: any; estimatedFare: number; timeoutSeconds?: number }) => {
+    this.socket.on('NEW_RIDE_AVAILABLE', (data: { rideId: string; customerId: string; pickup: any; dropoff: any; estimatedFare?: number; vehicleType?: string; distance?: number; duration?: number; timeoutSeconds?: number; customer?: any }) => {
       console.log('🚗 New ride available:', data);
       
       // Convert backend format to frontend Ride format
-      const ride: Partial<Ride> = {
+      const ride: Ride = {
         id: data.rideId,
         customerId: data.customerId,
-        pickupLocation: data.pickup,
-        dropoffLocation: data.dropoff,
-        fare: data.estimatedFare,
+        driverId: null,
+        pickupLocation: {
+          lat: data.pickup?.lat || data.pickup?.latitude || 0,
+          lng: data.pickup?.lng || data.pickup?.longitude || 0,
+          address: data.pickup?.address || 'Pickup location'
+        },
+        dropoffLocation: {
+          lat: data.dropoff?.lat || data.dropoff?.latitude || 0,
+          lng: data.dropoff?.lng || data.dropoff?.longitude || 0,
+          address: data.dropoff?.address || 'Dropoff location'
+        },
+        fare: data.estimatedFare || 0,
+        vehicleType: (data.vehicleType as VehicleType) || 'ECONOMY',
+        distance: data.distance,
+        duration: data.duration,
+        estimatedDuration: data.duration,
         status: 'PENDING',
+        customer: data.customer ? {
+          firstName: data.customer.firstName || 'Customer',
+          lastName: data.customer.lastName || '',
+          phoneNumber: data.customer.phoneNumber,
+          rating: data.customer.rating
+        } : undefined
       };
       
-      store.dispatch(setPendingRide({ ride: ride as Ride, timeoutSeconds: data.timeoutSeconds || 30 }));
+      store.dispatch(setPendingRide({ ride, timeoutSeconds: data.timeoutSeconds || 30 }));
       
       store.dispatch(
         showNotification({

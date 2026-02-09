@@ -12,8 +12,10 @@ export const paymentApi = {
     return response.data;
   },
 
+  // Payment retry - NOT IMPLEMENTED IN BACKEND
+  // Backend limitation: POST /payments/:paymentId/retry endpoint does not exist
+  // For production, either implement in backend or remove retry button from UI
   retryPayment: async (paymentId: string): Promise<PaymentResponse> => {
-    const response = await axiosInstance.post(`/payments/${paymentId}/retry`);
-    return response.data;
+    throw new Error('Payment retry is not supported. Please contact support.');
   },
 };

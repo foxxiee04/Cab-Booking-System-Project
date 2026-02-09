@@ -64,11 +64,11 @@ export class AuthService {
     const salt = await bcrypt.genSalt(12);
     const passwordHash = await bcrypt.hash(input.password, salt);
 
-    // Create user
+    // Create user (set phone to undefined if empty to avoid unique constraint issues with NULL)
     const user = await prisma.user.create({
       data: {
         email: input.email.toLowerCase(),
-        phone: input.phone,
+        phone: input.phone && input.phone.trim() !== '' ? input.phone : undefined,
         passwordHash,
         role: input.role || UserRole.CUSTOMER,
         status: UserStatus.ACTIVE,

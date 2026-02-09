@@ -33,7 +33,8 @@
     "licenseNumber": "Số GPLX",
     "licenseExpiry": "Ngày hết hạn GPLX",
     "info": "Tất cả thông tin sẽ được xác minh trước khi nhận chuyến. Vui lòng nhập chính xác.",
-    "submit": "Hoàn tất"
+    "submit": "Hoàn tất",
+    "successMessage": "Hồ sơ đã được hoàn tất! Hồ sơ của bạn đang chờ admin phê duyệt. Bạn sẽ được thông báo khi được phê duyệt."
   },
   "dashboard": {
     "title": "Bảng điều khiển",
@@ -52,7 +53,8 @@
     "ridesCompleted": "{{count}} chuyến hoàn tất",
     "gpsError": "Không lấy được vị trí. Vui lòng bật GPS.",
     "statusChangeFailed": "Không thể thay đổi trạng thái",
-    "acceptRideFailed": "Không thể nhận chuyến"
+    "acceptRideFailed": "Không thể nhận chuyến",
+    "needApproval": "Hồ sơ tài xế của bạn đang chờ admin phê duyệt. Bạn không thể trực tuyến cho đến khi được phê duyệt. Vui lòng chờ thông báo từ admin."
   },
   "rideRequest": {
     "title": "Yêu cầu chuyến mới",

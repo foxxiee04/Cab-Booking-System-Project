@@ -15,6 +15,8 @@
     "dropoffLocation": "Dropoff Location",
     "dropoffPlaceholder": "Where to?",
     "estimatedFare": "Estimated Fare",
+    "calculatingFare": "Calculating fare...",
+    "waitingForEstimate": "Calculating fare, please wait...",
     "surgePricing": "{{multiplier}}x Surge Pricing",
     "vehicleType": "Vehicle Type",
     "paymentMethod": "Payment Method",

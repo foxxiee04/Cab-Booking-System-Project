@@ -2,29 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
-  AppBar,
-  Toolbar,
-  Typography,
-  IconButton,
-  Drawer,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
   Switch,
   Card,
   CardContent,
   Chip,
   Alert,
+  FormControlLabel,
+  Typography,
+  Paper,
+  Grid,
 } from '@mui/material';
-import {
-  Menu as MenuIcon,
-  DriveEta,
-  AttachMoney,
-  History,
-  Person,
-  Logout,
-} from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { logout } from '../store/auth.slice';
@@ -34,6 +21,7 @@ import {
   setCurrentLocation,
 } from '../store/driver.slice';
 import { clearPendingRide, setCurrentRide } from '../store/ride.slice';
+import NavigationBar from '../components/common/NavigationBar';
 import MapView from '../components/map/MapView';
 import DriverMarker from '../components/map/DriverMarker';
 import RideRequestModal from '../components/ride-request/RideRequestModal';
@@ -56,10 +44,9 @@ const Dashboard: React.FC = () => {
     (state) => state.ride
   );
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [watchId, setWatchId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [watchId, setWatchId] = useState<number | null>(null);
 
   // Fetch driver profile
   useEffect(() => {
@@ -142,6 +129,7 @@ const Dashboard: React.FC = () => {
   // Handle go online/offline
   const handleToggleOnline = async () => {
     setLoading(true);
+    setError('');
     try {
       if (isOnline) {
         await driverApi.goOffline();
@@ -151,7 +139,13 @@ const Dashboard: React.FC = () => {
         dispatch(setOnlineStatus(true));
       }
     } catch (error: any) {
-      setError(error.response?.data?.error?.message || t('dashboard.statusChangeFailed'));
+      const errorMessage = error.response?.data?.error?.message || t('dashboard.statusChangeFailed');
+      setError(errorMessage);
+      
+      // Check if error is due to approval status
+      if (errorMessage.includes('approved') || errorMessage.includes('PENDING')) {
+        setError(t('dashboard.needApproval'));
+      }
     } finally {
       setLoading(false);
     }
@@ -205,74 +199,18 @@ const Dashboard: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* App Bar */}
-      <AppBar position="static">
-        <Toolbar>
-          <IconButton
-            edge="start"
-            color="inherit"
-            onClick={() => setSidebarOpen(true)}
-            sx={{ mr: 2 }}
-          >
-            <MenuIcon />
-          </IconButton>
-          <DriveEta sx={{ mr: 1 }} />
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            {t('dashboard.title')}
-          </Typography>
-          <Chip
-            label={isOnline ? t('dashboard.online') : t('dashboard.offline')}
-            color={isOnline ? 'success' : 'default'}
-            size="small"
-            sx={{ mr: 2 }}
-          />
-        </Toolbar>
-      </AppBar>
-
-      {/* Sidebar */}
-      <Drawer anchor="left" open={sidebarOpen} onClose={() => setSidebarOpen(false)}>
-        <Box sx={{ width: 250, pt: 2 }}>
-          <Box sx={{ px: 2, pb: 2 }}>
-            <Typography variant="h6">
-              {user?.firstName} {user?.lastName}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {profile?.vehicleMake} {profile?.vehicleModel}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              ⭐ {(profile?.rating ?? 0).toFixed(1)} • {profile?.totalRides ?? 0} {t('dashboard.rides')}
-            </Typography>
-          </Box>
-          <List>
-            <ListItemButton onClick={() => { navigate('/earnings'); setSidebarOpen(false); }}>
-              <ListItemIcon><AttachMoney /></ListItemIcon>
-              <ListItemText primary={t('dashboard.earnings')} />
-            </ListItemButton>
-            <ListItemButton onClick={() => { navigate('/history'); setSidebarOpen(false); }}>
-              <ListItemIcon><History /></ListItemIcon>
-              <ListItemText primary={t('dashboard.rideHistory')} />
-            </ListItemButton>
-            <ListItemButton onClick={() => { navigate('/profile'); setSidebarOpen(false); }}>
-              <ListItemIcon><Person /></ListItemIcon>
-              <ListItemText primary={t('dashboard.profile')} />
-            </ListItemButton>
-            <ListItemButton onClick={handleLogout}>
-              <ListItemIcon><Logout /></ListItemIcon>
-              <ListItemText primary={t('dashboard.logout')} />
-            </ListItemButton>
-          </List>
-        </Box>
-      </Drawer>
+      {/* Navigation Bar */}
+      <NavigationBar title={t('dashboard.title')} />
 
       {/* Main Content */}
-      <Box sx={{ flexGrow: 1, position: 'relative' }}>
+      <Box sx={{ flexGrow: 1, position: 'relative', mt: 8 }}>
         {/* Map */}
         <MapView center={mapCenter} height="100%">
           {currentLocation && <DriverMarker location={currentLocation} />}
         </MapView>
 
         {/* Online/Offline Toggle */}
-        <Card
+        <Paper
           elevation={3}
           sx={{
             position: 'absolute',
@@ -282,42 +220,63 @@ const Dashboard: React.FC = () => {
             maxWidth: 400,
             mx: 'auto',
             zIndex: 1000,
+            borderRadius: 3,
           }}
         >
           <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="h6">
-                {isOnline ? t('dashboard.youOnline') : t('dashboard.youOffline')}
-              </Typography>
-              <Switch
-                checked={isOnline}
-                onChange={handleToggleOnline}
-                disabled={loading}
-                color="success"
-              />
-            </Box>
-            {isOnline && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                {t('dashboard.readyToAccept')}
-              </Typography>
-            )}
-            {!isOnline && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                {t('dashboard.goOnlineHint')}
-              </Typography>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs>
+                <Typography variant="h6">
+                  {isOnline ? t('dashboard.youOnline') : t('dashboard.youOffline')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {isOnline
+                    ? t('dashboard.readyToAccept')
+                    : t('dashboard.goOnlineHint')}
+                </Typography>
+              </Grid>
+              <Grid item>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(isOnline)}
+                      onChange={handleToggleOnline}
+                      disabled={loading}
+                      color="success"
+                    />
+                  }
+                  label=""
+                />
+              </Grid>
+            </Grid>
+            {profile && (
+              <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Chip
+                  label={`⭐ ${(profile.rating ?? 0).toFixed(1)}`}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                />
+                <Chip
+                  label={`${profile.totalRides ?? 0} rides`}
+                  size="small"
+                  variant="outlined"
+                />
+              </Box>
             )}
           </CardContent>
-        </Card>
+        </Paper>
 
         {/* Earnings Card */}
         {earnings && (
-          <Card
+          <Paper
             elevation={3}
             sx={{
               position: 'absolute',
               bottom: 16,
               left: 16,
               zIndex: 1000,
+              borderRadius: 3,
             }}
           >
             <CardContent>
@@ -331,7 +290,7 @@ const Dashboard: React.FC = () => {
                 {t('dashboard.ridesCompleted', { count: profile?.totalRides || 0 })}
               </Typography>
             </CardContent>
-          </Card>
+          </Paper>
         )}
 
         {/* Error Alert */}

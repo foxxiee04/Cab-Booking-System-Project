@@ -364,3 +364,6 @@ lib-cov/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+
+.doc/

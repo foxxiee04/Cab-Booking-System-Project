@@ -85,38 +85,27 @@ export class DriverService {
   }
 
   async goOnline(userId: string): Promise<any> {
-    // Try to update existing driver
-    const existing = await prisma.driver.findUnique({
+    // Get existing driver
+    const driver = await prisma.driver.findUnique({
       where: { userId },
     });
 
-    if (!existing) {
-      // Auto-create driver profile
-      logger.info(`Auto-creating driver profile for userId: ${userId}`);
-      return prisma.driver.create({
-        data: {
-          userId,
-          status: DriverStatus.PENDING,
-          availabilityStatus: AvailabilityStatus.ONLINE,
-          vehicleType: VehicleType.CAR,
-          vehicleBrand: 'Unknown',
-          vehicleModel: 'Unknown',
-          vehiclePlate: 'TEMP',
-          vehicleColor: 'Unknown',
-          vehicleYear: new Date().getFullYear(),
-          licenseNumber: 'TEMP',
-          licenseExpiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-          licenseVerified: false,
-        },
-      });
+    if (!driver) {
+      throw new Error('Driver profile not found. Please complete profile setup first.');
     }
 
-    const driver = await prisma.driver.update({
+    // Check if driver is approved
+    if (driver.status !== DriverStatus.APPROVED) {
+      throw new Error(`Driver must be approved before going online. Current status: ${driver.status}`);
+    }
+
+    // Update to online
+    const updatedDriver = await prisma.driver.update({
       where: { userId },
       data: { availabilityStatus: AvailabilityStatus.ONLINE },
     });
 
-    return driver;
+    return updatedDriver;
   }
 
   async goOffline(userId: string): Promise<any> {

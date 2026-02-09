@@ -147,15 +147,7 @@ const Login: React.FC = () => {
               </Button>
             </form>
 
-            <Box sx={{ mt: 3, p: 2, bgcolor: '#E3F2FD', borderRadius: 2 }}>
-              <Typography variant="caption" color="text.secondary">
-                {t('login.demoAccount')}:
-              </Typography>
-              <Typography variant="body2">
-                📧 admin@cabsystem.com<br />
-                🔒 Password123!
-              </Typography>
-            </Box>
+
           </CardContent>
         </Card>
       </Container>

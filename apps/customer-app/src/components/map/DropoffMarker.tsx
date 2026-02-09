@@ -20,23 +20,31 @@ interface DropoffMarkerProps {
   showPopup?: boolean;
 }
 
-export const DropoffMarker: React.FC<DropoffMarkerProps> = ({
-  location,
-  showPopup = true,
-}) => {
-  return (
-    <Marker position={[location.lat, location.lng]} icon={dropoffIcon}>
-      {showPopup && (
-        <Popup>
-          <div style={{ textAlign: 'center' }}>
-            <strong>🏁 Dropoff Location</strong>
-            <br />
-            {location.address || `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`}
-          </div>
-        </Popup>
-      )}
-    </Marker>
-  );
-};
+export const DropoffMarker: React.FC<DropoffMarkerProps> = React.memo(
+  ({ location, showPopup = true }) => {
+    return (
+      <Marker position={[location.lat, location.lng]} icon={dropoffIcon}>
+        {showPopup && (
+          <Popup>
+            <div style={{ textAlign: 'center' }}>
+              <strong>🏁 Dropoff Location</strong>
+              <br />
+              {location.address || `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`}
+            </div>
+          </Popup>
+        )}
+      </Marker>
+    );
+  },
+  (prev, next) => {
+    // Only re-render if location actually changed
+    return (
+      prev.location.lat === next.location.lat &&
+      prev.location.lng === next.location.lng &&
+      prev.location.address === next.location.address &&
+      prev.showPopup === next.showPopup
+    );
+  }
+);
 
 export default DropoffMarker;

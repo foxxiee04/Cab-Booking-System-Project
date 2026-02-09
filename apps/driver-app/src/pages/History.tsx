@@ -95,14 +95,14 @@ const History: React.FC = () => {
               </Box>
 
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                {formatDate(ride.createdAt)}
+                {ride.createdAt ? formatDate(ride.createdAt) : 'N/A'}
               </Typography>
 
               <Typography variant="body2" sx={{ mt: 1 }}>
                 {t('history.fare')}: {ride.fare ? formatCurrency(ride.fare) : 'N/A'}
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5 }}>
-                {t('history.payment')}: {getPaymentMethodLabel(ride.paymentMethod)}
+                {t('history.payment')}: {ride.paymentMethod ? getPaymentMethodLabel(ride.paymentMethod) : 'N/A'}
               </Typography>
             </CardContent>
           </Card>

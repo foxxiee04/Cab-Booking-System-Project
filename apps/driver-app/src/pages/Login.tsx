@@ -143,17 +143,6 @@ const Login: React.FC = () => {
               </Button>
             </form>
 
-            {/* Demo account */}
-            <Box sx={{ mt: 3, p: 2, bgcolor: '#E3F2FD', borderRadius: 2 }}>
-              <Typography variant="caption" color="text.secondary">
-                {t('login.demoAccount')}:
-              </Typography>
-              <Typography variant="body2">
-                📧 driver1@example.com<br />
-                🔒 Password123!
-              </Typography>
-            </Box>
-
             {/* Register link */}
             <Box sx={{ textAlign: 'center', mt: 3 }}>
               <Typography variant="body2">

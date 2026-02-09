@@ -15,6 +15,8 @@
     "dropoffLocation": "Điểm đến",
     "dropoffPlaceholder": "Bạn muốn đi đâu?",
     "estimatedFare": "Giá ước tính",
+    "calculatingFare": "Đang tính giá...",
+    "waitingForEstimate": "Đang tính giá, vui lòng đợi...",
     "surgePricing": "Hệ số tăng giá {{multiplier}}x",
     "vehicleType": "Loại xe",
     "paymentMethod": "Phương thức thanh toán",

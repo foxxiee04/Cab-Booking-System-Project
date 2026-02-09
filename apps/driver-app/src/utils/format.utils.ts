@@ -28,7 +28,8 @@ export const formatPhoneNumber = (phone: string): string => {
 };
 
 // Get vehicle type label
-export const getVehicleTypeLabel = (type: VehicleType): string => {
+export const getVehicleTypeLabel = (type?: VehicleType): string => {
+  if (!type) return 'Economy';
   const labels: Record<VehicleType, string> = {
     ECONOMY: i18n.t('vehicle.ECONOMY'),
     COMFORT: i18n.t('vehicle.COMFORT'),

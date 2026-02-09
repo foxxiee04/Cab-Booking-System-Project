@@ -140,19 +140,6 @@ const Login: React.FC = () => {
                 </Typography>
               </Box>
             </form>
-
-            {/* Demo Accounts */}
-            <Box sx={{ mt: 3, p: 2, bgcolor: '#F5F5F5', borderRadius: 2 }}>
-              <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                {t('login.demoAccount')}:
-              </Typography>
-              <Typography variant="caption" display="block">
-                📧 customer1@example.com
-              </Typography>
-              <Typography variant="caption" display="block">
-                🔒 Password123!
-              </Typography>
-            </Box>
           </CardContent>
         </Card>
       </Container>

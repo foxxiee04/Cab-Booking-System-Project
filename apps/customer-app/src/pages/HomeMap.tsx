@@ -1,56 +1,35 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
-  AppBar,
-  Toolbar,
-  Typography,
-  IconButton,
-  Drawer,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
   Paper,
   TextField,
   Button,
-  Card,
-  CardContent,
-  Chip,
   Alert,
   CircularProgress,
   Autocomplete,
 } from '@mui/material';
 import {
-  Menu as MenuIcon,
-  History,
-  Person,
-  Logout,
-  DirectionsCar,
   MyLocation,
-  Search,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { logout } from '../store/auth.slice';
 import {
   setPickupLocation,
   setDropoffLocation,
-  setFareEstimate,
-  setSurgeMultiplier,
   setCurrentRide,
 } from '../store/ride.slice';
 import { setCurrentLocation } from '../store/location.slice';
+import NavigationBar from '../components/common/NavigationBar';
 import MapView from '../components/map/MapView';
 import PickupMarker from '../components/map/PickupMarker';
 import DropoffMarker from '../components/map/DropoffMarker';
+import RideBookingFlow from '../components/booking/RideBookingFlow';
 import {
   getCurrentLocation,
   geocodeAddress,
   reverseGeocode,
 } from '../utils/map.utils';
-import { formatCurrency } from '../utils/format.utils';
-import { pricingApi } from '../api/pricing.api';
 import { rideApi } from '../api/ride.api';
 import { Location } from '../types';
 
@@ -61,18 +40,15 @@ const HomeMap: React.FC = () => {
 
   const { user } = useAppSelector((state) => state.auth);
   const { currentLocation } = useAppSelector((state) => state.location);
-  const { pickupLocation, dropoffLocation, fareEstimate, surgeMultiplier } =
+  const { pickupLocation, dropoffLocation } =
     useAppSelector((state) => state.ride);
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pickupSearch, setPickupSearch] = useState('');
   const [dropoffSearch, setDropoffSearch] = useState('');
   const [pickupOptions, setPickupOptions] = useState<Location[]>([]);
   const [dropoffOptions, setDropoffOptions] = useState<Location[]>([]);
-  const [loading, setLoadingState] = useState(false);
   const [error, setErrorMessage] = useState('');
-  const [vehicleType, setVehicleType] = useState<'ECONOMY' | 'COMFORT' | 'PREMIUM'>('ECONOMY');
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'WALLET'>('CASH');
+  const [bookingFlowOpen, setBookingFlowOpen] = useState(false);
   const pickupSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropoffSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pickupAbort = useRef<AbortController | null>(null);
@@ -102,7 +78,7 @@ const HomeMap: React.FC = () => {
     const checkActiveRide = async () => {
       try {
         const activeRide = await rideApi.getActiveRide();
-        if (activeRide) {
+        if (activeRide && activeRide.data && activeRide.data.ride) {
           dispatch(setCurrentRide(activeRide.data.ride));
           navigate(`/ride/${activeRide.data.ride.id}`);
         }
@@ -170,254 +146,185 @@ const HomeMap: React.FC = () => {
     }, 350);
   };
 
-  // Estimate fare
-  const handleEstimateFare = async () => {
-    if (!pickupLocation || !dropoffLocation) {
+  // Open booking flow when both locations are selected
+  const handleOpenBooking = () => {
+    if (pickupLocation && dropoffLocation) {
+      setBookingFlowOpen(true);
+    } else {
       setErrorMessage(t('errors.selectLocations'));
-      return;
     }
+  };
 
-    setLoadingState(true);
-    setErrorMessage('');
+  // Handle successful ride creation
+  const handleRideCreated = (rideId: string) => {
+    navigate(`/ride/${rideId}`);
+  };
 
+  // Memoize map center calculation to prevent unnecessary re-renders
+  // Priority: dropoff > pickup > current location > default HCM center
+  const mapCenter = useMemo(() => {
+    if (dropoffLocation) return dropoffLocation;
+    if (pickupLocation) return pickupLocation;
+    if (currentLocation) return currentLocation;
+    return { lat: 10.762622, lng: 106.660172 }; // Default: Ho Chi Minh City center
+  }, [dropoffLocation, pickupLocation, currentLocation]);
+
+  // GPS status
+  const [gpsReady, setGpsReady] = useState(false);
+  useEffect(() => {
+    if (currentLocation) setGpsReady(true);
+  }, [currentLocation]);
+
+  // Re-center to current location
+  const handleRecenter = async () => {
     try {
-      // Get surge multiplier
-      const surgeResponse = await pricingApi.getSurge();
-      dispatch(setSurgeMultiplier(surgeResponse.data.multiplier));
-
-      // Get fare estimate
-      const estimateResponse = await pricingApi.estimateFare({
-        pickup: pickupLocation,
-        dropoff: dropoffLocation,
-        vehicleType,
-      });
-
-      dispatch(setFareEstimate(estimateResponse.data.fare));
-    } catch (error: any) {
-      setErrorMessage(t('errors.estimateFare'));
-    } finally {
-      setLoadingState(false);
+      const location = await getCurrentLocation();
+      dispatch(setCurrentLocation(location));
+      dispatch(setPickupLocation(location));
+      const address = await reverseGeocode(location.lat, location.lng);
+      dispatch(setPickupLocation({ ...location, address }));
+      setPickupSearch(address);
+    } catch (err) {
+      console.error('Failed to get location:', err);
     }
   };
-
-  // Request ride
-  const handleRequestRide = async () => {
-    if (!pickupLocation || !dropoffLocation) {
-      setErrorMessage(t('errors.selectLocations'));
-      return;
-    }
-
-    setLoadingState(true);
-    setErrorMessage('');
-
-    try {
-      const response = await rideApi.createRide({
-        pickup: pickupLocation,
-        dropoff: dropoffLocation,
-        vehicleType,
-        paymentMethod,
-      });
-
-      dispatch(setCurrentRide(response.data.ride));
-      navigate(`/ride/${response.data.ride.id}`);
-    } catch (error: any) {
-      setErrorMessage(error.response?.data?.error?.message || t('errors.requestRide'));
-    } finally {
-      setLoadingState(false);
-    }
-  };
-
-  // Handle logout
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login');
-  };
-
-  const mapCenter = dropoffLocation || pickupLocation || currentLocation || { lat: 10.762622, lng: 106.660172 };
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* App Bar */}
-      <AppBar position="static">
-        <Toolbar>
-          <IconButton
-            edge="start"
-            color="inherit"
-            onClick={() => setSidebarOpen(true)}
-            sx={{ mr: 2 }}
-          >
-            <MenuIcon />
-          </IconButton>
-          <DirectionsCar sx={{ mr: 1 }} />
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            {t('app.title')}
-          </Typography>
-          <Typography variant="body2">
-            {t('app.welcome', { name: user?.firstName || '' })}
-          </Typography>
-        </Toolbar>
-      </AppBar>
-
-      {/* Sidebar */}
-      <Drawer anchor="left" open={sidebarOpen} onClose={() => setSidebarOpen(false)}>
-        <Box sx={{ width: 250, pt: 2 }}>
-          <Box sx={{ px: 2, pb: 2 }}>
-            <Typography variant="h6">{user?.firstName} {user?.lastName}</Typography>
-            <Typography variant="body2" color="text.secondary">{user?.email}</Typography>
-          </Box>
-          <List>
-            <ListItemButton onClick={() => { navigate('/history'); setSidebarOpen(false); }}>
-              <ListItemIcon><History /></ListItemIcon>
-              <ListItemText primary={t('menu.rideHistory')} />
-            </ListItemButton>
-            <ListItemButton onClick={() => { navigate('/profile'); setSidebarOpen(false); }}>
-              <ListItemIcon><Person /></ListItemIcon>
-              <ListItemText primary={t('menu.profile')} />
-            </ListItemButton>
-            <ListItemButton onClick={handleLogout}>
-              <ListItemIcon><Logout /></ListItemIcon>
-              <ListItemText primary={t('menu.logout')} />
-            </ListItemButton>
-          </List>
-        </Box>
-      </Drawer>
+      {/* Navigation Bar */}
+      <NavigationBar title={t('app.title')} />
 
       {/* Main Content */}
-      <Box sx={{ flexGrow: 1, position: 'relative' }}>
+      <Box sx={{ flexGrow: 1, position: 'relative', mt: 8 }}>
         {/* Map */}
         <MapView center={mapCenter} height="100%">
           {pickupLocation && <PickupMarker location={pickupLocation} />}
           {dropoffLocation && <DropoffMarker location={dropoffLocation} />}
         </MapView>
 
-        {/* Booking Panel */}
+        {/* GPS recenter button */}
+        <Box sx={{
+          position: 'absolute',
+          bottom: 320,
+          right: 16,
+          zIndex: 1000,
+        }}>
+          <Paper
+            elevation={3}
+            onClick={handleRecenter}
+            sx={{
+              width: 44, height: 44,
+              borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+              '&:hover': { bgcolor: 'grey.100' },
+            }}
+          >
+            <MyLocation sx={{ color: gpsReady ? 'primary.main' : 'grey.400' }} />
+          </Paper>
+        </Box>
+
+        {/* ── Bottom booking card ─────────────────────────────────── */}
         <Paper
-          elevation={3}
+          elevation={6}
           sx={{
             position: 'absolute',
-            top: 16,
-            left: 16,
-            right: 16,
-            maxWidth: 400,
-            mx: 'auto',
-            p: 2,
+            bottom: 0,
+            left: 0,
+            right: 0,
             zIndex: 1000,
+            borderRadius: '20px 20px 0 0',
+            p: 2.5,
+            pt: 1.5,
+            boxShadow: '0 -4px 20px rgba(0,0,0,0.12)',
           }}
         >
-          <Typography variant="h6" gutterBottom>
-            {t('home.bookRide')}
-          </Typography>
-
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-
-          {/* Pickup Location */}
-          <Autocomplete
-            freeSolo
-            options={pickupOptions}
-            getOptionLabel={(option: any) => option.address || ''}
-            inputValue={pickupSearch}
-            onInputChange={(_, value) => handlePickupSearch(value)}
-            onChange={(_, value: any) => {
-              if (value) {
-                dispatch(setPickupLocation(value));
-                setPickupSearch(value.address || '');
-              }
-            }}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label={t('home.pickupLocation')}
-                placeholder={t('home.pickupPlaceholder')}
-                InputProps={{
-                  ...params.InputProps,
-                  startAdornment: <MyLocation sx={{ mr: 1, color: 'action.active' }} />,
-                }}
-                sx={{ mb: 2 }}
-              />
-            )}
-          />
-
-          {/* Dropoff Location */}
-          <Autocomplete
-            freeSolo
-            options={dropoffOptions}
-            getOptionLabel={(option: any) => option.address || ''}
-            inputValue={dropoffSearch}
-            onInputChange={(_, value) => handleDropoffSearch(value)}
-            onChange={(_, value: any) => {
-              if (value) {
-                dispatch(setDropoffLocation(value));
-                setDropoffSearch(value.address || '');
-                handleEstimateFare();
-              }
-            }}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label={t('home.dropoffLocation')}
-                placeholder={t('home.dropoffPlaceholder')}
-                InputProps={{
-                  ...params.InputProps,
-                  startAdornment: <Search sx={{ mr: 1, color: 'action.active' }} />,
-                }}
-                sx={{ mb: 2 }}
-              />
-            )}
-          />
-
-          {/* Fare Estimate */}
-          {fareEstimate && (
-            <Card variant="outlined" sx={{ mb: 2, bgcolor: '#F5F5F5' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('home.estimatedFare')}
-                  </Typography>
-                  <Typography variant="h5" color="primary" fontWeight="bold">
-                    {formatCurrency(fareEstimate)}
-                  </Typography>
-                </Box>
-                {surgeMultiplier > 1 && (
-                  <Chip
-                    label={t('home.surgePricing', { multiplier: surgeMultiplier })}
-                    size="small"
-                    color="warning"
-                    sx={{ mt: 1 }}
-                  />
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Vehicle Type */}
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" gutterBottom>{t('home.vehicleType')}</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              {['ECONOMY', 'COMFORT', 'PREMIUM'].map((type) => (
-                <Chip
-                  key={type}
-                  label={t(`vehicle.${type}`)}
-                  onClick={() => setVehicleType(type as any)}
-                  color={vehicleType === type ? 'primary' : 'default'}
-                  variant={vehicleType === type ? 'filled' : 'outlined'}
-                />
-              ))}
-            </Box>
+          {/* Drag handle */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+            <Box sx={{ width: 40, height: 4, borderRadius: 2, bgcolor: 'grey.300' }} />
           </Box>
 
-          {/* Payment Method */}
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" gutterBottom>{t('home.paymentMethod')}</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              {['CASH', 'CARD', 'WALLET'].map((method) => (
-                <Chip
-                  key={method}
-                  label={t(`payment.${method}`)}
-                  onClick={() => setPaymentMethod(method as any)}
-                  color={paymentMethod === method ? 'secondary' : 'default'}
-                  variant={paymentMethod === method ? 'filled' : 'outlined'}
-                />
-              ))}
+          {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setErrorMessage('')}>{error}</Alert>}
+
+          {/* Location inputs with connecting dots */}
+          <Box sx={{ display: 'flex', gap: 1.5 }}>
+            {/* Dots column */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 2.5, width: 20 }}>
+              <Box sx={{
+                width: 12, height: 12, borderRadius: '50%',
+                bgcolor: '#4CAF50', border: '2px solid white',
+                boxShadow: '0 0 0 2px #4CAF50',
+              }} />
+              <Box sx={{ width: 2, height: 40, bgcolor: 'grey.300', my: 0.5 }} />
+              <Box sx={{
+                width: 12, height: 12, borderRadius: 1,
+                bgcolor: '#F44336', border: '2px solid white',
+                boxShadow: '0 0 0 2px #F44336',
+              }} />
+            </Box>
+
+            {/* Inputs column */}
+            <Box sx={{ flex: 1 }}>
+              {/* Pickup Location */}
+              <Autocomplete
+                freeSolo
+                options={pickupOptions}
+                getOptionLabel={(option: any) => option.address || ''}
+                inputValue={pickupSearch}
+                onInputChange={(_, value) => handlePickupSearch(value)}
+                onChange={(_, value: any) => {
+                  if (value) {
+                    dispatch(setPickupLocation(value));
+                    setPickupSearch(value.address || '');
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    placeholder={t('home.pickupPlaceholder', 'Where to pick you up?')}
+                    variant="outlined"
+                    size="small"
+                    sx={{
+                      mb: 1.5,
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                        bgcolor: 'grey.50',
+                      },
+                    }}
+                    fullWidth
+                  />
+                )}
+              />
+
+              {/* Dropoff Location */}
+              <Autocomplete
+                freeSolo
+                options={dropoffOptions}
+                getOptionLabel={(option: any) => option.address || ''}
+                inputValue={dropoffSearch}
+                onInputChange={(_, value) => handleDropoffSearch(value)}
+                onChange={(_, value: any) => {
+                  if (value) {
+                    dispatch(setDropoffLocation(value));
+                    setDropoffSearch(value.address || '');
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    placeholder={t('home.dropoffPlaceholder', 'Where are you going?')}
+                    variant="outlined"
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                        bgcolor: 'grey.50',
+                      },
+                    }}
+                    fullWidth
+                  />
+                )}
+              />
             </Box>
           </Box>
 
@@ -426,14 +333,31 @@ const HomeMap: React.FC = () => {
             fullWidth
             variant="contained"
             size="large"
-            onClick={handleRequestRide}
-            disabled={loading || !pickupLocation || !dropoffLocation}
-            sx={{ py: 1.5 }}
+            onClick={handleOpenBooking}
+            disabled={!pickupLocation || !dropoffLocation}
+            sx={{
+              mt: 2,
+              py: 1.8,
+              fontSize: '1rem',
+              fontWeight: 700,
+              borderRadius: 3,
+              textTransform: 'none',
+              boxShadow: !pickupLocation || !dropoffLocation ? 'none' : '0 4px 12px rgba(25,118,210,0.3)',
+            }}
           >
-            {loading ? <CircularProgress size={24} /> : t('home.requestRide')}
+            {t('home.continueBooking', 'Book a Ride')}
           </Button>
         </Paper>
       </Box>
+
+      {/* Ride Booking Flow Modal */}
+      <RideBookingFlow
+        open={bookingFlowOpen}
+        onClose={() => setBookingFlowOpen(false)}
+        pickup={pickupLocation!}
+        dropoff={dropoffLocation!}
+        onRideCreated={handleRideCreated}
+      />
     </Box>
   );
 };

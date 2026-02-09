@@ -133,7 +133,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
                 {t('rideRequest.pickup')}
               </Typography>
               <Typography variant="body1">
-                {ride.pickupLocation.address || t('rideRequest.locationProvided')}
+                {ride.pickupLocation?.address || t('rideRequest.locationProvided')}
               </Typography>
             </Box>
           </Box>
@@ -146,7 +146,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
                 {t('rideRequest.dropoff')}
               </Typography>
               <Typography variant="body1">
-                {ride.dropoffLocation.address || t('rideRequest.locationProvided')}
+                {ride.dropoffLocation?.address || t('rideRequest.locationProvided')}
               </Typography>
             </Box>
           </Box>
@@ -160,7 +160,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
                   {t('rideRequest.vehicle')}
                 </Typography>
                 <Typography variant="body2" fontWeight="bold">
-                  {getVehicleTypeLabel(ride.vehicleType)}
+                  {ride.vehicleType ? getVehicleTypeLabel(ride.vehicleType) : 'Economy'}
                 </Typography>
               </Card>
             </Grid>
@@ -170,7 +170,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
                   {t('rideRequest.distance')}
                 </Typography>
                 <Typography variant="body2" fontWeight="bold">
-                  {formatDistance(ride.distance)}
+                  {ride.distance ? formatDistance(ride.distance) : 'N/A'}
                 </Typography>
               </Card>
             </Grid>
@@ -180,7 +180,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
                   {t('rideRequest.duration')}
                 </Typography>
                 <Typography variant="body2" fontWeight="bold">
-                  {formatDuration(ride.duration)}
+                  {(ride.duration || ride.estimatedDuration) ? formatDuration(ride.duration || ride.estimatedDuration || 0) : 'N/A'}
                 </Typography>
               </Card>
             </Grid>
@@ -193,7 +193,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
                 {t('rideRequest.estimatedEarnings')}
               </Typography>
               <Typography variant="h4" color="success.main" fontWeight="bold">
-                {formatCurrency(ride.fare)}
+                {ride.fare ? formatCurrency(ride.fare) : 'N/A'}
               </Typography>
             </CardContent>
           </Card>

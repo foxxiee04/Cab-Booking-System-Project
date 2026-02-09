@@ -140,4 +140,18 @@ export class PaymentController {
       next(error);
     }
   };
+
+  getPaymentMethods = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const methods = [
+        { id: 'CASH', name: 'Tiền mặt', icon: 'cash', enabled: true },
+        { id: 'CARD', name: 'Thẻ tín dụng/ghi nợ', icon: 'card', enabled: true },
+        { id: 'WALLET', name: 'Ví điện tử', icon: 'wallet', enabled: true },
+      ];
+      
+      res.json({ success: true, data: { methods } });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

@@ -20,23 +20,31 @@ interface PickupMarkerProps {
   showPopup?: boolean;
 }
 
-export const PickupMarker: React.FC<PickupMarkerProps> = ({
-  location,
-  showPopup = true,
-}) => {
-  return (
-    <Marker position={[location.lat, location.lng]} icon={pickupIcon}>
-      {showPopup && (
-        <Popup>
-          <div style={{ textAlign: 'center' }}>
-            <strong>📍 Pickup Location</strong>
-            <br />
-            {location.address || `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`}
-          </div>
-        </Popup>
-      )}
-    </Marker>
-  );
-};
+export const PickupMarker: React.FC<PickupMarkerProps> = React.memo(
+  ({ location, showPopup = true }) => {
+    return (
+      <Marker position={[location.lat, location.lng]} icon={pickupIcon}>
+        {showPopup && (
+          <Popup>
+            <div style={{ textAlign: 'center' }}>
+              <strong>📍 Pickup Location</strong>
+              <br />
+              {location.address || `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`}
+            </div>
+          </Popup>
+        )}
+      </Marker>
+    );
+  },
+  (prev, next) => {
+    // Only re-render if location actually changed
+    return (
+      prev.location.lat === next.location.lat &&
+      prev.location.lng === next.location.lng &&
+      prev.location.address === next.location.address &&
+      prev.showPopup === next.showPopup
+    );
+  }
+);
 
 export default PickupMarker;

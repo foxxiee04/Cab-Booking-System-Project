@@ -7,7 +7,40 @@ export class BookingController {
 
   createBooking = async (req: Request, res: Response) => {
     try {
-      const booking = await this.bookingService.createBooking(req.body);
+      // Extract customerId from auth headers (set by API gateway)
+      const customerId = req.headers['x-user-id'] as string;
+      if (!customerId) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'User ID not found in request' },
+        });
+      }
+
+      // Transform location objects to flat fields if present
+      const {
+        pickupLocation,
+        dropoffLocation,
+        pickupAddress,
+        pickupLat,
+        pickupLng,
+        dropoffAddress,
+        dropoffLat,
+        dropoffLng,
+        ...rest
+      } = req.body;
+
+      const bookingData = {
+        customerId,
+        pickupAddress: pickupLocation?.address || pickupAddress,
+        pickupLat: pickupLocation?.geoPoint?.lat || pickupLat,
+        pickupLng: pickupLocation?.geoPoint?.lng || pickupLng,
+        dropoffAddress: dropoffLocation?.address || dropoffAddress,
+        dropoffLat: dropoffLocation?.geoPoint?.lat || dropoffLat,
+        dropoffLng: dropoffLocation?.geoPoint?.lng || dropoffLng,
+        ...rest,
+      };
+
+      const booking = await this.bookingService.createBooking(bookingData);
       res.status(201).json({ success: true, data: { booking } });
     } catch (error: any) {
       logger.error('Create booking error:', error);

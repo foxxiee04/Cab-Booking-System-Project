@@ -6,6 +6,7 @@ import { config } from './config';
 import { EventPublisher } from './events/publisher';
 import { EventConsumer } from './events/consumer';
 import { createPaymentRoutes } from './routes/payment.routes';
+import { paymentGatewayManager } from './services/payment-gateway.manager';
 import { logger } from './utils/logger';
 
 const app = express();
@@ -37,6 +38,9 @@ const start = async () => {
   try {
     await prisma.$connect();
     logger.info('Connected to PostgreSQL');
+
+    // Initialize payment gateways
+    paymentGatewayManager.initialize();
 
     await eventPublisher.connect();
     await eventConsumer.connect();

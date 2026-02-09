@@ -16,6 +16,9 @@ const getPaging = (req: Request) => {
 
 const getAuthHeaders = (req: Request) => ({
   Authorization: req.header('authorization') || '',
+  'x-user-id': req.headers['x-user-id'] as string || '',
+  'x-user-email': req.headers['x-user-email'] as string || '',
+  'x-user-role': req.headers['x-user-role'] as string || '',
 });
 
 router.get('/rides', async (req: Request, res: Response) => {
@@ -147,7 +150,8 @@ router.get('/logs', async (_req: Request, res: Response) => {
   res.json({ success: true, data: { logs: [], total: 0 } });
 });
 
-router.get('/stats', async (req: Request, res: Response) => {
+// Stats handler function
+const handleStats = async (req: Request, res: Response) => {
   try {
     const headers = getAuthHeaders(req);
 
@@ -202,6 +206,10 @@ router.get('/stats', async (req: Request, res: Response) => {
       error: { code: 'ADMIN_STATS_FAILED', message: 'Failed to load stats' },
     });
   }
-});
+};
+
+// Both endpoints use the same handler
+router.get('/stats', handleStats);
+router.get('/statistics', handleStats);
 
 export default router;

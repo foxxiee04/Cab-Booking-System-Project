@@ -32,7 +32,22 @@
     "docker:logs": "docker-compose logs -f",
     "docker:build": "docker-compose build"
   },
-  "keywords": ["microservices", "cab-booking", "nodejs", "fastapi", "docker"],
+  "keywords": [
+    "microservices",
+    "cab-booking",
+    "nodejs",
+    "fastapi",
+    "docker"
+  ],
   "author": "KLTN2025",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^25.2.2",
+    "@types/pg": "^8.16.0",
+    "bcryptjs": "^3.0.3",
+    "pg": "^8.18.0",
+    "socket.io-client": "^4.8.3",
+    "tsx": "^4.21.0"
+  }
 }

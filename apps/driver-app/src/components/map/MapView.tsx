@@ -1,7 +1,9 @@
 import React, { useEffect } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import POIMarkers from './POIMarkers';
 import 'leaflet/dist/leaflet.css';
+import '../../styles/map.css';
 import { Location } from '../../types';
 
 interface MapViewProps {
@@ -45,11 +47,17 @@ const MapView: React.FC<MapViewProps> = ({
       style={{ height, width: '100%' }}
       zoomControl={true}
     >
+      {/* CartoDB Voyager — colorful, readable, free */}
       <TileLayer
-        attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
-        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+        maxZoom={20}
       />
       <MapCenter center={center} zoom={zoom} />
+      
+      {/* POI markers with clustering — fetches from backend API */}
+      <POIMarkers />
+      
       {children}
     </MapContainer>
   );

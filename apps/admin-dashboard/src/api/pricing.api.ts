@@ -17,9 +17,14 @@ export const pricingApi = {
     return response.data;
   },
 
-  // Get pricing history
+  // Get pricing history - NOT IMPLEMENTED IN BACKEND
+  // Backend limitation: /pricing/surge/history endpoint does not exist
+  // Consider implementing in backend or remove from UI
   getSurgeHistory: async (): Promise<ApiResponse<{ history: SurgePricing[] }>> => {
-    const response = await axiosInstance.get('/pricing/surge/history');
-    return response.data;
+    // Return empty history instead of calling non-existent endpoint
+    return {
+      success: true,
+      data: { history: [] }
+    };
   },
 };

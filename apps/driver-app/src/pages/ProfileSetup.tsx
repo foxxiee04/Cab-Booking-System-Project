@@ -62,6 +62,8 @@ const ProfileSetup: React.FC = () => {
 
       if (response.success) {
         dispatch(setProfile(response.data.driver));
+        // Show success and inform about approval process
+        alert(t('profileSetup.successMessage'));
         navigate('/dashboard');
       }
     } catch (err: any) {

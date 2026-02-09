@@ -37,23 +37,14 @@ export class DriverController {
 
   getMe = async (req: AuthRequest, res: Response) => {
     try {
-      let driver = await this.driverService.getDriverByUserId(req.user!.userId);
+      const driver = await this.driverService.getDriverByUserId(req.user!.userId);
       
       if (!driver) {
-        logger.info(`Auto-creating driver profile for userId: ${req.user!.userId}`);
-        driver = await this.driverService.registerDriver({
-          userId: req.user!.userId,
-          vehicle: {
-            type: 'CAR',
-            brand: 'Unknown',
-            model: 'Unknown',
-            plate: 'TEMP',
-            color: 'Unknown',
-            year: new Date().getFullYear(),
-          },
-          license: {
-            number: 'TEMP',
-            expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        return res.status(404).json({
+          success: false,
+          error: { 
+            code: 'PROFILE_NOT_SETUP', 
+            message: 'Please complete your driver profile setup first' 
           },
         });
       }

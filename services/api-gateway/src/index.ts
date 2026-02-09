@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import swaggerUi from 'swagger-ui-express';
 import { config } from './config';
 import { authMiddleware } from './middleware/auth';
 import { generalLimiter } from './middleware/rate-limit';
@@ -12,12 +13,15 @@ import adminRoutes from './routes/admin';
 import { logger } from './utils/logger';
 import { SocketServer } from './socket/socket-server';
 import { EventConsumer } from './events/consumer';
+import { swaggerSpec } from './swagger';
 
 const app = express();
 const httpServer = createServer(app);
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable for Swagger UI
+}));
 app.use(cors({
   origin: '*', // Configure for production
   credentials: true,
@@ -31,7 +35,30 @@ app.use(morgan('combined', {
 // Rate limiting - DISABLED FOR TESTING
 // app.use(generalLimiter);
 
-// Health check (before auth)
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Check API Gateway health
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Service is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: healthy
+ *                 service:
+ *                   type: string
+ *                   example: api-gateway
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ */
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
@@ -40,7 +67,32 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Service health aggregation
+/**
+ * @swagger
+ * /health/services:
+ *   get:
+ *     summary: Check all microservices health
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Health status of all services
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 gateway:
+ *                   type: string
+ *                   example: healthy
+ *                 services:
+ *                   type: object
+ *                   additionalProperties:
+ *                     type: string
+ *                     enum: [healthy, unhealthy, unreachable]
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ */
 app.get('/health/services', async (req, res) => {
   const services = config.services;
   const results: Record<string, string> = {};
@@ -60,6 +112,12 @@ app.get('/health/services', async (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Swagger API Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Cab Booking System API',
+}));
 
 // Map proxy endpoints (public)
 app.use('/api/map', mapRoutes);

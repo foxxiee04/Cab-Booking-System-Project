@@ -3,14 +3,16 @@ import { ApiResponse, Driver, DriverRegistration, Location, Earnings } from '../
 
 const mapVehicleType = (type: DriverRegistration['vehicleType']): 'CAR' | 'SUV' | 'MOTORCYCLE' => {
   switch (type) {
+    case 'ECONOMY':
+      return 'CAR';
+    case 'COMFORT':
+      return 'CAR';
+    case 'PREMIUM':
+      return 'SUV';
     case 'CAR':
       return 'CAR';
     case 'SUV':
       return 'SUV';
-    case 'COMFORT':
-      return 'SUV';
-    case 'PREMIUM':
-      return 'CAR';
     case 'MOTORCYCLE':
       return 'MOTORCYCLE';
     default:
@@ -75,9 +77,9 @@ export const driverApi = {
   // Get earnings - Using alternative endpoint since /drivers/me/earnings doesn't exist
   getEarnings: async (): Promise<ApiResponse<{ earnings: Earnings }>> => {
     // Backend doesn't have dedicated earnings endpoint yet
-    // Calculate from completed rides via payments
+    // Calculate from completed rides via driver history
     try {
-      const ridesResponse = await axiosInstance.get('/rides', { 
+      const ridesResponse = await axiosInstance.get('/rides/driver/history', { 
         params: { status: 'COMPLETED', limit: 1000 } 
       });
       
@@ -117,14 +119,13 @@ export const driverApi = {
     }
   },
 
-  // Get ride history - Using /rides endpoint with status filter
+  // Get ride history - Using /rides/driver/history endpoint
   getRideHistory: async (params?: {
     limit?: number;
     offset?: number;
   }): Promise<ApiResponse<{ rides: any[]; total: number }>> => {
-    // Backend doesn't have /drivers/me/rides, use general /rides endpoint
-    // The rides endpoint filters by authenticated driver automatically
-    const response = await axiosInstance.get('/rides', { 
+    // Use driver-specific ride history endpoint
+    const response = await axiosInstance.get('/rides/driver/history', { 
       params: {
         ...params,
         // Include all relevant statuses for driver history

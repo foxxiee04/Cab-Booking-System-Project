@@ -1,39 +1,85 @@
 import { Location, RouteData } from '../types';
 import axiosInstance from '../api/axios.config';
 
-// Geocode address to coordinates
+// Simple in-memory cache for geocoding results - improves performance
+const geocodeCache = new Map<string, { results: Location[]; timestamp: number }>();
+const reverseGeocodeCache = new Map<string, { address: string; timestamp: number }>();
+const routeCache = new Map<string, { route: RouteData; timestamp: number }>();
+
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_CACHE_SIZE = 100;
+
+const cleanCache = (cache: Map<string, any>) => {
+  if (cache.size > MAX_CACHE_SIZE) {
+    const now = Date.now();
+    for (const [key, value] of cache.entries()) {
+      if (now - value.timestamp > CACHE_TTL) {
+        cache.delete(key);
+      }
+    }
+  }
+};
+
+// Geocode address to coordinates - WITH CACHING
 export const geocodeAddress = async (address: string): Promise<Location[]> => {
+  const cacheKey = address.toLowerCase().trim();
+  const cached = geocodeCache.get(cacheKey);
+  
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.results;
+  }
+
   try {
     const response = await axiosInstance.get('/map/geocode', {
       params: { q: address, limit: 7 },
     });
 
-    return response.data?.data?.results || [];
+    const results = response.data?.data?.results || [];
+    geocodeCache.set(cacheKey, { results, timestamp: Date.now() });
+    cleanCache(geocodeCache);
+    return results;
   } catch (error) {
     console.error('Geocoding error:', error);
-    return [];
+    return cached?.results || [];
   }
 };
 
-// Reverse geocode coordinates to address
+// Reverse geocode coordinates to address - WITH CACHING
 export const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+  const cacheKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+  const cached = reverseGeocodeCache.get(cacheKey);
+  
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.address;
+  }
+
   try {
     const response = await axiosInstance.get('/map/reverse', {
       params: { lat, lng },
     });
 
-    return response.data?.data?.address || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    const address = response.data?.data?.display_name || 'Unknown location';
+    reverseGeocodeCache.set(cacheKey, { address, timestamp: Date.now() });
+    cleanCache(reverseGeocodeCache);
+    return address;
   } catch (error) {
     console.error('Reverse geocoding error:', error);
-    return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    return cached?.address || 'Unknown location';
   }
 };
 
-// Get route between two points
+// Get route between two locations - WITH CACHING
 export const getRoute = async (
   start: Location,
   end: Location
 ): Promise<RouteData | null> => {
+  const cacheKey = `${start.lat.toFixed(6)},${start.lng.toFixed(6)}-${end.lat.toFixed(6)},${end.lng.toFixed(6)}`;
+  const cached = routeCache.get(cacheKey);
+  
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.route;
+  }
+
   try {
     const response = await axiosInstance.get('/map/route', {
       params: {
@@ -49,14 +95,18 @@ export const getRoute = async (
       return null;
     }
 
-    return {
+    const routeData: RouteData = {
       coordinates: route.geometry.coordinates,
       distance: route.distance,
       duration: route.duration,
     };
+
+    routeCache.set(cacheKey, { route: routeData, timestamp: Date.now() });
+    cleanCache(routeCache);
+    return routeData;
   } catch (error) {
     console.error('Routing error:', error);
-    return null;
+    return cached?.route || null;
   }
 };
 

@@ -87,6 +87,14 @@ router.use(
   }))
 );
 
+// Notification Service routes
+router.use(
+  '/api/notifications',
+  createProxyMiddleware(createProxyOptions(config.services.notification, {
+    '^/api/notifications': '/api/notifications',
+  }))
+);
+
 // WebSocket proxy for notifications
 router.use(
   '/socket.io',
