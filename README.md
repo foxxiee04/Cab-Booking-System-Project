@@ -829,6 +829,97 @@ docker service update --image cab-ride-service:v2 cab-booking_ride-service
 docker stack rm cab-booking
 ```
 
+### GitHub Actions CI/CD + Docker Hub
+
+#### Bước 1 — Tạo Docker Hub Access Token
+
+1. Đăng nhập [https://hub.docker.com](https://hub.docker.com)
+2. Nhấn **Avatar** (góc trên phải) → **Account Settings** → **Security** → **New Access Token**
+3. Đặt tên token (ví dụ `github-actions`), chọn quyền **Read & Write**
+4. Nhấn **Generate** → **Copy** token ngay (chỉ hiện 1 lần)
+
+#### Bước 2 — Thêm Secrets vào GitHub Repository
+
+1. Mở repo trên GitHub → **Settings** → **Secrets and variables** → **Actions**
+2. Nhấn **New repository secret**, thêm lần lượt:
+
+| Name | Value |
+|------|-------|
+| `DOCKERHUB_USERNAME` | Username Docker Hub của bạn (ví dụ `myuser`) |
+| `DOCKERHUB_TOKEN` | Access Token vừa copy ở Bước 1 |
+
+#### Bước 3 — Push code & chạy pipeline
+
+```bash
+# Commit tất cả thay đổi
+git add .
+git commit -m "ci: setup CI/CD pipeline with Docker Hub"
+git push origin main
+```
+
+Hoặc chạy thủ công:
+1. Mở repo trên GitHub → **Actions** → chọn workflow **CI/CD - Docker Hub**
+2. Nhấn **Run workflow** → chọn branch `main` → **Run workflow**
+
+#### Bước 4 — Kiểm tra kết quả
+
+1. Vào tab **Actions** trên GitHub để xem pipeline đang chạy
+2. Job `CI - Node Services`: build + test toàn bộ backend Node.js
+3. Job `CI - AI Service`: test Python AI service
+4. Job `Docker - Build & Push`: build và push 11 image lên Docker Hub
+5. Vào [https://hub.docker.com](https://hub.docker.com) → **Repositories** để xác nhận image đã được push
+
+#### Bước 5 — Deploy production từ Docker Hub
+
+```bash
+# Tạo file .env trên server production
+cat > .env << 'EOF'
+DOCKERHUB_USERNAME=myuser
+IMAGE_TAG=latest
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=<strong-password>
+MONGO_USER=admin
+MONGO_PASSWORD=<strong-password>
+RABBITMQ_USER=guest
+RABBITMQ_PASS=<strong-password>
+JWT_SECRET=<min-32-characters>
+REFRESH_TOKEN_SECRET=<min-32-characters>
+INTERNAL_SERVICE_TOKEN=<service-token>
+EOF
+
+# Pull image mới nhất và khởi động
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+
+# Kiểm tra
+docker compose -f docker-compose.prod.yml ps
+curl http://localhost:3000/health
+```
+
+#### Tổng quan pipeline
+
+```
+push/PR → main,develop
+    │
+    ├─ CI - Node Services ──→ npm install → build → test (Jest)
+    ├─ CI - AI Service ─────→ pip install → pytest
+    │
+    └─ (chỉ push, không PR)
+         │
+         └─ Docker Build & Push ──→ 11 images → Docker Hub
+              ├─ <username>/cab-api-gateway:latest
+              ├─ <username>/cab-auth-service:latest
+              ├─ <username>/cab-booking-service:latest
+              ├─ <username>/cab-driver-service:latest
+              ├─ <username>/cab-notification-service:latest
+              ├─ <username>/cab-payment-service:latest
+              ├─ <username>/cab-pricing-service:latest
+              ├─ <username>/cab-review-service:latest
+              ├─ <username>/cab-ride-service:latest
+              ├─ <username>/cab-user-service:latest
+              └─ <username>/cab-ai-service:latest
+```
+
 ### Environment Variables
 
 **Backend (.env):**
