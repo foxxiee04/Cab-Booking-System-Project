@@ -11,6 +11,10 @@ export class EventConsumer {
   private queue = 'ride-service-queue';
   private rideService: RideService;
 
+  isConnected(): boolean {
+    return Boolean(this.connection && this.channel);
+  }
+
   constructor(rideService: RideService) {
     this.rideService = rideService;
   }

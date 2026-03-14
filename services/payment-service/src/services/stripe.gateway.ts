@@ -20,7 +20,7 @@ class StripeGateway {
   initialize() {
     if (config.stripe.enabled && config.stripe.secretKey) {
       this.stripe = new Stripe(config.stripe.secretKey, {
-        apiVersion: '2024-12-18.acacia',
+        apiVersion: '2025-02-24.acacia',
       });
       this.enabled = true;
       logger.info('✅ Stripe gateway initialized');

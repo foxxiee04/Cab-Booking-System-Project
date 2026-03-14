@@ -1,84 +1,59 @@
 @echo off
 REM ============================================
-REM Database Reset Script - Windows
-REM Drops all databases and re-runs migrations
+REM  Cab Booking System - Database Reset Script
+REM  Resets all PostgreSQL + MongoDB databases
 REM ============================================
 
-echo ========================================
-echo DATABASE RESET SCRIPT
-echo ========================================
+echo ============================================
+echo  Cab Booking System - Database Reset
+echo ============================================
 echo.
-echo WARNING: This will delete ALL data!
-echo Press Ctrl+C to cancel
+
+set POSTGRES_HOST=localhost
+set POSTGRES_PORT=5433
+set POSTGRES_USER=postgres
+set POSTGRES_PASSWORD=postgres123
+set MONGO_HOST=localhost
+set MONGO_PORT=27017
+set MONGO_USER=admin
+set MONGO_PASSWORD=admin123
+
+echo [1/4] Dropping and recreating PostgreSQL databases...
 echo.
-pause
+
+for %%d in (auth_db booking_db driver_db payment_db ride_db user_db) do (
+    echo   Dropping %%d...
+    psql -h %POSTGRES_HOST% -p %POSTGRES_PORT% -U %POSTGRES_USER% -c "DROP DATABASE IF EXISTS %%d;" 2>nul
+    echo   Creating %%d...
+    psql -h %POSTGRES_HOST% -p %POSTGRES_PORT% -U %POSTGRES_USER% -c "CREATE DATABASE %%d;" 2>nul
+)
+
+echo.
+echo [2/4] Dropping MongoDB databases...
+echo.
+
+mongosh --host %MONGO_HOST% --port %MONGO_PORT% -u %MONGO_USER% -p %MONGO_PASSWORD% --authenticationDatabase admin --eval "db.getSiblingDB('notification_db').dropDatabase(); db.getSiblingDB('review_db').dropDatabase(); print('MongoDB databases dropped');" 2>nul
+
+echo.
+echo [3/4] Running Prisma migrations...
+echo.
 
 cd /d "%~dp0.."
 
-echo.
-echo [1/7] Resetting Auth Service Database...
-cd services\auth-service
-call npx prisma migrate reset --force --skip-seed
-if %errorlevel% neq 0 (
-    echo ERROR: Auth database reset failed
-    exit /b 1
+for %%s in (auth-service booking-service driver-service payment-service ride-service user-service) do (
+    echo   Migrating %%s...
+    cd services\%%s
+    call npx prisma migrate deploy 2>nul || call npx prisma db push --accept-data-loss 2>nul
+    cd ..\..
 )
 
 echo.
-echo [2/7] Resetting User Service Database...
-cd ..\user-service
-call npx prisma migrate reset --force --skip-seed
-if %errorlevel% neq 0 (
-    echo ERROR: User database reset failed
-    exit /b 1
-)
+echo [4/4] Seeding database...
+echo.
+
+call npx tsx scripts\seed-database.ts
 
 echo.
-echo [3/7] Resetting Driver Service Database...
-cd ..\driver-service
-call npx prisma migrate reset --force --skip-seed
-if %errorlevel% neq 0 (
-    echo ERROR: Driver database reset failed
-    exit /b 1
-)
-
-echo.
-echo [4/7] Resetting Booking Service Database...
-cd ..\booking-service
-call npx prisma migrate reset --force --skip-seed
-if %errorlevel% neq 0 (
-    echo ERROR: Booking database reset failed
-    exit /b 1
-)
-
-echo.
-echo [5/7] Resetting Ride Service Database...
-cd ..\ride-service
-call npx prisma migrate reset --force --skip-seed
-if %errorlevel% neq 0 (
-    echo ERROR: Ride database reset failed
-    exit /b 1
-)
-
-echo.
-echo [6/7] Resetting Payment Service Database...
-cd ..\payment-service
-call npx prisma migrate reset --force --skip-seed
-if %errorlevel% neq 0 (
-    echo ERROR: Payment database reset failed
-    exit /b 1
-)
-
-echo.
-echo [7/7] Clearing MongoDB Collections...
-cd ..\..
-docker exec -it cab-mongodb mongosh --eval "use notification_db; db.dropDatabase(); use review_db; db.dropDatabase();"
-
-echo.
-echo ========================================
-echo DATABASE RESET COMPLETE
-echo ========================================
-echo.
-echo All databases have been reset.
-echo Run seed-database.bat to populate with test data.
-echo.
+echo ============================================
+echo  Database reset complete!
+echo ============================================

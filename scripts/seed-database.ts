@@ -1,612 +1,533 @@
-// @ts-nocheck
 /**
- * ============================================
- * COMPREHENSIVE DATABASE SEEDING SCRIPT
- * ============================================
- * Seeds all databases with realistic Vietnamese data
- * for Admin, Driver, and Customer applications
- * 
- * NOTE: This script is deprecated and needs refactoring.
- * Each service has its own Prisma schema and should be seeded separately.
+ * Cab Booking System - Database Seed Script
+ * Seeds all databases with sample data for development/testing
+ *
+ * Usage: npx tsx scripts/seed-database.ts
+ *
+ * Prerequisites: All databases must exist and Prisma migrations applied
  */
 
-import { PrismaClient as AuthPrismaClient } from '@prisma/client';
-import { PrismaClient as UserPrismaClient } from '@prisma/client';
-import { PrismaClient as DriverPrismaClient } from '@prisma/client';
-import { PrismaClient as BookingPrismaClient } from '@prisma/client';
-import { PrismaClient as RidePrismaClient } from '../services/ride-service/src/generated/prisma-client';
-import { PrismaClient as PaymentPrismaClient } from '../services/payment-service/src/generated/prisma-client';
-import * as bcrypt from 'bcryptjs';
+import path from 'node:path';
 
-// Initialize Prisma Clients
-const authClient = new AuthPrismaClient();
-const userClient = new UserPrismaClient();
-const driverClient = new DriverPrismaClient();
-const bookingClient = new BookingPrismaClient();
-const rideClient = new RidePrismaClient();
-const paymentClient = new PaymentPrismaClient();
+// Use direct connection URLs for local development
+const POSTGRES_HOST = process.env.POSTGRES_HOST || 'localhost';
+const POSTGRES_PORT = process.env.POSTGRES_PORT || '5433';
+const POSTGRES_USER = process.env.POSTGRES_USER || 'postgres';
+const POSTGRES_PASSWORD = process.env.POSTGRES_PASSWORD || 'postgres123';
 
-// ============================================
-// SEED DATA CONSTANTS
-// ============================================
-
-interface SeedAccount {
-  email: string;
-  password: string;
-  phone: string;
-  firstName: string;
-  lastName: string;
-  role: 'ADMIN' | 'DRIVER' | 'CUSTOMER';
+function pgUrl(db: string) {
+  return `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${db}`;
 }
 
-const ACCOUNTS: SeedAccount[] = [
-  // ADMIN ACCOUNTS
-  {
-    email: 'admin@cabsystem.vn',
-    password: 'Admin@123',
-    phone: '+84901000001',
-    firstName: 'Nguyễn',
-    lastName: 'Quản Trị',
-    role: 'ADMIN',
-  },
-  {
-    email: 'admin2@cabsystem.vn',
-    password: 'Admin@123',
-    phone: '+84901000002',
-    firstName: 'Trần',
-    lastName: 'Admin',
-    role: 'ADMIN',
-  },
+function createServicePrismaClient(serviceName: string, dbName: string) {
+  const clientModulePath = path.resolve(
+    process.cwd(),
+    'services',
+    serviceName,
+    'node_modules',
+    '.prisma',
+    'client'
+  );
+  const { PrismaClient } = require(clientModulePath);
 
-  // DRIVER ACCOUNTS
-  {
-    email: 'driver1@cabsystem.vn',
-    password: 'Driver@123',
-    phone: '+84902000001',
-    firstName: 'Lê',
-    lastName: 'Văn Tài',
-    role: 'DRIVER',
-  },
-  {
-    email: 'driver2@cabsystem.vn',
-    password: 'Driver@123',
-    phone: '+84902000002',
-    firstName: 'Phạm',
-    lastName: 'Minh Đức',
-    role: 'DRIVER',
-  },
-  {
-    email: 'driver3@cabsystem.vn',
-    password: 'Driver@123',
-    phone: '+84902000003',
-    firstName: 'Hoàng',
-    lastName: 'Văn Sơn',
-    role: 'DRIVER',
-  },
-  {
-    email: 'driver4@cabsystem.vn',
-    password: 'Driver@123',
-    phone: '+84902000004',
-    firstName: 'Vũ',
-    lastName: 'Thanh Tùng',
-    role: 'DRIVER',
-  },
-  {
-    email: 'driver5@cabsystem.vn',
-    password: 'Driver@123',
-    phone: '+84902000005',
-    firstName: 'Đặng',
-    lastName: 'Quang Hải',
-    role: 'DRIVER',
-  },
+  return new PrismaClient({
+    datasources: { db: { url: pgUrl(dbName) } },
+  });
+}
 
-  // CUSTOMER ACCOUNTS
+// ============ SEED DATA ============
+
+const CUSTOMERS = [
   {
-    email: 'customer1@gmail.com',
-    password: 'Customer@123',
-    phone: '+84903000001',
-    firstName: 'Nguyễn',
-    lastName: 'Thị Mai',
-    role: 'CUSTOMER',
+    email: 'customer1@example.com',
+    phone: '+84901234561',
+    password: '$2b$10$LQPFTvBcPYC5Kx4OcZpBYu5I3FQwBqxtH1iR5L8TQ0jRmXsUmxN3e', // password123
+    firstName: 'Nguyen',
+    lastName: 'Van A',
   },
   {
-    email: 'customer2@gmail.com',
-    password: 'Customer@123',
-    phone: '+84903000002',
-    firstName: 'Trần',
-    lastName: 'Văn An',
-    role: 'CUSTOMER',
+    email: 'customer2@example.com',
+    phone: '+84901234562',
+    password: '$2b$10$LQPFTvBcPYC5Kx4OcZpBYu5I3FQwBqxtH1iR5L8TQ0jRmXsUmxN3e',
+    firstName: 'Tran',
+    lastName: 'Thi B',
   },
   {
-    email: 'customer3@gmail.com',
-    password: 'Customer@123',
-    phone: '+84903000003',
-    firstName: 'Lê',
-    lastName: 'Hoàng Nam',
-    role: 'CUSTOMER',
-  },
-  {
-    email: 'customer4@gmail.com',
-    password: 'Customer@123',
-    phone: '+84903000004',
-    firstName: 'Phạm',
-    lastName: 'Thu Hương',
-    role: 'CUSTOMER',
-  },
-  {
-    email: 'customer5@gmail.com',
-    password: 'Customer@123',
-    phone: '+84903000005',
-    firstName: 'Hoàng',
-    lastName: 'Minh Tuấn',
-    role: 'CUSTOMER',
+    email: 'customer3@example.com',
+    phone: '+84901234563',
+    password: '$2b$10$LQPFTvBcPYC5Kx4OcZpBYu5I3FQwBqxtH1iR5L8TQ0jRmXsUmxN3e',
+    firstName: 'Le',
+    lastName: 'Van C',
   },
 ];
 
-const VEHICLES = [
+const DRIVERS = [
   {
-    type: 'CAR' as const,
-    brand: 'Toyota',
-    model: 'Vios',
-    plate: '59A-12345',
-    color: 'Trắng',
-    year: 2022,
+    email: 'driver1@example.com',
+    phone: '+84911234561',
+    password: '$2b$10$LQPFTvBcPYC5Kx4OcZpBYu5I3FQwBqxtH1iR5L8TQ0jRmXsUmxN3e',
+    firstName: 'Pham',
+    lastName: 'Van D',
+    vehicle: {
+      type: 'CAR',
+      brand: 'Toyota',
+      model: 'Vios',
+      plate: '51A-12345',
+      color: 'White',
+      year: 2022,
+    },
+    license: {
+      number: 'GP-123456',
+      expiryDate: new Date('2027-12-31'),
+    },
   },
   {
-    type: 'CAR' as const,
-    brand: 'Hyundai',
-    model: 'Accent',
-    plate: '51B-67890',
-    color: 'Bạc',
-    year: 2021,
+    email: 'driver2@example.com',
+    phone: '+84911234562',
+    password: '$2b$10$LQPFTvBcPYC5Kx4OcZpBYu5I3FQwBqxtH1iR5L8TQ0jRmXsUmxN3e',
+    firstName: 'Vo',
+    lastName: 'Thi E',
+    vehicle: {
+      type: 'CAR',
+      brand: 'Honda',
+      model: 'City',
+      plate: '51A-67890',
+      color: 'Black',
+      year: 2023,
+    },
+    license: {
+      number: 'GP-654321',
+      expiryDate: new Date('2028-06-30'),
+    },
   },
   {
-    type: 'SUV' as const,
-    brand: 'Honda',
-    model: 'CR-V',
-    plate: '50C-11111',
-    color: 'Đen',
-    year: 2023,
-  },
-  {
-    type: 'CAR' as const,
-    brand: 'Mazda',
-    model: 'Mazda 3',
-    plate: '30D-22222',
-    color: 'Đỏ',
-    year: 2022,
-  },
-  {
-    type: 'CAR' as const,
-    brand: 'Kia',
-    model: 'Cerato',
-    plate: '92E-33333',
-    color: 'Xanh',
-    year: 2021,
+    email: 'driver3@example.com',
+    phone: '+84911234563',
+    password: '$2b$10$LQPFTvBcPYC5Kx4OcZpBYu5I3FQwBqxtH1iR5L8TQ0jRmXsUmxN3e',
+    firstName: 'Hoang',
+    lastName: 'Van F',
+    vehicle: {
+      type: 'SUV',
+      brand: 'Ford',
+      model: 'Everest',
+      plate: '51A-11111',
+      color: 'Silver',
+      year: 2023,
+    },
+    license: {
+      number: 'GP-111111',
+      expiryDate: new Date('2028-12-31'),
+    },
   },
 ];
 
-const LOCATIONS = [
-  // Hồ Chí Minh
-  { name: 'Sân bay Tân Sơn Nhất', lat: 10.8186, lng: 106.6517, city: 'Hồ Chí Minh' },
-  { name: 'Bến Thành Market', lat: 10.7722, lng: 106.6980, city: 'Hồ Chí Minh' },
-  { name: 'Landmark 81', lat: 10.7946, lng: 106.7218, city: 'Hồ Chí Minh' },
-  { name: 'Nhà hát Thành phố', lat: 10.7768, lng: 106.7032, city: 'Hồ Chí Minh' },
-  { name: 'Chợ Lớn', lat: 10.7546, lng: 106.6574, city: 'Hồ Chí Minh' },
-  
-  // Hà Nội
-  { name: 'Sân bay Nội Bài', lat: 21.2212, lng: 105.8065, city: 'Hà Nội' },
-  { name: 'Hồ Gươm', lat: 21.0285, lng: 105.8542, city: 'Hà Nội' },
-  { name: 'Nhà hát Lớn Hà Nội', lat: 21.0245, lng: 105.8563, city: 'Hà Nội' },
-  { name: 'Lăng Bác', lat: 21.0369, lng: 105.8345, city: 'Hà Nội' },
-  { name: 'Phố cổ Hà Nội', lat: 21.0333, lng: 105.8525, city: 'Hà Nội' },
-  
-  // Đà Nẵng
-  { name: 'Sân bay Đà Nẵng', lat: 16.0439, lng: 108.1993, city: 'Đà Nẵng' },
-  { name: 'Cầu Rồng', lat: 16.0608, lng: 108.2278, city: 'Đà Nẵng' },
-  { name: 'Bãi biển Mỹ Khê', lat: 16.0423, lng: 108.2482, city: 'Đà Nẵng' },
-  { name: 'Bà Nà Hills', lat: 15.9969, lng: 107.9969, city: 'Đà Nẵng' },
-  
-  // Cần Thơ
-  { name: 'Chợ nổi Cái Răng', lat: 10.0452, lng: 105.7702, city: 'Cần Thơ' },
-  { name: 'Cầu Cần Thơ', lat: 10.0342, lng: 105.7670, city: 'Cần Thơ' },
+const ADMIN = {
+  email: 'admin@cabbooking.com',
+  phone: '+84900000001',
+  password: '$2b$10$LQPFTvBcPYC5Kx4OcZpBYu5I3FQwBqxtH1iR5L8TQ0jRmXsUmxN3e',
+  firstName: 'System',
+  lastName: 'Admin',
+};
+
+const BOOKINGS = [
+  {
+    pickupAddress: '227 Nguyen Van Cu, Q5, TP.HCM',
+    pickupLat: 10.7628,
+    pickupLng: 106.6825,
+    dropoffAddress: 'Saigon Centre, Le Loi, Q1, TP.HCM',
+    dropoffLat: 10.7721,
+    dropoffLng: 106.7002,
+    vehicleType: 'ECONOMY',
+    paymentMethod: 'CASH',
+    estimatedFare: 45000,
+    estimatedDistance: 3.5,
+    estimatedDuration: 900,
+  },
+  {
+    pickupAddress: 'Ben Thanh Market, Q1, TP.HCM',
+    pickupLat: 10.7726,
+    pickupLng: 106.698,
+    dropoffAddress: 'Tan Son Nhat Airport, TP.HCM',
+    dropoffLat: 10.8185,
+    dropoffLng: 106.6588,
+    vehicleType: 'COMFORT',
+    paymentMethod: 'CARD',
+    estimatedFare: 120000,
+    estimatedDistance: 8.2,
+    estimatedDuration: 1800,
+  },
+  {
+    pickupAddress: 'Phu My Hung, Q7, TP.HCM',
+    pickupLat: 10.7294,
+    pickupLng: 106.7187,
+    dropoffAddress: 'Thu Thiem, Q2, TP.HCM',
+    dropoffLat: 10.7875,
+    dropoffLng: 106.7342,
+    vehicleType: 'PREMIUM',
+    paymentMethod: 'WALLET',
+    estimatedFare: 85000,
+    estimatedDistance: 12.5,
+    estimatedDuration: 2400,
+  },
 ];
 
-// ============================================
-// SEED FUNCTIONS
-// ============================================
+// ============ SEED FUNCTIONS ============
 
-async function seedAuthService() {
-  console.log('📦 [1/6] Seeding Auth Service...');
-  
-  const passwordHash = await bcrypt.hash('Admin@123', 10);
-  const users = [];
-  
-  for (const account of ACCOUNTS) {
-    const hash = await bcrypt.hash(account.password, 10);
-    const user = await authClient.user.create({
-      data: {
-        email: account.email,
-        phone: account.phone,
-        passwordHash: hash,
-        role: account.role,
+async function seedAuthDB() {
+  console.log('  Seeding auth_db...');
+  const prisma = createServicePrismaClient('auth-service', 'auth_db');
+
+  try {
+    // Seed admin
+    const admin = await prisma.user.upsert({
+      where: { email: ADMIN.email },
+      update: {},
+      create: {
+        email: ADMIN.email,
+        phone: ADMIN.phone,
+        passwordHash: ADMIN.password,
+        role: 'ADMIN',
         status: 'ACTIVE',
-        firstName: account.firstName,
-        lastName: account.lastName,
+        firstName: ADMIN.firstName,
+        lastName: ADMIN.lastName,
       },
     });
-    users.push(user);
-    console.log(`   ✓ Created ${account.role}: ${account.email} (${account.firstName} ${account.lastName})`);
-  }
-  
-  return users;
-}
+    console.log(`    Admin: ${admin.email} (${admin.id})`);
 
-async function seedUserService(authUsers: any[]) {
-  console.log('📦 [2/6] Seeding User Service...');
-  
-  for (const authUser of authUsers) {
-    await userClient.userProfile.create({
-      data: {
-        userId: authUser.id,
-        firstName: authUser.firstName,
-        lastName: authUser.lastName,
-        phone: authUser.phone,
-        status: 'ACTIVE',
-      },
-    });
-    console.log(`   ✓ Created profile for: ${authUser.email}`);
-  }
-}
+    // Seed customers
+    const customerIds: string[] = [];
+    for (const c of CUSTOMERS) {
+      const user = await prisma.user.upsert({
+        where: { email: c.email },
+        update: {},
+        create: {
+          email: c.email,
+          phone: c.phone,
+          passwordHash: c.password,
+          role: 'CUSTOMER',
+          status: 'ACTIVE',
+          firstName: c.firstName,
+          lastName: c.lastName,
+        },
+      });
+      customerIds.push(user.id);
+      console.log(`    Customer: ${user.email} (${user.id})`);
+    }
 
-async function seedDriverService(authUsers: any[]) {
-  console.log('📦 [3/6] Seeding Driver Service...');
-  
-  const driverUsers = authUsers.filter((u) => u.role === 'DRIVER');
-  const drivers = [];
-  
-  for (let i = 0; i < driverUsers.length; i++) {
-    const user = driverUsers[i];
-    const vehicle = VEHICLES[i];
-    
-    const driver = await driverClient.driver.create({
-      data: {
-        userId: user.id,
-        status: i < 4 ? 'APPROVED' : 'PENDING', // First 4 approved, rest pending
-        availabilityStatus: i < 3 ? 'ONLINE' : 'OFFLINE', // First 3 online
-        vehicleType: vehicle.type,
-        vehicleBrand: vehicle.brand,
-        vehicleModel: vehicle.model,
-        vehiclePlate: vehicle.plate,
-        vehicleColor: vehicle.color,
-        vehicleYear: vehicle.year,
-        licenseNumber: `GPLX${String(i + 1).padStart(6, '0')}`,
-        licenseExpiryDate: new Date('2026-12-31'),
-        licenseVerified: i < 4,
-        ratingAverage: 4.5 + Math.random() * 0.5,
-        ratingCount: Math.floor(Math.random() * 50) + 10,
-        lastLocationLat: LOCATIONS[i % LOCATIONS.length].lat,
-        lastLocationLng: LOCATIONS[i % LOCATIONS.length].lng,
-        lastLocationTime: new Date(),
-      },
-    });
-    
-    drivers.push(driver);
-    console.log(`   ✓ Created driver: ${user.email} - ${vehicle.brand} ${vehicle.model} (${vehicle.plate})`);
-  }
-  
-  return drivers;
-}
+    // Seed driver users
+    const driverUserIds: string[] = [];
+    for (const d of DRIVERS) {
+      const user = await prisma.user.upsert({
+        where: { email: d.email },
+        update: {},
+        create: {
+          email: d.email,
+          phone: d.phone,
+          passwordHash: d.password,
+          role: 'DRIVER',
+          status: 'ACTIVE',
+          firstName: d.firstName,
+          lastName: d.lastName,
+        },
+      });
+      driverUserIds.push(user.id);
+      console.log(`    Driver user: ${user.email} (${user.id})`);
+    }
 
-async function seedBookingsAndRides(authUsers: any[], drivers: any[]) {
-  console.log('📦 [4/6] Seeding Bookings & Rides...');
-  
-  const customers = authUsers.filter((u) => u.role === 'CUSTOMER');
-  const approvedDrivers = drivers.filter((d) => d.status === 'APPROVED');
-  
-  const rides = [];
-  
-  // Scenario 1: Completed rides
-  for (let i = 0; i < 5; i++) {
-    const customer = customers[i % customers.length];
-    const driver = approvedDrivers[i % approvedDrivers.length];
-    const pickup = LOCATIONS[i];
-    const dropoff = LOCATIONS[(i + 3) % LOCATIONS.length];
-    
-    const distance = Math.random() * 15 + 5; // 5-20 km
-    const duration = Math.floor(distance * 180); // ~3 min/km
-    const fare = 15000 + distance * 12000; // Base + per km
-    
-    const ride = await rideClient.ride.create({
-      data: {
-        customerId: customer.id,
-        driverId: driver.userId,
-        status: 'COMPLETED',
-        vehicleType: 'ECONOMY',
-        paymentMethod: i % 2 === 0 ? 'CASH' : 'CARD',
-        pickupAddress: pickup.name,
-        pickupLat: pickup.lat,
-        pickupLng: pickup.lng,
-        dropoffAddress: dropoff.name,
-        dropoffLat: dropoff.lat,
-        dropoffLng: dropoff.lng,
-        distance,
-        duration,
-        fare,
-        surgeMultiplier: 1.0,
-        suggestedDriverIds: [driver.userId],
-        offeredDriverIds: [driver.userId],
-        acceptedDriverId: driver.userId,
-        requestedAt: new Date(Date.now() - 3600000 * (i + 1)),
-        assignedAt: new Date(Date.now() - 3600000 * (i + 1) + 120000),
-        acceptedAt: new Date(Date.now() - 3600000 * (i + 1) + 180000),
-        startedAt: new Date(Date.now() - 3600000 * (i + 1) + 600000),
-        completedAt: new Date(Date.now() - 3600000 * (i + 1) + 600000 + duration * 1000),
-      },
-    });
-    
-    rides.push(ride);
-    console.log(`   ✓ Created COMPLETED ride: ${pickup.name} → ${dropoff.name} (${distance.toFixed(1)}km, ${fare.toFixed(0)} VND)`);
-  }
-  
-  // Scenario 2: Ongoing rides
-  for (let i = 0; i < 2; i++) {
-    const customer = customers[(i + 1) % customers.length];
-    const driver = approvedDrivers[(i + 1) % approvedDrivers.length];
-    const pickup = LOCATIONS[i + 5];
-    const dropoff = LOCATIONS[(i + 10) % LOCATIONS.length];
-    
-    const distance = Math.random() * 10 + 3;
-    const duration = Math.floor(distance * 180);
-    const fare = 15000 + distance * 12000;
-    
-    const ride = await rideClient.ride.create({
-      data: {
-        customerId: customer.id,
-        driverId: driver.userId,
-        status: 'IN_PROGRESS',
-        vehicleType: 'ECONOMY',
-        paymentMethod: 'CASH',
-        pickupAddress: pickup.name,
-        pickupLat: pickup.lat,
-        pickupLng: pickup.lng,
-        dropoffAddress: dropoff.name,
-        dropoffLat: dropoff.lat,
-        dropoffLng: dropoff.lng,
-        distance,
-        duration,
-        fare,
-        suggestedDriverIds: [driver.userId],
-        offeredDriverIds: [driver.userId],
-        acceptedDriverId: driver.userId,
-        requestedAt: new Date(Date.now() - 1200000),
-        assignedAt: new Date(Date.now() - 1000000),
-        acceptedAt: new Date(Date.now() - 900000),
-        startedAt: new Date(Date.now() - 600000),
-      },
-    });
-    
-    rides.push(ride);
-    console.log(`   ✓ Created IN_PROGRESS ride: ${pickup.name} → ${dropoff.name}`);
-  }
-  
-  // Scenario 3: Pending rides (waiting for driver)
-  for (let i = 0; i < 2; i++) {
-    const customer = customers[(i + 2) % customers.length];
-    const pickup = LOCATIONS[i + 8];
-    const dropoff = LOCATIONS[(i + 12) % LOCATIONS.length];
-    
-    const ride = await rideClient.ride.create({
-      data: {
-        customerId: customer.id,
-        status: 'FINDING_DRIVER',
-        vehicleType: 'ECONOMY',
-        paymentMethod: 'CASH',
-        pickupAddress: pickup.name,
-        pickupLat: pickup.lat,
-        pickupLng: pickup.lng,
-        dropoffAddress: dropoff.name,
-        dropoffLat: dropoff.lat,
-        dropoffLng: dropoff.lng,
-        requestedAt: new Date(),
-      },
-    });
-    
-    rides.push(ride);
-    console.log(`   ✓ Created FINDING_DRIVER ride: ${pickup.name} → ${dropoff.name}`);
-  }
-  
-  // Scenario 4: Cancelled rides
-  for (let i = 0; i < 2; i++) {
-    const customer = customers[(i + 3) % customers.length];
-    const pickup = LOCATIONS[i + 10];
-    const dropoff = LOCATIONS[(i + 14) % LOCATIONS.length];
-    
-    const ride = await rideClient.ride.create({
-      data: {
-        customerId: customer.id,
-        status: 'CANCELLED',
-        vehicleType: 'ECONOMY',
-        paymentMethod: 'CASH',
-        pickupAddress: pickup.name,
-        pickupLat: pickup.lat,
-        pickupLng: pickup.lng,
-        dropoffAddress: dropoff.name,
-        dropoffLat: dropoff.lat,
-        dropoffLng: dropoff.lng,
-        requestedAt: new Date(Date.now() - 7200000),
-        cancelledAt: new Date(Date.now() - 7000000),
-        cancelReason: i === 0 ? 'Customer cancelled' : 'No driver available',
-        cancelledBy: i === 0 ? 'CUSTOMER' : 'SYSTEM',
-      },
-    });
-    
-    rides.push(ride);
-    console.log(`   ✓ Created CANCELLED ride: ${pickup.name} → ${dropoff.name} (${ride.cancelReason})`);
-  }
-  
-  return rides;
-}
-
-async function seedPayments(rides: any[]) {
-  console.log('📦 [5/6] Seeding Payments...');
-  
-  const completedRides = rides.filter((r) => r.status === 'COMPLETED');
-  const inProgressRides = rides.filter((r) => r.status === 'IN_PROGRESS');
-  
-  // Payments for completed rides
-  for (const ride of completedRides) {
-    // Create fare first
-    await paymentClient.fare.create({
-      data: {
-        rideId: ride.id,
-        baseFare: 15000,
-        distanceFare: ride.distance! * 12000,
-        timeFare: 0,
-        surgeMultiplier: 1.0,
-        totalFare: ride.fare!,
-        distanceKm: ride.distance!,
-        durationMinutes: Math.floor(ride.duration! / 60),
-      },
-    });
-    
-    // Create payment
-    await paymentClient.payment.create({
-      data: {
-        rideId: ride.id,
-        customerId: ride.customerId,
-        driverId: ride.driverId!,
-        amount: ride.fare!,
-        method: ride.paymentMethod === 'CASH' ? 'CASH' : 'CARD',
-        provider: 'MOCK',
-        status: 'COMPLETED',
-        transactionId: `TXN${Date.now()}${Math.random().toString(36).substr(2, 9)}`,
-        initiatedAt: ride.completedAt!,
-        completedAt: ride.completedAt!,
-      },
-    });
-    
-    console.log(`   ✓ Created COMPLETED payment for ride ${ride.id.substring(0, 8)}... (${ride.fare!.toFixed(0)} VND)`);
-  }
-  
-  // Pending payments for in-progress rides
-  for (const ride of inProgressRides) {
-    await paymentClient.fare.create({
-      data: {
-        rideId: ride.id,
-        baseFare: 15000,
-        distanceFare: ride.distance! * 12000,
-        timeFare: 0,
-        surgeMultiplier: 1.0,
-        totalFare: ride.fare!,
-        distanceKm: ride.distance!,
-        durationMinutes: Math.floor(ride.duration! / 60),
-      },
-    });
-    
-    await paymentClient.payment.create({
-      data: {
-        rideId: ride.id,
-        customerId: ride.customerId,
-        driverId: ride.driverId!,
-        amount: ride.fare!,
-        method: 'CASH',
-        provider: 'MOCK',
-        status: 'PENDING',
-        initiatedAt: new Date(),
-      },
-    });
-    
-    console.log(`   ✓ Created PENDING payment for ride ${ride.id.substring(0, 8)}...`);
+    await prisma.$disconnect();
+    return { customerIds, driverUserIds, adminId: admin.id };
+  } catch (error) {
+    await prisma.$disconnect();
+    throw error;
   }
 }
 
-async function seedBookings(authUsers: any[]) {
-  console.log('📦 [6/6] Seeding Bookings...');
-  
-  const customers = authUsers.filter((u) => u.role === 'CUSTOMER');
-  
-  // Create some pending bookings
-  for (let i = 0; i < 3; i++) {
-    const customer = customers[i % customers.length];
-    const pickup = LOCATIONS[i];
-    const dropoff = LOCATIONS[(i + 5) % LOCATIONS.length];
-    
-    const distance = Math.random() * 15 + 5;
-    const duration = Math.floor(distance * 180);
-    const fare = 15000 + distance * 12000;
-    
-    await bookingClient.booking.create({
-      data: {
-        customerId: customer.id,
-        pickupAddress: pickup.name,
-        pickupLat: pickup.lat,
-        pickupLng: pickup.lng,
-        dropoffAddress: dropoff.name,
-        dropoffLat: dropoff.lat,
-        dropoffLng: dropoff.lng,
-        vehicleType: i % 2 === 0 ? 'ECONOMY' : 'COMFORT',
-        paymentMethod: 'CASH',
-        estimatedFare: fare,
-        estimatedDistance: distance,
-        estimatedDuration: duration,
-        status: 'CONFIRMED',
-        confirmedAt: new Date(),
-      },
-    });
-    
-    console.log(`   ✓ Created CONFIRMED booking: ${pickup.name} → ${dropoff.name}`);
+async function seedUserDB(customerIds: string[], driverUserIds: string[]) {
+  console.log('  Seeding user_db...');
+  const prisma = createServicePrismaClient('user-service', 'user_db');
+
+  try {
+    // Seed customer profiles
+    for (let i = 0; i < customerIds.length; i++) {
+      await prisma.userProfile.upsert({
+        where: { userId: customerIds[i] },
+        update: {},
+        create: {
+          userId: customerIds[i],
+          firstName: CUSTOMERS[i].firstName,
+          lastName: CUSTOMERS[i].lastName,
+          phone: CUSTOMERS[i].phone,
+          status: 'ACTIVE',
+        },
+      });
+    }
+
+    // Seed driver profiles
+    for (let i = 0; i < driverUserIds.length; i++) {
+      await prisma.userProfile.upsert({
+        where: { userId: driverUserIds[i] },
+        update: {},
+        create: {
+          userId: driverUserIds[i],
+          firstName: DRIVERS[i].firstName,
+          lastName: DRIVERS[i].lastName,
+          phone: DRIVERS[i].phone,
+          status: 'ACTIVE',
+        },
+      });
+    }
+
+    console.log(`    ${customerIds.length + driverUserIds.length} profiles created`);
+    await prisma.$disconnect();
+  } catch (error) {
+    await prisma.$disconnect();
+    throw error;
   }
 }
 
-// ============================================
-// MAIN SEED FUNCTION
-// ============================================
+async function seedDriverDB(driverUserIds: string[]) {
+  console.log('  Seeding driver_db...');
+  const prisma = createServicePrismaClient('driver-service', 'driver_db');
+
+  try {
+    const driverIds: string[] = [];
+
+    for (let i = 0; i < driverUserIds.length; i++) {
+      const d = DRIVERS[i];
+      const driver = await prisma.driver.upsert({
+        where: { userId: driverUserIds[i] },
+        update: {},
+        create: {
+          userId: driverUserIds[i],
+          status: 'APPROVED',
+          availabilityStatus: 'ONLINE',
+          vehicleType: d.vehicle.type,
+          vehicleBrand: d.vehicle.brand,
+          vehicleModel: d.vehicle.model,
+          vehiclePlate: d.vehicle.plate,
+          vehicleColor: d.vehicle.color,
+          vehicleYear: d.vehicle.year,
+          licenseNumber: d.license.number,
+          licenseExpiryDate: d.license.expiryDate,
+          licenseVerified: true,
+          ratingAverage: 4.5 + Math.random() * 0.5,
+          ratingCount: Math.floor(Math.random() * 100) + 10,
+          lastLocationLat: 10.76 + Math.random() * 0.05,
+          lastLocationLng: 106.68 + Math.random() * 0.05,
+          lastLocationTime: new Date(),
+        },
+      });
+      driverIds.push(driver.id);
+      console.log(`    Driver: ${d.vehicle.plate} (${driver.id})`);
+    }
+
+    await prisma.$disconnect();
+    return driverIds;
+  } catch (error) {
+    await prisma.$disconnect();
+    throw error;
+  }
+}
+
+async function seedBookingDB(customerIds: string[]) {
+  console.log('  Seeding booking_db...');
+  const prisma = createServicePrismaClient('booking-service', 'booking_db');
+
+  try {
+    const bookingIds: string[] = [];
+
+    for (let i = 0; i < BOOKINGS.length; i++) {
+      const b = BOOKINGS[i];
+      const booking = await prisma.booking.create({
+        data: {
+          customerId: customerIds[i % customerIds.length],
+          pickupAddress: b.pickupAddress,
+          pickupLat: b.pickupLat,
+          pickupLng: b.pickupLng,
+          dropoffAddress: b.dropoffAddress,
+          dropoffLat: b.dropoffLat,
+          dropoffLng: b.dropoffLng,
+          vehicleType: b.vehicleType,
+          paymentMethod: b.paymentMethod,
+          estimatedFare: b.estimatedFare,
+          estimatedDistance: b.estimatedDistance,
+          estimatedDuration: b.estimatedDuration,
+          status: 'CONFIRMED',
+          confirmedAt: new Date(),
+        },
+      });
+      bookingIds.push(booking.id);
+      console.log(`    Booking: ${booking.id} (${b.pickupAddress} -> ${b.dropoffAddress})`);
+    }
+
+    await prisma.$disconnect();
+    return bookingIds;
+  } catch (error) {
+    await prisma.$disconnect();
+    throw error;
+  }
+}
+
+async function seedMongoDB() {
+  console.log('  Seeding MongoDB (notification_db, review_db)...');
+
+  const MONGO_HOST = process.env.MONGO_HOST || 'localhost';
+  const MONGO_PORT = process.env.MONGO_PORT || '27017';
+  const MONGO_USER = process.env.MONGO_USER || 'admin';
+  const MONGO_PASSWORD = process.env.MONGO_PASSWORD || 'admin123';
+
+  try {
+    const mongoose = require('mongoose');
+
+    // Seed notification_db
+    const notifConn = await mongoose.createConnection(
+      `mongodb://${MONGO_USER}:${MONGO_PASSWORD}@${MONGO_HOST}:${MONGO_PORT}/notification_db?authSource=admin`
+    );
+    const NotifSchema = new mongoose.Schema({
+      userId: String,
+      type: String,
+      recipient: String,
+      subject: String,
+      message: String,
+      status: String,
+      priority: String,
+      retryCount: Number,
+      sentAt: Date,
+    }, { timestamps: true });
+    const Notification = notifConn.model('Notification', NotifSchema);
+
+    await Notification.create([
+      {
+        userId: 'seed-user-1',
+        type: 'EMAIL',
+        recipient: 'customer1@example.com',
+        subject: 'Welcome to Cab Booking',
+        message: 'Welcome to our cab booking service!',
+        status: 'SENT',
+        priority: 'MEDIUM',
+        retryCount: 0,
+        sentAt: new Date(),
+      },
+      {
+        userId: 'seed-user-1',
+        type: 'SMS',
+        recipient: '+84901234561',
+        message: 'Your booking BK001 is confirmed.',
+        status: 'SENT',
+        priority: 'HIGH',
+        retryCount: 0,
+        sentAt: new Date(),
+      },
+    ]);
+    console.log('    2 sample notifications created');
+    await notifConn.close();
+
+    // Seed review_db
+    const reviewConn = await mongoose.createConnection(
+      `mongodb://${MONGO_USER}:${MONGO_PASSWORD}@${MONGO_HOST}:${MONGO_PORT}/review_db?authSource=admin`
+    );
+    const ReviewSchema = new mongoose.Schema({
+      rideId: String,
+      bookingId: String,
+      type: String,
+      reviewerId: String,
+      reviewerName: String,
+      revieweeId: String,
+      revieweeName: String,
+      rating: Number,
+      comment: String,
+      tags: [String],
+    }, { timestamps: true });
+    const Review = reviewConn.model('Review', ReviewSchema);
+
+    await Review.create([
+      {
+        rideId: 'seed-ride-1',
+        bookingId: 'seed-booking-1',
+        type: 'CUSTOMER_TO_DRIVER',
+        reviewerId: 'seed-customer-1',
+        reviewerName: 'Nguyen Van A',
+        revieweeId: 'seed-driver-1',
+        revieweeName: 'Pham Van D',
+        rating: 5,
+        comment: 'Excellent driver, very professional!',
+        tags: ['professional', 'clean_car', 'safe_driving'],
+      },
+      {
+        rideId: 'seed-ride-1',
+        bookingId: 'seed-booking-1',
+        type: 'DRIVER_TO_CUSTOMER',
+        reviewerId: 'seed-driver-1',
+        reviewerName: 'Pham Van D',
+        revieweeId: 'seed-customer-1',
+        revieweeName: 'Nguyen Van A',
+        rating: 4,
+        comment: 'Polite customer',
+        tags: ['friendly'],
+      },
+    ]);
+    console.log('    2 sample reviews created');
+    await reviewConn.close();
+  } catch (error: any) {
+    console.log(`    MongoDB seed skipped: ${error.message}`);
+  }
+}
+
+// ============ MAIN ============
 
 async function main() {
-  console.log('\n🌱 ========================================');
-  console.log('🌱 DATABASE SEEDING STARTED');
-  console.log('🌱 ========================================\n');
-  
+  console.log('');
+  console.log('========================================');
+  console.log(' Cab Booking System - Database Seeding');
+  console.log('========================================');
+  console.log('');
+
   try {
-    // Seed in order
-    const authUsers = await seedAuthService();
-    await seedUserService(authUsers);
-    const drivers = await seedDriverService(authUsers);
-    const rides = await seedBookingsAndRides(authUsers, drivers);
-    await seedPayments(rides);
-    await seedBookings(authUsers);
-    
-    console.log('\n✅ ========================================');
-    console.log('✅ DATABASE SEEDING COMPLETE');
-    console.log('✅ ========================================\n');
-    
-    console.log('📊 SUMMARY:');
-    console.log(`   - Users: ${authUsers.length} (${authUsers.filter(u => u.role === 'ADMIN').length} admins, ${authUsers.filter(u => u.role === 'DRIVER').length} drivers, ${authUsers.filter(u => u.role === 'CUSTOMER').length} customers)`);
-    console.log(`   - Drivers: ${drivers.length} (${drivers.filter(d => d.status === 'APPROVED').length} approved, ${drivers.filter(d => d.availabilityStatus === 'ONLINE').length} online)`);
-    console.log(`   - Rides: ${rides.length} (${rides.filter(r => r.status === 'COMPLETED').length} completed, ${rides.filter(r => r.status === 'IN_PROGRESS').length} in-progress, ${rides.filter(r => r.status === 'FINDING_DRIVER').length} finding driver, ${rides.filter(r => r.status === 'CANCELLED').length} cancelled)`);
-    console.log(`   - Locations: ${LOCATIONS.length} across Vietnam (TP.HCM, Hà Nội, Đà Nẵng, Cần Thơ)`);
-    
-    console.log('\n🔐 TEST ACCOUNTS:');
-    console.log('   Admin: admin@cabsystem.vn / Admin@123');
-    console.log('   Driver: driver1@cabsystem.vn / Driver@123');
-    console.log('   Customer: customer1@gmail.com / Customer@123');
-    
-  } catch (error) {
-    console.error('\n❌ ERROR during seeding:', error);
-    throw error;
-  } finally {
-    await authClient.$disconnect();
-    await userClient.$disconnect();
-    await driverClient.$disconnect();
-    await bookingClient.$disconnect();
-    await rideClient.$disconnect();
-    await paymentClient.$disconnect();
+    // 1. Seed auth database (creates users first)
+    const { customerIds, driverUserIds, adminId } = await seedAuthDB();
+
+    // 2. Seed user profiles
+    await seedUserDB(customerIds, driverUserIds);
+
+    // 3. Seed driver database
+    const driverIds = await seedDriverDB(driverUserIds);
+
+    // 4. Seed bookings
+    const bookingIds = await seedBookingDB(customerIds);
+
+    // 5. Seed MongoDB (notifications + reviews)
+    await seedMongoDB();
+
+    console.log('');
+    console.log('========================================');
+    console.log(' Seeding completed successfully!');
+    console.log('========================================');
+    console.log('');
+    console.log(' Summary:');
+    console.log(`   Admin:       1 (${adminId})`);
+    console.log(`   Customers:   ${customerIds.length}`);
+    console.log(`   Drivers:     ${driverIds.length}`);
+    console.log(`   Bookings:    ${bookingIds.length}`);
+    console.log(`   Notifications: 2 (sample)`);
+    console.log(`   Reviews:     2 (sample)`);
+    console.log('');
+    console.log(' Test credentials:');
+    console.log('   All users password: password123');
+    console.log('   Admin: admin@cabbooking.com');
+    console.log('   Customer: customer1@example.com');
+    console.log('   Driver: driver1@example.com');
+    console.log('');
+  } catch (error: any) {
+    console.error('');
+    console.error('Seeding failed:', error.message);
+    console.error('');
+    console.error('Make sure:');
+    console.error('  1. PostgreSQL is running on port 5433');
+    console.error('  2. MongoDB is running on port 27017');
+    console.error('  3. All databases exist (run reset-database script first)');
+    console.error('  4. Prisma migrations have been applied');
+    process.exit(1);
   }
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  });
+main();

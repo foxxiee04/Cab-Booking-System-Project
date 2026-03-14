@@ -197,14 +197,6 @@ export class RideService {
 
     logger.info('Ride created from booking', { rideId, bookingId: data.bookingId });
 
-    // Publish ride.assignment.requested event
-    await this.eventPublisher.publish('ride.assignment.requested', {
-      rideId: ride.id,
-      customerId: ride.customerId,
-      vehicleType: ride.vehicleType,
-      pickup: { lat: ride.pickupLat, lng: ride.pickupLng },
-    }, ride.id);
-
     // Request driver suggestions
     await this.requestDriverSuggestions(ride);
 

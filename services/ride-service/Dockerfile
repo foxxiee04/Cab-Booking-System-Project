@@ -1,6 +1,6 @@
 FROM node:20-slim
 
-WORKDIR /app
+WORKDIR /workspace/services/ride-service
 
 # Prisma needs OpenSSL at runtime
 RUN apt-get update \
@@ -8,20 +8,18 @@ RUN apt-get update \
 	&& rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
-COPY package*.json ./
+COPY services/ride-service/package*.json ./
 RUN npm ci
 
-# Copy Prisma schema
-COPY prisma ./prisma
+COPY shared/package*.json /workspace/shared/
+RUN npm install --prefix /workspace/shared --omit=dev
 
-# Generate Prisma client
-RUN npx prisma generate
-
-# Copy source
-COPY . .
+# Copy service source and shared build artifacts
+COPY services/ride-service .
+COPY shared/dist /workspace/shared/dist
 
 # Build TypeScript
-RUN npm run build && cp -r src/generated dist/
+RUN npx prisma generate && npm run build && cp -r src/generated dist/
 
 EXPOSE 3002
 

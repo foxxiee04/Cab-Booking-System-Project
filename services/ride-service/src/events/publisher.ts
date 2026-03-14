@@ -9,6 +9,10 @@ export class EventPublisher {
   private connection: Connection | null = null;
   private channel: Channel | null = null;
 
+  isConnected(): boolean {
+    return Boolean(this.connection && this.channel);
+  }
+
   async connect(): Promise<void> {
     try {
       this.connection = await amqp.connect(config.rabbitmq.url);

@@ -15,6 +15,8 @@ describe('Driver Offer Timeout & Re-assignment', () => {
   let offerManager: DriverOfferManager;
   let rideService: RideService;
   let mockRedis: jest.Mocked<Redis>;
+  let redisStrings: Map<string, string>;
+  let redisSets: Map<string, Set<string>>;
 
   const mockRide = {
     id: 'ride-123',
@@ -61,26 +63,58 @@ describe('Driver Offer Timeout & Re-assignment', () => {
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
+    redisStrings = new Map();
+    redisSets = new Map();
 
     // Create mocked instances
     mockRedis = {
-      setex: jest.fn().mockResolvedValue('OK'),
-      del: jest.fn().mockResolvedValue(1),
-      sadd: jest.fn().mockResolvedValue(1),
-      sismember: jest.fn().mockResolvedValue(0),
-      smembers: jest.fn().mockResolvedValue([]),
-      get: jest.fn().mockResolvedValue(null),
+      on: jest.fn(),
+      setex: jest.fn().mockImplementation(async (key: string, _ttl: number, value: string) => {
+        redisStrings.set(key, value);
+        return 'OK';
+      }),
+      del: jest.fn().mockImplementation(async (...keys: string[]) => {
+        let deleted = 0;
+        for (const key of keys) {
+          deleted += Number(redisStrings.delete(key));
+          deleted += Number(redisSets.delete(key));
+        }
+        return deleted;
+      }),
+      sadd: jest.fn().mockImplementation(async (key: string, value: string) => {
+        const existing = redisSets.get(key) ?? new Set<string>();
+        const previousSize = existing.size;
+        existing.add(value);
+        redisSets.set(key, existing);
+        return existing.size > previousSize ? 1 : 0;
+      }),
+      sismember: jest.fn().mockImplementation(async (key: string, value: string) => {
+        return redisSets.get(key)?.has(value) ? 1 : 0;
+      }),
+      smembers: jest.fn().mockImplementation(async (key: string) => {
+        return Array.from(redisSets.get(key) ?? []);
+      }),
+      get: jest.fn().mockImplementation(async (key: string) => {
+        return redisStrings.get(key) ?? null;
+      }),
+      ttl: jest.fn().mockImplementation(async (key: string) => {
+        return redisStrings.has(key) ? 20 : 0;
+      }),
+      exists: jest.fn().mockImplementation(async (key: string) => {
+        return redisStrings.has(key) ? 1 : 0;
+      }),
+      psubscribe: jest.fn().mockResolvedValue(1),
       config: jest.fn().mockResolvedValue('OK'),
       quit: jest.fn().mockResolvedValue('OK'),
     } as any;
 
-    Redis.prototype = mockRedis as any;
+    (Redis as jest.MockedClass<typeof Redis>).mockImplementation(() => mockRedis);
 
     prisma = new PrismaClient() as jest.Mocked<PrismaClient>;
     eventPublisher = new EventPublisher() as jest.Mocked<EventPublisher>;
     eventPublisher.publish = jest.fn().mockResolvedValue(undefined);
 
-    offerManager = new DriverOfferManager();
+    offerManager = new DriverOfferManager(mockRedis as any);
     rideService = new RideService(prisma, eventPublisher, offerManager);
 
     // Mock Prisma methods
@@ -92,7 +126,9 @@ describe('Driver Offer Timeout & Re-assignment', () => {
   });
 
   afterEach(async () => {
-    await offerManager.close();
+    if (offerManager) {
+      await offerManager.close();
+    }
   });
 
   describe('Task 2.1: OFFERED Status with Timeout', () => {
@@ -124,7 +160,7 @@ describe('Driver Offer Timeout & Re-assignment', () => {
       expect(mockRedis.setex).toHaveBeenCalledWith(
         'ride:offer:ride-123',
         20,
-        driverId
+        expect.stringContaining(`"driverId":"${driverId}"`)
       );
 
       // Verify event published
@@ -134,7 +170,8 @@ describe('Driver Offer Timeout & Re-assignment', () => {
           rideId: 'ride-123',
           driverId,
           ttlSeconds: 20,
-        })
+        }),
+        'ride-123'
       );
     });
 
@@ -145,6 +182,7 @@ describe('Driver Offer Timeout & Re-assignment', () => {
         ...mockRide,
         offeredDriverIds: [driverId],
       });
+      await mockRedis.sadd('ride:offered:ride-123', driverId);
 
       await expect(
         rideService.offerRideToDriver('ride-123', driverId, 20)
@@ -162,8 +200,17 @@ describe('Driver Offer Timeout & Re-assignment', () => {
       };
 
       (prisma.ride.findUnique as jest.Mock).mockResolvedValue(offeredRide);
-      (mockRedis.get as jest.Mock).mockResolvedValue(driverId);
       (mockRedis.smembers as jest.Mock).mockResolvedValue([]);
+      await mockRedis.setex(
+        'ride:offer:ride-123',
+        20,
+        JSON.stringify({
+          rideId: 'ride-123',
+          driverId,
+          offeredAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 20_000).toISOString(),
+        })
+      );
       
       (prisma.ride.update as jest.Mock).mockResolvedValueOnce({
         ...offeredRide,
@@ -192,8 +239,9 @@ describe('Driver Offer Timeout & Re-assignment', () => {
         'ride.offer_timeout',
         expect.objectContaining({
           rideId: 'ride-123',
-          driverId,
-        })
+          timedOutDriverId: driverId,
+        }),
+        'ride-123'
       );
     });
 
@@ -207,7 +255,16 @@ describe('Driver Offer Timeout & Re-assignment', () => {
       };
 
       (prisma.ride.findUnique as jest.Mock).mockResolvedValue(offeredRide);
-      (mockRedis.get as jest.Mock).mockResolvedValue(driverId);
+      await mockRedis.setex(
+        'ride:offer:ride-123',
+        20,
+        JSON.stringify({
+          rideId: 'ride-123',
+          driverId,
+          offeredAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 20_000).toISOString(),
+        })
+      );
       
       (prisma.ride.update as jest.Mock).mockResolvedValue({
         ...offeredRide,
@@ -232,7 +289,8 @@ describe('Driver Offer Timeout & Re-assignment', () => {
       // Verify assigned event published
       expect(eventPublisher.publish).toHaveBeenCalledWith(
         'ride.assigned',
-        expect.any(Object)
+        expect.any(Object),
+        'ride-123'
       );
     });
   });
@@ -251,8 +309,17 @@ describe('Driver Offer Timeout & Re-assignment', () => {
       };
 
       (prisma.ride.findUnique as jest.Mock).mockResolvedValue(offeredRide);
-      (mockRedis.get as jest.Mock).mockResolvedValue(driver1);
       (mockRedis.smembers as jest.Mock).mockResolvedValue([]);
+      await mockRedis.setex(
+        'ride:offer:ride-123',
+        20,
+        JSON.stringify({
+          rideId: 'ride-123',
+          driverId: driver1,
+          offeredAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 20_000).toISOString(),
+        })
+      );
       
       (prisma.ride.update as jest.Mock).mockResolvedValue({
         ...offeredRide,
@@ -270,7 +337,8 @@ describe('Driver Offer Timeout & Re-assignment', () => {
         expect.objectContaining({
           rideId: 'ride-123',
           excludeDriverIds: expect.arrayContaining([driver1]),
-        })
+        }),
+        'ride-123'
       );
     });
 
@@ -294,7 +362,8 @@ describe('Driver Offer Timeout & Re-assignment', () => {
         'ride.reassignment_requested',
         expect.objectContaining({
           excludeDriverIds: expect.arrayContaining([driver1, driver2]),
-        })
+        }),
+        'ride-123'
       );
     });
 
@@ -319,11 +388,12 @@ describe('Driver Offer Timeout & Re-assignment', () => {
 
       // Verify max attempts event published
       expect(eventPublisher.publish).toHaveBeenCalledWith(
-        'ride.max_reassignment_attempts',
+        'ride.reassignment_failed',
         expect.objectContaining({
           rideId: 'ride-123',
           attempts: 3,
-        })
+        }),
+        'ride-123'
       );
     });
 
@@ -357,7 +427,8 @@ describe('Driver Offer Timeout & Re-assignment', () => {
           rideId: 'ride-123',
           driverId,
           reason: 'Too far away',
-        })
+        }),
+        'ride-123'
       );
 
       // Verify re-assignment triggered
@@ -365,7 +436,8 @@ describe('Driver Offer Timeout & Re-assignment', () => {
         'ride.reassignment_requested',
         expect.objectContaining({
           excludeDriverIds: expect.arrayContaining([driverId]),
-        })
+        }),
+        'ride-123'
       );
     });
   });
@@ -394,7 +466,6 @@ describe('Driver Offer Timeout & Re-assignment', () => {
 
       // Driver A timeout
       (prisma.ride.findUnique as jest.Mock).mockResolvedValue(currentRide);
-      (mockRedis.get as jest.Mock).mockResolvedValue(driverA);
       (mockRedis.smembers as jest.Mock).mockResolvedValue([]);
       currentRide = {
         ...currentRide,
@@ -421,7 +492,6 @@ describe('Driver Offer Timeout & Re-assignment', () => {
 
       // Driver B timeout
       (prisma.ride.findUnique as jest.Mock).mockResolvedValue(currentRide);
-      (mockRedis.get as jest.Mock).mockResolvedValue(driverB);
       currentRide = {
         ...currentRide,
         status: RideStatus.FINDING_DRIVER,
@@ -447,7 +517,6 @@ describe('Driver Offer Timeout & Re-assignment', () => {
 
       // Driver C accepts
       (prisma.ride.findUnique as jest.Mock).mockResolvedValue(currentRide);
-      (mockRedis.get as jest.Mock).mockResolvedValue(driverC);
       currentRide = {
         ...currentRide,
         status: RideStatus.ASSIGNED,
@@ -476,6 +545,7 @@ describe('Driver Offer Timeout & Re-assignment', () => {
       };
 
       (prisma.ride.findUnique as jest.Mock).mockResolvedValue(rideWithRejected);
+      await mockRedis.sadd('ride:offered:ride-123', driverId);
 
       await expect(
         rideService.offerRideToDriver('ride-123', driverId, 20)

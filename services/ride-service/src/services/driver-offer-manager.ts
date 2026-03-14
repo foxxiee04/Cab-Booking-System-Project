@@ -214,6 +214,14 @@ export class DriverOfferManager {
     return this.MAX_REASSIGN_ATTEMPTS;
   }
 
+  async ping(): Promise<boolean> {
+    try {
+      return (await this.redis.ping()) === 'PONG';
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Close Redis connection
    */

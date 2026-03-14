@@ -1,0 +1,102 @@
+erDiagram
+    USERS {
+        string id PK
+        string email UK
+        string phone UK
+        string password_hash
+        string role
+        string status
+        datetime created_at
+        datetime updated_at
+    }
+
+    REFRESH_TOKENS {
+        string id PK
+        string token_id UK
+        string user_id FK
+        datetime expires_at
+        datetime revoked_at
+        datetime created_at
+    }
+
+    USER_PROFILES {
+        string id PK
+        string user_id UK
+        string first_name
+        string last_name
+        string phone
+        string avatar
+        string status
+    }
+
+    DRIVERS {
+        string id PK
+        string user_id UK
+        string status
+        string availability_status
+        string vehicle_type
+        string vehicle_plate
+        string current_ride_id
+    }
+
+    BOOKING {
+        string id PK
+        string customerId
+        string status
+        string vehicleType
+        string paymentMethod
+        float estimatedFare
+        float surgeMultiplier
+    }
+
+    RIDE {
+        string id PK
+        string customerId
+        string driverId
+        string status
+        string vehicleType
+        string paymentMethod
+        float fare
+        int reassignAttempts
+    }
+
+    RIDE_STATE_TRANSITION {
+        string id PK
+        string rideId FK
+        string fromStatus
+        string toStatus
+        string actorId
+        string actorType
+        datetime occurredAt
+    }
+
+    FARE {
+        string id PK
+        string rideId UK
+        float baseFare
+        float distanceFare
+        float timeFare
+        float totalFare
+    }
+
+    PAYMENT {
+        string id PK
+        string rideId UK
+        string customerId
+        string driverId
+        float amount
+        string status
+        string provider
+    }
+
+    OUTBOXEVENT {
+        string id PK
+        string eventType
+        string correlationId
+        datetime createdAt
+        datetime publishedAt
+    }
+
+    USERS ||--o{ REFRESH_TOKENS : owns
+    RIDE ||--o{ RIDE_STATE_TRANSITION : records
+    FARE ||--o| PAYMENT : settles

@@ -2,11 +2,10 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import type { SignOptions } from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
-import { PrismaClient, UserRole, UserStatus } from '@prisma/client';
+import { UserRole, UserStatus } from '../generated/prisma-client';
 import { config } from '../config';
+import { prisma } from '../config/db';
 import { EventPublisher } from '../events/publisher';
-
-const prisma = new PrismaClient();
 
 interface RegisterInput {
   email: string;

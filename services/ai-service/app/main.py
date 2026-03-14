@@ -1,10 +1,12 @@
 """FastAPI application entry point"""
 
 import logging
-from fastapi import FastAPI
+from pathlib import Path
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api import predict
+from app.services.prediction_service import prediction_service
 
 # Configure logging
 logging.basicConfig(
@@ -57,6 +59,26 @@ async def root():
         "version": settings.APP_VERSION,
         "docs": "/docs",
         "redoc": "/redoc"
+    }
+
+
+@app.get("/ready")
+async def readiness_check(response: Response):
+    """Dependency readiness endpoint"""
+    model_path = Path(settings.MODEL_PATH)
+    model_loaded = prediction_service.model is not None and prediction_service.scaler is not None
+    model_file_present = model_path.exists()
+    ready = model_loaded and model_file_present
+    if not ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+    return {
+        "status": "ready" if ready else "not_ready",
+        "service": settings.APP_NAME,
+        "dependencies": {
+            "model_file": model_file_present,
+            "model_loaded": model_loaded,
+        },
     }
 
 

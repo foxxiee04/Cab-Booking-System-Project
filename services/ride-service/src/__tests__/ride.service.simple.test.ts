@@ -29,6 +29,9 @@ jest.mock('axios');
 jest.mock('../events/publisher');
 jest.mock('../config', () => ({
   config: {
+    redis: {
+      url: 'redis://localhost:6379',
+    },
     services: {
       pricing: 'http://pricing-service:3009',
       driver: 'http://driver-service:3003',
@@ -48,6 +51,7 @@ import axios from 'axios';
 describe('RideService - Simple Test Suite', () => {
   let rideService: RideService;
   let mockEventPublisher: jest.Mocked<EventPublisher>;
+  const mockOfferManager = {} as any;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -66,7 +70,7 @@ describe('RideService - Simple Test Suite', () => {
       close: jest.fn(),
     } as any;
 
-    rideService = new RideService(mockPrisma, mockEventPublisher);
+    rideService = new RideService(mockPrisma, mockEventPublisher, mockOfferManager);
   });
 
   describe('CREATE RIDE', () => {
@@ -112,6 +116,14 @@ describe('RideService - Simple Test Suite', () => {
         'ride.created',
         expect.any(Object),
         expect.any(String)
+      );
+      expect(mockEventPublisher.publish).toHaveBeenCalledWith(
+        'ride.finding_driver_requested',
+        expect.objectContaining({
+          rideId: 'ride-123',
+          customerId: 'customer-123',
+        }),
+        'ride-123'
       );
     });
 
@@ -166,6 +178,49 @@ describe('RideService - Simple Test Suite', () => {
       });
 
       await expect(rideService.createRide(input)).rejects.toThrow('Customer already has an active ride');
+    });
+
+    it('should create ride from booking and request matching through the new event', async () => {
+      mockPrisma.ride.create.mockResolvedValue({
+        id: 'ride-booking-123',
+        customerId: 'customer-123',
+        status: 'FINDING_DRIVER',
+        pickupLat: 10.7764,
+        pickupLng: 106.7008,
+        dropoffLat: 10.7809,
+        dropoffLng: 106.6956,
+        vehicleType: 'ECONOMY',
+        fare: 50000,
+      });
+
+      const result = await rideService.createRideFromBooking({
+        bookingId: 'booking-123',
+        customerId: 'customer-123',
+        pickupAddress: '123 Nguyen Hue',
+        pickupLat: 10.7764,
+        pickupLng: 106.7008,
+        dropoffAddress: '456 Le Loi',
+        dropoffLat: 10.7809,
+        dropoffLng: 106.6956,
+        vehicleType: 'ECONOMY',
+        paymentMethod: 'CASH',
+        fare: 50000,
+      });
+
+      expect(result.id).toBe('ride-booking-123');
+      expect(mockEventPublisher.publish).toHaveBeenCalledTimes(1);
+      expect(mockEventPublisher.publish).toHaveBeenCalledWith(
+        'ride.finding_driver_requested',
+        expect.objectContaining({
+          rideId: 'ride-booking-123',
+          customerId: 'customer-123',
+          pickup: { lat: 10.7764, lng: 106.7008 },
+          dropoff: { lat: 10.7809, lng: 106.6956 },
+          vehicleType: 'ECONOMY',
+          fare: 50000,
+        }),
+        'ride-booking-123'
+      );
     });
   });
 

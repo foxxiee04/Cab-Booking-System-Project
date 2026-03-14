@@ -57,9 +57,11 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?set RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:?set RABBITMQ_PASS}
+      RABBITMQ_PROMETHEUS_RETURN_PER_OBJECT_METRICS: "true"
     ports:
       - "5672:5672"
       - "15672:15672"  # Management UI
+      - "15692:15692"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -71,8 +73,8 @@ services:
   # ============ Microservices ============
   api-gateway:
     build:
-      context: ./services/api-gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/api-gateway/Dockerfile
     image: cab-api-gateway:latest
     container_name: cab-api-gateway
     ports:
@@ -91,6 +93,7 @@ services:
       - DRIVER_SERVICE_URL=http://driver-service:3003
       - PAYMENT_SERVICE_URL=http://payment-service:3004
       - NOTIFICATION_SERVICE_URL=http://notification-service:3005
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
     depends_on:
       - auth-service
       - user-service
@@ -105,8 +108,8 @@ services:
 
   auth-service:
     build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/auth-service/Dockerfile
     image: cab-auth-service:latest
     container_name: cab-auth-service
     ports:
@@ -117,6 +120,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/auth_db?schema=public
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:?set REFRESH_TOKEN_SECRET}
       - JWT_EXPIRES_IN=15m
       - REFRESH_TOKEN_EXPIRES_IN=7d
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
@@ -147,8 +151,8 @@ services:
 
   ride-service:
     build:
-      context: ./services/ride-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/ride-service/Dockerfile
     image: cab-ride-service:latest
     container_name: cab-ride-service
     ports:
@@ -173,8 +177,8 @@ services:
 
   driver-service:
     build:
-      context: ./services/driver-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/driver-service/Dockerfile
     image: cab-driver-service:latest
     container_name: cab-driver-service
     ports:
@@ -231,6 +235,7 @@ services:
       - PORT=3005
       - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/notification_db?authSource=admin
       - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
     depends_on:
       mongodb:
@@ -282,8 +287,8 @@ services:
 
   pricing-service:
     build:
-      context: ./services/pricing-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/pricing-service/Dockerfile
     image: cab-pricing-service:latest
     container_name: cab-pricing-service
     ports:
@@ -293,8 +298,8 @@ services:
       - PORT=3009
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
-      - OSRM_BASE_URL=${OSRM_BASE_URL:-http://router.project-osrm.org}
-      - AI_SERVICE_URL=http://ai-service:8000
+      - OSRM_BASE_URL=${OSRM_BASE_URL:?set OSRM_BASE_URL}
+      - AI_SERVICE_URL=${AI_SERVICE_URL:?set AI_SERVICE_URL}
     depends_on:
       redis:
         condition: service_healthy
@@ -315,7 +320,7 @@ services:
       - PORT=8000
       - MODEL_PATH=app/models/eta_price_model.joblib
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; raise SystemExit(0 if urlopen('http://localhost:8000/api/health').status == 200 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -324,12 +329,102 @@ services:
     networks:
       - default
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: cab-prometheus
+    profiles: ["monitoring"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - api-gateway
+      - ride-service
+      - payment-service
+      - pricing-service
+      - rabbitmq
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: cab-grafana
+    profiles: ["monitoring"]
+    ports:
+      - "3006:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin123}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: cab-loki
+    profiles: ["monitoring"]
+    ports:
+      - "3100:3100"
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: cab-promtail
+    profiles: ["monitoring"]
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cab-cadvisor
+    profiles: ["monitoring"]
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    privileged: true
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: cab-node-exporter
+    profiles: ["monitoring"]
+    ports:
+      - "9100:9100"
+    command:
+      - --path.rootfs=/host
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+
 
 volumes:
   postgres_data:
   mongo_data:
   redis_data:
   rabbitmq_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
 
 networks:
   default:

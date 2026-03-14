@@ -5,9 +5,9 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc && node -e \"require('fs').cpSync('src/generated', 'dist/generated', { recursive: true, force: true })\"",
     "start": "node dist/index.js",
-    "test": "npm run db:generate && jest",
+    "test": "npm run db:generate && jest --runInBand --silent",
     "migrate": "npx prisma migrate dev",
     "db:generate": "npx prisma generate"
   },
@@ -22,7 +22,7 @@
     "winston": "^3.11.0",
     "dotenv": "^16.3.1",
     "jsonwebtoken": "^9.0.2",
-    "stripe": "^17.5.0",
+    "stripe": "^17.7.0",
     "axios": "^1.6.0"
   },
   "devDependencies": {

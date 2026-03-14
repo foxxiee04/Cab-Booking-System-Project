@@ -10,9 +10,8 @@ import {
   validateRefund,
 } from '../validators/payment.validator';
 
-const router = Router();
-
 export const createPaymentRoutes = (prisma: PrismaClient, eventPublisher: EventPublisher) => {
+  const router = Router();
   const paymentService = new PaymentService(prisma, eventPublisher);
   const controller = new PaymentController(paymentService);
 

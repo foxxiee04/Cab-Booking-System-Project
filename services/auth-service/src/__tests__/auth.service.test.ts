@@ -17,7 +17,7 @@ const mockPrisma = {
   },
 };
 
-jest.mock('@prisma/client', () => ({
+jest.mock('../generated/prisma-client', () => ({
   PrismaClient: jest.fn(() => mockPrisma),
   UserRole: {
     CUSTOMER: 'CUSTOMER',
@@ -47,7 +47,7 @@ jest.mock('../config', () => ({
 
 import { AuthService } from '../services/auth.service';
 import { EventPublisher } from '../events/publisher';
-import { UserRole, UserStatus } from '@prisma/client';
+import { UserRole, UserStatus } from '../generated/prisma-client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 

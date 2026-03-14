@@ -95,14 +95,4 @@ router.use(
   }))
 );
 
-// WebSocket proxy for notifications
-router.use(
-  '/socket.io',
-  createProxyMiddleware({
-    target: config.services.notification,
-    changeOrigin: true,
-    ws: true,
-  })
-);
-
 export default router;

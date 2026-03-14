@@ -20,8 +20,8 @@ env:
   IMAGE_NAMESPACE: ${{ secrets.DOCKERHUB_USERNAME || github.repository_owner }}
 
 jobs:
-  ci-node:
-    name: CI - Node Services
+  test-unit:
+    name: Test - Unit
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -78,19 +78,108 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build workspaces
-        run: npm run build --workspaces --if-present
+      - name: Build shared helpers
+        run: npm run build:shared
 
-      - name: Run tests
-        run: npm run test --workspaces --if-present -- --passWithNoTests
+      - name: Run unit tests
+        run: npm run test:unit
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
           MONGODB_URI: mongodb://localhost:27017/test_db
           REDIS_URL: redis://localhost:6379
           RABBITMQ_URL: amqp://localhost:5672
+          JWT_SECRET: test-jwt-secret
+          REFRESH_TOKEN_SECRET: test-refresh-secret
+          INTERNAL_SERVICE_TOKEN: test-internal-token
+          AI_SERVICE_URL: http://127.0.0.1:8000
+          OSRM_BASE_URL: http://router.project-osrm.org
 
-  ci-ai:
-    name: CI - AI Service
+  test-contract:
+    name: Test - Contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build shared helpers
+        run: npm run build:shared
+
+      - name: Run contract tests
+        run: npm run test:contract
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          RABBITMQ_URL: amqp://localhost:5672
+          JWT_SECRET: test-jwt-secret
+          INTERNAL_SERVICE_TOKEN: test-internal-token
+
+  test-integration:
+    name: Test - Integration
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: cab_booking
+      MONGO_USER: mongo
+      MONGO_PASSWORD: mongo
+      RABBITMQ_USER: guest
+      RABBITMQ_PASS: guest
+      JWT_SECRET: test-jwt-secret
+      REFRESH_TOKEN_SECRET: test-refresh-secret
+      INTERNAL_SERVICE_TOKEN: test-internal-token
+      OSRM_BASE_URL: http://router.project-osrm.org
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Start integration infrastructure
+        run: docker compose -f .github/docker/docker-compose.integration.yml up -d --build --wait
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build workspaces
+        run: npm run build --workspaces --if-present
+
+      - name: Start backend services and run integration tests
+        run: npx tsx scripts/run-integration-backend.ts
+
+      - name: Print Node service logs on failure
+        if: failure()
+        run: |
+          if [ -d .ci-logs ]; then
+            for file in .ci-logs/*.log; do
+              [ -f "$file" ] || continue
+              echo "===== $file ====="
+              tail -n 200 "$file"
+            done
+          fi
+
+      - name: Print Docker logs on failure
+        if: failure()
+        run: docker compose -f .github/docker/docker-compose.integration.yml logs --no-color
+
+      - name: Stop integration infrastructure
+        if: always()
+        run: docker compose -f .github/docker/docker-compose.integration.yml down -v
+
+  test-ai:
+    name: Test - AI Service
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -113,27 +202,75 @@ jobs:
   docker-build-and-push:
     name: Docker - Build & Push
     runs-on: ubuntu-latest
-    needs: [ci-node, ci-ai]
+    needs: [test-unit, test-contract, test-integration, test-ai]
     if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - api-gateway
-          - auth-service
-          - booking-service
-          - driver-service
-          - notification-service
-          - payment-service
-          - pricing-service
-          - review-service
-          - ride-service
-          - user-service
-          - ai-service
+        include:
+          - service: api-gateway
+            context: .
+            dockerfile: ./services/api-gateway/Dockerfile
+            needs_shared: true
+          - service: auth-service
+            context: .
+            dockerfile: ./services/auth-service/Dockerfile
+            needs_shared: true
+          - service: booking-service
+            context: ./services/booking-service
+            dockerfile: ./Dockerfile
+            needs_shared: false
+          - service: driver-service
+            context: .
+            dockerfile: ./services/driver-service/Dockerfile
+            needs_shared: true
+          - service: notification-service
+            context: ./services/notification-service
+            dockerfile: ./Dockerfile
+            needs_shared: false
+          - service: payment-service
+            context: ./services/payment-service
+            dockerfile: ./Dockerfile
+            needs_shared: false
+          - service: pricing-service
+            context: .
+            dockerfile: ./services/pricing-service/Dockerfile
+            needs_shared: true
+          - service: review-service
+            context: ./services/review-service
+            dockerfile: ./Dockerfile
+            needs_shared: false
+          - service: ride-service
+            context: .
+            dockerfile: ./services/ride-service/Dockerfile
+            needs_shared: true
+          - service: user-service
+            context: ./services/user-service
+            dockerfile: ./Dockerfile
+            needs_shared: false
+          - service: ai-service
+            context: ./services/ai-service
+            dockerfile: ./Dockerfile
+            needs_shared: false
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: matrix.needs_shared
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        if: matrix.needs_shared
+        run: npm install
+
+      - name: Build shared helpers
+        if: matrix.needs_shared
+        run: npm run build:shared
 
       - name: Validate Docker Hub secrets
         run: |
@@ -163,7 +300,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ./services/${{ matrix.service }}
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

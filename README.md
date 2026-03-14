@@ -46,6 +46,8 @@ Cab Booking System là nền tảng đặt xe taxi với 3 ứng dụng frontend
 - **MongoDB** - Document store (notifications, reviews)
 - **Redis** - Cache, geo-indexing, surge pricing
 - **RabbitMQ** - Event-driven messaging
+- **Docker Compose + Docker Swarm** - Container orchestration, service scaling and load distribution
+- **Prometheus + Grafana + Loki** - Monitoring, dashboards and log aggregation
 
 ---
 
@@ -60,8 +62,7 @@ graph TB
     end
 
     subgraph "API Layer"
-        GW[API Gateway<br/>Port 3000<br/>Auth Middleware]
-        WS[WebSocket Server<br/>Socket.IO]
+        GW[API Gateway<br/>Port 3000<br/>JWT + Routing + Socket.IO Hub]
     end
 
     subgraph "Microservices Layer"
@@ -98,8 +99,8 @@ graph TB
     GW --> NOTIF
     GW --> REVIEW
 
-    WS -.Real-time Updates.-> CA
-    WS -.Real-time Updates.-> DA
+    GW -.Real-time Updates.-> CA
+    GW -.Real-time Updates.-> DA
 
     AUTH --> PG
     USER --> PG
@@ -117,8 +118,9 @@ graph TB
     RIDE -.Events.-> MQ
     PAYMENT -.Events.-> MQ
     
-    MQ -.Consume.-> NOTIF
-    MQ -.Consume.-> PAYMENT
+    MQ -.Ride Events.-> GW
+    MQ -.Async Notifications.-> NOTIF
+    MQ -.Billing Events.-> PAYMENT
 
     style CA fill:#4CAF50
     style DA fill:#2196F3
@@ -126,6 +128,13 @@ graph TB
     style GW fill:#9C27B0
     style AI fill:#F44336
 ```
+
+### Realtime, Data, Deployment
+- Realtime ride updates go through API Gateway Socket.IO, not Notification Service. Ride Service publishes domain events to RabbitMQ and API Gateway fan-outs status changes to customer and driver apps.
+- Each microservice keeps its own database boundary and communicates with other services only through REST APIs or RabbitMQ events.
+- API Gateway is responsible for JWT authentication and request routing. Horizontal scaling and load distribution are handled at the Docker Swarm or reverse-proxy layer rather than by application code inside the gateway.
+- Docker Compose is used for local orchestration, while Docker Swarm stack files define multi-replica production deployment. Redis is used for cache, geo queries and realtime adapter state.
+- An optional monitoring stack is available via Prometheus, Grafana, Loki, Promtail, cAdvisor and node-exporter.
 
 ---
 
@@ -236,11 +245,11 @@ Cab-Booking-System-Project/
 │   └── README.md
 │
 ├── 🗄️ scripts/                       # Operational Scripts
-│   ├── rebuild-system.sh/bat         # Complete rebuild
-│   ├── init-db.sql                   # Database initialization
-│   ├── seed-data-fixed.sql           # Sample data
-│   ├── full-backend-test.ps1         # Integration tests
-│   └── clear-db.sh/bat               # Reset databases
+│   ├── init-db.sql                   # PostgreSQL initialization
+│   ├── reset-database.sh/bat         # Reset DBs + apply migrations + seed sample data
+│   ├── seed-database.ts              # Seed sample data directly
+│   ├── test-backend.sh/bat           # Backend test wrappers
+│   └── test-backend.ts               # Backend integration flow test
 │
 ├── 🔐 env/                           # Environment configs
 │   ├── auth.env
@@ -272,15 +281,15 @@ Cab-Booking-System-Project/
 ### Backend Services
 | Service | Port | URL | Database | Description |
 |---------|------|-----|----------|-------------|
-| **API Gateway** | 3000 | http://localhost:3000 | - | Entry point, auth middleware, Socket.IO |
+| **API Gateway** | 3000 | http://localhost:3000 | - | Entry point, auth middleware, admin aggregation, Socket.IO realtime hub |
 | **Auth Service** | 3001 | http://localhost:3001 | PostgreSQL | Login, register, JWT, refresh tokens |
 | **Ride Service** | 3002 | http://localhost:3002 | PostgreSQL | Ride management, state machine |
 | **Driver Service** | 3003 | http://localhost:3003 | PostgreSQL + Redis | Driver profiles, location, status |
-| **Payment Service** | 3004 | http://localhost:3004 | PostgreSQL | Payment processing, outbox pattern |
-| **Notification Service** | 3005 | http://localhost:3005 | MongoDB + Redis | Push notifications, in-app messages |
-| **User Service** | 3007 | http://localhost:3007 | PostgreSQL | User profiles, preferences |
+| **Payment Service** | 3004 | http://localhost:3004 | PostgreSQL | Payment execution, history, refunds |
+| **Notification Service** | 3005 | http://localhost:3005 | MongoDB + Redis | Notification history, email/SMS processing, event-driven delivery |
+| **User Service** | 3007 | http://localhost:3007 | PostgreSQL | User profile service only |
 | **Booking Service** | 3008 | http://localhost:3008 | PostgreSQL | Booking creation, confirmation |
-| **Pricing Service** | 3009 | http://localhost:3009 | Redis | Fare estimation, surge pricing |
+| **Pricing Service** | 3009 | http://localhost:3009 | Redis | Fare estimation, surge pricing, route cost calculation |
 | **Review Service** | 3010 | http://localhost:3010 | MongoDB | Ratings & reviews |
 | **AI Service** | 8000 | http://localhost:8000 | - | ETA & surge prediction (ML) |
 
@@ -292,6 +301,9 @@ Cab-Booking-System-Project/
 | Redis | 6379 | Cache, geo-indexing, surge data |
 | RabbitMQ | 5672 | Event bus |
 | RabbitMQ Management | 15672 | Management UI |
+| Prometheus | 9090 | Metrics collection (optional monitoring profile) |
+| Grafana | 3006 | Monitoring dashboards (optional monitoring profile) |
+| Loki | 3100 | Centralized logs (optional monitoring profile) |
 
 ---
 
@@ -339,23 +351,27 @@ npm install
 npm start   # → http://localhost:4002
 ```
 
-### Complete System Rebuild
+### Reset Database & Seed Sample Data
 
 ```bash
 # Windows
-.\scripts\rebuild-system.bat
+scripts\reset-database.bat
 
 # Linux/Mac
-./scripts/rebuild-system.sh
+./scripts/reset-database.sh
 ```
 
 Script này sẽ:
-1. ✅ Stop và xóa containers/volumes
-2. ✅ Build Docker images
-3. ✅ Khởi tạo databases
-4. ✅ Apply Prisma migrations
-5. ✅ Seed sample data
-6. ✅ Start tất cả services
+1. ✅ Drop và tạo lại các PostgreSQL databases
+2. ✅ Drop MongoDB databases cho notification/review
+3. ✅ Apply Prisma migrations hoặc `db push` fallback
+4. ✅ Seed sample data cho môi trường local
+
+Hoặc chỉ seed dữ liệu mẫu sau khi services/database đã sẵn sàng:
+
+```bash
+npm run db:seed
+```
 
 ### Verify System
 
@@ -373,6 +389,20 @@ curl http://localhost:3000/health/services
 docker-compose logs -f api-gateway
 docker-compose logs -f ride-service
 ```
+
+### Optional Monitoring Stack
+
+```bash
+# Local Docker Compose
+docker-compose --profile monitoring up -d prometheus grafana loki promtail cadvisor node-exporter
+
+# Docker Swarm
+docker stack deploy -c docker-stack.yml cab-booking
+```
+
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3006
+- Loki: http://localhost:3100
 
 ---
 
@@ -432,6 +462,9 @@ docker-compose logs -f ride-service
 - JWT authentication middleware
 - Request routing to microservices
 - WebSocket server for real-time updates
+- Single realtime delivery hub for customer, driver, and admin clients
+- RabbitMQ event consumer for ride lifecycle fan-out and driver matching notifications
+- Resolve driver profile IDs to auth user IDs before delivering driver socket events
 - Rate limiting
 - CORS handling
 
@@ -445,7 +478,8 @@ docker-compose logs -f ride-service
 - Refresh token rotation
 - Password hashing (bcrypt)
 - Token validation
-- Event publishing (user.created)
+- Role and identity management
+- Event publishing (user.created, role changed)
 
 **Tech:** Node.js, Express, Prisma  
 **Database:** PostgreSQL (auth_db)  
@@ -454,16 +488,17 @@ docker-compose logs -f ride-service
 ### Ride Service (Port 3002)
 **Responsibilities:**
 - Create rides from bookings
-- Driver assignment (with retry logic)
+- Own the ride state machine and matching workflow state
+- Publish matching requests, offers, retries, and lifecycle events
 - Ride state machine (created → assigned → accepted → pickup → started → completed)
-- Real-time ride updates via Socket.IO
+- Publish ride lifecycle events for realtime delivery via API Gateway
 - Ride history
 - Cancel rides
 
-**Tech:** Node.js, Express, Prisma, Socket.IO  
+**Tech:** Node.js, Express, Prisma  
 **Database:** PostgreSQL (ride_db)  
 **Tables:** rides, ride_transitions  
-**Events:** ride.created, ride.completed, ride.cancelled
+**Events:** ride.finding_driver_requested, ride.reassignment_requested, ride.offered, ride.assigned, ride.completed, ride.cancelled
 
 ### Driver Service (Port 3003)
 **Responsibilities:**
@@ -474,6 +509,9 @@ docker-compose logs -f ride-service
 - Geo-indexing with Redis (GEOADD/GEORADIUS)
 - Find nearby drivers
 - Driver availability management
+- Expose canonical nearby-driver queries to other services
+
+**Boundary note:** driver-service does not run a RabbitMQ matching consumer. Matching orchestration lives in ride-service event flow and API Gateway realtime fan-out; driver-service only owns driver data, availability, and nearby-driver lookup.
 
 **Tech:** Node.js, Express, Prisma, Redis  
 **Database:** PostgreSQL (driver_db) + Redis (geo-index)  
@@ -495,12 +533,14 @@ docker-compose logs -f ride-service
 
 ### Notification Service (Port 3005)
 **Responsibilities:**
-- Send notifications to users/drivers
-- In-app notifications
+- Store notification history
+- Consume business events and prepare notification content
 - Push notifications (FCM ready)
 - Email notifications (SMTP ready)
-- Notification history
+- SMS notifications / mock SMS flow
 - Mark as read
+
+**Boundary note:** socket realtime delivery is handled by API Gateway; notification-service is responsible for notification persistence and async channels.
 
 **Tech:** Node.js, Express, MongoDB, Redis  
 **Database:** MongoDB (notification_db)  
@@ -514,9 +554,11 @@ docker-compose logs -f ride-service
 - Preferences
 - Get user by ID
 
+**Boundary note:** authentication, login, registration, JWT, and role management live in Auth Service. User Service is profile-only.
+
 **Tech:** Node.js, Express, Prisma  
 **Database:** PostgreSQL (user_db)  
-**Tables:** users
+**Tables:** user_profiles
 
 ### Booking Service (Port 3008)
 **Responsibilities:**
@@ -538,6 +580,8 @@ docker-compose logs -f ride-service
 - Base fare + per km/minute rates
 - Surge pricing (dynamic multiplier)
 - AI-powered ETA predictions
+
+**Boundary note:** pricing-service calculates and predicts fares; payment-service executes and records payment transactions.
 - Pricing rules management
 
 **Tech:** Node.js, Express, Redis  
@@ -578,17 +622,17 @@ docker-compose logs -f ride-service
 | Database | Service | Tables |
 |----------|---------|--------|
 | auth_db | Auth Service | users, refresh_tokens |
-| user_db | User Service | users |
+| user_db | User Service | user_profiles |
 | driver_db | Driver Service | drivers, vehicles |
 | booking_db | Booking Service | bookings |
 | ride_db | Ride Service | rides, ride_transitions |
 | payment_db | Payment Service | payments, payment_outbox |
 | pricing_db | *(Unused)* | *(Config stored in Redis)* |
 
-**Credentials:**
-- Username: `postgres`
-- Password: `postgres123`
-- Connection: `postgresql://postgres:postgres123@localhost:5433/<db_name>`
+**Credentials:** lấy từ `.env` / `.env.example`
+- Default local username: `postgres`
+- Default local password: `postgres123`
+- Connection: `postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@localhost:5433/<db_name>`
 
 ### MongoDB (Port 27017)
 **2 Databases:**
@@ -598,10 +642,10 @@ docker-compose logs -f ride-service
 | notification_db | Notification Service | notifications |
 | review_db | Review Service | reviews |
 
-**Credentials:**
-- Username: `admin`
-- Password: `admin123`
-- Connection: `mongodb://admin:admin123@localhost:27017`
+**Credentials:** lấy từ `.env` / `.env.example`
+- Default local username: `admin`
+- Default local password: `admin123`
+- Connection: `mongodb://<MONGO_USER>:<MONGO_PASSWORD>@localhost:27017`
 
 **Note:** MongoDB collections được tạo tự động khi có data đầu tiên được insert.
 
@@ -628,7 +672,7 @@ sequenceDiagram
     participant R as Ride Service
     participant D as Driver Service
     participant MQ as RabbitMQ
-    participant N as Notification
+    participant GWS as API Gateway Socket.IO
 
     C->>GW: POST /api/auth/login
     GW->>A: Validate credentials
@@ -643,20 +687,21 @@ sequenceDiagram
 
     C->>GW: POST /api/bookings
     GW->>B: Create booking
-    B->>MQ: Publish booking.created
     B-->>C: Booking created
 
     C->>GW: POST /api/bookings/:id/confirm
     GW->>B: Confirm booking
     B-->>C: Booking confirmed
 
-    MQ->>R: Consume booking.created
-    R->>R: Create ride
+    B->>MQ: Publish booking.confirmed
+    MQ->>R: Consume booking.confirmed
+    R->>R: Create ride + start matching workflow
     R->>D: Find nearby drivers
     D-->>R: Available drivers
-    R->>D: Assign driver
-    R->>MQ: Publish ride.created
-    MQ->>N: Send notification to driver
+    R->>MQ: Publish ride.finding_driver_requested / ride.offered
+    MQ->>GWS: Fan-out realtime offer
+    GWS-->>C: Ride status updates
+    GWS-->>D: NEW_RIDE_AVAILABLE
 ```
 
 ### 2. Driver Nhận Chuyến (Ride Acceptance Flow)
@@ -666,14 +711,15 @@ sequenceDiagram
     participant D as Driver App
     participant GW as API Gateway
     participant R as Ride Service
-    participant WS as WebSocket
+    participant WS as API Gateway Socket.IO
     participant C as Customer App
 
-    WS-->>D: ride.assigned event
+    WS-->>D: NEW_RIDE_AVAILABLE
     D->>GW: POST /api/rides/:id/accept
     GW->>R: Driver accepts ride
     R->>R: Update state: assigned → accepted
-    R->>WS: Emit ride.accepted
+    R->>MQ: Publish ride.accepted
+    MQ->>WS: Fan-out ride.accepted
     WS-->>C: Notify customer
 
     D->>GW: POST /api/rides/:id/pickup
@@ -738,9 +784,11 @@ sequenceDiagram
 
 ```bash
 # Backend integration tests
-cd scripts
-./full-backend-test.ps1      # Windows
-./full-backend-test.sh        # Linux/Mac
+npm run test:backend
+
+# Hoặc dùng wrapper theo OS
+scripts\test-backend.bat      # Windows
+./scripts/test-backend.sh      # Linux/Mac
 
 # Frontend unit tests
 cd apps/customer-app
@@ -765,14 +813,11 @@ npm test
 
 | Script | Purpose | Usage |
 |--------|---------|-------|
-| **rebuild-system** | Complete system rebuild | `./scripts/rebuild-system.sh` |
-| **clear-db** | Reset all databases | `./scripts/clear-db.sh` |
-| **init-db.sql** | Initialize PostgreSQL DBs | Đã auto-run trong Docker |
-| **seed-data-fixed.sql** | Insert sample data | `docker exec -i cab-postgres psql ...` |
-| **verify-system** | Check environment | `./scripts/verify-system.sh` |
-| **full-backend-test** | Run all integration tests | `./scripts/full-backend-test.ps1` |
-| **smoke-test** | Quick health check | `./scripts/smoke-test.sh` |
-| **sync-schemas** | Sync Prisma schemas | `./scripts/sync-schemas.sh` |
+| **reset-database.sh/bat** | Reset PostgreSQL + MongoDB, apply migrations, then seed | `./scripts/reset-database.sh` |
+| **seed-database.ts** | Seed sample local data | `npm run db:seed` |
+| **test-backend.ts** | Run backend integration flow directly | `npm run test:backend` |
+| **test-backend.sh/bat** | OS wrappers for backend integration flow | `./scripts/test-backend.sh` |
+| **init-db.sql** | Initialize PostgreSQL DBs on container bootstrap | Auto-mounted by Docker Compose |
 
 ### Docker Commands
 

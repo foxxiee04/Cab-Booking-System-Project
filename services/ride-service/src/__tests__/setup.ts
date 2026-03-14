@@ -9,6 +9,8 @@ process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test_db';
 process.env.RABBITMQ_URL = 'amqp://localhost:5672';
 process.env.REDIS_URL = 'redis://localhost:6379';
+process.env.JWT_SECRET = 'test-jwt-secret';
+process.env.INTERNAL_SERVICE_TOKEN = 'test-internal-token';
 
 // Suppress console logs during tests (optional)
 // global.console = {

@@ -15,5 +15,21 @@ redisClient.on('connect', () => {
 });
 
 export async function connectRedis() {
-  await redisClient.connect();
+  if (!redisClient.isOpen) {
+    await redisClient.connect();
+  }
+}
+
+export async function disconnectRedis() {
+  if (redisClient.isOpen) {
+    await redisClient.quit();
+  }
+}
+
+export async function isRedisReady(): Promise<boolean> {
+  try {
+    return redisClient.isOpen && (await redisClient.ping()) === 'PONG';
+  } catch {
+    return false;
+  }
 }

@@ -179,6 +179,10 @@ export class SocketServer {
     return this.io;
   }
 
+  public isReady(): boolean {
+    return this.pubClient.status === 'ready' && this.subClient.status === 'ready';
+  }
+
   /**
    * Close connections
    */

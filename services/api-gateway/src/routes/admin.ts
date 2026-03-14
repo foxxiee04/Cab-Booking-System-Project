@@ -47,14 +47,36 @@ router.get('/rides', async (req: Request, res: Response) => {
 router.get('/drivers', async (req: Request, res: Response) => {
   try {
     const { limit, page } = getPaging(req);
+    const userLimit = Math.max(limit * 5, 1000);
 
-    const response = await axios.get(`${config.services.driver}/api/drivers`, {
-      params: { page, limit },
-      headers: getAuthHeaders(req),
-    });
+    const headers = getAuthHeaders(req);
+    const [driverResponse, userResponse] = await Promise.all([
+      axios.get(`${config.services.driver}/api/drivers`, {
+        params: { page, limit },
+        headers,
+      }),
+      axios.get(`${config.services.auth}/api/auth/users`, {
+        params: { page: 1, limit: userLimit },
+        headers,
+      }),
+    ]);
 
-    const payload = response.data?.data || response.data;
+    const payload = driverResponse.data?.data || driverResponse.data;
     const rawDrivers = payload.drivers || [];
+    const usersPayload = userResponse.data?.data || userResponse.data;
+    const users = usersPayload.users || [];
+    const usersById = new Map(
+      users.map((user: any) => [
+        user.id,
+        {
+          id: user.id,
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          email: user.email || '',
+          phoneNumber: user.phone || user.phoneNumber || '',
+        },
+      ])
+    );
 
     const drivers = rawDrivers.map((driver: any) => ({
       id: driver.id,
@@ -73,11 +95,12 @@ router.get('/drivers', async (req: Request, res: Response) => {
         driver.lastLocationLat != null && driver.lastLocationLng != null
           ? { lat: driver.lastLocationLat, lng: driver.lastLocationLng }
           : null,
+      user: usersById.get(driver.userId) || null,
       createdAt: driver.createdAt,
       updatedAt: driver.updatedAt,
     }));
 
-    const total = response.data?.meta?.total ?? drivers.length;
+    const total = driverResponse.data?.meta?.total ?? drivers.length;
 
     res.json({ success: true, data: { drivers, total } });
   } catch (error: any) {

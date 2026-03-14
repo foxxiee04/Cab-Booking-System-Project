@@ -5,6 +5,16 @@ import { logger } from '../utils/logger';
 import { calculateDistance, estimateDuration } from '../utils/geo.utils';
 
 type VehicleType = 'ECONOMY' | 'COMFORT' | 'PREMIUM';
+type AITimeOfDay = 'OFF_PEAK' | 'RUSH_HOUR';
+type AIDayType = 'WEEKDAY' | 'WEEKEND';
+
+interface AIPrediction {
+  eta_minutes: number;
+  price_multiplier: number;
+  distance_km: number;
+  time_of_day: AITimeOfDay;
+  day_type: AIDayType;
+}
 
 export class PricingService {
   
@@ -40,10 +50,15 @@ export class PricingService {
       distance = calculateDistance(pickupLat, pickupLng, dropoffLat, dropoffLng);
       duration = estimateDuration(distance);
     }
-    const durationMinutes = Math.ceil(duration / 60);
+    const baseDurationMinutes = Math.ceil(duration / 60);
 
     // Get surge multiplier
-    const surgeMultiplier = await this.getCurrentSurgeMultiplier();
+    const configuredSurgeMultiplier = await this.getCurrentSurgeMultiplier();
+    const aiPrediction = await this.getAIPrediction(distance);
+    const durationMinutes = aiPrediction?.eta_minutes ?? baseDurationMinutes;
+    const surgeMultiplier = aiPrediction
+      ? Math.max(configuredSurgeMultiplier, aiPrediction.price_multiplier)
+      : configuredSurgeMultiplier;
 
     // Calculate base components
     const baseFare = config.pricing.baseFare[vehicleType];
@@ -68,9 +83,10 @@ export class PricingService {
     return {
       fare: totalFare,
       distance,
-      duration,
+      duration: durationMinutes * 60,
       durationMinutes,
       surgeMultiplier,
+      aiPrediction,
       breakdown: {
         baseFare,
         distanceFare: Math.round(distanceFare),
@@ -171,5 +187,38 @@ export class PricingService {
     await this.setSurgeMultiplier(multiplier);
 
     return { multiplier, demandSupplyRatio };
+  }
+
+  private async getAIPrediction(distanceKm: number): Promise<AIPrediction | null> {
+    try {
+      const response = await axios.post(
+        `${config.ai.baseUrl}/api/predict`,
+        {
+          distance_km: distanceKm,
+          time_of_day: this.mapTimeOfDay(new Date().getHours()),
+          day_type: this.mapDayType(new Date().getDay()),
+        },
+        { timeout: config.ai.timeoutMs }
+      );
+
+      const payload = response.data;
+      if (!payload || typeof payload.eta_minutes !== 'number' || typeof payload.price_multiplier !== 'number') {
+        return null;
+      }
+
+      return payload as AIPrediction;
+    } catch (error) {
+      logger.warn('AI prediction unavailable, using deterministic pricing', error);
+      return null;
+    }
+  }
+
+  private mapTimeOfDay(hour: number): AITimeOfDay {
+    const isRushHour = (hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 20);
+    return isRushHour ? 'RUSH_HOUR' : 'OFF_PEAK';
+  }
+
+  private mapDayType(dayOfWeek: number): AIDayType {
+    return dayOfWeek === 0 || dayOfWeek === 6 ? 'WEEKEND' : 'WEEKDAY';
   }
 }

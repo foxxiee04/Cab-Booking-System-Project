@@ -12,6 +12,10 @@ export class EventConsumer {
   private exchange = 'domain-events';
   private queue = 'payment-service-queue';
 
+  isConnected(): boolean {
+    return Boolean(this.connection && this.channel);
+  }
+
   constructor(prisma: PrismaClient, eventPublisher: EventPublisher) {
     this.paymentService = new PaymentService(prisma, eventPublisher);
   }

@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { getRequiredEnv } from '../../../../shared/dist';
 dotenv.config();
 
 export const config = {
@@ -10,15 +11,17 @@ export const config = {
   },
   
   jwt: {
-    secret: process.env.JWT_SECRET || 'default-secret',
+    secret: getRequiredEnv('JWT_SECRET'),
     expiresIn: process.env.JWT_EXPIRES_IN || '15m',
-    refreshSecret: process.env.REFRESH_TOKEN_SECRET || 'default-refresh-secret',
+    refreshSecret: getRequiredEnv('REFRESH_TOKEN_SECRET'),
     refreshExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
   },
   
   rabbitmq: {
     url: process.env.RABBITMQ_URL || 'amqp://localhost:5672',
   },
+
+  internalServiceToken: getRequiredEnv('INTERNAL_SERVICE_TOKEN'),
   
   serviceName: process.env.SERVICE_NAME || 'auth-service',
 };

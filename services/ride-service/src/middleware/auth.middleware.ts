@@ -1,11 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { getRequiredEnv } from '../../../../shared/dist';
 
 interface AuthRequest extends Request {
   user?: { userId: string; role: string; email?: string };
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'default-secret';
+const JWT_SECRET = getRequiredEnv('JWT_SECRET');
 
 export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;

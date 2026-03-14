@@ -2,15 +2,25 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+function getRequiredEnv(name: string): string {
+  const value = process.env[name]?.trim();
+
+  if (!value) {
+    throw new Error(`${name} environment variable is required`);
+  }
+
+  return value;
+}
+
 export const config = {
   serviceName: 'notification-service',
   port: parseInt(process.env.PORT || '3005', 10),
-  mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/notification_db',
+  mongodbUri: getRequiredEnv('MONGODB_URI'),
   redis: {
-    url: process.env.REDIS_URL || 'redis://localhost:6379',
+    url: getRequiredEnv('REDIS_URL'),
   },
   rabbitmq: {
-    url: process.env.RABBITMQ_URL || 'amqp://rabbitmq_user:rabbitmq_password@localhost:5672',
+    url: getRequiredEnv('RABBITMQ_URL'),
     queue: 'notification-events',
   },
   email: {

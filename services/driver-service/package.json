@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "prisma generate && tsc",
+    "build": "prisma generate && tsc && node -e \"require('fs').cpSync('src/generated', 'dist/generated', { recursive: true, force: true })\"",
     "start": "node dist/index.js",
     "test": "prisma generate && jest",
     "prisma:generate": "prisma generate",
@@ -14,6 +14,7 @@
   "dependencies": {
     "express": "^4.18.2",
     "@prisma/client": "^5.8.0",
+    "axios": "^1.6.2",
     "ioredis": "^5.3.2",
     "amqplib": "^0.10.3",
     "uuid": "^9.0.0",
@@ -27,7 +28,6 @@
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/amqplib": "^0.10.4",
-    "axios": "^1.6.2",
     "@types/uuid": "^9.0.7",
     "@types/cors": "^2.8.17",
     "@types/node": "^20.10.5",

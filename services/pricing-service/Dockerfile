@@ -1,11 +1,15 @@
 FROM node:20-alpine
 
-WORKDIR /app
+WORKDIR /workspace/services/pricing-service
 
-COPY package*.json ./
+COPY services/pricing-service/package*.json ./
 RUN npm install
 
-COPY . .
+COPY shared/package*.json /workspace/shared/
+RUN npm install --prefix /workspace/shared --omit=dev
+
+COPY services/pricing-service .
+COPY shared/dist /workspace/shared/dist
 RUN npm run build
 
 EXPOSE 3009

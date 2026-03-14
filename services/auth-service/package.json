@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "prisma generate && tsc",
+    "build": "prisma generate && tsc && node -e \"require('fs').cpSync('src/generated', 'dist/generated', { recursive: true, force: true })\"",
     "start": "node dist/index.js",
     "test": "prisma generate && jest",
     "prisma:generate": "prisma generate",
@@ -14,6 +14,7 @@
   "dependencies": {
     "express": "^4.18.2",
     "@prisma/client": "^5.8.0",
+    "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
     "amqplib": "^0.10.3",

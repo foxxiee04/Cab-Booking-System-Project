@@ -1,33 +1,33 @@
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import morgan from 'morgan';
+import { createApp } from './app';
 import { config } from './config';
 import userRoutes from './routes/user.routes';
-import { prisma } from './config/db';
+import { checkDatabaseReadiness, connectDB, disconnectDB, prisma } from './config/db';
 
-async function main() {
-  const app = express();
+export async function start() {
+  await connectDB();
 
-  app.use(helmet());
-  app.use(cors());
-  app.use(express.json());
-  app.use(morgan('dev'));
-
-  app.get('/health', (_, res) => {
-    res.json({ status: 'ok', service: config.serviceName });
+  const app = createApp({
+    getReadiness: async () => ({
+      postgres: await checkDatabaseReadiness(),
+    }),
   });
 
-  app.use('/api/users', userRoutes);
-
-  await prisma.$connect();
-
-  app.listen(config.port, () => {
+  const server = app.listen(config.port, () => {
     console.log(`User Service running on port ${config.port}`);
   });
+
+  process.on('SIGTERM', async () => {
+    await disconnectDB();
+    server.close();
+    process.exit(0);
+  });
+
+  return { app, server };
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (require.main === module) {
+  start().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

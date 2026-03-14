@@ -1,16 +1,19 @@
 import { EventConsumer } from '../../events/consumer';
 import { SocketServer } from '../../socket/socket-server';
 import Redis from 'ioredis';
+import axios from 'axios';
 
 // Mock dependencies
 jest.mock('ioredis');
 jest.mock('amqplib');
+jest.mock('axios');
 jest.mock('../../socket/socket-server');
 
 describe('EventConsumer', () => {
   let eventConsumer: EventConsumer;
   let mockSocketServer: jest.Mocked<SocketServer>;
   let mockRedis: jest.Mocked<Redis>;
+  const mockedAxios = axios as jest.Mocked<typeof axios>;
 
   beforeEach(() => {
     // Create mock instances
@@ -18,7 +21,6 @@ describe('EventConsumer', () => {
       emitToCustomer: jest.fn(),
       emitToDriver: jest.fn(),
       emitToDrivers: jest.fn(),
-      emitToCustomerAndDriver: jest.fn(),
       isUserOnline: jest.fn(),
     } as any;
 
@@ -28,45 +30,48 @@ describe('EventConsumer', () => {
     } as any;
 
     (Redis as jest.MockedClass<typeof Redis>).mockImplementation(() => mockRedis);
+    mockedAxios.get.mockReset();
 
     eventConsumer = new EventConsumer(mockSocketServer);
   });
 
-  describe('Booking Events', () => {
-    it('should handle booking.created and notify nearby drivers', async () => {
-      // Mock Redis georadius to return nearby drivers
+  describe('Matching Events', () => {
+    it('should handle ride.finding_driver_requested and notify nearby online drivers', async () => {
       mockRedis.georadius.mockResolvedValue([
         ['driver-1', '500'],
         ['driver-2', '1200'],
         ['driver-3', '2500'],
       ] as any);
 
-      // Mock socket server to show all drivers are online
-      mockSocketServer.isUserOnline.mockReturnValue(true);
+      mockedAxios.get
+        .mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-1' } } } })
+        .mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-2' } } } })
+        .mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-3' } } } });
 
-      // Simulate booking.created event
+      mockSocketServer.isUserOnline.mockImplementation((userId: string) => userId !== 'user-2');
+
       const payload = {
-        bookingId: 'booking-123',
+        rideId: 'ride-123',
         customerId: 'customer-456',
         pickup: {
           address: '123 Main St',
-          geoPoint: { lat: 10.762622, lng: 106.660172 },
+          lat: 10.762622,
+          lng: 106.660172,
         },
         dropoff: {
           address: '456 Second St',
-          geoPoint: { lat: 10.772622, lng: 106.670172 },
+          lat: 10.772622,
+          lng: 106.670172,
         },
-        estimatedFare: 50.5,
-        estimatedDistance: 5.2,
-        createdAt: new Date().toISOString(),
+        fare: 50.5,
+        distance: 5.2,
+        searchRadiusKm: 5,
       };
 
-      // Access private method through any type
-      await (eventConsumer as any).handleBookingCreated(payload);
+      await (eventConsumer as any).handleMatchingRequested(payload);
 
-      // Verify Redis was queried for nearby drivers
       expect(mockRedis.georadius).toHaveBeenCalledWith(
-        'driver-locations',
+        'drivers:geo:online',
         106.660172,
         10.762622,
         5000,
@@ -74,86 +79,97 @@ describe('EventConsumer', () => {
         'WITHDIST'
       );
 
-      // Verify notification was sent to drivers
       expect(mockSocketServer.emitToDrivers).toHaveBeenCalledWith(
-        ['driver-1', 'driver-2', 'driver-3'],
+        ['user-1', 'user-3'],
         'NEW_RIDE_AVAILABLE',
         expect.objectContaining({
-          bookingId: 'booking-123',
+          rideId: 'ride-123',
           customerId: 'customer-456',
           estimatedFare: 50.5,
         })
       );
     });
 
-    it('should filter out offline drivers', async () => {
-      // Mock Redis to return 3 drivers
+    it('should exclude drivers that were already tried during reassignment', async () => {
       mockRedis.georadius.mockResolvedValue([
         ['driver-1', '500'],
         ['driver-2', '1200'],
         ['driver-3', '2500'],
       ] as any);
 
-      // Only driver-1 and driver-3 are online
-      mockSocketServer.isUserOnline.mockImplementation((userId: string) => {
-        return userId === 'driver-1' || userId === 'driver-3';
-      });
+      mockedAxios.get
+        .mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-1' } } } })
+        .mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-3' } } } });
+
+      mockSocketServer.isUserOnline.mockReturnValue(true);
 
       const payload = {
-        bookingId: 'booking-456',
+        rideId: 'ride-456',
         customerId: 'customer-789',
         pickup: {
-          address: '123 Main St',
-          geoPoint: { lat: 10.762622, lng: 106.660172 },
+          lat: 10.762622,
+          lng: 106.660172,
         },
-        dropoff: {
-          address: '456 Second St',
-          geoPoint: { lat: 10.772622, lng: 106.670172 },
-        },
-        estimatedFare: 30.0,
-        estimatedDistance: 3.5,
-        createdAt: new Date().toISOString(),
+        excludeDriverIds: ['driver-2'],
       };
 
-      await (eventConsumer as any).handleBookingCreated(payload);
+      await (eventConsumer as any).handleMatchingRequested(payload);
 
-      // Should only notify online drivers
       expect(mockSocketServer.emitToDrivers).toHaveBeenCalledWith(
-        ['driver-1', 'driver-3'],
+        ['user-1', 'user-3'],
         'NEW_RIDE_AVAILABLE',
         expect.any(Object)
+      );
+
+      expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('should deliver a targeted ride offer to the resolved driver socket room', async () => {
+      mockedAxios.get.mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-999' } } } });
+
+      await (eventConsumer as any).handleRideOffered({
+        rideId: 'ride-offer-1',
+        driverId: 'driver-999',
+        customerId: 'customer-1',
+        pickup: { lat: 10.7, lng: 106.6, address: 'Pickup' },
+        dropoff: { lat: 10.8, lng: 106.7, address: 'Dropoff' },
+        fare: 120000,
+        ttlSeconds: 20,
+      });
+
+      expect(mockSocketServer.emitToDriver).toHaveBeenCalledWith(
+        'user-999',
+        'NEW_RIDE_AVAILABLE',
+        expect.objectContaining({
+          rideId: 'ride-offer-1',
+          timeoutSeconds: 20,
+          estimatedFare: 120000,
+        })
       );
     });
 
     it('should handle no nearby drivers gracefully', async () => {
-      // Mock Redis to return no drivers
       mockRedis.georadius.mockResolvedValue([]);
 
       const payload = {
-        bookingId: 'booking-lonely',
+        rideId: 'ride-lonely',
         customerId: 'customer-sad',
         pickup: {
-          address: 'Remote Location',
-          geoPoint: { lat: 11.0, lng: 107.0 },
+          lat: 11.0,
+          lng: 107.0,
         },
-        dropoff: {
-          address: 'Another Remote Location',
-          geoPoint: { lat: 11.1, lng: 107.1 },
-        },
-        estimatedFare: 100.0,
-        estimatedDistance: 20.0,
-        createdAt: new Date().toISOString(),
       };
 
-      await (eventConsumer as any).handleBookingCreated(payload);
+      await (eventConsumer as any).handleMatchingRequested(payload);
 
-      // Should not call emitToDrivers when no drivers found
       expect(mockSocketServer.emitToDrivers).not.toHaveBeenCalled();
     });
   });
 
   describe('Ride Status Events', () => {
     it('should handle ride.accepted and notify customer', async () => {
+      mockedAxios.get.mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-789' } } } });
+
       const payload = {
         rideId: 'ride-123',
         customerId: 'customer-456',
@@ -174,13 +190,50 @@ describe('EventConsumer', () => {
       );
 
       expect(mockSocketServer.emitToDriver).toHaveBeenCalledWith(
-        'driver-789',
+        'user-789',
+        'ride:status',
+        expect.objectContaining({
+          rideId: 'ride-123',
+          status: 'ACCEPTED',
+        })
+      );
+    });
+
+    it('should handle ride.picking_up and notify both parties', async () => {
+      mockedAxios.get.mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-900' } } } });
+
+      const payload = {
+        rideId: 'ride-pickup-1',
+        customerId: 'customer-100',
+        driverId: 'driver-900',
+        status: 'PICKING_UP',
+      };
+
+      await (eventConsumer as any).handleRidePickingUp(payload);
+
+      expect(mockSocketServer.emitToCustomer).toHaveBeenCalledWith(
+        'customer-100',
         'RIDE_STATUS_UPDATE',
-        expect.any(Object)
+        expect.objectContaining({
+          rideId: 'ride-pickup-1',
+          status: 'PICKING_UP',
+          driverId: 'driver-900',
+        })
+      );
+
+      expect(mockSocketServer.emitToDriver).toHaveBeenCalledWith(
+        'user-900',
+        'ride:status',
+        expect.objectContaining({
+          rideId: 'ride-pickup-1',
+          status: 'PICKING_UP',
+        })
       );
     });
 
     it('should handle ride.started and notify both parties', async () => {
+      mockedAxios.get.mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-222' } } } });
+
       const payload = {
         rideId: 'ride-456',
         customerId: 'customer-111',
@@ -190,10 +243,18 @@ describe('EventConsumer', () => {
 
       await (eventConsumer as any).handleRideStarted(payload);
 
-      expect(mockSocketServer.emitToCustomerAndDriver).toHaveBeenCalledWith(
+      expect(mockSocketServer.emitToCustomer).toHaveBeenCalledWith(
         'customer-111',
-        'driver-222',
         'RIDE_STATUS_UPDATE',
+        expect.objectContaining({
+          rideId: 'ride-456',
+          status: 'IN_PROGRESS',
+        })
+      );
+
+      expect(mockSocketServer.emitToDriver).toHaveBeenCalledWith(
+        'user-222',
+        'ride:status',
         expect.objectContaining({
           rideId: 'ride-456',
           status: 'IN_PROGRESS',
@@ -202,6 +263,8 @@ describe('EventConsumer', () => {
     });
 
     it('should handle ride.completed with fare info', async () => {
+      mockedAxios.get.mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-444' } } } });
+
       const payload = {
         rideId: 'ride-789',
         customerId: 'customer-333',
@@ -214,9 +277,8 @@ describe('EventConsumer', () => {
 
       await (eventConsumer as any).handleRideCompleted(payload);
 
-      expect(mockSocketServer.emitToCustomerAndDriver).toHaveBeenCalledWith(
+      expect(mockSocketServer.emitToCustomer).toHaveBeenCalledWith(
         'customer-333',
-        'driver-444',
         'RIDE_COMPLETED',
         expect.objectContaining({
           rideId: 'ride-789',
@@ -226,9 +288,20 @@ describe('EventConsumer', () => {
           duration: 15,
         })
       );
+
+      expect(mockSocketServer.emitToDriver).toHaveBeenCalledWith(
+        'user-444',
+        'ride:status',
+        expect.objectContaining({
+          rideId: 'ride-789',
+          status: 'COMPLETED',
+        })
+      );
     });
 
     it('should handle ride.cancelled and notify both parties', async () => {
+      mockedAxios.get.mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-666' } } } });
+
       const payload = {
         rideId: 'ride-cancel',
         customerId: 'customer-555',
@@ -248,9 +321,11 @@ describe('EventConsumer', () => {
       );
 
       expect(mockSocketServer.emitToDriver).toHaveBeenCalledWith(
-        'driver-666',
-        'RIDE_STATUS_UPDATE',
-        expect.any(Object)
+        'user-666',
+        'ride:cancelled',
+        expect.objectContaining({
+          rideId: 'ride-cancel',
+        })
       );
     });
 
@@ -279,25 +354,16 @@ describe('EventConsumer', () => {
       mockRedis.georadius.mockRejectedValue(new Error('Redis connection failed'));
 
       const payload = {
-        bookingId: 'booking-error',
+        rideId: 'ride-error',
         customerId: 'customer-error',
         pickup: {
-          address: 'Test',
-          geoPoint: { lat: 10.0, lng: 106.0 },
+          lat: 10.0,
+          lng: 106.0,
         },
-        dropoff: {
-          address: 'Test2',
-          geoPoint: { lat: 10.1, lng: 106.1 },
-        },
-        estimatedFare: 20.0,
-        estimatedDistance: 2.0,
-        createdAt: new Date().toISOString(),
       };
 
-      // Should not throw error
-      await expect((eventConsumer as any).handleBookingCreated(payload)).resolves.not.toThrow();
+      await expect((eventConsumer as any).handleMatchingRequested(payload)).resolves.not.toThrow();
 
-      // Should not emit when error occurs
       expect(mockSocketServer.emitToDrivers).not.toHaveBeenCalled();
     });
   });

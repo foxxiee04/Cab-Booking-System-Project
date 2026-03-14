@@ -1,10 +1,9 @@
 import Redis from 'ioredis';
-import { PrismaClient, DriverStatus, AvailabilityStatus, VehicleType } from '@prisma/client';
+import { DriverStatus, AvailabilityStatus, VehicleType } from '../generated/prisma-client';
 import { config } from '../config';
+import { prisma } from '../config/db';
 import { EventPublisher } from '../events/publisher';
 import { logger } from '../utils/logger';
-
-const prisma = new PrismaClient();
 const GEO_KEY = 'drivers:geo:online';
 
 interface RegisterDriverInput {

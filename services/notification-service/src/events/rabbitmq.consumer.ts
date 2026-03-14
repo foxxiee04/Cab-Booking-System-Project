@@ -5,6 +5,10 @@ import { notificationService } from '../services/notification.service';
 let connection: any = null;
 let channel: any = null;
 
+export function isRabbitMQConnected(): boolean {
+  return Boolean(connection && channel);
+}
+
 export async function connectRabbitMQ() {
   try {
     connection = await amqplib.connect(config.rabbitmq.url);

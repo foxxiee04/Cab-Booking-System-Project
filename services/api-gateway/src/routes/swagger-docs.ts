@@ -345,7 +345,7 @@
  * @swagger
  * /api/rides:
  *   get:
- *     summary: Get rides (customer: own rides, driver: assigned rides)
+ *     summary: "Get rides (customer: own rides, driver: assigned rides)"
  *     tags: [Rides]
  *     security:
  *       - bearerAuth: []

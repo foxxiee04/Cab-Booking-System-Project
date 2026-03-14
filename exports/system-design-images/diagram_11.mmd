@@ -1,0 +1,37 @@
+sequenceDiagram
+    participant C as Customer
+    participant G as API Gateway
+    participant R as Ride Service
+    participant D as Driver Service
+    participant X as Redis Offer Store
+    participant MQ as RabbitMQ
+
+    C->>G: Tao ride / confirm booking
+    G->>R: createRide
+    R->>MQ: ride.finding_driver_requested
+    MQ->>G: matching request
+    G->>D: tim driver online gan nhat
+    D-->>G: danh sach driver phu hop
+    G-->>Driver: NEW_RIDE_AVAILABLE
+    R->>X: set ride:offer:{rideId}
+    R->>X: sadd ride:offered:{rideId}
+
+    alt Driver chap nhan trong thoi gian TTL
+        Driver->>G: accept-offer
+        G->>R: acceptOffer
+        R->>X: del ride:offer:{rideId}
+        R->>MQ: ride.assigned / ride.accepted
+        MQ->>G: fan-out trang thai
+        G-->>C: RIDE_STATUS_UPDATE
+    else Driver timeout hoac reject
+        X-->>R: offer expired / cancelOffer
+        R->>X: sadd ride:rejected:{rideId}
+        R->>MQ: ride.offer_timeout
+        alt Chua vuot so lan reassign
+            R->>MQ: ride.reassignment_requested
+            MQ->>G: matching request moi
+        else Dat nguong toi da
+            R->>MQ: ride.reassignment_failed
+            G-->>C: thong bao khong tim thay tai xe
+        end
+    end

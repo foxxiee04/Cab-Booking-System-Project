@@ -1,13 +1,17 @@
 FROM node:20-alpine
 
-WORKDIR /app
+WORKDIR /workspace/services/api-gateway
 
 # Install dependencies
-COPY package*.json ./
+COPY services/api-gateway/package*.json ./
 RUN npm install
 
-# Copy source
-COPY . .
+COPY shared/package*.json /workspace/shared/
+RUN npm install --prefix /workspace/shared --omit=dev
+
+# Copy service source and shared build artifacts
+COPY services/api-gateway .
+COPY shared/dist /workspace/shared/dist
 
 # Build TypeScript
 RUN npm run build

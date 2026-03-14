@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { getRequiredEnv } from '../../../../shared/dist';
 dotenv.config();
 
 export const config = {
@@ -18,10 +19,10 @@ export const config = {
   },
   
   jwt: {
-    secret: process.env.JWT_SECRET || 'default-secret',
+    secret: getRequiredEnv('JWT_SECRET'),
   },
   
-  internalServiceToken: process.env.INTERNAL_SERVICE_TOKEN || 'default-internal-token',
+  internalServiceToken: getRequiredEnv('INTERNAL_SERVICE_TOKEN'),
   
   services: {
     ride: process.env.RIDE_SERVICE_URL || 'http://localhost:3002',

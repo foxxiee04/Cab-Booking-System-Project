@@ -1,4 +1,7 @@
 import { Request, Response } from 'express';
+import axios from 'axios';
+import { InternalDriverByUserResponse } from '../../../../shared/dist';
+import { config } from '../config';
 import { RideService } from '../services/ride.service';
 import { logger } from '../utils/logger';
 import { UserRole } from '../enums/ride-status.enum';
@@ -186,14 +189,12 @@ export class RideController {
       const userId = req.user!.userId;
       
       // Get driver profile to get driverId
-      const axios = require('axios');
       let driverId = userId;
       
       try {
-        const internalToken = process.env.INTERNAL_SERVICE_TOKEN || 'secret';
-        const driverRes = await axios.get(
-          `${process.env.DRIVER_SERVICE_URL || 'http://driver-service:3003'}/internal/drivers/by-user/${userId}`,
-          { headers: { 'x-internal-token': internalToken } }
+        const driverRes = await axios.get<InternalDriverByUserResponse>(
+          `${config.services.driver}/internal/drivers/by-user/${userId}`,
+          { headers: { 'x-internal-token': config.internalServiceToken } }
         );
         if (driverRes.data?.data?.driver?.id) {
           driverId = driverRes.data.data.driver.id;

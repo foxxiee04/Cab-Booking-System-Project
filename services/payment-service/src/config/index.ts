@@ -1,20 +1,30 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+function getRequiredEnv(name: string): string {
+  const value = process.env[name]?.trim();
+
+  if (!value) {
+    throw new Error(`${name} environment variable is required`);
+  }
+
+  return value;
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '3004', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   
   database: {
-    url: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/payment_db',
+    url: getRequiredEnv('DATABASE_URL'),
   },
   
   rabbitmq: {
-    url: process.env.RABBITMQ_URL || 'amqp://localhost:5672',
+    url: getRequiredEnv('RABBITMQ_URL'),
   },
   
   jwt: {
-    secret: process.env.JWT_SECRET || 'default-secret',
+    secret: getRequiredEnv('JWT_SECRET'),
   },
   
   serviceName: process.env.SERVICE_NAME || 'payment-service',

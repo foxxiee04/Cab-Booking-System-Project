@@ -10,6 +10,17 @@ export async function createUserProfile(data: {
   lastName?: string;
   phone?: string;
   avatar?: string;
+  email?: string;
 }) {
-  return prisma.userProfile.create({ data: { ...data } });
+  const { userId, firstName, lastName, phone, avatar } = data;
+
+  return prisma.userProfile.create({
+    data: {
+      userId,
+      firstName,
+      lastName,
+      phone,
+      avatar,
+    },
+  });
 }

@@ -12,6 +12,10 @@ jest.mock('../config/redis', () => ({
 
 jest.mock('../config', () => ({
   config: {
+    ai: {
+      baseUrl: 'http://ai-service:8000',
+      timeoutMs: 1500,
+    },
     osrm: {
       baseUrl: 'http://router.project-osrm.org',
     },
@@ -43,6 +47,7 @@ jest.mock('../config', () => ({
 
 jest.mock('axios', () => ({
   get: jest.fn(),
+  post: jest.fn(),
 }));
 
 jest.mock('../utils/geo.utils', () => ({
@@ -55,6 +60,8 @@ import axios from 'axios';
 
 describe('PricingService - Simple Test Suite', () => {
   let pricingService: PricingService;
+  let calculateDistance: jest.Mock;
+  let estimateDuration: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -64,6 +71,10 @@ describe('PricingService - Simple Test Suite', () => {
     mockRedis.expire.mockReset();
 
     (axios.get as jest.Mock).mockRejectedValue(new Error('OSRM unavailable'));
+    (axios.post as jest.Mock).mockRejectedValue(new Error('AI unavailable'));
+
+    calculateDistance = require('../utils/geo.utils').calculateDistance;
+    estimateDuration = require('../utils/geo.utils').estimateDuration;
 
     pricingService = new PricingService();
   });
@@ -84,6 +95,129 @@ describe('PricingService - Simple Test Suite', () => {
       expect(result.distance).toBe(5.5);
       expect(result.surgeMultiplier).toBe(1.0);
       expect(result.breakdown).toBeDefined();
+      expect(result.aiPrediction).toBeNull();
+    });
+
+    it('should enrich estimate with AI prediction when available', async () => {
+      mockRedis.get.mockResolvedValue('1.0');
+      (axios.post as jest.Mock).mockResolvedValue({
+        data: {
+          eta_minutes: 18,
+          price_multiplier: 1.4,
+          distance_km: 5.5,
+          time_of_day: 'RUSH_HOUR',
+          day_type: 'WEEKDAY',
+        },
+      });
+
+      const result = await pricingService.estimateFare({
+        pickupLat: 10.7764,
+        pickupLng: 106.7008,
+        dropoffLat: 10.7809,
+        dropoffLng: 106.6956,
+        vehicleType: 'ECONOMY',
+      });
+
+      expect(axios.post).toHaveBeenCalledWith(
+        'http://ai-service:8000/api/predict',
+        expect.objectContaining({
+          distance_km: 5.5,
+        }),
+        expect.objectContaining({ timeout: 1500 })
+      );
+      expect(result.durationMinutes).toBe(18);
+      expect(result.surgeMultiplier).toBe(1.4);
+      expect(result.aiPrediction).toEqual(
+        expect.objectContaining({
+          eta_minutes: 18,
+          price_multiplier: 1.4,
+        })
+      );
+    });
+
+    it('should use OSRM route when provider returns a route', async () => {
+      mockRedis.get.mockResolvedValue('1.0');
+      (axios.get as jest.Mock).mockResolvedValue({
+        data: {
+          routes: [{ distance: 8200, duration: 900 }],
+        },
+      });
+
+      const result = await pricingService.estimateFare({
+        pickupLat: 10.7764,
+        pickupLng: 106.7008,
+        dropoffLat: 10.7809,
+        dropoffLng: 106.6956,
+        vehicleType: 'ECONOMY',
+      });
+
+      expect(result.distance).toBe(8.2);
+      expect(result.duration).toBe(900);
+      expect(calculateDistance).not.toHaveBeenCalled();
+      expect(estimateDuration).not.toHaveBeenCalled();
+    });
+
+    it('should fall back when OSRM returns no routes', async () => {
+      mockRedis.get.mockResolvedValue('1.0');
+      (axios.get as jest.Mock).mockResolvedValue({ data: { routes: [] } });
+
+      const result = await pricingService.estimateFare({
+        pickupLat: 10.7764,
+        pickupLng: 106.7008,
+        dropoffLat: 10.7809,
+        dropoffLng: 106.6956,
+        vehicleType: 'ECONOMY',
+      });
+
+      expect(result.distance).toBe(5.5);
+      expect(calculateDistance).toHaveBeenCalled();
+      expect(estimateDuration).toHaveBeenCalledWith(5.5);
+    });
+
+    it('should ignore invalid AI payload and keep deterministic pricing', async () => {
+      mockRedis.get.mockResolvedValue('1.2');
+      (axios.post as jest.Mock).mockResolvedValue({
+        data: {
+          eta_minutes: '18',
+          price_multiplier: null,
+        },
+      });
+
+      const result = await pricingService.estimateFare({
+        pickupLat: 10.7764,
+        pickupLng: 106.7008,
+        dropoffLat: 10.7809,
+        dropoffLng: 106.6956,
+        vehicleType: 'ECONOMY',
+      });
+
+      expect(result.aiPrediction).toBeNull();
+      expect(result.surgeMultiplier).toBe(1.2);
+      expect(result.durationMinutes).toBe(17);
+    });
+
+    it('should keep Redis surge if AI suggests lower multiplier', async () => {
+      mockRedis.get.mockResolvedValue('1.6');
+      (axios.post as jest.Mock).mockResolvedValue({
+        data: {
+          eta_minutes: 14,
+          price_multiplier: 1.2,
+          distance_km: 5.5,
+          time_of_day: 'RUSH_HOUR',
+          day_type: 'WEEKDAY',
+        },
+      });
+
+      const result = await pricingService.estimateFare({
+        pickupLat: 10.7764,
+        pickupLng: 106.7008,
+        dropoffLat: 10.7809,
+        dropoffLng: 106.6956,
+        vehicleType: 'ECONOMY',
+      });
+
+      expect(result.surgeMultiplier).toBe(1.6);
+      expect(result.durationMinutes).toBe(14);
     });
 
     it('should apply surge multiplier', async () => {
@@ -152,6 +286,14 @@ describe('PricingService - Simple Test Suite', () => {
 
     it('should return default 1.0 if not set', async () => {
       mockRedis.get.mockResolvedValue(null);
+
+      const result = await pricingService.getCurrentSurgeMultiplier();
+
+      expect(result).toBe(1.0);
+    });
+
+    it('should return default 1.0 when Redis get fails', async () => {
+      mockRedis.get.mockRejectedValue(new Error('redis down'));
 
       const result = await pricingService.getCurrentSurgeMultiplier();
 
@@ -269,6 +411,14 @@ describe('PricingService - Simple Test Suite', () => {
 
     it('should return empty array if no zones', async () => {
       mockRedis.get.mockResolvedValue(null);
+
+      const result = await pricingService.getSurgeZones();
+
+      expect(result).toEqual([]);
+    });
+
+    it('should return empty array when surge zones cannot be loaded', async () => {
+      mockRedis.get.mockRejectedValue(new Error('redis down'));
 
       const result = await pricingService.getSurgeZones();
 

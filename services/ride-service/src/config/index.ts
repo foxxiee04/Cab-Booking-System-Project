@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { getRequiredEnv } from '../../../../shared/dist';
 dotenv.config();
 
 export const config = {
@@ -21,6 +22,8 @@ export const config = {
     pricing: process.env.PRICING_SERVICE_URL || 'http://localhost:3009',
     driver: process.env.DRIVER_SERVICE_URL || 'http://localhost:3003',
   },
+
+  internalServiceToken: getRequiredEnv('INTERNAL_SERVICE_TOKEN'),
   
   serviceName: process.env.SERVICE_NAME || 'ride-service',
   

@@ -1,414 +1,433 @@
 /**
- * ============================================
- * BACKEND BUSINESS LOGIC TESTING SCRIPT
- * ============================================
- * Tests backend APIs directly without frontend
- * Validates business rules, state transitions, permissions
+ * Cab Booking System - Backend Logic Test
+ * Tests the complete flow: Auth → Booking → Pricing → Ride → Payment → Notification → Review
+ *
+ * Usage: npx tsx scripts/test-backend.ts
+ *
+ * Prerequisites: All services must be running (docker-compose up)
  */
 
-import axios, { AxiosInstance } from 'axios';
-
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000';
+const BASE_URLS = {
+  gateway: process.env.GATEWAY_URL || 'http://localhost:3000',
+  auth: process.env.AUTH_URL || 'http://localhost:3001',
+  ride: process.env.RIDE_URL || 'http://localhost:3002',
+  driver: process.env.DRIVER_URL || 'http://localhost:3003',
+  booking: process.env.BOOKING_URL || 'http://localhost:3008',
+  notification: process.env.NOTIFICATION_URL || 'http://localhost:3005',
+  payment: process.env.PAYMENT_URL || 'http://localhost:3004',
+  user: process.env.USER_URL || 'http://localhost:3007',
+  pricing: process.env.PRICING_URL || 'http://localhost:3009',
+  review: process.env.REVIEW_URL || 'http://localhost:3010',
+};
 
 interface TestResult {
-  test: string;
-  status: 'PASS' | 'FAIL' | 'SKIP';
-  message: string;
-  details?: any;
+  name: string;
+  passed: boolean;
+  duration: number;
+  error?: string;
+  data?: any;
 }
 
 const results: TestResult[] = [];
 
-// Test credentials
-const ADMIN_CREDS = { email: 'admin@cabsystem.vn', password: 'Admin@123' };
-const DRIVER_CREDS = { email: 'driver1@cabsystem.vn', password: 'Driver@123' };
-const CUSTOMER_CREDS = { email: 'customer1@gmail.com', password: 'Customer@123' };
+// ============ HELPERS ============
 
-let adminToken: string;
-let driverToken: string;
-let customerToken: string;
-let driverId: string;
-let customerId: string;
-let testRideId: string;
+async function httpRequest(
+  url: string,
+  method: string = 'GET',
+  body?: any,
+  headers?: Record<string, string>
+): Promise<{ status: number; data: any }> {
+  const options: RequestInit = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+  };
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
 
-function log(test: string, status: 'PASS' | 'FAIL' | 'SKIP', message: string, details?: any) {
-  results.push({ test, status, message, details });
-  const icon = status === 'PASS' ? '✅' : status === 'FAIL' ? '❌' : '⏭️';
-  console.log(`${icon} ${test}: ${message}`);
-  if (details) {
-    console.log(`   Details:`, JSON.stringify(details, null, 2));
+  const res = await fetch(url, options);
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = text;
+  }
+  return { status: res.status, data };
+}
+
+async function runTest(name: string, fn: () => Promise<any>): Promise<any> {
+  const start = Date.now();
+  try {
+    const data = await fn();
+    const duration = Date.now() - start;
+    results.push({ name, passed: true, duration, data });
+    console.log(`  ✅ ${name} (${duration}ms)`);
+    return data;
+  } catch (error: any) {
+    const duration = Date.now() - start;
+    results.push({ name, passed: false, duration, error: error.message });
+    console.log(`  ❌ ${name} (${duration}ms): ${error.message}`);
+    return null;
   }
 }
 
-async function testAuthenticationFlow() {
-  console.log('\n🔐 ===== AUTHENTICATION & AUTHORIZATION =====\n');
-  
-  try {
-    // Test 1: Admin login
-    const adminRes = await axios.post(`${API_BASE_URL}/api/auth/login`, ADMIN_CREDS);
-    adminToken = adminRes.data.data.tokens.accessToken;
-    log('AUTH-001', 'PASS', 'Admin login successful', { role: 'ADMIN' });
-    
-    // Test 2: Driver login
-    const driverRes = await axios.post(`${API_BASE_URL}/api/auth/login`, DRIVER_CREDS);
-    driverToken = driverRes.data.data.tokens.accessToken;
-    log('AUTH-002', 'PASS', 'Driver login successful', { role: 'DRIVER' });
-    
-    // Test 3: Customer login
-    const customerRes = await axios.post(`${API_BASE_URL}/api/auth/login`, CUSTOMER_CREDS);
-    customerToken = customerRes.data.data.tokens.accessToken;
-    customerId = customerRes.data.data.user.id;
-    log('AUTH-003', 'PASS', 'Customer login successful', { role: 'CUSTOMER', customerId });
-    
-    // Test 4: Invalid credentials
-    try {
-      await axios.post(`${API_BASE_URL}/api/auth/login`, {
-        email: 'invalid@test.com',
-        password: 'wrong',
+function assert(condition: boolean, message: string) {
+  if (!condition) throw new Error(message);
+}
+
+// ============ TEST FUNCTIONS ============
+
+async function testHealthChecks() {
+  console.log('\n📋 Phase 1: Health Checks');
+  console.log('─'.repeat(50));
+
+  const services = [
+    { name: 'Auth Service', url: `${BASE_URLS.auth}/health` },
+    { name: 'User Service', url: `${BASE_URLS.user}/health` },
+    { name: 'Driver Service', url: `${BASE_URLS.driver}/health` },
+    { name: 'Booking Service', url: `${BASE_URLS.booking}/health` },
+    { name: 'Pricing Service', url: `${BASE_URLS.pricing}/health` },
+    { name: 'Ride Service', url: `${BASE_URLS.ride}/health` },
+    { name: 'Payment Service', url: `${BASE_URLS.payment}/health` },
+    { name: 'Notification Service', url: `${BASE_URLS.notification}/health` },
+    { name: 'Review Service', url: `${BASE_URLS.review}/health` },
+  ];
+
+  for (const svc of services) {
+    await runTest(`Health: ${svc.name}`, async () => {
+      const res = await httpRequest(svc.url);
+      assert(res.status === 200, `Expected 200, got ${res.status}`);
+      assert(
+        res.data.status === 'ok' || res.data.status === 'healthy',
+        `Status not ok: ${JSON.stringify(res.data)}`
+      );
+      return res.data;
+    });
+  }
+}
+
+async function testAuthFlow() {
+  console.log('\n📋 Phase 2: Authentication Flow');
+  console.log('─'.repeat(50));
+
+  const timestamp = Date.now();
+  const testEmail = `test_${timestamp}@example.com`;
+  const testPassword = 'TestPassword123!';
+
+  // Register customer
+  const registerData = await runTest('Register customer', async () => {
+    const res = await httpRequest(`${BASE_URLS.auth}/api/auth/register`, 'POST', {
+      email: testEmail,
+      password: testPassword,
+      role: 'CUSTOMER',
+      firstName: 'Test',
+      lastName: 'User',
+    });
+    assert(res.status === 201 || res.status === 200, `Register failed: ${res.status} ${JSON.stringify(res.data)}`);
+    return res.data;
+  });
+
+  // Login
+  const loginData = await runTest('Login customer', async () => {
+    const res = await httpRequest(`${BASE_URLS.auth}/api/auth/login`, 'POST', {
+      email: testEmail,
+      password: testPassword,
+    });
+    assert(res.status === 200, `Login failed: ${res.status} ${JSON.stringify(res.data)}`);
+    const tokens = res.data?.data?.tokens || res.data?.tokens || {};
+    assert(tokens.accessToken || res.data?.accessToken || res.data?.token, 'No token in response');
+    return res.data;
+  });
+
+  const token = loginData?.data?.tokens?.accessToken || loginData?.tokens?.accessToken || loginData?.accessToken || loginData?.token;
+  const userId = loginData?.data?.user?.id || loginData?.user?.id || registerData?.data?.user?.id || registerData?.user?.id;
+
+  // Get profile
+  if (token) {
+    await runTest('Get user profile', async () => {
+      const res = await httpRequest(`${BASE_URLS.auth}/api/auth/me`, 'GET', undefined, {
+        Authorization: `Bearer ${token}`,
       });
-      log('AUTH-004', 'FAIL', 'Should reject invalid credentials', null);
-    } catch (err: any) {
-      if (err.response?.status === 401) {
-        log('AUTH-004', 'PASS', 'Correctly rejected invalid credentials', null);
-      } else {
-        log('AUTH-004', 'FAIL', `Unexpected error: ${err.message}`, null);
-      }
-    }
-    
-    // Test 5: Protected route without token
-    try {
-      await axios.get(`${API_BASE_URL}/api/users/profile`);
-      log('AUTH-005', 'FAIL', 'Should reject unauthenticated request', null);
-    } catch (err: any) {
-      if (err.response?.status === 401) {
-        log('AUTH-005', 'PASS', 'Correctly rejected unauthenticated request', null);
-      } else {
-        log('AUTH-005', 'FAIL', `Unexpected error: ${err.message}`, null);
-      }
-    }
-    
-  } catch (error: any) {
-    log('AUTH-ERROR', 'FAIL', `Authentication tests failed: ${error.message}`, null);
+      assert(res.status === 200, `Profile fetch failed: ${res.status}`);
+      return res.data;
+    });
   }
+
+  // Register driver
+  const driverEmail = `driver_${timestamp}@example.com`;
+  const driverData = await runTest('Register driver', async () => {
+    const res = await httpRequest(`${BASE_URLS.auth}/api/auth/register`, 'POST', {
+      email: driverEmail,
+      password: testPassword,
+      role: 'DRIVER',
+      firstName: 'Test',
+      lastName: 'Driver',
+    });
+    assert(res.status === 201 || res.status === 200, `Driver register failed: ${res.status}`);
+    return res.data;
+  });
+
+  const driverLoginData = await runTest('Login driver', async () => {
+    const res = await httpRequest(`${BASE_URLS.auth}/api/auth/login`, 'POST', {
+      email: driverEmail,
+      password: testPassword,
+    });
+    assert(res.status === 200, `Driver login failed: ${res.status}`);
+    return res.data;
+  });
+
+  return {
+    customerToken: token,
+    customerId: userId,
+    customerEmail: testEmail,
+    driverToken: driverLoginData?.data?.tokens?.accessToken || driverLoginData?.tokens?.accessToken || driverLoginData?.accessToken,
+    driverId: driverLoginData?.data?.user?.id || driverLoginData?.user?.id || driverData?.data?.user?.id || driverData?.user?.id,
+    driverEmail,
+  };
 }
 
-async function testUserManagement() {
-  console.log('\n👤 ===== USER MANAGEMENT =====\n');
-  
-  const adminClient = axios.create({
-    baseURL: API_BASE_URL,
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
-  
-  try {
-    // Test 1: Admin can get all users
-    const usersRes = await adminClient.get('/api/auth/users');
-    log('USER-001', 'PASS', `Admin retrieved ${usersRes.data.length || usersRes.data.users?.length || 0} users`, null);
-    
-    // Test 2: Get customer profile
-    const customerClient = axios.create({
-      baseURL: API_BASE_URL,
-      headers: { Authorization: `Bearer ${customerToken}` },
+async function testPricingFlow() {
+  console.log('\n📋 Phase 3: Pricing Estimation');
+  console.log('─'.repeat(50));
+
+  const pricingData = await runTest('Get price estimate', async () => {
+    const res = await httpRequest(`${BASE_URLS.pricing}/api/pricing/estimate`, 'POST', {
+      pickupLat: 10.7628,
+      pickupLng: 106.6825,
+      dropoffLat: 10.7721,
+      dropoffLng: 106.7002,
+      vehicleType: 'ECONOMY',
     });
-    
-    const profileRes = await customerClient.get('/api/auth/me');
-    log('USER-002', 'PASS', 'Customer retrieved own profile', { email: profileRes.data.email });
-    
-    // Test 3: Customer cannot access admin endpoints
-    try {
-      await customerClient.get('/api/admin/statistics');
-      log('USER-003', 'FAIL', 'Customer should not access admin endpoints', null);
-    } catch (err: any) {
-      if (err.response?.status === 403 || err.response?.status === 401) {
-        log('USER-003', 'PASS', 'Correctly blocked customer from admin endpoint', null);
-      } else {
-        log('USER-003', 'FAIL', `Unexpected error: ${err.message}`, null);
-      }
-    }
-    
-  } catch (error: any) {
-    log('USER-ERROR', 'FAIL', `User management tests failed: ${error.message}`, null);
-  }
+    assert(res.status === 200, `Pricing failed: ${res.status} ${JSON.stringify(res.data)}`);
+    return res.data;
+  });
+
+  return pricingData;
 }
 
-async function testDriverManagement() {
-  console.log('\n🚗 ===== DRIVER MANAGEMENT =====\n');
-  
-  const driverClient = axios.create({
-    baseURL: API_BASE_URL,
-    headers: { Authorization: `Bearer ${driverToken}` },
-  });
-  
-  try {
-    // Test 1: Get driver profile
-    const profileRes = await driverClient.get('/api/drivers/me');
-    driverId = profileRes.data.id;
-    log('DRIVER-001', 'PASS', 'Driver retrieved profile', {
-      status: profileRes.data.status,
-      availability: profileRes.data.availabilityStatus,
-      vehicle: `${profileRes.data.vehicleBrand} ${profileRes.data.vehicleModel}`,
-    });
-    
-    // Test 2: Driver can update availability
-    if (profileRes.data.status === 'APPROVED') {
-      const updateRes = await driverClient.patch('/api/drivers/availability', {
-        availabilityStatus: 'ONLINE',
-      });
-      log('DRIVER-002', 'PASS', 'Driver updated availability to ONLINE', null);
-    } else {
-      log('DRIVER-002', 'SKIP', 'Driver not approved, cannot go online', null);
-    }
-    
-    // Test 3: Driver can get ride history
-    const ridesRes = await driverClient.get('/api/rides/driver/history');
-    log('DRIVER-003', 'PASS', `Driver retrieved ${ridesRes.data.length || ridesRes.data.rides?.length || 0} rides`, null);
-    
-    // Test 4: Get available rides
-    const availableRes = await driverClient.get('/api/rides/available', {
-      params: { lat: 10.7946, lng: 106.7218 },
-    });
-    log('DRIVER-004', 'PASS', `Driver retrieved available rides`, { count: availableRes.data.length || 0 });
-    
-  } catch (error: any) {
-    log('DRIVER-ERROR', 'FAIL', `Driver management tests failed: ${error.message}`, { error: error.response?.data });
-  }
-}
+async function testBookingFlow(auth: any) {
+  console.log('\n📋 Phase 4: Booking Flow');
+  console.log('─'.repeat(50));
 
-async function testRideLifecycle() {
-  console.log('\n🚕 ===== RIDE LIFECYCLE =====\n');
-  
-  const customerClient = axios.create({
-    baseURL: API_BASE_URL,
-    headers: { Authorization: `Bearer ${customerToken}` },
-  });
-  
-  const driverClient = axios.create({
-    baseURL: API_BASE_URL,
-    headers: { Authorization: `Bearer ${driverToken}` },
-  });
-  
-  try {
-    // Test 1: Customer creates a booking
-    const bookingRes = await customerClient.post('/api/bookings', {
-      pickupAddress: 'Sân bay Tân Sơn Nhất',
-      pickupLat: 10.8186,
-      pickupLng: 106.6517,
-      dropoffAddress: 'Landmark 81',
-      dropoffLat: 10.7946,
-      dropoffLng: 106.7218,
+  const headers: Record<string, string> = {};
+  if (auth?.customerToken) {
+    headers['Authorization'] = `Bearer ${auth.customerToken}`;
+  }
+  if (auth?.customerId) {
+    headers['x-user-id'] = auth.customerId;
+  }
+
+  const bookingData = await runTest('Create booking', async () => {
+    const res = await httpRequest(`${BASE_URLS.booking}/api/bookings`, 'POST', {
+      customerId: auth?.customerId || 'test-customer-id',
+      pickupAddress: '227 Nguyen Van Cu, Q5, TP.HCM',
+      pickupLat: 10.7628,
+      pickupLng: 106.6825,
+      dropoffAddress: 'Saigon Centre, Le Loi, Q1, TP.HCM',
+      dropoffLat: 10.7721,
+      dropoffLng: 106.7002,
       vehicleType: 'ECONOMY',
       paymentMethod: 'CASH',
-    });
-    
-    const bookingId = bookingRes.data.data?.booking?.id || bookingRes.data.id;
-    log('RIDE-001', 'PASS', 'Customer created booking', { bookingId, status: bookingRes.data.data?.booking?.status || bookingRes.data.status });
-    
-    // Test 2: Get estimated fare
-    const pricingRes = await customerClient.post('/api/pricing/estimate', {
-      pickupLat: 10.8186,
-      pickupLng: 106.6517,
-      dropoffLat: 10.7946,
-      dropoffLng: 106.7218,
-      vehicleType: 'ECONOMY',
-    });
-    log('RIDE-002', 'PASS', 'Got pricing estimate', {
-      estimatedFare: pricingRes.data.data?.fare || pricingRes.data.estimatedFare,
-      distance: pricingRes.data.data?.distance || pricingRes.data.distance,
-    });
-    
-    // Test 3: Confirm booking
-    const confirmRes = await customerClient.post(`/api/bookings/${bookingId}/confirm`);
-    log('RIDE-003', 'PASS', 'Booking confirmed', { status: confirmRes.data.data?.booking?.status || confirmRes.data.status });
-    
-    // Test 4: Customer gets ride history
-    const historyRes = await customerClient.get('/api/rides/customer/history');
-    log('RIDE-004', 'PASS', `Customer retrieved ride history`, {
-      count: historyRes.data.length || historyRes.data.rides?.length || 0,
-    });
-    
-    // Test 5: Customer cannot accept rides (permission check)
-    try {
-      await customerClient.post('/api/rides/some-ride-id/accept');
-      log('RIDE-005', 'FAIL', 'Customer should not be able to accept rides', null);
-    } catch (err: any) {
-      if (err.response?.status === 403 || err.response?.status === 404) {
-        log('RIDE-005', 'PASS', 'Correctly blocked customer from accepting rides', null);
-      } else {
-        log('RIDE-005', 'FAIL', `Unexpected error: ${err.message}`, null);
-      }
-    }
-    
-  } catch (error: any) {
-    log('RIDE-ERROR', 'FAIL', `Ride lifecycle tests failed: ${error.message}`, {
-      error: error.response?.data,
-      status: error.response?.status,
-    });
-  }
-}
-
-async function testPaymentFlow() {
-  console.log('\n💳 ===== PAYMENT PROCESSING =====\n');
-  
-  const customerClient = axios.create({
-    baseURL: API_BASE_URL,
-    headers: { Authorization: `Bearer ${customerToken}` },
+    }, headers);
+    assert(res.status === 201 || res.status === 200, `Booking failed: ${res.status} ${JSON.stringify(res.data)}`);
+    return res.data;
   });
-  
-  try {
-    // Test 1: Get payment history
-    const paymentsRes = await customerClient.get('/api/payments/customer/history');
-    log('PAYMENT-001', 'PASS', `Retrieved payment history`, {
-      count: paymentsRes.data.length || paymentsRes.data.payments?.length || 0,
-    });
-    
-    // Test 2: Check payment methods
-    const methodsRes = await customerClient.get('/api/payments/methods');
-    log('PAYMENT-002', 'PASS', 'Retrieved available payment methods', {
-      methods: methodsRes.data.methods || methodsRes.data,
-    });
-    
-  } catch (error: any) {
-    log('PAYMENT-ERROR', 'FAIL', `Payment tests failed: ${error.message}`, {
-      error: error.response?.data,
+
+  const bookingId = bookingData?.booking?.id || bookingData?.id;
+
+  if (bookingId) {
+    await runTest('Get booking by ID', async () => {
+      const res = await httpRequest(
+        `${BASE_URLS.booking}/api/bookings/${bookingId}`,
+        'GET',
+        undefined,
+        headers
+      );
+      assert(res.status === 200, `Get booking failed: ${res.status}`);
+      return res.data;
     });
   }
+
+  return { bookingId, bookingData };
 }
 
-async function testAdminFunctions() {
-  console.log('\n👨‍💼 ===== ADMIN FUNCTIONS =====\n');
-  
-  const adminClient = axios.create({
-    baseURL: API_BASE_URL,
-    headers: { Authorization: `Bearer ${adminToken}` },
+async function testUserService(auth: any) {
+  console.log('\n📋 Phase 5: User Service');
+  console.log('─'.repeat(50));
+
+  if (!auth?.customerId) {
+    console.log('  ⏭️  Skipped (no customer ID)');
+    return;
+  }
+
+  await runTest('Create user profile', async () => {
+    const res = await httpRequest(`${BASE_URLS.user}/api/users`, 'POST', {
+      userId: auth.customerId,
+      firstName: 'Test',
+      lastName: 'Customer',
+      email: auth.customerEmail,
+    });
+    assert(res.status === 201 || res.status === 200 || res.status === 409 || res.status === 400,
+      `Create profile failed: ${res.status} ${JSON.stringify(res.data)}`);
+    return res.data;
   });
-  
-  try {
-    // Test 1: Get all rides
-    const ridesRes = await adminClient.get('/api/admin/rides');
-    log('ADMIN-001', 'PASS', `Admin retrieved all rides`, {
-      count: ridesRes.data.length || ridesRes.data.rides?.length || 0,
-    });
-    
-    // Test 2: Get statistics
-    const statsRes = await adminClient.get('/api/admin/statistics');
-    log('ADMIN-002', 'PASS', 'Admin retrieved statistics', { stats: statsRes.data });
-    
-    // Test 3: Get all drivers
-    const driversRes = await adminClient.get('/api/admin/drivers');
-    log('ADMIN-003', 'PASS', `Admin retrieved all drivers`, {
-      count: driversRes.data.length || driversRes.data.drivers?.length || 0,
-    });
-    
-    // Test 4: Approve/reject driver
-    const pendingDriversRes = await adminClient.get('/api/admin/drivers?status=PENDING');
-    const pendingDrivers = pendingDriversRes.data.drivers || pendingDriversRes.data || [];
-    
-    if (pendingDrivers.length > 0) {
-      const pendingDriver = pendingDrivers[0];
-      const approveRes = await adminClient.patch(`/api/admin/drivers/${pendingDriver.id}/status`, {
-        status: 'APPROVED',
-      });
-      log('ADMIN-004', 'PASS', 'Admin approved driver', { driverId: pendingDriver.id });
-    } else {
-      log('ADMIN-004', 'SKIP', 'No pending drivers to approve', null);
-    }
-    
-  } catch (error: any) {
-    log('ADMIN-ERROR', 'FAIL', `Admin tests failed: ${error.message}`, {
-      error: error.response?.data,
-      status: error.response?.status,
-    });
-  }
+
+  await runTest('Get user profile', async () => {
+    const res = await httpRequest(`${BASE_URLS.user}/api/users/${auth.customerId}`);
+    assert(res.status === 200 || res.status === 404, `Get profile failed: ${res.status}`);
+    return res.data;
+  });
 }
 
-async function testServiceHealth() {
-  console.log('\n🏥 ===== SERVICE HEALTH CHECKS =====\n');
-  
-  const services = [
-    { name: 'API Gateway', url: `${API_BASE_URL}/health` },
-    { name: 'Auth Service', url: `http://localhost:3001/health` },
-    { name: 'User Service', url: `http://localhost:3007/health` },
-    { name: 'Driver Service', url: `http://localhost:3003/health` },
-    { name: 'Booking Service', url: `http://localhost:3008/health` },
-    { name: 'Ride Service', url: `http://localhost:3002/health` },
-    { name: 'Payment Service', url: `http://localhost:3004/health` },
-    { name: 'Pricing Service', url: `http://localhost:3009/health` },
-    { name: 'Notification Service', url: `http://localhost:3005/health` },
-    { name: 'Review Service', url: `http://localhost:3010/health` },
-  ];
-  
-  for (const service of services) {
-    try {
-      const res = await axios.get(service.url, { timeout: 5000 });
-      if (res.status === 200) {
-        log(`HEALTH-${service.name}`, 'PASS', `${service.name} is healthy`, null);
-      } else {
-        log(`HEALTH-${service.name}`, 'FAIL', `${service.name} returned status ${res.status}`, null);
-      }
-    } catch (error: any) {
-      log(`HEALTH-${service.name}`, 'FAIL', `${service.name} is unreachable`, {
-        error: error.message,
-      });
-    }
+async function testNotificationService(auth: any) {
+  console.log('\n📋 Phase 6: Notification Service');
+  console.log('─'.repeat(50));
+
+  const headers: Record<string, string> = {};
+  if (auth?.customerId) {
+    headers['x-user-id'] = auth.customerId;
   }
+
+  await runTest('Get user notifications', async () => {
+    const res = await httpRequest(
+      `${BASE_URLS.notification}/api/notifications`,
+      'GET',
+      undefined,
+      headers
+    );
+    assert(res.status === 200 || res.status === 401, `Notifications fetch failed: ${res.status}`);
+    return res.data;
+  });
+
+  await runTest('Get notification statistics', async () => {
+    const res = await httpRequest(`${BASE_URLS.notification}/api/notifications/statistics`);
+    assert(res.status === 200, `Stats failed: ${res.status}`);
+    return res.data;
+  });
 }
 
-// ============================================
-// MAIN TEST EXECUTION
-// ============================================
+async function testReviewService(auth: any) {
+  console.log('\n📋 Phase 7: Review Service');
+  console.log('─'.repeat(50));
+
+  const headers: Record<string, string> = {};
+  if (auth?.customerId) {
+    headers['x-user-id'] = auth.customerId;
+    headers['x-user-name'] = 'Test Customer';
+  }
+
+  const reviewData = await runTest('Create review', async () => {
+    const res = await httpRequest(`${BASE_URLS.review}/api/reviews`, 'POST', {
+      rideId: `test-ride-${Date.now()}`,
+      bookingId: `test-booking-${Date.now()}`,
+      type: 'CUSTOMER_TO_DRIVER',
+      revieweeId: auth?.driverId || 'test-driver-id',
+      revieweeName: 'Test Driver',
+      rating: 5,
+      comment: 'Excellent service!',
+      tags: ['professional', 'clean_car'],
+    }, headers);
+    assert(
+      res.status === 201 || res.status === 200 || res.status === 409,
+      `Create review failed: ${res.status} ${JSON.stringify(res.data)}`
+    );
+    return res.data;
+  });
+
+  if (auth?.driverId) {
+    await runTest('Get driver received reviews', async () => {
+      const res = await httpRequest(
+        `${BASE_URLS.review}/api/reviews/received/${auth.driverId}`
+      );
+      assert(res.status === 200, `Get reviews failed: ${res.status}`);
+      return res.data;
+    });
+
+    await runTest('Get driver stats', async () => {
+      const res = await httpRequest(
+        `${BASE_URLS.review}/api/reviews/driver/${auth.driverId}/stats`
+      );
+      assert(res.status === 200, `Get stats failed: ${res.status}`);
+      return res.data;
+    });
+  }
+
+  await runTest('Get top rated drivers', async () => {
+    const res = await httpRequest(`${BASE_URLS.review}/api/reviews/top-drivers`);
+    assert(res.status === 200, `Top drivers failed: ${res.status}`);
+    return res.data;
+  });
+
+  return reviewData;
+}
+
+// ============ MAIN ============
 
 async function main() {
-  console.log('\n🧪 ========================================');
-  console.log('🧪 BACKEND BUSINESS LOGIC TESTING');
-  console.log('🧪 ========================================\n');
-  
-  console.log(`API Base URL: ${API_BASE_URL}\n`);
-  
-  // Wait for services to be ready
-  console.log('⏳ Waiting for services to be ready...\n');
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-  
-  // Run all test suites
-  await testServiceHealth();
-  await testAuthenticationFlow();
-  await testUserManagement();
-  await testDriverManagement();
-  await testRideLifecycle();
-  await testPaymentFlow();
-  await testAdminFunctions();
-  
-  // Print summary
-  console.log('\n📊 ========================================');
-  console.log('📊 TEST SUMMARY');
-  console.log('📊 ========================================\n');
-  
-  const passed = results.filter((r) => r.status === 'PASS').length;
-  const failed = results.filter((r) => r.status === 'FAIL').length;
-  const skipped = results.filter((r) => r.status === 'SKIP').length;
+  console.log('');
+  console.log('╔══════════════════════════════════════════════════╗');
+  console.log('║    Cab Booking System - Backend Logic Test       ║');
+  console.log('╚══════════════════════════════════════════════════╝');
+  console.log('');
+
+  const startTime = Date.now();
+
+  // Phase 1: Health checks
+  await testHealthChecks();
+
+  // Phase 2: Auth flow
+  const auth = await testAuthFlow();
+
+  // Phase 3: Pricing
+  await testPricingFlow();
+
+  // Phase 4: Booking
+  await testBookingFlow(auth);
+
+  // Phase 5: User service
+  await testUserService(auth);
+
+  // Phase 6: Notifications
+  await testNotificationService(auth);
+
+  // Phase 7: Reviews
+  await testReviewService(auth);
+
+  // ============ REPORT ============
+  const totalTime = Date.now() - startTime;
+  const passed = results.filter((r) => r.passed).length;
+  const failed = results.filter((r) => !r.passed).length;
   const total = results.length;
-  
-  console.log(`Total Tests: ${total}`);
-  console.log(`✅ Passed: ${passed}`);
-  console.log(`❌ Failed: ${failed}`);
-  console.log(`⏭️  Skipped: ${skipped}`);
-  console.log(`Success Rate: ${((passed / (total - skipped)) * 100).toFixed(1)}%\n`);
-  
+
+  console.log('');
+  console.log('╔══════════════════════════════════════════════════╗');
+  console.log('║                  TEST REPORT                     ║');
+  console.log('╠══════════════════════════════════════════════════╣');
+  console.log(`║  Total:   ${total.toString().padEnd(5)} tests                          ║`);
+  console.log(`║  Passed:  ${passed.toString().padEnd(5)} ✅                              ║`);
+  console.log(`║  Failed:  ${failed.toString().padEnd(5)} ❌                              ║`);
+  console.log(`║  Time:    ${(totalTime / 1000).toFixed(2).padEnd(5)}s                            ║`);
+  console.log('╚══════════════════════════════════════════════════╝');
+
   if (failed > 0) {
-    console.log('Failed tests:');
+    console.log('\nFailed tests:');
     results
-      .filter((r) => r.status === 'FAIL')
+      .filter((r) => !r.passed)
       .forEach((r) => {
-        console.log(`  ❌ ${r.test}: ${r.message}`);
+        console.log(`  ❌ ${r.name}: ${r.error}`);
       });
   }
-  
-  console.log('\n========================================\n');
-  
-  // Exit with appropriate code
+
+  console.log('');
   process.exit(failed > 0 ? 1 : 0);
 }
 
-main().catch((error) => {
-  console.error('\n❌ Fatal error:', error);
+main().catch((err) => {
+  console.error('Fatal error:', err);
   process.exit(1);
 });

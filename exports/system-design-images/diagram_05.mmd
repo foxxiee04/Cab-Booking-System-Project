@@ -1,0 +1,15 @@
+flowchart TB
+    C([Customer])
+    C --> C1((Dang ky / Dang nhap))
+    C --> C2((Xem profile))
+    C --> C3((Nhap diem don, diem tra))
+    C --> C4((Nhan gia uoc tinh))
+    C --> C5((Tao va xac nhan booking))
+    C --> C6((Theo doi ride realtime))
+    C --> C7((Thanh toan))
+    C --> C8((Nhan thong bao))
+    C --> C9((Danh gia driver))
+
+    C5 -. include .-> C4
+    C6 -. include .-> C8
+    C9 -. extend .-> C7

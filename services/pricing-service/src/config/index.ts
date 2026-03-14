@@ -1,18 +1,33 @@
+function getRequiredEnv(name: string): string {
+  const value = process.env[name]?.trim();
+
+  if (!value) {
+    throw new Error(`${name} environment variable is required`);
+  }
+
+  return value;
+}
+
 export const config = {
   serviceName: 'pricing-service',
   port: parseInt(process.env.PORT || '3009', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   
+  ai: {
+    baseUrl: getRequiredEnv('AI_SERVICE_URL'),
+    timeoutMs: parseInt(process.env.AI_SERVICE_TIMEOUT_MS || '1500', 10),
+  },
+  
   redis: {
-    url: process.env.REDIS_URL || 'redis://localhost:6379',
+    url: getRequiredEnv('REDIS_URL'),
   },
 
   osrm: {
-    baseUrl: process.env.OSRM_BASE_URL || 'http://router.project-osrm.org',
+    baseUrl: getRequiredEnv('OSRM_BASE_URL'),
   },
   
   rabbitmq: {
-    url: process.env.RABBITMQ_URL || 'amqp://localhost:5672',
+    url: getRequiredEnv('RABBITMQ_URL'),
   },
   
   pricing: {

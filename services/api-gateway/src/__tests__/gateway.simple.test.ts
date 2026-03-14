@@ -2,6 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { authMiddleware, requireRole, AuthenticatedRequest } from '../middleware/auth';
 
+jest.mock('jsonwebtoken', () => ({
+  verify: jest.fn(),
+}));
+
 describe('API Gateway - Middleware Tests', () => {
   const JWT_SECRET = 'test-secret';
   let mockReq: Partial<AuthenticatedRequest>;
@@ -57,15 +61,15 @@ describe('API Gateway - Middleware Tests', () => {
     });
 
     it('should accept valid JWT token', () => {
-      const token = jwt.sign(
-        { userId: 'user-123', email: 'test@example.com', role: 'CUSTOMER' },
-        JWT_SECRET,
-        { expiresIn: '1h' }
-      );
+      (jwt.verify as jest.Mock).mockReturnValue({
+        userId: 'user-123',
+        email: 'test@example.com',
+        role: 'CUSTOMER',
+      });
 
       Object.defineProperty(mockReq, 'path', { value: '/api/protected', writable: true });
       mockReq.headers = {
-        authorization: `Bearer ${token}`,
+        authorization: 'Bearer valid-token',
       };
 
       authMiddleware(mockReq as AuthenticatedRequest, mockRes as Response, mockNext);
@@ -79,6 +83,10 @@ describe('API Gateway - Middleware Tests', () => {
     });
 
     it('should reject invalid JWT token', () => {
+      (jwt.verify as jest.Mock).mockImplementation(() => {
+        throw new Error('invalid token');
+      });
+
       Object.defineProperty(mockReq, 'path', { value: '/api/protected', writable: true });
       mockReq.headers = {
         authorization: 'Bearer invalid-token',
@@ -95,15 +103,13 @@ describe('API Gateway - Middleware Tests', () => {
     });
 
     it('should reject expired JWT token', () => {
-      const token = jwt.sign(
-        { userId: 'user-123', role: 'CUSTOMER' },
-        JWT_SECRET,
-        { expiresIn: '-1h' } // Expired
-      );
+      (jwt.verify as jest.Mock).mockImplementation(() => {
+        throw new Error('jwt expired');
+      });
 
       Object.defineProperty(mockReq, 'path', { value: '/api/protected', writable: true });
       mockReq.headers = {
-        authorization: `Bearer ${token}`,
+        authorization: 'Bearer expired-token',
       };
 
       authMiddleware(mockReq as AuthenticatedRequest, mockRes as Response, mockNext);
@@ -183,14 +189,15 @@ describe('API Gateway - Middleware Tests', () => {
 
   describe('HEADER FORWARDING', () => {
     it('should forward user info in headers', () => {
-      const token = jwt.sign(
-        { userId: 'user-123', email: 'test@test.com', role: 'CUSTOMER' },
-        JWT_SECRET
-      );
+      (jwt.verify as jest.Mock).mockReturnValue({
+        userId: 'user-123',
+        email: 'test@test.com',
+        role: 'CUSTOMER',
+      });
 
       Object.defineProperty(mockReq, 'path', { value: '/api/test', writable: true });
       mockReq.headers = {
-        authorization: `Bearer ${token}`,
+        authorization: 'Bearer valid-token',
       };
 
       authMiddleware(mockReq as AuthenticatedRequest, mockRes as Response, mockNext);

@@ -1,0 +1,13 @@
+flowchart TB
+    A([Admin])
+    A --> A1((Dang nhap he thong))
+    A --> A2((Xem danh sach user))
+    A --> A3((Cap nhat role user))
+    A --> A4((Verify driver))
+    A --> A5((Xem dashboard tong hop))
+    A --> A6((Xem rides va payments))
+    A --> A7((Refund payment))
+
+    A5 -. include .-> A6
+    A4 -. enable .-> A6
+    A7 -. extend .-> A6

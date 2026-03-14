@@ -27,7 +27,7 @@ describe('proxy router wiring', () => {
 
     const { createProxyMiddleware } = require('http-proxy-middleware');
 
-    // expected proxies: auth, rides, drivers, payments, bookings, pricing, users, reviews, socket.io
+    // expected proxies: auth, rides, drivers, payments, bookings, pricing, users, reviews, notifications
     expect(createProxyMiddleware).toHaveBeenCalledTimes(9);
 
     const calls = createProxyMiddleware.mock.calls.map((c: any[]) => c[0]);

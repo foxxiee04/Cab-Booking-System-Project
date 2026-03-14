@@ -1,4 +1,5 @@
 import amqp, { Channel, Connection, ConsumeMessage } from 'amqplib';
+import axios from 'axios';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { SocketServer } from '../socket/socket-server';
@@ -6,20 +7,14 @@ import Redis from 'ioredis';
 
 const EXCHANGE_NAME = 'domain-events';
 const QUEUE_NAME = 'api-gateway-events';
+const DRIVER_GEO_KEY = 'drivers:geo:online';
+const DEFAULT_MATCH_RADIUS_METERS = 5000;
+const DEFAULT_OFFER_TIMEOUT_SECONDS = 30;
 
-interface Location {
-  address: string;
-  geoPoint: { lat: number; lng: number };
-}
-
-interface BookingCreatedPayload {
-  bookingId: string;
-  customerId: string;
-  pickup: Location;
-  dropoff: Location;
-  estimatedFare: number;
-  estimatedDistance: number;
-  createdAt: string;
+interface MatchingLocation {
+  lat: number;
+  lng: number;
+  address?: string;
 }
 
 interface RideEventPayload {
@@ -27,21 +22,45 @@ interface RideEventPayload {
   customerId: string;
   driverId?: string;
   status: string;
-  pickup?: Location;
-  dropoff?: Location;
+  pickup?: MatchingLocation;
+  dropoff?: MatchingLocation;
   fare?: number;
   distance?: number;
   duration?: number;
 }
 
-interface RideCreatedPayload {
+interface MatchingRequestedPayload {
   rideId: string;
   customerId: string;
-  vehicleType: string;
-  pickup: { lat: number; lng: number; address: string };
-  dropoff: { lat: number; lng: number; address: string };
-  estimatedFare: number;
-  surgeMultiplier: number;
+  vehicleType?: string;
+  pickup: MatchingLocation;
+  dropoff?: MatchingLocation;
+  fare?: number;
+  estimatedFare?: number;
+  distance?: number;
+  duration?: number;
+  searchRadiusKm?: number;
+  excludeDriverIds?: string[];
+  attempt?: number;
+  maxAttempts?: number;
+}
+
+interface RideOfferedPayload {
+  rideId: string;
+  driverId: string;
+  customerId: string;
+  pickup: MatchingLocation;
+  dropoff: MatchingLocation;
+  fare?: number;
+  distance?: number;
+  duration?: number;
+  ttlSeconds?: number;
+  expiresAt?: string;
+}
+
+interface DriverRecipient {
+  driverId: string;
+  userId: string;
 }
 
 export class EventConsumer {
@@ -49,6 +68,7 @@ export class EventConsumer {
   private channel: Channel | null = null;
   private socketServer: SocketServer;
   private redis: Redis;
+  private driverUserCache = new Map<string, string>();
 
   constructor(socketServer: SocketServer) {
     this.socketServer = socketServer;
@@ -65,9 +85,13 @@ export class EventConsumer {
       await this.channel!.assertQueue(QUEUE_NAME, { durable: true });
 
       // Bind to events we care about
-      await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'booking.created');
-      await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.created');
+      await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.finding_driver_requested');
+      await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.reassignment_requested');
+      await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.offered');
+      await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.assigned');
+      await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.offer_timeout');
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.accepted');
+      await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.picking_up');
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.started');
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.completed');
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.cancelled');
@@ -76,9 +100,15 @@ export class EventConsumer {
 
       logger.info('API Gateway EventConsumer connected to RabbitMQ');
     } catch (error) {
+      this.channel = null;
+      this.connection = null;
       logger.error('Failed to connect to RabbitMQ:', error);
       setTimeout(() => this.connect(), 5000);
     }
+  }
+
+  isConnected(): boolean {
+    return this.connection !== null && this.channel !== null;
   }
 
   private async handleMessage(msg: ConsumeMessage | null): Promise<void> {
@@ -91,14 +121,24 @@ export class EventConsumer {
       logger.info(`Received event: ${eventType}`);
 
       switch (eventType) {
-        case 'booking.created':
-          await this.handleBookingCreated(content.payload);
+        case 'ride.finding_driver_requested':
+        case 'ride.reassignment_requested':
+          await this.handleMatchingRequested(content.payload);
           break;
-        case 'ride.created':
-          await this.handleRideCreated(content.payload);
+        case 'ride.offered':
+          await this.handleRideOffered(content.payload);
+          break;
+        case 'ride.assigned':
+          await this.handleRideAssigned(content.payload);
+          break;
+        case 'ride.offer_timeout':
+          await this.handleRideOfferTimeout(content.payload);
           break;
         case 'ride.accepted':
           await this.handleRideAccepted(content.payload);
+          break;
+        case 'ride.picking_up':
+          await this.handleRidePickingUp(content.payload);
           break;
         case 'ride.started':
           await this.handleRideStarted(content.payload);
@@ -120,50 +160,14 @@ export class EventConsumer {
     }
   }
 
-  private async handleBookingCreated(payload: BookingCreatedPayload): Promise<void> {
-    logger.info(`Processing booking.created for booking ${payload.bookingId}`);
+  private async handleMatchingRequested(payload: MatchingRequestedPayload): Promise<void> {
+    logger.info(`Processing driver matching request for ride ${payload.rideId}`);
 
     try {
-      // Find nearby online drivers
       const nearbyDrivers = await this.findNearbyOnlineDrivers(
-        payload.pickup.geoPoint,
-        5000 // 5km radius
-      );
-
-      if (nearbyDrivers.length === 0) {
-        logger.warn(`No online drivers found for booking ${payload.bookingId}`);
-        return;
-      }
-
-      // Push notification to all nearby drivers
-      const notificationData = {
-        bookingId: payload.bookingId,
-        customerId: payload.customerId,
-        pickup: payload.pickup,
-        dropoff: payload.dropoff,
-        estimatedFare: payload.estimatedFare,
-        estimatedDistance: payload.estimatedDistance,
-        createdAt: payload.createdAt,
-      };
-
-      this.socketServer.emitToDrivers(nearbyDrivers, 'NEW_RIDE_AVAILABLE', notificationData);
-
-      logger.info(
-        `Pushed NEW_RIDE_AVAILABLE to ${nearbyDrivers.length} drivers for booking ${payload.bookingId}`
-      );
-    } catch (error) {
-      logger.error('Error handling booking.created:', error);
-    }
-  }
-
-  private async handleRideCreated(payload: RideCreatedPayload): Promise<void> {
-    logger.info(`Processing ride.created for ride ${payload.rideId}`);
-
-    try {
-      // Find nearby online drivers
-      const nearbyDrivers = await this.findNearbyOnlineDrivers(
-        { lat: payload.pickup.lat, lng: payload.pickup.lng },
-        5000 // 5km radius
+        payload.pickup,
+        this.getMatchRadiusMeters(payload.searchRadiusKm),
+        payload.excludeDriverIds
       );
 
       if (nearbyDrivers.length === 0) {
@@ -171,26 +175,93 @@ export class EventConsumer {
         return;
       }
 
-      // Push notification to all nearby drivers
       const notificationData = {
         rideId: payload.rideId,
         customerId: payload.customerId,
-        vehicleType: payload.vehicleType,
         pickup: payload.pickup,
         dropoff: payload.dropoff,
-        estimatedFare: payload.estimatedFare,
-        surgeMultiplier: payload.surgeMultiplier,
-        createdAt: new Date().toISOString(),
+        estimatedFare: payload.fare ?? payload.estimatedFare,
+        vehicleType: payload.vehicleType,
+        distance: payload.distance,
+        duration: payload.duration,
+        timeoutSeconds: DEFAULT_OFFER_TIMEOUT_SECONDS,
+        searchAttempt: payload.attempt,
       };
 
-      this.socketServer.emitToDrivers(nearbyDrivers, 'NEW_RIDE_AVAILABLE', notificationData);
+      this.socketServer.emitToDrivers(
+        nearbyDrivers.map((driver) => driver.userId),
+        'NEW_RIDE_AVAILABLE',
+        notificationData
+      );
 
       logger.info(
         `Pushed NEW_RIDE_AVAILABLE to ${nearbyDrivers.length} drivers for ride ${payload.rideId}`
       );
     } catch (error) {
-      logger.error('Error handling ride.created:', error);
+      logger.error('Error handling driver matching request:', error);
     }
+  }
+
+  private async handleRideOffered(payload: RideOfferedPayload): Promise<void> {
+    logger.info(`Processing ride.offered for ride ${payload.rideId}`);
+
+    const driverUserId = await this.resolveDriverUserId(payload.driverId);
+    if (!driverUserId) {
+      logger.warn(`Unable to resolve realtime recipient for driver ${payload.driverId}`);
+      return;
+    }
+
+    this.socketServer.emitToDriver(driverUserId, 'NEW_RIDE_AVAILABLE', {
+      rideId: payload.rideId,
+      customerId: payload.customerId,
+      pickup: payload.pickup,
+      dropoff: payload.dropoff,
+      estimatedFare: payload.fare,
+      distance: payload.distance,
+      duration: payload.duration,
+      timeoutSeconds: payload.ttlSeconds ?? DEFAULT_OFFER_TIMEOUT_SECONDS,
+      expiresAt: payload.expiresAt,
+    });
+  }
+
+  private async handleRideAssigned(payload: RideEventPayload): Promise<void> {
+    logger.info(`Processing ride.assigned for ride ${payload.rideId}`);
+
+    const data = {
+      rideId: payload.rideId,
+      status: 'ASSIGNED',
+      driverId: payload.driverId,
+      message: 'A driver has been assigned to your ride',
+    };
+
+    this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
+
+    const driverUserId = await this.resolveDriverUserId(payload.driverId);
+    if (driverUserId) {
+      this.socketServer.emitToDriver(driverUserId, 'ride:status', {
+        rideId: payload.rideId,
+        status: 'ASSIGNED',
+      });
+    }
+  }
+
+  private async handleRideOfferTimeout(payload: RideEventPayload & { timedOutDriverId?: string }): Promise<void> {
+    logger.info(`Processing ride.offer_timeout for ride ${payload.rideId}`);
+
+    if (payload.timedOutDriverId) {
+      const driverUserId = await this.resolveDriverUserId(payload.timedOutDriverId);
+      if (driverUserId) {
+        this.socketServer.emitToDriver(driverUserId, 'ride:timeout', {
+          rideId: payload.rideId,
+        });
+      }
+    }
+
+    this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', {
+      rideId: payload.rideId,
+      status: 'FINDING_DRIVER',
+      message: 'Looking for another driver',
+    });
   }
 
   private async handleRideAccepted(payload: RideEventPayload): Promise<void> {
@@ -206,9 +277,12 @@ export class EventConsumer {
     // Notify customer
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
 
-    // Also notify driver
-    if (payload.driverId) {
-      this.socketServer.emitToDriver(payload.driverId, 'RIDE_STATUS_UPDATE', data);
+    const driverUserId = await this.resolveDriverUserId(payload.driverId);
+    if (driverUserId) {
+      this.socketServer.emitToDriver(driverUserId, 'ride:status', {
+        rideId: payload.rideId,
+        status: 'ACCEPTED',
+      });
     }
   }
 
@@ -221,14 +295,35 @@ export class EventConsumer {
       message: 'Your ride has started',
     };
 
-    // Notify both customer and driver
-    if (payload.driverId) {
-      this.socketServer.emitToCustomerAndDriver(
-        payload.customerId,
-        payload.driverId,
-        'RIDE_STATUS_UPDATE',
-        data
-      );
+    this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
+
+    const driverUserId = await this.resolveDriverUserId(payload.driverId);
+    if (driverUserId) {
+      this.socketServer.emitToDriver(driverUserId, 'ride:status', {
+        rideId: payload.rideId,
+        status: 'IN_PROGRESS',
+      });
+    }
+  }
+
+  private async handleRidePickingUp(payload: RideEventPayload): Promise<void> {
+    logger.info(`Processing ride.picking_up for ride ${payload.rideId}`);
+
+    const data = {
+      rideId: payload.rideId,
+      status: 'PICKING_UP',
+      driverId: payload.driverId,
+      message: 'Driver has arrived and is picking you up',
+    };
+
+    this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
+
+    const driverUserId = await this.resolveDriverUserId(payload.driverId);
+    if (driverUserId) {
+      this.socketServer.emitToDriver(driverUserId, 'ride:status', {
+        rideId: payload.rideId,
+        status: 'PICKING_UP',
+      });
     }
   }
 
@@ -244,14 +339,14 @@ export class EventConsumer {
       message: 'Your ride has been completed',
     };
 
-    // Notify both customer and driver
-    if (payload.driverId) {
-      this.socketServer.emitToCustomerAndDriver(
-        payload.customerId,
-        payload.driverId,
-        'RIDE_COMPLETED',
-        data
-      );
+    this.socketServer.emitToCustomer(payload.customerId, 'RIDE_COMPLETED', data);
+
+    const driverUserId = await this.resolveDriverUserId(payload.driverId);
+    if (driverUserId) {
+      this.socketServer.emitToDriver(driverUserId, 'ride:status', {
+        rideId: payload.rideId,
+        status: 'COMPLETED',
+      });
     }
   }
 
@@ -267,9 +362,12 @@ export class EventConsumer {
     // Notify customer
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
 
-    // Notify driver if assigned
-    if (payload.driverId) {
-      this.socketServer.emitToDriver(payload.driverId, 'RIDE_STATUS_UPDATE', data);
+    const driverUserId = await this.resolveDriverUserId(payload.driverId);
+    if (driverUserId) {
+      this.socketServer.emitToDriver(driverUserId, 'ride:cancelled', {
+        rideId: payload.rideId,
+        reason: payload.status,
+      });
     }
   }
 
@@ -279,13 +377,12 @@ export class EventConsumer {
    */
   private async findNearbyOnlineDrivers(
     location: { lat: number; lng: number },
-    radiusMeters: number
-  ): Promise<string[]> {
+    radiusMeters: number,
+    excludeDriverIds: string[] = []
+  ): Promise<DriverRecipient[]> {
     try {
-      // Query Redis for nearby drivers
-      // Format: GEORADIUS driver-locations lng lat radius m
       const results = await this.redis.georadius(
-        'driver-locations',
+        DRIVER_GEO_KEY,
         location.lng,
         location.lat,
         radiusMeters,
@@ -297,29 +394,74 @@ export class EventConsumer {
         return [];
       }
 
-      // Extract driver IDs and filter only online drivers
-      const driverIds: string[] = [];
-      
+      const excluded = new Set(excludeDriverIds);
+      const driverRecipients: DriverRecipient[] = [];
+
       for (const result of results) {
         const driverId = Array.isArray(result) ? result[0] : result;
-        
-        // Check if driver is online using our socket server
-        if (this.socketServer.isUserOnline(driverId)) {
-          driverIds.push(driverId);
+        if (excluded.has(driverId)) {
+          continue;
+        }
+
+        const userId = await this.resolveDriverUserId(driverId);
+        if (userId && this.socketServer.isUserOnline(userId)) {
+          driverRecipients.push({ driverId, userId });
         }
       }
 
-      return driverIds;
+      return driverRecipients;
     } catch (error) {
       logger.error('Error finding nearby drivers:', error);
       return [];
     }
   }
 
+  private getMatchRadiusMeters(searchRadiusKm?: number): number {
+    if (!searchRadiusKm || searchRadiusKm <= 0) {
+      return DEFAULT_MATCH_RADIUS_METERS;
+    }
+
+    return Math.round(searchRadiusKm * 1000);
+  }
+
+  private async resolveDriverUserId(driverId?: string): Promise<string | null> {
+    if (!driverId) {
+      return null;
+    }
+
+    const cachedUserId = this.driverUserCache.get(driverId);
+    if (cachedUserId) {
+      return cachedUserId;
+    }
+
+    try {
+      const response = await axios.get(`${config.services.driver}/internal/drivers/${driverId}`, {
+        headers: {
+          'x-internal-token': config.internalServiceToken,
+        },
+        timeout: 3000,
+      });
+
+      const userId = response.data?.data?.driver?.userId;
+      if (userId) {
+        this.driverUserCache.set(driverId, userId);
+        return userId;
+      }
+    } catch (error) {
+      logger.warn(`Failed to resolve driver ${driverId} to socket user`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    return null;
+  }
+
   async close(): Promise<void> {
     await this.channel?.close();
     await (this.connection as any)?.close();
     await this.redis.quit();
+    this.channel = null;
+    this.connection = null;
     logger.info('EventConsumer closed');
   }
 }

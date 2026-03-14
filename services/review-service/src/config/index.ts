@@ -2,8 +2,18 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+function getRequiredEnv(name: string): string {
+  const value = process.env[name]?.trim();
+
+  if (!value) {
+    throw new Error(`${name} environment variable is required`);
+  }
+
+  return value;
+}
+
 export const config = {
   serviceName: 'review-service',
   port: parseInt(process.env.PORT || '3010', 10),
-  mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/review_db',
+  mongodbUri: getRequiredEnv('MONGODB_URI'),
 };

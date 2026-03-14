@@ -1,18 +1,28 @@
+function getRequiredEnv(name: string): string {
+  const value = process.env[name]?.trim();
+
+  if (!value) {
+    throw new Error(`${name} environment variable is required`);
+  }
+
+  return value;
+}
+
 export const config = {
   serviceName: 'booking-service',
   port: parseInt(process.env.PORT || '3008', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   
   database: {
-    url: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/booking_db',
+    url: getRequiredEnv('DATABASE_URL'),
   },
   
   rabbitmq: {
-    url: process.env.RABBITMQ_URL || 'amqp://localhost:5672',
+    url: getRequiredEnv('RABBITMQ_URL'),
   },
   
   services: {
-    pricing: process.env.PRICING_SERVICE_URL || 'http://localhost:3009',
-    ride: process.env.RIDE_SERVICE_URL || 'http://localhost:3002',
+    pricing: getRequiredEnv('PRICING_SERVICE_URL'),
+    ride: getRequiredEnv('RIDE_SERVICE_URL'),
   },
 };

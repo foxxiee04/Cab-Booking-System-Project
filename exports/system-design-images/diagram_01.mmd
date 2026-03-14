@@ -1,0 +1,62 @@
+graph TB
+    subgraph Frontend
+        C[Customer App]
+        D[Driver App]
+        A[Admin Dashboard]
+    end
+
+    subgraph Entry
+        G[API Gateway\nJWT + Routing + Socket.IO]
+    end
+
+    subgraph CoreServices
+        AUTH[Auth Service]
+        USER[User Service]
+        DRIVER[Driver Service]
+        BOOKING[Booking Service]
+        RIDE[Ride Service]
+        PRICING[Pricing Service]
+        PAYMENT[Payment Service]
+        NOTIF[Notification Service]
+        REVIEW[Review Service]
+        AI[AI Service]
+    end
+
+    subgraph Infrastructure
+        PG[(PostgreSQL\n6 databases)]
+        MG[(MongoDB\n2 databases)]
+        RD[(Redis)]
+        MQ[(RabbitMQ)]
+    end
+
+    C --> G
+    D --> G
+    A --> G
+
+    G --> AUTH
+    G --> USER
+    G --> DRIVER
+    G --> BOOKING
+    G --> RIDE
+    G --> PRICING
+    G --> PAYMENT
+    G --> NOTIF
+    G --> REVIEW
+
+    AUTH --> PG
+    USER --> PG
+    DRIVER --> PG
+    DRIVER --> RD
+    BOOKING --> PG
+    RIDE --> PG
+    PRICING --> RD
+    PRICING --> AI
+    PAYMENT --> PG
+    NOTIF --> MG
+    REVIEW --> MG
+
+    BOOKING -.domain events.-> MQ
+    RIDE -.domain events.-> MQ
+    PAYMENT -.domain events.-> MQ
+    MQ -.realtime ride events.-> G
+    MQ -.async notifications.-> NOTIF

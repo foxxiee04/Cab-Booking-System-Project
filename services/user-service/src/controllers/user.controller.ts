@@ -10,6 +10,14 @@ export async function getUser(req: Request, res: Response) {
 }
 
 export async function createUser(req: Request, res: Response) {
-  const user = await createUserProfile(req.body);
-  res.status(201).json({ success: true, data: { user } });
+  try {
+    const { userId, firstName, lastName, phone, avatar, email } = req.body;
+    const user = await createUserProfile({ userId, firstName, lastName, phone, avatar, email });
+    res.status(201).json({ success: true, data: { user } });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: error.message || 'Failed to create user' },
+    });
+  }
 }

@@ -10,7 +10,7 @@ const mockPrisma: any = {
   },
 };
 
-jest.mock('@prisma/client', () => ({
+jest.mock('../generated/prisma-client', () => ({
   PrismaClient: jest.fn(() => mockPrisma),
   DriverStatus: {
     PENDING: 'PENDING',
@@ -99,7 +99,15 @@ describe('DriverService - Simple Test Suite', () => {
       const result = await driverService.registerDriver(input);
 
       expect(result.id).toBe('driver-123');
-      expect(mockPrisma.driver.create).toHaveBeenCalled();
+      expect(mockPrisma.driver.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'PENDING',
+            availabilityStatus: 'OFFLINE',
+            licenseVerified: false,
+          }),
+        })
+      );
     });
 
     it('should throw error if driver already registered', async () => {
@@ -126,10 +134,31 @@ describe('DriverService - Simple Test Suite', () => {
   });
 
   describe('GO ONLINE/OFFLINE', () => {
+    it('should throw error when profile is not found before going online', async () => {
+      mockPrisma.driver.findUnique.mockResolvedValue(null);
+
+      await expect(driverService.goOnline('missing-user')).rejects.toThrow(
+        'Driver profile not found. Please complete profile setup first.'
+      );
+    });
+
+    it('should throw error when driver is not approved', async () => {
+      mockPrisma.driver.findUnique.mockResolvedValue({
+        id: 'driver-123',
+        userId: 'user-123',
+        status: 'PENDING',
+      });
+
+      await expect(driverService.goOnline('user-123')).rejects.toThrow(
+        'Driver must be approved before going online. Current status: PENDING'
+      );
+    });
+
     it('should set driver online', async () => {
       mockPrisma.driver.findUnique.mockResolvedValue({
         id: 'driver-123',
         userId: 'user-123',
+        status: 'APPROVED',
       });
       mockPrisma.driver.update.mockResolvedValue({
         id: 'driver-123',
@@ -150,6 +179,11 @@ describe('DriverService - Simple Test Suite', () => {
       const result = await driverService.goOffline('user-123');
 
       expect(result.availabilityStatus).toBe('OFFLINE');
+      expect(mockPrisma.driver.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ currentRideId: null, availabilityStatus: 'OFFLINE' }),
+        })
+      );
       expect(mockRedis.zrem).toHaveBeenCalled();
     });
   });
@@ -165,6 +199,11 @@ describe('DriverService - Simple Test Suite', () => {
       await driverService.updateLocation('driver-123', { lat: 10.8231, lng: 106.6297 });
 
       expect(mockRedis.geoadd).toHaveBeenCalled();
+      expect(mockRedis.setex).toHaveBeenCalledWith(
+        'driver:location:driver-123',
+        300,
+        expect.stringContaining('10.8231')
+      );
       expect(mockPrisma.driver.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({

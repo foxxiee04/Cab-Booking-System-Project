@@ -20,10 +20,24 @@ describe('SocketServer', () => {
     });
   });
 
-  afterAll((done) => {
-    socketServer.close().then(() => {
-      httpServer.close(done);
-    });
+  afterAll(async () => {
+    if (clientSocket && clientSocket.connected) {
+      clientSocket.disconnect();
+    }
+
+    await socketServer.close();
+
+    if (httpServer.listening) {
+      await new Promise<void>((resolve, reject) => {
+        httpServer.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
   });
 
   afterEach(() => {

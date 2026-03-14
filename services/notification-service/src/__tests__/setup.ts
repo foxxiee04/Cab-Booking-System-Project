@@ -1,0 +1,10 @@
+process.env.NODE_ENV = 'test';
+process.env.MONGODB_URI = 'mongodb://localhost:27017/test_notifications';
+process.env.REDIS_URL = 'redis://localhost:6379';
+process.env.RABBITMQ_URL = 'amqp://localhost:5672';
+
+jest.setTimeout(10000);
+
+afterEach(() => {
+  jest.clearAllMocks();
+});

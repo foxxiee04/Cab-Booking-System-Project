@@ -1,0 +1,114 @@
+import express, { NextFunction, Request, Response } from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import swaggerUi from 'swagger-ui-express';
+import { createRequestContextMiddleware } from '../../../shared/dist';
+import { config } from './config';
+import { authMiddleware } from './middleware/auth';
+import { generalLimiter } from './middleware/rate-limit';
+import proxyRoutes from './routes/proxy';
+import mapRoutes from './routes/map';
+import adminRoutes from './routes/admin';
+import { logger } from './utils/logger';
+import { swaggerSpec } from './swagger';
+
+interface GatewayAppOptions {
+  getReadiness: () => Promise<Record<string, boolean>>;
+  fetchImpl?: typeof fetch;
+  enableRateLimit?: boolean;
+}
+
+export function createApp({
+  getReadiness,
+  fetchImpl = fetch,
+  enableRateLimit = false,
+}: GatewayAppOptions) {
+  const app = express();
+
+  morgan.token('request-id', (req) => req.headers['x-request-id'] as string || '-');
+
+  app.use(createRequestContextMiddleware() as express.RequestHandler);
+  app.use(helmet({
+    contentSecurityPolicy: false,
+  }));
+  app.use(cors({
+    origin: '*',
+    credentials: true,
+  }));
+  app.use(morgan(':method :url :status :response-time ms request_id=:request-id', {
+    stream: { write: (message) => logger.info(message.trim()) },
+  }));
+
+  if (enableRateLimit) {
+    app.use(generalLimiter);
+  }
+
+  app.get('/health', (_req, res) => {
+    res.json({
+      status: 'healthy',
+      service: 'api-gateway',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  app.get('/ready', async (_req, res) => {
+    const dependencies = await getReadiness();
+    const ready = Object.values(dependencies).every(Boolean);
+
+    res.status(ready ? 200 : 503).json({
+      status: ready ? 'ready' : 'not_ready',
+      service: 'api-gateway',
+      dependencies,
+    });
+  });
+
+  app.get('/health/services', async (_req, res) => {
+    const services = config.services;
+    const results: Record<string, string> = {};
+
+    for (const [name, url] of Object.entries(services)) {
+      try {
+        const response = await fetchImpl(`${url}/health`);
+        results[name] = response.ok ? 'healthy' : 'unhealthy';
+      } catch {
+        results[name] = 'unreachable';
+      }
+    }
+
+    res.json({
+      gateway: 'healthy',
+      services: results,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'Cab Booking System API',
+  }));
+
+  app.use('/api/map', mapRoutes);
+  app.use(authMiddleware);
+  app.use('/api/admin', adminRoutes);
+  app.use(proxyRoutes);
+  app.use(express.json({ limit: '10mb' }));
+
+  app.use((req, res) => {
+    res.status(404).json({
+      success: false,
+      message: 'Endpoint not found',
+      path: req.path,
+    });
+  });
+
+  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+    logger.error('Unhandled error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
+  });
+
+  return app;
+}
