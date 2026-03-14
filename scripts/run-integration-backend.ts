@@ -43,12 +43,17 @@ function quoteWindowsArg(arg: string) {
   return `"${arg.replace(/"/g, '\\"')}"`;
 }
 
-function spawnProcess(command: string, args: string[], options?: { env?: NodeJS.ProcessEnv; cwd?: string; stdio?: 'inherit' | 'pipe' }) {
+function spawnProcess(
+  command: string,
+  args: string[],
+  options?: { env?: NodeJS.ProcessEnv; cwd?: string; stdio?: 'inherit' | 'pipe'; detached?: boolean }
+) {
   const spawnOptions = {
     cwd: options?.cwd ?? rootDir,
     env: options?.env ?? process.env,
     stdio: options?.stdio ?? 'inherit',
     shell: false,
+    detached: options?.detached ?? false,
   } as const;
 
   if (isWindows && command.toLowerCase().endsWith('.cmd')) {
@@ -119,6 +124,7 @@ async function startService(service: string, env: NodeJS.ProcessEnv) {
     cwd: rootDir,
     env,
     stdio: 'pipe',
+    detached: !isWindows,
   });
 
   startedChild.stdout?.pipe(stream);
@@ -202,7 +208,16 @@ async function stopServices() {
           return;
         }
 
-        child.kill();
+        if (child.pid) {
+          try {
+            process.kill(-child.pid, 'SIGKILL');
+          } catch {
+            child.kill('SIGKILL');
+          }
+          return;
+        }
+
+        child.kill('SIGKILL');
       }, 5000);
 
       child.once('exit', async () => {
@@ -216,7 +231,16 @@ async function stopServices() {
         return;
       }
 
-      child.kill();
+      if (child.pid) {
+        try {
+          process.kill(-child.pid, 'SIGTERM');
+        } catch {
+          child.kill('SIGTERM');
+        }
+        return;
+      }
+
+      child.kill('SIGTERM');
     }));
   }
 
