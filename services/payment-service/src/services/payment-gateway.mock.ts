@@ -177,7 +177,7 @@ export class VisaGatewayMock extends MockPaymentGateway {
   }
 
   protected generateTransactionId(): string {
-    return `VISA_${Date.now()}_${uuidv4().slice(0, 12).toUpperCase()}`;
+    return `VISA_${Date.now()}_${uuidv4().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
   }
 
   protected generateSuccessResponse(transactionId: string, amount: number, currency: string, orderId: string) {

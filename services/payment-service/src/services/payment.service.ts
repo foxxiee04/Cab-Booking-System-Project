@@ -202,9 +202,9 @@ export class PaymentService {
       const mappedProvider = this.mapPaymentProvider(paymentMethod);
 
       // Create fare and payment in transaction
-      await this.prisma.$transaction(async (tx) => {
+      const createdPayment = await this.prisma.$transaction(async (tx) => {
         // Create fare record
-        const fare = await tx.fare.create({
+        await tx.fare.create({
           data: {
             rideId,
             baseFare: fareDetails.baseFare,
@@ -249,15 +249,17 @@ export class PaymentService {
         });
 
         logger.info(`Fare calculated for ride ${rideId}: ${fareDetails.totalFare} VND (Method: ${mappedMethod})`);
+
+        return payment;
       });
 
       // Process payment asynchronously based on method
       if (mappedMethod === PaymentMethod.CASH) {
         // Cash payment: mark as completed immediately (COD)
-        await this.processPayment(rideId);
+        await this.processPaymentRecord(createdPayment);
       } else {
         // Electronic payment (MOMO/VISA): process with gateway mock
-        await this.processElectronicPayment(rideId);
+        await this.processElectronicPaymentRecord(createdPayment);
       }
     } catch (error) {
       logger.error(`Error processing ride completed for ${rideId}:`, error);
@@ -270,6 +272,20 @@ export class PaymentService {
     if (!payment) {
       throw new Error('Payment not found');
     }
+
+    await this.processPaymentRecord(payment);
+  }
+
+  private async processPaymentRecord(payment: {
+    id: string;
+    rideId: string;
+    customerId: string;
+    driverId?: string | null;
+    amount: number;
+    method: PaymentMethod;
+    provider?: PaymentProvider | null;
+  }): Promise<void> {
+    const { rideId } = payment;
 
     try {
       // Update to processing
@@ -367,6 +383,21 @@ export class PaymentService {
     if (!payment) {
       throw new Error('Payment not found');
     }
+
+    await this.processElectronicPaymentRecord(payment);
+  }
+
+  private async processElectronicPaymentRecord(payment: {
+    id: string;
+    rideId: string;
+    customerId: string;
+    driverId?: string | null;
+    method: PaymentMethod;
+    provider: PaymentProvider;
+    amount: number;
+    currency: string;
+  }): Promise<void> {
+    const { rideId } = payment;
 
     try {
       // Update to processing

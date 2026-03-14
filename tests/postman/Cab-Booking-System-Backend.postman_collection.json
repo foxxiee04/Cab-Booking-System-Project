@@ -1,0 +1,823 @@
+{
+  "info": {
+    "_postman_id": "3fbb6f1b-0f7d-49f8-a12b-4cb7c62f6fb0",
+    "name": "Cab Booking System Backend",
+    "description": "Postman collection de test backend qua API Gateway. Chay folder theo thu tu tu tren xuong de collection tu luu token, userId, bookingId, rideId va paymentIntentId. Folder Admin la tuy chon va can tu dien bien `adminAccessToken` truoc khi chay.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "userPassword", "value": "Postman@123" },
+    { "key": "runId", "value": "" },
+    { "key": "customerEmail", "value": "" },
+    { "key": "driverEmail", "value": "" },
+    { "key": "customerName", "value": "Postman Customer" },
+    { "key": "driverName", "value": "Postman Driver" },
+    { "key": "customerAccessToken", "value": "" },
+    { "key": "customerRefreshToken", "value": "" },
+    { "key": "driverAccessToken", "value": "" },
+    { "key": "driverRefreshToken", "value": "" },
+    { "key": "adminAccessToken", "value": "" },
+    { "key": "customerUserId", "value": "" },
+    { "key": "driverUserId", "value": "" },
+    { "key": "driverProfileId", "value": "" },
+    { "key": "bookingId", "value": "" },
+    { "key": "rideId", "value": "" },
+    { "key": "rideFare", "value": "120000" },
+    { "key": "paymentIntentId", "value": "" },
+    { "key": "reviewId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "00 - Bootstrap",
+      "item": [
+        {
+          "name": "Init Test Variables",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const runId = Date.now().toString();",
+                  "pm.collectionVariables.set('runId', runId);",
+                  "pm.collectionVariables.set('customerEmail', `postman.customer.${runId}@example.com`);",
+                  "pm.collectionVariables.set('driverEmail', `postman.driver.${runId}@example.com`);",
+                  "pm.collectionVariables.unset('customerAccessToken');",
+                  "pm.collectionVariables.unset('customerRefreshToken');",
+                  "pm.collectionVariables.unset('driverAccessToken');",
+                  "pm.collectionVariables.unset('driverRefreshToken');",
+                  "pm.collectionVariables.unset('customerUserId');",
+                  "pm.collectionVariables.unset('driverUserId');",
+                  "pm.collectionVariables.unset('driverProfileId');",
+                  "pm.collectionVariables.unset('bookingId');",
+                  "pm.collectionVariables.unset('rideId');",
+                  "pm.collectionVariables.set('rideFare', '120000');",
+                  "pm.collectionVariables.unset('paymentIntentId');",
+                  "pm.collectionVariables.unset('reviewId');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Gateway health OK', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "description": "Khoi tao email/token/id moi cho mot lan chay collection. Chay request nay dau tien."
+          }
+        },
+        {
+          "name": "Gateway Health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Health returns 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "Gateway Ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/ready"
+          }
+        },
+        {
+          "name": "Downstream Health Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health/services"
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Customer Auth",
+      "item": [
+        {
+          "name": "Register Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Customer registered', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "if (json?.data?.user?.id) pm.collectionVariables.set('customerUserId', json.data.user.id);",
+                  "if (json?.data?.tokens?.accessToken) pm.collectionVariables.set('customerAccessToken', json.data.tokens.accessToken);",
+                  "if (json?.data?.tokens?.refreshToken) pm.collectionVariables.set('customerRefreshToken', json.data.tokens.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"firstName\": \"Postman\",\n  \"lastName\": \"Customer\",\n  \"phone\": \"0901234567\",\n  \"role\": \"CUSTOMER\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          }
+        },
+        {
+          "name": "Login Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Customer login OK', function () { pm.response.to.have.status(200); });",
+                  "if (json?.data?.user?.id) pm.collectionVariables.set('customerUserId', json.data.user.id);",
+                  "if (json?.data?.tokens?.accessToken) pm.collectionVariables.set('customerAccessToken', json.data.tokens.accessToken);",
+                  "if (json?.data?.tokens?.refreshToken) pm.collectionVariables.set('customerRefreshToken', json.data.tokens.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Refresh Customer Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Customer refresh OK', function () { pm.response.to.have.status(200); });",
+                  "if (json?.data?.tokens?.accessToken) pm.collectionVariables.set('customerAccessToken', json.data.tokens.accessToken);",
+                  "if (json?.data?.tokens?.refreshToken) pm.collectionVariables.set('customerRefreshToken', json.data.tokens.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{customerRefreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/refresh"
+          }
+        },
+        {
+          "name": "Get Current Customer",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Driver Auth and Profile",
+      "item": [
+        {
+          "name": "Register Driver Account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Driver account registered', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "if (json?.data?.user?.id) pm.collectionVariables.set('driverUserId', json.data.user.id);",
+                  "if (json?.data?.tokens?.accessToken) pm.collectionVariables.set('driverAccessToken', json.data.tokens.accessToken);",
+                  "if (json?.data?.tokens?.refreshToken) pm.collectionVariables.set('driverRefreshToken', json.data.tokens.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{driverEmail}}\",\n  \"password\": \"{{userPassword}}\",\n  \"firstName\": \"Postman\",\n  \"lastName\": \"Driver\",\n  \"phone\": \"0907654321\",\n  \"role\": \"DRIVER\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          }
+        },
+        {
+          "name": "Login Driver",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Driver login OK', function () { pm.response.to.have.status(200); });",
+                  "if (json?.data?.user?.id) pm.collectionVariables.set('driverUserId', json.data.user.id);",
+                  "if (json?.data?.tokens?.accessToken) pm.collectionVariables.set('driverAccessToken', json.data.tokens.accessToken);",
+                  "if (json?.data?.tokens?.refreshToken) pm.collectionVariables.set('driverRefreshToken', json.data.tokens.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{driverEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Register Driver Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Driver profile created', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const driver = json?.data?.driver;",
+                  "if (driver?.id) pm.collectionVariables.set('driverProfileId', driver.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverAccessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicle\": {\n    \"type\": \"CAR\",\n    \"plate\": \"51A-{{runId}}\",\n    \"brand\": \"Toyota\",\n    \"model\": \"Vios\",\n    \"color\": \"Black\"\n  },\n  \"license\": {\n    \"number\": \"LIC-{{runId}}\",\n    \"expiryDate\": \"2030-12-31T00:00:00.000Z\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/drivers/register"
+          }
+        },
+        {
+          "name": "Get Current Driver Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/drivers/me"
+          }
+        },
+        {
+          "name": "Driver Go Online",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/drivers/me/online"
+          }
+        },
+        {
+          "name": "Driver Update Location",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverAccessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 10.772622,\n  \"lng\": 106.660172\n}"
+            },
+            "url": "{{baseUrl}}/api/drivers/me/location"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - User Profiles",
+      "item": [
+        {
+          "name": "Create Customer Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{customerUserId}}\",\n  \"firstName\": \"Postman\",\n  \"lastName\": \"Customer\",\n  \"phone\": \"0901234567\",\n  \"email\": \"{{customerEmail}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users"
+          }
+        },
+        {
+          "name": "Get Customer Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/users/{{customerUserId}}"
+          }
+        },
+        {
+          "name": "Create Driver User Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{driverUserId}}\",\n  \"firstName\": \"Postman\",\n  \"lastName\": \"Driver\",\n  \"phone\": \"0907654321\",\n  \"email\": \"{{driverEmail}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users"
+          }
+        },
+        {
+          "name": "Get Driver User Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/users/{{driverUserId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Pricing and Map",
+      "item": [
+        {
+          "name": "Estimate Fare",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickupLat\": 10.772622,\n  \"pickupLng\": 106.660172,\n  \"dropoffLat\": 10.776889,\n  \"dropoffLng\": 106.656222,\n  \"vehicleType\": \"ECONOMY\"\n}"
+            },
+            "url": "{{baseUrl}}/api/pricing/estimate"
+          }
+        },
+        {
+          "name": "Get Current Surge",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/pricing/surge"
+          }
+        },
+        {
+          "name": "Map Route Preview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/map/route?fromLat=10.772622&fromLng=106.660172&toLat=10.776889&toLng=106.656222"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Booking and Ride Flow",
+      "item": [
+        {
+          "name": "Create Booking",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Booking created', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const booking = json?.data?.booking;",
+                  "if (booking?.id) pm.collectionVariables.set('bookingId', booking.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickupAddress\": \"1 Dai Co Viet, Hai Ba Trung, Ha Noi\",\n  \"pickupLat\": 10.772622,\n  \"pickupLng\": 106.660172,\n  \"dropoffAddress\": \"268 Ly Thuong Kiet, District 10, HCMC\",\n  \"dropoffLat\": 10.776889,\n  \"dropoffLng\": 106.656222,\n  \"vehicleType\": \"ECONOMY\",\n  \"paymentMethod\": \"CARD\"\n}"
+            },
+            "url": "{{baseUrl}}/api/bookings"
+          }
+        },
+        {
+          "name": "Get Booking Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/bookings/{{bookingId}}"
+          }
+        },
+        {
+          "name": "Confirm Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/bookings/{{bookingId}}/confirm"
+          }
+        },
+        {
+          "name": "Create Ride",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Ride created', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const ride = json?.data?.ride;",
+                  "if (ride?.id) pm.collectionVariables.set('rideId', ride.id);",
+                  "const fare = ride?.fare || ride?.estimatedFare || 120000;",
+                  "pm.collectionVariables.set('rideFare', String(fare));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup\": {\n    \"address\": \"1 Dai Co Viet, Hai Ba Trung, Ha Noi\",\n    \"lat\": 10.772622,\n    \"lng\": 106.660172\n  },\n  \"dropoff\": {\n    \"address\": \"268 Ly Thuong Kiet, District 10, HCMC\",\n    \"lat\": 10.776889,\n    \"lng\": 106.656222\n  },\n  \"vehicleType\": \"ECONOMY\",\n  \"paymentMethod\": \"CARD\"\n}"
+            },
+            "url": "{{baseUrl}}/api/rides"
+          }
+        },
+        {
+          "name": "Get Customer Active Ride",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/rides/customer/active"
+          }
+        },
+        {
+          "name": "Driver Browse Available Rides",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/drivers/me/available-rides?lat=10.772622&lng=106.660172&radius=5&vehicleType=ECONOMY"
+          }
+        },
+        {
+          "name": "Driver Accept Ride",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/drivers/me/rides/{{rideId}}/accept"
+          }
+        },
+        {
+          "name": "Driver Assigned Ride",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/drivers/me/rides/assigned"
+          }
+        },
+        {
+          "name": "Driver Mark Pickup",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/rides/{{rideId}}/pickup"
+          }
+        },
+        {
+          "name": "Driver Start Ride",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/rides/{{rideId}}/start"
+          }
+        },
+        {
+          "name": "Driver Complete Ride",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/rides/{{rideId}}/complete"
+          }
+        },
+        {
+          "name": "Get Ride Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/rides/{{rideId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Payments",
+      "item": [
+        {
+          "name": "Get Payment Methods",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/payments/methods"
+          }
+        },
+        {
+          "name": "Create Payment Intent",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Payment intent created', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const payload = json?.data || {};",
+                  "if (payload.paymentIntentId) pm.collectionVariables.set('paymentIntentId', payload.paymentIntentId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" },
+              { "key": "Idempotency-Key", "value": "pm-{{runId}}-ride-{{rideId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rideId\": \"{{rideId}}\",\n  \"amount\": {{rideFare}},\n  \"currency\": \"VND\",\n  \"paymentMethod\": \"CARD\"\n}"
+            },
+            "url": "{{baseUrl}}/api/payments/intents"
+          }
+        },
+        {
+          "name": "Mock Payment Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentIntentId\": \"{{paymentIntentId}}\",\n  \"status\": \"COMPLETED\",\n  \"transactionId\": \"txn-{{runId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/payments/webhook/mock"
+          }
+        },
+        {
+          "name": "Get Payment By Ride",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/payments/ride/{{rideId}}"
+          }
+        },
+        {
+          "name": "Customer Payment History",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/payments/customer/history?page=1&limit=20"
+          }
+        },
+        {
+          "name": "Driver Earnings",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/payments/driver/earnings?page=1&limit=20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Notifications and Reviews",
+      "item": [
+        {
+          "name": "Send Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{customerUserId}}\",\n  \"type\": \"IN_APP\",\n  \"recipient\": \"{{customerEmail}}\",\n  \"subject\": \"Ride completed\",\n  \"message\": \"Your ride {{rideId}} has been completed successfully.\",\n  \"priority\": \"HIGH\",\n  \"metadata\": {\n    \"rideId\": \"{{rideId}}\",\n    \"bookingId\": \"{{bookingId}}\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/notifications/notifications/send"
+          }
+        },
+        {
+          "name": "Get Customer Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/notifications/notifications?limit=20"
+          }
+        },
+        {
+          "name": "Create Review For Driver",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Review created', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const review = json?.review || json?.data?.review;",
+                  "if (review?._id) pm.collectionVariables.set('reviewId', review._id);",
+                  "if (review?.id) pm.collectionVariables.set('reviewId', review.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" },
+              { "key": "x-user-name", "value": "{{customerName}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rideId\": \"{{rideId}}\",\n  \"bookingId\": \"{{bookingId}}\",\n  \"type\": \"CUSTOMER_TO_DRIVER\",\n  \"revieweeId\": \"{{driverUserId}}\",\n  \"revieweeName\": \"{{driverName}}\",\n  \"rating\": 5,\n  \"comment\": \"Tai xe den dung gio, di chuyen an toan.\",\n  \"tags\": [\"professional\", \"safe_driving\"]\n}"
+            },
+            "url": "{{baseUrl}}/api/reviews/reviews"
+          }
+        },
+        {
+          "name": "Get Ride Reviews",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/reviews/reviews/ride/{{rideId}}"
+          }
+        },
+        {
+          "name": "Get Driver Review Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/reviews/reviews/driver/{{driverUserId}}/stats"
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Admin Optional",
+      "description": "Folder nay can tu dien bien adminAccessToken bang JWT cua tai khoan ADMIN da co san trong he thong/seed.",
+      "item": [
+        {
+          "name": "Admin Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/stats"
+          }
+        },
+        {
+          "name": "Admin Drivers",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/drivers?limit=20&offset=0"
+          }
+        },
+        {
+          "name": "Admin Customers",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/customers?limit=20&offset=0"
+          }
+        },
+        {
+          "name": "Admin Rides",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/rides?limit=20&offset=0"
+          }
+        },
+        {
+          "name": "Admin Payments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/admin/payments?limit=20&offset=0"
+          }
+        }
+      ]
+    }
+  ]
+}

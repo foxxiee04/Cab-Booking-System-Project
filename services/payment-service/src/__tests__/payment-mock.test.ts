@@ -420,20 +420,20 @@ describe('Mock Payment Gateways', () => {
     });
 
     test('Should return MoMo error codes on failure', async () => {
-      // Run multiple times to hit failure case (10% chance)
-      let failureFound = false;
-      for (let i = 0; i < 50; i++) {
-        const result = await momoGateway.processPayment(100000, 'VND', 'order-123');
-        if (!result.success) {
-          failureFound = true;
-          expect(result.providerResponse).toHaveProperty('resultCode');
-          expect(result.providerResponse.resultCode).not.toBe(0);
-          break;
-        }
-      }
-      
-      // At least one failure should occur in 50 attempts (probability > 99.99%)
-      expect(failureFound).toBe(true);
+      const randomSpy = jest.spyOn(Math, 'random')
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0.95)
+        .mockReturnValueOnce(0);
+      const delaySpy = jest.spyOn<any, any>(momoGateway as any, 'simulateDelay').mockResolvedValue(undefined);
+
+      const result = await momoGateway.processPayment(100000, 'VND', 'order-123');
+
+      expect(result.success).toBe(false);
+      expect(result.providerResponse).toHaveProperty('resultCode');
+      expect(result.providerResponse.resultCode).not.toBe(0);
+
+      delaySpy.mockRestore();
+      randomSpy.mockRestore();
     });
   });
 
@@ -445,6 +445,9 @@ describe('Mock Payment Gateways', () => {
     });
 
     test('Should generate Visa transaction ID format', async () => {
+      const delaySpy = jest.spyOn<any, any>(visaGateway as any, 'simulateDelay').mockResolvedValue(undefined);
+      const randomSpy = jest.spyOn(Math, 'random').mockReturnValueOnce(0).mockReturnValueOnce(0.1);
+
       const result = await visaGateway.processPayment(
         100000,
         'VND',
@@ -454,6 +457,9 @@ describe('Mock Payment Gateways', () => {
       if (result.success) {
         expect(result.transactionId).toMatch(/^VISA_\d+_[A-Z0-9]{12}$/);
       }
+
+      randomSpy.mockRestore();
+      delaySpy.mockRestore();
     });
 
     test('Should return Visa-specific response format on success', async () => {
@@ -485,19 +491,21 @@ describe('Mock Payment Gateways', () => {
     });
 
     test('Should return Visa error codes on failure', async () => {
-      let failureFound = false;
-      for (let i = 0; i < 50; i++) {
-        const result = await visaGateway.processPayment(100000, 'VND', 'order-123');
-        if (!result.success) {
-          failureFound = true;
-          expect(result.providerResponse).toHaveProperty('error');
-          expect(result.providerResponse.error).toHaveProperty('type', 'card_error');
-          expect(result.providerResponse.error).toHaveProperty('code');
-          break;
-        }
-      }
-      
-      expect(failureFound).toBe(true);
+      const randomSpy = jest.spyOn(Math, 'random')
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0.95)
+        .mockReturnValueOnce(0);
+      const delaySpy = jest.spyOn<any, any>(visaGateway as any, 'simulateDelay').mockResolvedValue(undefined);
+
+      const result = await visaGateway.processPayment(100000, 'VND', 'order-123');
+
+      expect(result.success).toBe(false);
+      expect(result.providerResponse).toHaveProperty('error');
+      expect(result.providerResponse.error).toHaveProperty('type', 'card_error');
+      expect(result.providerResponse.error).toHaveProperty('code');
+
+      delaySpy.mockRestore();
+      randomSpy.mockRestore();
     });
   });
 });
