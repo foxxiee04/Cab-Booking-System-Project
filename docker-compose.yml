@@ -6,8 +6,8 @@ services:
     image: postgres:16-alpine
     container_name: cab-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-cab_booking}
     ports:
       - "5433:5432"
@@ -24,8 +24,8 @@ services:
     image: mongo:7
     container_name: cab-mongodb
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:?set MONGO_USER}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?set MONGO_PASSWORD}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-mongo}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-mongo}
     ports:
       - "27017:27017"
     volumes:
@@ -55,8 +55,8 @@ services:
     image: rabbitmq:3.12-management-alpine
     container_name: cab-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?set RABBITMQ_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:?set RABBITMQ_PASS}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
       RABBITMQ_PROMETHEUS_RETURN_PER_OBJECT_METRICS: "true"
     ports:
       - "5672:5672"
@@ -82,7 +82,7 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
-      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
+      - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
       - REDIS_URL=redis://redis:6379
       - AUTH_SERVICE_URL=http://auth-service:3001
       - USER_SERVICE_URL=http://user-service:3007
@@ -93,7 +93,7 @@ services:
       - DRIVER_SERVICE_URL=http://driver-service:3003
       - PAYMENT_SERVICE_URL=http://payment-service:3004
       - NOTIFICATION_SERVICE_URL=http://notification-service:3005
-      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
     depends_on:
       - auth-service
       - user-service
@@ -117,13 +117,13 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3001
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/auth_db?schema=public
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
-      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
-      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:?set REFRESH_TOKEN_SECRET}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/auth_db?schema=public
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-test-refresh-secret}
       - JWT_EXPIRES_IN=15m
       - REFRESH_TOKEN_EXPIRES_IN=7d
-      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
     depends_on:
       postgres:
         condition: service_healthy
@@ -142,8 +142,8 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3007
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/user_db?schema=public
-      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/user_db?schema=public
+      - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
     depends_on:
       postgres:
         condition: service_healthy
@@ -160,12 +160,12 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3002
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/ride_db?schema=public
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/ride_db?schema=public
       - REDIS_URL=redis://redis:6379
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
       - PRICING_SERVICE_URL=http://pricing-service:3009
-      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
-      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
+      - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
     depends_on:
       postgres:
         condition: service_healthy
@@ -186,11 +186,11 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3003
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/driver_db?schema=public
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/driver_db?schema=public
       - REDIS_URL=redis://redis:6379
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
-      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
-      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
       - RIDE_SERVICE_URL=http://ride-service:3002
     depends_on:
       postgres:
@@ -212,9 +212,9 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3004
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/payment_db?schema=public
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
-      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/payment_db?schema=public
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
     depends_on:
       postgres:
         condition: service_healthy
@@ -233,10 +233,10 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3005
-      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/notification_db?authSource=admin
+      - MONGODB_URI=mongodb://${MONGO_USER:-mongo}:${MONGO_PASSWORD:-mongo}@mongodb:27017/notification_db?authSource=admin
       - REDIS_URL=redis://redis:6379
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
-      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -255,8 +255,8 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3010
-      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/review_db?authSource=admin
-      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
+      - MONGODB_URI=mongodb://${MONGO_USER:-mongo}:${MONGO_PASSWORD:-mongo}@mongodb:27017/review_db?authSource=admin
+      - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -274,8 +274,8 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3008
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/booking_db?schema=public
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/booking_db?schema=public
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
       - PRICING_SERVICE_URL=http://pricing-service:3009
       - RIDE_SERVICE_URL=http://ride-service:3002
     depends_on:
@@ -297,9 +297,9 @@ services:
       - NODE_ENV=development
       - PORT=3009
       - REDIS_URL=redis://redis:6379
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
-      - OSRM_BASE_URL=${OSRM_BASE_URL:?set OSRM_BASE_URL}
-      - AI_SERVICE_URL=${AI_SERVICE_URL:?set AI_SERVICE_URL}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      - OSRM_BASE_URL=${OSRM_BASE_URL:-http://router.project-osrm.org}
+      - AI_SERVICE_URL=${AI_SERVICE_URL:-http://ai-service:8000}
     depends_on:
       redis:
         condition: service_healthy

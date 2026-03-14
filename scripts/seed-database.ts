@@ -13,7 +13,9 @@ import path from 'node:path';
 const POSTGRES_HOST = process.env.POSTGRES_HOST || 'localhost';
 const POSTGRES_PORT = process.env.POSTGRES_PORT || '5433';
 const POSTGRES_USER = process.env.POSTGRES_USER || 'postgres';
-const POSTGRES_PASSWORD = process.env.POSTGRES_PASSWORD || 'postgres123';
+const POSTGRES_PASSWORD = process.env.POSTGRES_PASSWORD || 'postgres';
+const PASSWORD_HASH =
+  '$2a$10$bfRFBfVOiG/.RrxxAeQXIeltcib08rS0Lg2YUGvEh8rUD.8V2y7fi'; // password123
 
 function pgUrl(db: string) {
   return `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${db}`;
@@ -24,9 +26,9 @@ function createServicePrismaClient(serviceName: string, dbName: string) {
     process.cwd(),
     'services',
     serviceName,
-    'node_modules',
-    '.prisma',
-    'client'
+    'src',
+    'generated',
+    'prisma-client'
   );
   const { PrismaClient } = require(clientModulePath);
 
@@ -41,21 +43,21 @@ const CUSTOMERS = [
   {
     email: 'customer1@example.com',
     phone: '+84901234561',
-    password: '$2b$10$LQPFTvBcPYC5Kx4OcZpBYu5I3FQwBqxtH1iR5L8TQ0jRmXsUmxN3e', // password123
+    password: PASSWORD_HASH,
     firstName: 'Nguyen',
     lastName: 'Van A',
   },
   {
     email: 'customer2@example.com',
     phone: '+84901234562',
-    password: '$2b$10$LQPFTvBcPYC5Kx4OcZpBYu5I3FQwBqxtH1iR5L8TQ0jRmXsUmxN3e',
+    password: PASSWORD_HASH,
     firstName: 'Tran',
     lastName: 'Thi B',
   },
   {
     email: 'customer3@example.com',
     phone: '+84901234563',
-    password: '$2b$10$LQPFTvBcPYC5Kx4OcZpBYu5I3FQwBqxtH1iR5L8TQ0jRmXsUmxN3e',
+    password: PASSWORD_HASH,
     firstName: 'Le',
     lastName: 'Van C',
   },
@@ -65,7 +67,7 @@ const DRIVERS = [
   {
     email: 'driver1@example.com',
     phone: '+84911234561',
-    password: '$2b$10$LQPFTvBcPYC5Kx4OcZpBYu5I3FQwBqxtH1iR5L8TQ0jRmXsUmxN3e',
+    password: PASSWORD_HASH,
     firstName: 'Pham',
     lastName: 'Van D',
     vehicle: {
@@ -84,7 +86,7 @@ const DRIVERS = [
   {
     email: 'driver2@example.com',
     phone: '+84911234562',
-    password: '$2b$10$LQPFTvBcPYC5Kx4OcZpBYu5I3FQwBqxtH1iR5L8TQ0jRmXsUmxN3e',
+    password: PASSWORD_HASH,
     firstName: 'Vo',
     lastName: 'Thi E',
     vehicle: {
@@ -103,7 +105,7 @@ const DRIVERS = [
   {
     email: 'driver3@example.com',
     phone: '+84911234563',
-    password: '$2b$10$LQPFTvBcPYC5Kx4OcZpBYu5I3FQwBqxtH1iR5L8TQ0jRmXsUmxN3e',
+    password: PASSWORD_HASH,
     firstName: 'Hoang',
     lastName: 'Van F',
     vehicle: {
@@ -124,7 +126,7 @@ const DRIVERS = [
 const ADMIN = {
   email: 'admin@cabbooking.com',
   phone: '+84900000001',
-  password: '$2b$10$LQPFTvBcPYC5Kx4OcZpBYu5I3FQwBqxtH1iR5L8TQ0jRmXsUmxN3e',
+  password: PASSWORD_HASH,
   firstName: 'System',
   lastName: 'Admin',
 };
@@ -373,8 +375,8 @@ async function seedMongoDB() {
 
   const MONGO_HOST = process.env.MONGO_HOST || 'localhost';
   const MONGO_PORT = process.env.MONGO_PORT || '27017';
-  const MONGO_USER = process.env.MONGO_USER || 'admin';
-  const MONGO_PASSWORD = process.env.MONGO_PASSWORD || 'admin123';
+  const MONGO_USER = process.env.MONGO_USER || 'mongo';
+  const MONGO_PASSWORD = process.env.MONGO_PASSWORD || 'mongo';
 
   try {
     const mongoose = require('mongoose');

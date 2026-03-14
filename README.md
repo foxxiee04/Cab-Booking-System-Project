@@ -573,22 +573,25 @@ RabbitMQ UI: http://localhost:15672
 
 ### 8.2 Kiểm thử đã được xác nhận trong quá trình hoàn thiện backend
 
-- Unit test backend pass.
-- Contract test giữa Driver Service và Ride Service pass.
-- Docker-backed integration flow pass.
-- AI service pytest pass.
+- Ở môi trường local, các nhóm kiểm thử cốt lõi đã được chạy để xác nhận luồng backend chính.
+- Unit test backend đã được xử lý để chạy ổn định theo lệnh `npm run test:unit`.
+- Contract test giữa Driver Service và Ride Service đã được cấu hình và dùng để kiểm tra tính tương thích ở mức service boundary.
+- Docker-backed integration flow đã được dùng để kiểm tra chuỗi backend quan trọng trong môi trường gần với runtime thực tế.
+- AI service có bộ pytest riêng để kiểm tra logic phía FastAPI.
+
+Lưu ý: các kết quả trên phản ánh trạng thái kiểm chứng trong quá trình hoàn thiện backend và môi trường local. Chúng không nên được diễn đạt như cam kết rằng mọi lần chạy GitHub Actions đều đang pass tuyệt đối trên mọi nhánh hoặc mọi thời điểm.
 
 ### 8.3 Pipeline CI/CD
 
-Workflow chính nằm tại `.github/workflows/ci-cd.yml` và gồm các bước:
+Workflow chính nằm tại `.github/workflows/ci-cd.yml` và được thiết kế theo mô hình quality gate trước khi build image. Cụ thể, pipeline hiện tại gồm các job chính sau:
 
-- Cài dependency.
-- Build shared helpers.
-- Chạy unit tests.
-- Chạy contract tests.
-- Khởi động infra integration riêng và chạy integration tests thực.
-- Chạy pytest cho AI service.
-- Nếu không phải pull request, build và push Docker image lên Docker Hub.
+- `test-unit`: cài dependency, build shared helpers, sau đó chạy `npm run test:unit` với PostgreSQL, MongoDB, Redis và RabbitMQ được cấp qua GitHub Actions services.
+- `test-contract`: cài dependency, build shared helpers và chạy `npm run test:contract` để kiểm tra tính tương thích giữa một số service boundary quan trọng.
+- `test-integration`: khởi động hạ tầng tích hợp riêng bằng file compose trong `.github/docker/docker-compose.integration.yml`, build backend artifact và chạy integration runner.
+- `test-ai`: cài dependency Python và chạy `pytest -q` trong `services/ai-service`.
+- `docker-build-and-push`: chỉ chạy khi không phải pull request và chỉ bắt đầu sau khi toàn bộ job kiểm thử phía trên hoàn tất; job này build và push image của từng service lên Docker Hub.
+
+Theo đúng trạng thái hiện tại của dự án, nên mô tả pipeline này là pipeline CI/CD da duoc cau hinh va huong den tu dong hoa kiem thu, build va phat hanh image, thay vi khang dinh rang GitHub Actions da on dinh tuyet doi. Ly do la ket qua tren GitHub van con phu thuoc vao secret Docker Hub, moi truong runner, va tinh dong bo giua ma nguon voi cau hinh test trong workflow.
 
 ### 8.4 Sơ đồ pipeline kiểm thử
 
@@ -596,17 +599,26 @@ Workflow chính nằm tại `.github/workflows/ci-cd.yml` và gồm các bước
 flowchart LR
     Start[Push or Pull Request] --> Install[Install Dependencies]
     Install --> Shared[Build Shared Helpers]
-    Shared --> Unit[Run Unit Tests]
-    Shared --> Contract[Run Contract Tests]
-    Shared --> AI[Run AI Pytest]
+    Shared --> Unit[Job test-unit]
+    Shared --> Contract[Job test-contract]
+    Shared --> AI[Job test-ai]
     Shared --> Infra[Start Integration Infra]
-    Infra --> Integration[Run Backend Integration Runner]
+    Infra --> Integration[Job test-integration]
     Unit --> Gate[Quality Gate]
     Contract --> Gate
     AI --> Gate
     Integration --> Gate
-    Gate --> Push[Build and Push Docker Images]
+    Gate --> Push[Build and Push Docker Images on non-PR events]
 ```
+
+### 8.5 Nhận xét thực tế về CI/CD
+
+Ở góc nhìn báo cáo KLTN, phần CI/CD nên được chốt theo tinh thần sau:
+
+- Dự án đã có workflow GitHub Actions tương đối đầy đủ cho unit test, contract test, integration test, AI test và build/push Docker image.
+- Pipeline đã thể hiện đúng định hướng DevOps và tự động hóa kiểm thử của hệ thống microservices.
+- Tuy nhiên, cần phân biệt rõ giữa "đã cấu hình pipeline" và "pipeline luôn pass ổn định trên GitHub".
+- Với trạng thái hiện tại, cách diễn đạt chính xác nhất là: hệ thống đã xây dựng được nền tảng CI/CD khả dụng, nhưng vẫn cần tiếp tục hoàn thiện để đạt độ ổn định cao trên môi trường GitHub Actions thực tế.
 
 ## 9. Giám sát và vận hành
 
