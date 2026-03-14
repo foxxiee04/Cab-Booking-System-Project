@@ -4,6 +4,7 @@ import { createApp } from './app';
 import { logger } from './utils/logger';
 import { SocketServer } from './socket/socket-server';
 import { EventConsumer } from './events/consumer';
+import { closeMapRedis } from './routes/map';
 
 export async function start() {
   const app = createApp({
@@ -33,7 +34,16 @@ export async function start() {
       logger.info('Shutting down API Gateway gracefully');
       await eventConsumer.close();
       await socketServer.close();
-      httpServer.close();
+      await closeMapRedis();
+      await new Promise<void>((resolve, reject) => {
+        httpServer.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      });
     };
 
     process.on('SIGTERM', async () => {

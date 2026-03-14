@@ -6,9 +6,29 @@ import { logger } from '../utils/logger';
 
 const router = Router();
 
-// ── Redis client for POI caching ──
-const redis = new Redis(config.redisUrl);
-redis.on('error', (err) => logger.warn('POI Redis error', { error: err.message }));
+let redis: Redis | null = null;
+
+function getRedisClient(): Redis {
+  if (!redis) {
+    redis = new Redis(config.redisUrl, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+    });
+    redis.on('error', (err) => logger.warn('POI Redis error', { error: err.message }));
+  }
+
+  return redis;
+}
+
+export async function closeMapRedis(): Promise<void> {
+  if (!redis) {
+    return;
+  }
+
+  const client = redis;
+  redis = null;
+  await client.quit();
+}
 
 const NOMINATIM_PARAMS = {
   format: 'jsonv2',
@@ -310,10 +330,11 @@ router.get('/pois', async (req, res) => {
   }
 
   const cacheKey = poiCacheKey(lat, lng, radius, types);
+  const redisClient = getRedisClient();
 
   // ── Check cache first ──
   try {
-    const cached = await redis.get(cacheKey);
+    const cached = await redisClient.get(cacheKey);
     if (cached) {
       logger.debug('POI cache HIT', { cacheKey });
       return res.json({ success: true, data: { pois: JSON.parse(cached) } });
@@ -353,7 +374,7 @@ router.get('/pois', async (req, res) => {
 
     // ── Store in cache ──
     try {
-      await redis.setex(cacheKey, POI_CACHE_TTL, JSON.stringify(pois));
+      await redisClient.setex(cacheKey, POI_CACHE_TTL, JSON.stringify(pois));
       logger.debug('POI cache SET', { cacheKey, count: pois.length });
     } catch (err) {
       logger.warn('POI cache write error', { error: (err as Error).message });
