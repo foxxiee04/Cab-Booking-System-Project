@@ -221,7 +221,7 @@ jobs:
             needs_shared: true
           - service: booking-service
             context: ./services/booking-service
-            dockerfile: ./Dockerfile
+            dockerfile: ./services/booking-service/Dockerfile
             needs_shared: false
           - service: driver-service
             context: .
@@ -229,11 +229,11 @@ jobs:
             needs_shared: true
           - service: notification-service
             context: ./services/notification-service
-            dockerfile: ./Dockerfile
+            dockerfile: ./services/notification-service/Dockerfile
             needs_shared: false
           - service: payment-service
             context: ./services/payment-service
-            dockerfile: ./Dockerfile
+            dockerfile: ./services/payment-service/Dockerfile
             needs_shared: false
           - service: pricing-service
             context: .
@@ -241,7 +241,7 @@ jobs:
             needs_shared: true
           - service: review-service
             context: ./services/review-service
-            dockerfile: ./Dockerfile
+            dockerfile: ./services/review-service/Dockerfile
             needs_shared: false
           - service: ride-service
             context: .
@@ -249,11 +249,11 @@ jobs:
             needs_shared: true
           - service: user-service
             context: ./services/user-service
-            dockerfile: ./Dockerfile
+            dockerfile: ./services/user-service/Dockerfile
             needs_shared: false
           - service: ai-service
             context: ./services/ai-service
-            dockerfile: ./Dockerfile
+            dockerfile: ./services/ai-service/Dockerfile
             needs_shared: false
 
     steps:
