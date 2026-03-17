@@ -1,152 +1,119 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box,
-  Paper,
-  TextField,
-  Button,
   Alert,
-  CircularProgress,
-  Autocomplete,
+  Avatar,
+  Box,
+  Button,
+  Chip,
+  Paper,
+  Skeleton,
+  Stack,
+  Typography,
 } from '@mui/material';
 import {
-  MyLocation,
+  AccessTimeRounded,
+  DirectionsCarFilledRounded,
+  LocalFireDepartmentRounded,
+  MyLocationRounded,
+  RouteRounded,
+  StarsRounded,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import {
-  setPickupLocation,
-  setDropoffLocation,
-  setCurrentRide,
-} from '../store/ride.slice';
+import { setPickupLocation, setDropoffLocation, setCurrentRide } from '../store/ride.slice';
 import { setCurrentLocation } from '../store/location.slice';
-import NavigationBar from '../components/common/NavigationBar';
-import MapView from '../components/map/MapView';
-import PickupMarker from '../components/map/PickupMarker';
-import DropoffMarker from '../components/map/DropoffMarker';
 import RideBookingFlow from '../components/booking/RideBookingFlow';
-import {
-  getCurrentLocation,
-  geocodeAddress,
-  reverseGeocode,
-} from '../utils/map.utils';
+import { getCurrentLocation, reverseGeocode } from '../utils/map.utils';
+import { driverApi } from '../api/driver.api';
 import { rideApi } from '../api/ride.api';
-import { Location } from '../types';
+import { BookingMap, BookingMapLocation, NearbyDriver, RouteSummary } from '../features/booking';
 
 const HomeMap: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
-
   const { user } = useAppSelector((state) => state.auth);
-  const { currentLocation } = useAppSelector((state) => state.location);
-  const { pickupLocation, dropoffLocation } =
-    useAppSelector((state) => state.ride);
+  const { pickupLocation, dropoffLocation } = useAppSelector((state) => state.ride);
 
-  const [pickupSearch, setPickupSearch] = useState('');
-  const [dropoffSearch, setDropoffSearch] = useState('');
-  const [pickupOptions, setPickupOptions] = useState<Location[]>([]);
-  const [dropoffOptions, setDropoffOptions] = useState<Location[]>([]);
   const [error, setErrorMessage] = useState('');
   const [bookingFlowOpen, setBookingFlowOpen] = useState(false);
-  const pickupSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dropoffSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pickupAbort = useRef<AbortController | null>(null);
-  const dropoffAbort = useRef<AbortController | null>(null);
+  const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
+  const [bootstrappingLocation, setBootstrappingLocation] = useState(false);
+  const [nearbyDrivers, setNearbyDrivers] = useState<NearbyDriver[]>([]);
 
-  // Get current location on mount
   useEffect(() => {
     const fetchLocation = async () => {
+      setBootstrappingLocation(true);
       try {
         const location = await getCurrentLocation();
         dispatch(setCurrentLocation(location));
         dispatch(setPickupLocation(location));
-        
-        // Get address
+
         const address = await reverseGeocode(location.lat, location.lng);
         dispatch(setPickupLocation({ ...location, address }));
-      } catch (error) {
-        console.error('Failed to get location:', error);
+      } catch (fetchLocationError) {
+        console.error('Failed to get location:', fetchLocationError);
+      } finally {
+        setBootstrappingLocation(false);
       }
     };
 
     fetchLocation();
   }, [dispatch]);
 
-  // Check for active ride
   useEffect(() => {
     const checkActiveRide = async () => {
       try {
         const activeRide = await rideApi.getActiveRide();
-        if (activeRide && activeRide.data && activeRide.data.ride) {
+        if (activeRide?.data?.ride) {
           dispatch(setCurrentRide(activeRide.data.ride));
           navigate(`/ride/${activeRide.data.ride.id}`);
         }
-      } catch (error) {
-        console.error('Failed to check active ride:', error);
+      } catch (activeRideError) {
+        console.error('Failed to check active ride:', activeRideError);
       }
     };
 
     checkActiveRide();
   }, [dispatch, navigate]);
 
-  // Search pickup locations
-  const handlePickupSearch = async (value: string) => {
-    setPickupSearch(value);
-    if (pickupSearchTimer.current) {
-      clearTimeout(pickupSearchTimer.current);
-    }
-    if (pickupAbort.current) {
-      pickupAbort.current.abort();
-    }
-    if (value.trim().length < 3) {
-      setPickupOptions([]);
+  useEffect(() => {
+    if (!pickupLocation?.lat || !pickupLocation?.lng) {
+      setNearbyDrivers([]);
       return;
     }
-    pickupSearchTimer.current = setTimeout(async () => {
-      const controller = new AbortController();
-      pickupAbort.current = controller;
-      try {
-        const results = await geocodeAddress(value.trim(), { signal: controller.signal });
-        setPickupOptions(results);
-      } catch (error: any) {
-        if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
-          return;
-        }
-        console.error('Pickup search failed:', error);
-      }
-    }, 350);
-  };
 
-  // Search dropoff locations
-  const handleDropoffSearch = async (value: string) => {
-    setDropoffSearch(value);
-    if (dropoffSearchTimer.current) {
-      clearTimeout(dropoffSearchTimer.current);
-    }
-    if (dropoffAbort.current) {
-      dropoffAbort.current.abort();
-    }
-    if (value.trim().length < 3) {
-      setDropoffOptions([]);
-      return;
-    }
-    dropoffSearchTimer.current = setTimeout(async () => {
-      const controller = new AbortController();
-      dropoffAbort.current = controller;
-      try {
-        const results = await geocodeAddress(value.trim(), { signal: controller.signal });
-        setDropoffOptions(results);
-      } catch (error: any) {
-        if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
-          return;
-        }
-        console.error('Dropoff search failed:', error);
-      }
-    }, 350);
-  };
+    let cancelled = false;
 
-  // Open booking flow when both locations are selected
+    const fetchNearbyDrivers = async () => {
+      try {
+        const response = await driverApi.getNearbyDrivers({
+          lat: pickupLocation.lat,
+          lng: pickupLocation.lng,
+          radius: 4,
+        });
+
+        if (!cancelled) {
+          setNearbyDrivers(response.data.drivers);
+        }
+      } catch (nearbyDriversError) {
+        if (!cancelled) {
+          console.error('Failed to fetch nearby drivers:', nearbyDriversError);
+          setNearbyDrivers([]);
+        }
+      }
+    };
+
+    fetchNearbyDrivers();
+    const interval = window.setInterval(fetchNearbyDrivers, 20000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [pickupLocation?.lat, pickupLocation?.lng]);
+
   const handleOpenBooking = () => {
     if (pickupLocation && dropoffLocation) {
       setBookingFlowOpen(true);
@@ -155,202 +122,144 @@ const HomeMap: React.FC = () => {
     }
   };
 
-  // Handle successful ride creation
   const handleRideCreated = (rideId: string) => {
     navigate(`/ride/${rideId}`);
   };
 
-  // Memoize map center calculation to prevent unnecessary re-renders
-  // Priority: dropoff > pickup > current location > default HCM center
-  const mapCenter = useMemo(() => {
-    if (dropoffLocation) return dropoffLocation;
-    if (pickupLocation) return pickupLocation;
-    if (currentLocation) return currentLocation;
-    return { lat: 10.762622, lng: 106.660172 }; // Default: Ho Chi Minh City center
-  }, [dropoffLocation, pickupLocation, currentLocation]);
-
-  // GPS status
-  const [gpsReady, setGpsReady] = useState(false);
-  useEffect(() => {
-    if (currentLocation) setGpsReady(true);
-  }, [currentLocation]);
-
-  // Re-center to current location
-  const handleRecenter = async () => {
-    try {
-      const location = await getCurrentLocation();
-      dispatch(setCurrentLocation(location));
-      dispatch(setPickupLocation(location));
-      const address = await reverseGeocode(location.lat, location.lng);
-      dispatch(setPickupLocation({ ...location, address }));
-      setPickupSearch(address);
-    } catch (err) {
-      console.error('Failed to get location:', err);
+  const routeMeta = useMemo(() => {
+    if (!routeSummary) {
+      return [] as Array<{ icon: React.ReactElement; label: string }>;
     }
+
+    return [
+      { icon: <RouteRounded />, label: routeSummary.distanceText },
+      { icon: <AccessTimeRounded />, label: routeSummary.durationText },
+    ];
+  }, [routeSummary]);
+
+  const normalizeLocation = (location: BookingMapLocation | null) => {
+    if (!location) {
+      return null;
+    }
+
+    return {
+      lat: location.lat,
+      lng: location.lng,
+      address: location.address,
+    };
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* Navigation Bar */}
-      <NavigationBar title={t('app.title')} />
-
-      {/* Main Content */}
-      <Box sx={{ flexGrow: 1, position: 'relative', mt: 8 }}>
-        {/* Map */}
-        <MapView center={mapCenter} height="100%">
-          {pickupLocation && <PickupMarker location={pickupLocation} />}
-          {dropoffLocation && <DropoffMarker location={dropoffLocation} />}
-        </MapView>
-
-        {/* GPS recenter button */}
-        <Box sx={{
-          position: 'absolute',
-          bottom: 320,
-          right: 16,
-          zIndex: 1000,
-        }}>
-          <Paper
-            elevation={3}
-            onClick={handleRecenter}
-            sx={{
-              width: 44, height: 44,
-              borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer',
-              '&:hover': { bgcolor: 'grey.100' },
-            }}
-          >
-            <MyLocation sx={{ color: gpsReady ? 'primary.main' : 'grey.400' }} />
-          </Paper>
-        </Box>
-
-        {/* ── Bottom booking card ─────────────────────────────────── */}
-        <Paper
-          elevation={6}
-          sx={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            zIndex: 1000,
-            borderRadius: '20px 20px 0 0',
-            p: 2.5,
-            pt: 1.5,
-            boxShadow: '0 -4px 20px rgba(0,0,0,0.12)',
-          }}
-        >
-          {/* Drag handle */}
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-            <Box sx={{ width: 40, height: 4, borderRadius: 2, bgcolor: 'grey.300' }} />
+    <Box sx={{ height: '100%', display: 'grid', gridTemplateRows: 'auto 1fr auto', gap: 1.5, pb: 1.5 }}>
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2,
+          borderRadius: 5,
+          background: 'linear-gradient(135deg, rgba(14,165,233,0.10), rgba(37,99,235,0.18))',
+          border: '1px solid rgba(59,130,246,0.12)',
+        }}
+      >
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48 }} src={user?.avatar}>
+            {user?.firstName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase()}
+          </Avatar>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="body2" color="text.secondary">
+              {t('app.welcome', { name: user?.firstName || 'bạn' })}
+            </Typography>
+            <Typography variant="h6" fontWeight={800}>
+              {t('home.mobileHeadline', 'Bạn muốn đi đâu hôm nay?')}
+            </Typography>
           </Box>
+        </Stack>
 
-          {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setErrorMessage('')}>{error}</Alert>}
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 2 }}>
+          <Chip icon={<DirectionsCarFilledRounded />} label={`${nearbyDrivers.length} ${t('home.nearbyDrivers', 'tài xế gần bạn')}`} color="primary" />
+          <Chip icon={<StarsRounded />} label={t('home.premiumExperience', 'Luồng đặt xe mobile-first')} variant="outlined" />
+          <Chip icon={<LocalFireDepartmentRounded />} label={t('home.fastEta', 'ETA và giá được cập nhật tức thì')} variant="outlined" />
+        </Stack>
+      </Paper>
 
-          {/* Location inputs with connecting dots */}
-          <Box sx={{ display: 'flex', gap: 1.5 }}>
-            {/* Dots column */}
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 2.5, width: 20 }}>
-              <Box sx={{
-                width: 12, height: 12, borderRadius: '50%',
-                bgcolor: '#4CAF50', border: '2px solid white',
-                boxShadow: '0 0 0 2px #4CAF50',
-              }} />
-              <Box sx={{ width: 2, height: 40, bgcolor: 'grey.300', my: 0.5 }} />
-              <Box sx={{
-                width: 12, height: 12, borderRadius: 1,
-                bgcolor: '#F44336', border: '2px solid white',
-                boxShadow: '0 0 0 2px #F44336',
-              }} />
-            </Box>
-
-            {/* Inputs column */}
-            <Box sx={{ flex: 1 }}>
-              {/* Pickup Location */}
-              <Autocomplete
-                freeSolo
-                options={pickupOptions}
-                getOptionLabel={(option: any) => option.address || ''}
-                inputValue={pickupSearch}
-                onInputChange={(_, value) => handlePickupSearch(value)}
-                onChange={(_, value: any) => {
-                  if (value) {
-                    dispatch(setPickupLocation(value));
-                    setPickupSearch(value.address || '');
-                  }
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    placeholder={t('home.pickupPlaceholder', 'Where to pick you up?')}
-                    variant="outlined"
-                    size="small"
-                    sx={{
-                      mb: 1.5,
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 2,
-                        bgcolor: 'grey.50',
-                      },
-                    }}
-                    fullWidth
-                  />
-                )}
-              />
-
-              {/* Dropoff Location */}
-              <Autocomplete
-                freeSolo
-                options={dropoffOptions}
-                getOptionLabel={(option: any) => option.address || ''}
-                inputValue={dropoffSearch}
-                onInputChange={(_, value) => handleDropoffSearch(value)}
-                onChange={(_, value: any) => {
-                  if (value) {
-                    dispatch(setDropoffLocation(value));
-                    setDropoffSearch(value.address || '');
-                  }
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    placeholder={t('home.dropoffPlaceholder', 'Where are you going?')}
-                    variant="outlined"
-                    size="small"
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 2,
-                        bgcolor: 'grey.50',
-                      },
-                    }}
-                    fullWidth
-                  />
-                )}
-              />
-            </Box>
+      <Box sx={{ position: 'relative', minHeight: 0, borderRadius: 6, overflow: 'hidden', bgcolor: '#eff6ff', boxShadow: '0 18px 48px rgba(15,23,42,0.12)' }}>
+        {bootstrappingLocation && !pickupLocation ? (
+          <Box sx={{ p: 2, height: '100%' }}>
+            <Skeleton variant="rectangular" width="100%" height="100%" sx={{ minHeight: 420, borderRadius: 6 }} />
           </Box>
-
-          {/* Request Ride Button */}
-          <Button
-            fullWidth
-            variant="contained"
-            size="large"
-            onClick={handleOpenBooking}
-            disabled={!pickupLocation || !dropoffLocation}
-            sx={{
-              mt: 2,
-              py: 1.8,
-              fontSize: '1rem',
-              fontWeight: 700,
-              borderRadius: 3,
-              textTransform: 'none',
-              boxShadow: !pickupLocation || !dropoffLocation ? 'none' : '0 4px 12px rgba(25,118,210,0.3)',
-            }}
-          >
-            {t('home.continueBooking', 'Book a Ride')}
-          </Button>
-        </Paper>
+        ) : (
+          <BookingMap
+            pickup={normalizeLocation(pickupLocation)}
+            dropoff={normalizeLocation(dropoffLocation)}
+            nearbyDrivers={nearbyDrivers}
+            onPickupChange={(location) => dispatch(setPickupLocation(normalizeLocation(location)))}
+            onDropoffChange={(location) => dispatch(setDropoffLocation(normalizeLocation(location)))}
+            onRouteComputed={setRouteSummary}
+            onError={setErrorMessage}
+            height="100%"
+          />
+        )}
       </Box>
 
-      {/* Ride Booking Flow Modal */}
+      <Paper
+        elevation={8}
+        sx={{
+          borderRadius: 5,
+          p: 2.25,
+          backgroundColor: 'rgba(255,255,255,0.96)',
+          backdropFilter: 'blur(18px)',
+          border: '1px solid rgba(148,163,184,0.14)',
+        }}
+      >
+        {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setErrorMessage('')}>{error}</Alert>}
+
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
+          <Chip icon={<MyLocationRounded />} label={pickupLocation?.address || t('home.pickupHint', 'Chọn điểm đón')} size="small" color="success" variant="outlined" />
+          {routeMeta.map((item) => (
+            <Chip key={item.label} icon={item.icon} label={item.label} size="small" variant="outlined" />
+          ))}
+        </Stack>
+
+        <Typography variant="h6" fontWeight={800} sx={{ mb: 0.5 }}>
+          {t('home.bookingHeadline', 'Đặt xe theo luồng 3 bước')}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {t('home.bookingBody', 'Chọn điểm đón, xem quãng đường và ETA, sau đó chọn loại xe cùng giá ước tính ngay trong bottom sheet.')}
+        </Typography>
+
+        <Stack direction="row" spacing={1.25} sx={{ mb: 2 }}>
+          <Paper variant="outlined" sx={{ flex: 1, p: 1.5, borderRadius: 3 }}>
+            <Typography variant="overline" color="text.secondary">{t('home.stepOne', 'Bước 1')}</Typography>
+            <Typography variant="subtitle2" fontWeight={800}>{t('home.stepOneBody', 'Chọn điểm đón và điểm đến')}</Typography>
+          </Paper>
+          <Paper variant="outlined" sx={{ flex: 1, p: 1.5, borderRadius: 3 }}>
+            <Typography variant="overline" color="text.secondary">{t('home.stepTwo', 'Bước 2')}</Typography>
+            <Typography variant="subtitle2" fontWeight={800}>{t('home.stepTwoBody', 'Xem loại xe và giá')}</Typography>
+          </Paper>
+          <Paper variant="outlined" sx={{ flex: 1, p: 1.5, borderRadius: 3 }}>
+            <Typography variant="overline" color="text.secondary">{t('home.stepThree', 'Bước 3')}</Typography>
+            <Typography variant="subtitle2" fontWeight={800}>{t('home.stepThreeBody', 'Tìm tài xế gần nhất')}</Typography>
+          </Paper>
+        </Stack>
+
+        <Button
+          fullWidth
+          variant="contained"
+          size="large"
+          onClick={handleOpenBooking}
+          disabled={!pickupLocation || !dropoffLocation}
+          sx={{
+            py: 1.65,
+            fontSize: '1rem',
+            fontWeight: 800,
+            borderRadius: 3.5,
+            textTransform: 'none',
+            boxShadow: !pickupLocation || !dropoffLocation ? 'none' : '0 10px 24px rgba(37,99,235,0.28)',
+          }}
+        >
+          {t('home.continueBooking', 'Tiếp tục đặt xe')}
+        </Button>
+      </Paper>
+
       <RideBookingFlow
         open={bookingFlowOpen}
         onClose={() => setBookingFlowOpen(false)}

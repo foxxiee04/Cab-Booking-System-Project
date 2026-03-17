@@ -13,6 +13,6 @@
     "declarationMap": true,
     "sourceMap": true
   },
-  "include": ["index.ts", "api-client/**/*", "types/**/*", "utils/**/*"],
+  "include": ["index.ts", "api-client/**/*", "types/**/*", "utils/**/*", "grpc/**/*"],
   "exclude": ["node_modules", "dist", "**/__tests__/**"]
 }

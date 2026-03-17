@@ -18,19 +18,23 @@ export const reviewController = {
       } = req.body;
 
       const reviewerId = req.headers['x-user-id'] as string;
-      const reviewerName = req.headers['x-user-name'] as string;
+      const reviewerName =
+        (req.headers['x-user-name'] as string)
+        || (req.body?.reviewerName as string)
+        || (req.headers['x-user-email'] as string)
+        || 'Anonymous Reviewer';
 
       if (!reviewerId) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      if (!rideId || !bookingId || !type || !revieweeId || !revieweeName || !rating) {
+      if (!rideId || !type || !revieweeId || !revieweeName || !rating) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
       const review = await reviewService.createReview({
         rideId,
-        bookingId,
+        bookingId: bookingId || rideId,
         type: type as ReviewType,
         reviewerId,
         reviewerName,

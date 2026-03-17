@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Docker Swarm Stack for Production Deployment
 # Deploy: docker stack deploy -c docker-stack.yml cab-booking
 
@@ -83,10 +81,9 @@ services:
 
   # ============ Microservices ============
   api-gateway:
-    image: ${REGISTRY:-localhost:5000}/cab-api-gateway:${TAG:-latest}
+    image: ${DOCKERHUB_USERNAME}/cab-api-gateway:${IMAGE_TAG:-latest}
     ports:
-      - "80:3000"
-      - "443:3000"
+      - "3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -112,10 +109,14 @@ services:
         - "traefik.http.routers.api.rule=Host(`api.cabbooking.local`)"
 
   auth-service:
-    image: ${REGISTRY:-localhost:5000}/cab-auth-service:${TAG:-latest}
+    image: ${DOCKERHUB_USERNAME}/cab-auth-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3001:3001"
+      - "50051:50051"
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - GRPC_PORT=50051
     env_file:
       - ./env/auth.env
     networks:
@@ -131,10 +132,14 @@ services:
           memory: 256M
 
   user-service:
-    image: ${REGISTRY:-localhost:5000}/cab-user-service:${TAG:-latest}
+    image: ${DOCKERHUB_USERNAME}/cab-user-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3007:3007"
+      - "50052:50052"
     environment:
       - NODE_ENV=production
       - PORT=3007
+      - GRPC_PORT=50052
     env_file:
       - ./env/user.env
     networks:
@@ -150,10 +155,14 @@ services:
           memory: 256M
 
   ride-service:
-    image: ${REGISTRY:-localhost:5000}/cab-ride-service:${TAG:-latest}
+    image: ${DOCKERHUB_USERNAME}/cab-ride-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3002:3002"
+      - "50054:50054"
     environment:
       - NODE_ENV=production
       - PORT=3002
+      - GRPC_PORT=50054
     env_file:
       - ./env/ride.env
     networks:
@@ -169,10 +178,14 @@ services:
           memory: 256M
 
   driver-service:
-    image: ${REGISTRY:-localhost:5000}/cab-driver-service:${TAG:-latest}
+    image: ${DOCKERHUB_USERNAME}/cab-driver-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3003:3003"
+      - "50055:50055"
     environment:
       - NODE_ENV=production
       - PORT=3003
+      - GRPC_PORT=50055
     env_file:
       - ./env/driver.env
     networks:
@@ -188,10 +201,14 @@ services:
           memory: 256M
 
   payment-service:
-    image: ${REGISTRY:-localhost:5000}/cab-payment-service:${TAG:-latest}
+    image: ${DOCKERHUB_USERNAME}/cab-payment-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3004:3004"
+      - "50056:50056"
     environment:
       - NODE_ENV=production
       - PORT=3004
+      - GRPC_PORT=50056
     env_file:
       - ./env/payment.env
     networks:
@@ -207,10 +224,14 @@ services:
           memory: 256M
 
   notification-service:
-    image: ${REGISTRY:-localhost:5000}/cab-notification-service:${TAG:-latest}
+    image: ${DOCKERHUB_USERNAME}/cab-notification-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3005:3005"
+      - "50058:50058"
     environment:
       - NODE_ENV=production
       - PORT=3005
+      - GRPC_PORT=50058
     env_file:
       - ./env/notification.env
     networks:
@@ -226,10 +247,14 @@ services:
           memory: 256M
 
   review-service:
-    image: ${REGISTRY:-localhost:5000}/cab-review-service:${TAG:-latest}
+    image: ${DOCKERHUB_USERNAME}/cab-review-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3010:3010"
+      - "50059:50059"
     environment:
       - NODE_ENV=production
       - PORT=3010
+      - GRPC_PORT=50059
     env_file:
       - ./env/review.env
     networks:
@@ -245,10 +270,14 @@ services:
           memory: 256M
 
   booking-service:
-    image: ${REGISTRY:-localhost:5000}/cab-booking-service:${TAG:-latest}
+    image: ${DOCKERHUB_USERNAME}/cab-booking-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3008:3008"
+      - "50053:50053"
     environment:
       - NODE_ENV=production
       - PORT=3008
+      - GRPC_PORT=50053
     env_file:
       - ./env/booking.env
     networks:
@@ -264,10 +293,14 @@ services:
           memory: 256M
 
   pricing-service:
-    image: ${REGISTRY:-localhost:5000}/cab-pricing-service:${TAG:-latest}
+    image: ${DOCKERHUB_USERNAME}/cab-pricing-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3009:3009"
+      - "50057:50057"
     environment:
       - NODE_ENV=production
       - PORT=3009
+      - GRPC_PORT=50057
       - AI_SERVICE_URL=http://ai-service:8000
     env_file:
       - ./env/pricing.env
@@ -287,7 +320,7 @@ services:
 
   # ============ AI Service (Swarm) ============
   ai-service:
-    image: ${REGISTRY:-localhost:5000}/cab-ai-service:${TAG:-latest}
+    image: ${DOCKERHUB_USERNAME}/cab-ai-service:${IMAGE_TAG:-latest}
     environment:
       - DEBUG=False
       - HOST=0.0.0.0

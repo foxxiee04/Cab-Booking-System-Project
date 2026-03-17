@@ -25,8 +25,8 @@ const Customers: React.FC = () => {
           limit: PAGE_SIZE,
           offset: page * PAGE_SIZE,
         });
-        setRows(response.data.customers || []);
-        setTotal(response.data.total || 0);
+        setRows(response.data?.customers || []);
+        setTotal(response.data?.total || 0);
       } catch (err: any) {
         setError(err.response?.data?.error?.message || t('errors.loadCustomers'));
       } finally {
@@ -35,7 +35,7 @@ const Customers: React.FC = () => {
     };
 
     fetchCustomers();
-  }, [page]);
+  }, [page, t]);
 
   const columns: GridColDef<Customer>[] = [
     { field: 'id', headerName: t('columns.customerId'), flex: 1, minWidth: 200 },

@@ -1,9 +1,9 @@
 import { BookingStatus } from '../models/booking.model';
 import { EventPublisher } from '../events/publisher';
 import { logger } from '../utils/logger';
-import axios from 'axios';
 import { config } from '../config';
 import { prisma } from '../config/db';
+import { pricingGrpcClient } from '../grpc/pricing.client';
 
 export class BookingService {
   private eventPublisher: EventPublisher;
@@ -32,17 +32,14 @@ export class BookingService {
       let estimatedFare, estimatedDistance, estimatedDuration, surgeMultiplier;
       
       try {
-        const pricingResponse = await axios.post(`${config.services.pricing}/api/pricing/estimate`, {
+        const estimate = await pricingGrpcClient.estimateFare({
           pickupLat: data.pickupLat,
           pickupLng: data.pickupLng,
           dropoffLat: data.dropoffLat,
           dropoffLng: data.dropoffLng,
           vehicleType: data.vehicleType,
-        }, {
-          timeout: 5000,
         });
 
-        const estimate = pricingResponse.data.data;
         estimatedFare = estimate.fare;
         estimatedDistance = estimate.distance;
         estimatedDuration = estimate.duration;

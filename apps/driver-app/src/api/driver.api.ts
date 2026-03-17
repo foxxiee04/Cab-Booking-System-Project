@@ -1,6 +1,30 @@
 import axiosInstance from './axios.config';
 import { ApiResponse, Driver, DriverRegistration, Location, Earnings } from '../types';
 
+const normalizeDriver = (driver: any): Driver => ({
+  id: driver.id,
+  userId: driver.userId,
+  vehicleType: driver.vehicleType,
+  vehicleMake: driver.vehicleMake || driver.vehicleBrand || '',
+  vehicleModel: driver.vehicleModel || '',
+  vehicleColor: driver.vehicleColor || '',
+  licensePlate: driver.licensePlate || driver.vehiclePlate || '',
+  licenseNumber: driver.licenseNumber || '',
+  rating: driver.rating ?? driver.ratingAverage ?? 0,
+  totalRides: driver.totalRides ?? driver.ratingCount ?? 0,
+  isOnline: driver.isOnline ?? ['ONLINE', 'BUSY'].includes(driver.availabilityStatus),
+  isAvailable: driver.isAvailable ?? driver.availabilityStatus === 'ONLINE',
+  currentLocation:
+    driver.currentLocation || (driver.lastLocationLat != null && driver.lastLocationLng != null
+      ? {
+          lat: driver.lastLocationLat,
+          lng: driver.lastLocationLng,
+        }
+      : null),
+  createdAt: driver.createdAt,
+  updatedAt: driver.updatedAt,
+});
+
 const mapVehicleType = (type: DriverRegistration['vehicleType']): 'CAR' | 'SUV' | 'MOTORCYCLE' => {
   switch (type) {
     case 'ECONOMY':
@@ -44,25 +68,49 @@ export const driverApi = {
   // Get driver profile
   getProfile: async (): Promise<ApiResponse<{ driver: Driver }>> => {
     const response = await axiosInstance.get('/drivers/me');
-    return response.data;
+    const payload = response.data?.data || response.data;
+    return {
+      ...response.data,
+      data: {
+        driver: normalizeDriver(payload.driver || payload),
+      },
+    };
   },
 
   // Update driver profile
   updateProfile: async (data: Partial<Driver>): Promise<ApiResponse<{ driver: Driver }>> => {
     const response = await axiosInstance.put('/drivers/me', data);
-    return response.data;
+    const payload = response.data?.data || response.data;
+    return {
+      ...response.data,
+      data: {
+        driver: normalizeDriver(payload.driver || payload),
+      },
+    };
   },
 
   // Go online
   goOnline: async (): Promise<ApiResponse<{ driver: Driver }>> => {
     const response = await axiosInstance.post('/drivers/me/online');
-    return response.data;
+    const payload = response.data?.data || response.data;
+    return {
+      ...response.data,
+      data: {
+        driver: normalizeDriver(payload.driver || payload),
+      },
+    };
   },
 
   // Go offline
   goOffline: async (): Promise<ApiResponse<{ driver: Driver }>> => {
     const response = await axiosInstance.post('/drivers/me/offline');
-    return response.data;
+    const payload = response.data?.data || response.data;
+    return {
+      ...response.data,
+      data: {
+        driver: normalizeDriver(payload.driver || payload),
+      },
+    };
   },
 
   // Update location

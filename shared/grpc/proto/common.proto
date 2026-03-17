@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package cab.booking.grpc.common;
+
+service HealthService {
+  rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc Ready(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string service = 1;
+  string status = 2;
+  map<string, bool> dependencies = 3;
+}

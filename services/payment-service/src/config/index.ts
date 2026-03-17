@@ -13,6 +13,7 @@ function getRequiredEnv(name: string): string {
 
 export const config = {
   port: parseInt(process.env.PORT || '3004', 10),
+  grpcPort: parseInt(process.env.GRPC_PORT || '50056', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   
   database: {

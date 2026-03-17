@@ -2,10 +2,16 @@
 
 import logging
 import joblib
-from typing import Dict, Tuple
+from typing import Dict
 import numpy as np
 
-from app.schemas.prediction import PredictionRequest, TimeOfDayEnum, DayTypeEnum
+from app.schemas.prediction import (
+    ConfidenceLevelEnum,
+    DayTypeEnum,
+    DemandLevelEnum,
+    PredictionRequest,
+    TimeOfDayEnum,
+)
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -91,7 +97,12 @@ class PredictionService:
             
             return {
                 'eta_minutes': eta_minutes,
-                'price_multiplier': round(price_multiplier, 2)
+                'price_multiplier': round(price_multiplier, 2),
+                'insights': self._build_operational_insights(
+                    request,
+                    eta_minutes=eta_minutes,
+                    price_multiplier=round(price_multiplier, 2),
+                ),
             }
             
         except Exception as e:
@@ -100,8 +111,69 @@ class PredictionService:
             logger.warning("Returning default values due to prediction error")
             return {
                 'eta_minutes': 20,
-                'price_multiplier': 1.0
+                'price_multiplier': 1.0,
+                'insights': self._build_operational_insights(
+                    request,
+                    eta_minutes=20,
+                    price_multiplier=1.0,
+                ),
             }
+
+    def _build_operational_insights(
+        self,
+        request: PredictionRequest,
+        eta_minutes: int,
+        price_multiplier: float,
+    ) -> Dict[str, object]:
+        demand_score = 0
+
+        if request.time_of_day == TimeOfDayEnum.RUSH_HOUR:
+          demand_score += 2
+        if request.day_type == DayTypeEnum.WEEKEND:
+          demand_score += 1
+        if request.distance_km >= 12:
+          demand_score += 1
+        if price_multiplier >= 1.3:
+          demand_score += 1
+
+        if demand_score >= 4:
+            demand_level = DemandLevelEnum.HIGH
+        elif demand_score >= 2:
+            demand_level = DemandLevelEnum.MEDIUM
+        else:
+            demand_level = DemandLevelEnum.LOW
+
+        if request.distance_km <= 8 and request.time_of_day == TimeOfDayEnum.OFF_PEAK:
+            eta_confidence = ConfidenceLevelEnum.HIGH
+        elif request.distance_km <= 20:
+            eta_confidence = ConfidenceLevelEnum.MEDIUM
+        else:
+            eta_confidence = ConfidenceLevelEnum.LOW
+
+        recommended_radius = 2.5
+        if demand_level == DemandLevelEnum.MEDIUM:
+            recommended_radius = 4.0
+        elif demand_level == DemandLevelEnum.HIGH:
+            recommended_radius = 6.0
+
+        if eta_minutes >= 35:
+            recommended_radius = min(recommended_radius + 1.0, 10.0)
+
+        if price_multiplier >= 1.5:
+            surge_reason = 'Demand is significantly above normal supply expectations'
+        elif request.time_of_day == TimeOfDayEnum.RUSH_HOUR:
+            surge_reason = 'Rush hour demand is increasing ETA and fare pressure'
+        elif request.day_type == DayTypeEnum.WEEKEND:
+            surge_reason = 'Weekend travel pattern is raising pickup competition'
+        else:
+            surge_reason = 'Normal traffic and supply conditions'
+
+        return {
+            'demand_level': demand_level.value,
+            'eta_confidence': eta_confidence.value,
+            'recommended_driver_radius_km': round(recommended_radius, 1),
+            'surge_reason': surge_reason,
+        }
 
 
 # Global instance

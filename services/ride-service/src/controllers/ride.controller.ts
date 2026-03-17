@@ -1,10 +1,9 @@
 import { Request, Response } from 'express';
-import axios from 'axios';
-import { InternalDriverByUserResponse } from '../../../../shared/dist';
 import { config } from '../config';
 import { RideService } from '../services/ride.service';
 import { logger } from '../utils/logger';
 import { UserRole } from '../enums/ride-status.enum';
+import { driverGrpcClient } from '../grpc/driver.client';
 
 interface AuthRequest extends Request {
   user?: { userId: string; role: string };
@@ -192,12 +191,9 @@ export class RideController {
       let driverId = userId;
       
       try {
-        const driverRes = await axios.get<InternalDriverByUserResponse>(
-          `${config.services.driver}/internal/drivers/by-user/${userId}`,
-          { headers: { 'x-internal-token': config.internalServiceToken } }
-        );
-        if (driverRes.data?.data?.driver?.id) {
-          driverId = driverRes.data.data.driver.id;
+        const driver = await driverGrpcClient.getDriverByUserId(userId);
+        if (driver?.id) {
+          driverId = driver.id;
         }
       } catch (err) {
         logger.warn('Could not fetch driver profile, using userId as driverId');

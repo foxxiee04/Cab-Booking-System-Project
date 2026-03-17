@@ -25,8 +25,8 @@ const Payments: React.FC = () => {
           limit: PAGE_SIZE,
           offset: page * PAGE_SIZE,
         });
-        setRows(response.data.payments || []);
-        setTotal(response.data.total || 0);
+        setRows(response.data?.payments || []);
+        setTotal(response.data?.total || 0);
       } catch (err: any) {
         setError(err.response?.data?.error?.message || t('errors.loadPayments'));
       } finally {
@@ -35,7 +35,7 @@ const Payments: React.FC = () => {
     };
 
     fetchPayments();
-  }, [page]);
+  }, [page, t]);
 
   const columns: GridColDef<Payment>[] = [
     { field: 'id', headerName: t('columns.paymentId'), flex: 1, minWidth: 210 },

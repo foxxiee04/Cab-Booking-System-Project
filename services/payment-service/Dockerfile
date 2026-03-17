@@ -1,26 +1,23 @@
 FROM node:20-slim
 
-WORKDIR /app
+WORKDIR /workspace/services/payment-service
 
-# Prisma needs OpenSSL at runtime
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends openssl ca-certificates \
 	&& rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-COPY package*.json ./
+COPY services/payment-service/package*.json ./
 RUN npm ci
 
-# Copy Prisma schema
-COPY prisma ./prisma
+COPY shared/package*.json /workspace/shared/
+RUN npm install --prefix /workspace/shared --omit=dev
 
-# Generate Prisma client
+COPY services/payment-service/prisma ./prisma
 RUN npx prisma generate
 
-# Copy source
-COPY . .
+COPY services/payment-service .
+COPY shared/dist /workspace/shared/dist
 
-# Build TypeScript
 RUN npm run build && cp -r src/generated dist/
 
 EXPOSE 3004

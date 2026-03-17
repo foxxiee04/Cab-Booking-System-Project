@@ -16,6 +16,20 @@ class DayTypeEnum(str, Enum):
     WEEKEND = "WEEKEND"
 
 
+class DemandLevelEnum(str, Enum):
+    """Demand classification inferred from prediction context"""
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
+
+class ConfidenceLevelEnum(str, Enum):
+    """Prediction confidence bucket"""
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
+
 class PredictionRequest(BaseModel):
     """Request schema for prediction endpoint"""
     
@@ -54,6 +68,26 @@ class PredictionRequest(BaseModel):
 
 class PredictionResponse(BaseModel):
     """Response schema for prediction endpoint"""
+
+    class PredictionInsights(BaseModel):
+        demand_level: DemandLevelEnum = Field(
+            ...,
+            description="Predicted demand intensity for operational decisions"
+        )
+        eta_confidence: ConfidenceLevelEnum = Field(
+            ...,
+            description="Confidence bucket for ETA prediction"
+        )
+        recommended_driver_radius_km: float = Field(
+            ...,
+            ge=1.0,
+            le=10.0,
+            description="Recommended driver search radius in kilometers"
+        )
+        surge_reason: str = Field(
+            ...,
+            description="Human-readable explanation for the predicted surge"
+        )
     
     eta_minutes: int = Field(
         ...,
@@ -79,6 +113,10 @@ class PredictionResponse(BaseModel):
         ...,
         description="Input day type"
     )
+    insights: PredictionInsights = Field(
+        ...,
+        description="Operational hints derived from the prediction"
+    )
     
     model_config = {
         "json_schema_extra": {
@@ -88,7 +126,13 @@ class PredictionResponse(BaseModel):
                     "price_multiplier": 1.08,
                     "distance_km": 8.5,
                     "time_of_day": "RUSH_HOUR",
-                    "day_type": "WEEKDAY"
+                    "day_type": "WEEKDAY",
+                    "insights": {
+                        "demand_level": "MEDIUM",
+                        "eta_confidence": "HIGH",
+                        "recommended_driver_radius_km": 3.5,
+                        "surge_reason": "Rush hour demand is increasing ETA and fare pressure"
+                    }
                 }
             ]
         }

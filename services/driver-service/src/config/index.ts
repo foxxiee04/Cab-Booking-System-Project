@@ -4,6 +4,7 @@ dotenv.config();
 
 export const config = {
   port: parseInt(process.env.PORT || '3003', 10),
+  grpcPort: parseInt(process.env.GRPC_PORT || '50055', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   
   database: {

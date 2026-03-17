@@ -1,98 +1,55 @@
-import { Router } from 'express';
-import { createProxyMiddleware, Options } from 'http-proxy-middleware';
-import { config } from '../config';
+import { Router, Request, Response } from 'express';
 import { logger } from '../utils/logger';
+import { grpcBridgeClient, ForwardableRequestLike } from '../grpc/bridge.client';
 
 const router = Router();
 
-// Proxy options factory
-const createProxyOptions = (target: string, pathRewrite?: Record<string, string>): Options => ({
-  target,
-  changeOrigin: true,
-  pathRewrite,
-  onError: (err, req, res) => {
-    logger.error(`Proxy error: ${err.message}`, { target, path: req.path });
-    (res as any).status(502).json({
+function normalizeProxyPath(service: keyof typeof import('../config').config.grpcServices, originalUrl: string): string {
+  const path = originalUrl.split('?')[0];
+
+  if (service === 'review') {
+    return path.replace(/^\/api\/reviews\/reviews(?=\/|$)/, '/api/reviews');
+  }
+
+  return path;
+}
+
+async function forward(service: keyof typeof import('../config').config.grpcServices, req: Request, res: Response) {
+  try {
+    const normalizedPath = normalizeProxyPath(service, req.originalUrl);
+    const forwardedRequest: ForwardableRequestLike = {
+      method: req.method,
+      originalUrl: normalizedPath,
+      query: req.query,
+      body: req.body,
+      headers: req.headers,
+    };
+
+    const response = await grpcBridgeClient.forward(service, forwardedRequest, normalizedPath);
+    res.status(response.statusCode).json(response.body);
+  } catch (error) {
+    logger.error('gRPC proxy error', {
+      service,
+      method: req.method,
+      path: normalizeProxyPath(service, req.originalUrl),
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    res.status(502).json({
       success: false,
       message: 'Service temporarily unavailable',
     });
-  },
-  onProxyReq: (proxyReq, req) => {
-    logger.debug(`Proxying ${req.method} ${req.path} -> ${target}`);
-  },
-});
+  }
+}
 
-// Auth Service routes
-router.use(
-  '/api/auth',
-  createProxyMiddleware(createProxyOptions(config.services.auth, {
-    '^/api/auth': '/api/auth',
-  }))
-);
-
-// Ride Service routes
-router.use(
-  '/api/rides',
-  createProxyMiddleware(createProxyOptions(config.services.ride, {
-    '^/api/rides': '/api/rides',
-  }))
-);
-
-// Driver Service routes
-router.use(
-  '/api/drivers',
-  createProxyMiddleware(createProxyOptions(config.services.driver, {
-    '^/api/drivers': '/api/drivers',
-  }))
-);
-
-// Payment Service routes
-router.use(
-  '/api/payments',
-  createProxyMiddleware(createProxyOptions(config.services.payment, {
-    '^/api/payments': '/api/payments',
-  }))
-);
-
-
-// Booking Service routes
-router.use(
-  '/api/bookings',
-  createProxyMiddleware(createProxyOptions(config.services.booking, {
-    '^/api/bookings': '/api/bookings',
-  }))
-);
-
-// Pricing Service routes
-router.use(
-  '/api/pricing',
-  createProxyMiddleware(createProxyOptions(config.services.pricing, {
-    '^/api/pricing': '/api/pricing',
-  }))
-);
-
-// User Service routes
-router.use(
-  '/api/users',
-  createProxyMiddleware(createProxyOptions(config.services.user, {
-    '^/api/users': '/api/users',
-  }))
-);
-
-// Review Service routes
-router.use(
-  '/api/reviews',
-  createProxyMiddleware(createProxyOptions(config.services.review, {
-    '^/api/reviews': '/api/reviews',
-  }))
-);
-
-// Notification Service routes
-router.use(
-  '/api/notifications',
-  createProxyMiddleware(createProxyOptions(config.services.notification, {
-    '^/api/notifications': '/api/notifications',
-  }))
-);
+router.use('/api/auth', (req, res) => void forward('auth', req, res));
+router.use('/api/rides', (req, res) => void forward('ride', req, res));
+router.use('/api/drivers', (req, res) => void forward('driver', req, res));
+router.use('/api/payments', (req, res) => void forward('payment', req, res));
+router.use('/api/bookings', (req, res) => void forward('booking', req, res));
+router.use('/api/pricing', (req, res) => void forward('pricing', req, res));
+router.use('/api/users', (req, res) => void forward('user', req, res));
+router.use('/api/reviews', (req, res) => void forward('review', req, res));
+router.use('/api/notifications', (req, res) => void forward('notification', req, res));
 
 export default router;

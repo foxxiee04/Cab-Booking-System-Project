@@ -37,6 +37,12 @@ const NOMINATIM_PARAMS = {
   countrycodes: config.map.nominatimCountry,
 };
 
+const NOMINATIM_HEADERS = {
+  'User-Agent': 'CabBookingSystem/1.0 (local-development)',
+  Referer: 'http://localhost:3000',
+  Accept: 'application/json',
+};
+
 router.get('/geocode', async (req, res) => {
   const q = String(req.query.q || '').trim();
   const limit = Math.min(Math.max(parseInt(String(req.query.limit || '7'), 10), 1), 10);
@@ -51,6 +57,7 @@ router.get('/geocode', async (req, res) => {
   try {
     const response = await axios.get(`${config.map.nominatimUrl}/search`, {
       timeout: config.map.timeoutMs,
+      headers: NOMINATIM_HEADERS,
       params: {
         q,
         limit,
@@ -89,6 +96,7 @@ router.get('/reverse', async (req, res) => {
   try {
     const response = await axios.get(`${config.map.nominatimUrl}/reverse`, {
       timeout: config.map.timeoutMs,
+      headers: NOMINATIM_HEADERS,
       params: {
         lat,
         lon: lng,

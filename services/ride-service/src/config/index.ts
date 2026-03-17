@@ -1,9 +1,10 @@
 import dotenv from 'dotenv';
-import { getRequiredEnv } from '../../../../shared/dist';
+import { getRequiredEnv, grpcAddressFromHttpUrl } from '../../../../shared/dist';
 dotenv.config();
 
 export const config = {
   port: parseInt(process.env.PORT || '3002', 10),
+  grpcPort: parseInt(process.env.GRPC_PORT || '50054', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   
   database: {
@@ -21,6 +22,11 @@ export const config = {
   services: {
     pricing: process.env.PRICING_SERVICE_URL || 'http://localhost:3009',
     driver: process.env.DRIVER_SERVICE_URL || 'http://localhost:3003',
+  },
+
+  grpcServices: {
+    pricing: process.env.PRICING_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.PRICING_SERVICE_URL || 'http://localhost:3009', 50057),
+    driver: process.env.DRIVER_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.DRIVER_SERVICE_URL || 'http://localhost:3003', 50055),
   },
 
   internalServiceToken: getRequiredEnv('INTERNAL_SERVICE_TOKEN'),

@@ -10,25 +10,25 @@ export const rideApi = {
 
   // Accept ride
   acceptRide: async (rideId: string): Promise<ApiResponse<{ ride: Ride }>> => {
-    const response = await axiosInstance.post(`/rides/${rideId}/accept`);
+    const response = await axiosInstance.post(`/rides/${rideId}/accept`, {});
     return response.data;
   },
 
   // Reject ride
   rejectRide: async (rideId: string): Promise<ApiResponse> => {
-    const response = await axiosInstance.post(`/rides/${rideId}/reject`);
+    const response = await axiosInstance.post(`/rides/${rideId}/reject`, {});
     return response.data;
   },
 
   // Start ride (arrived at pickup, customer on board)
   startRide: async (rideId: string): Promise<ApiResponse<{ ride: Ride }>> => {
-    const response = await axiosInstance.post(`/rides/${rideId}/start`);
+    const response = await axiosInstance.post(`/rides/${rideId}/start`, {});
     return response.data;
   },
 
   // Complete ride
   completeRide: async (rideId: string): Promise<ApiResponse<{ ride: Ride }>> => {
-    const response = await axiosInstance.post(`/rides/${rideId}/complete`);
+    const response = await axiosInstance.post(`/rides/${rideId}/complete`, {});
     return response.data;
   },
 

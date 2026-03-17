@@ -11,6 +11,10 @@
   ],
   "scripts": {
     "db:seed": "tsx scripts/seed-database.ts",
+    "dev:admin": "npm --prefix apps/admin-dashboard start",
+    "dev:customer": "npm --prefix apps/customer-app start",
+    "dev:driver-app": "npm --prefix apps/driver-app start",
+    "dev:frontends": "concurrently --names admin,customer,driver --prefix-colors blue,green,magenta \"npm run dev:admin\" \"npm run dev:customer\" \"npm run dev:driver-app\"",
     "dev:auth": "npm -w services/auth-service run dev",
     "dev:ride": "npm -w services/ride-service run dev",
     "dev:driver": "npm -w services/driver-service run dev",
@@ -26,6 +30,7 @@
     "test:contract": "npm -w services/driver-service run test -- --runInBand src/__tests__/contracts/internal-driver-response.contract.test.ts && npm -w services/ride-service run test -- --runInBand src/__tests__/contracts/driver-service.contract.test.ts",
     "test:integration": "tsx scripts/test-backend.ts",
     "test:backend": "tsx scripts/test-backend.ts",
+    "smoke:gateway": "tsx scripts/smoke-gateway-flows.ts",
     "test:ride": "npm -w services/ride-service run test",
     "test:auth": "npm -w services/auth-service run test",
     "test:shared": "npm -w shared run test",
@@ -54,6 +59,7 @@
     "@types/node": "^25.2.2",
     "@types/pg": "^8.16.0",
     "bcryptjs": "^3.0.3",
+    "concurrently": "^9.2.1",
     "pg": "^8.18.0",
     "socket.io-client": "^4.8.3",
     "tsx": "^4.21.0"

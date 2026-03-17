@@ -15,6 +15,7 @@ function getRequiredEnv(name: string): string {
 export const config = {
   serviceName: 'user-service',
   port: parseInt(process.env.PORT || '3007', 10),
+  grpcPort: parseInt(process.env.GRPC_PORT || '50052', 10),
   database: {
     url: getRequiredEnv('DATABASE_URL'),
   },

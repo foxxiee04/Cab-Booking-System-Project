@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package cab.booking.grpc.bridge;
+
+service HttpBridgeService {
+  rpc Forward(HttpBridgeRequest) returns (HttpBridgeResponse);
+}
+
+message HttpBridgeRequest {
+  string method = 1;
+  string path = 2;
+  string queryJson = 3;
+  string bodyJson = 4;
+  map<string, string> headers = 5;
+}
+
+message HttpBridgeResponse {
+  int32 statusCode = 1;
+  map<string, string> headers = 2;
+  string bodyJson = 3;
+}

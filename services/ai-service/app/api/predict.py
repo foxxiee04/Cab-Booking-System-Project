@@ -52,7 +52,8 @@ async def predict(request: PredictionRequest):
             price_multiplier=predictions['price_multiplier'],
             distance_km=request.distance_km,
             time_of_day=request.time_of_day.value,
-            day_type=request.day_type.value
+            day_type=request.day_type.value,
+            insights=predictions['insights'],
         )
         
         return response

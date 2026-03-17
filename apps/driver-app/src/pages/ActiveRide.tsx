@@ -17,7 +17,7 @@ import {
   DialogContentText,
   DialogActions,
   CircularProgress,
-  Slide,
+  Stack,
 } from '@mui/material';
 import {
   ArrowBack,
@@ -27,20 +27,14 @@ import {
   PlayArrow,
   CheckCircle,
   Cancel,
-  MyLocation,
   StarRate,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { updateRideStatus, clearCurrentRide } from '../store/ride.slice';
-import MapView from '../components/map/MapView';
-import DriverMarker from '../components/map/DriverMarker';
-import PickupMarker from '../components/map/PickupMarker';
-import DropoffMarker from '../components/map/DropoffMarker';
-import RouteLine from '../components/map/RouteLine';
 import { rideApi } from '../api/ride.api';
 import { formatCurrency } from '../utils/format.utils';
 import { useTranslation } from 'react-i18next';
-import { RideStatus } from '../types';
+import DriverTripMap from '../features/trip/components/DriverTripMap';
 
 // ── Phase configuration ─────────────────────────────────────────
 const PHASE_CONFIG: Record<string, {
@@ -143,7 +137,6 @@ const ActiveRide: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: '#f5f5f5' }}>
-      {/* ── Floating back button ────────────────────────────────── */}
       <Box sx={{
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1100,
         background: 'linear-gradient(180deg, rgba(0,0,0,0.4) 0%, transparent 100%)',
@@ -169,24 +162,15 @@ const ActiveRide: React.FC = () => {
         />
       </Box>
 
-      {/* ── Full-screen map ─────────────────────────────────────── */}
       <Box sx={{ flexGrow: 1, position: 'relative' }}>
-        <MapView center={mapCenter} height="100%">
-          {currentLocation && <DriverMarker location={currentLocation} />}
-          <PickupMarker location={currentRide.pickupLocation} />
-          <DropoffMarker location={currentRide.dropoffLocation} />
+        <DriverTripMap
+          currentLocation={mapCenter}
+          pickupLocation={currentRide.pickupLocation}
+          dropoffLocation={currentRide.dropoffLocation}
+          mode={status === 'IN_PROGRESS' ? 'trip' : 'pickup'}
+          height="100%"
+        />
 
-          {/* Route: driver → pickup (en route to pickup) */}
-          {currentLocation && (status === 'ACCEPTED' || status === 'ASSIGNED') && (
-            <RouteLine start={currentLocation} end={currentRide.pickupLocation} />
-          )}
-          {/* Route: driver → dropoff (trip in progress) */}
-          {currentLocation && status === 'IN_PROGRESS' && (
-            <RouteLine start={currentLocation} end={currentRide.dropoffLocation} />
-          )}
-        </MapView>
-
-        {/* Error alert */}
         {error && (
           <Alert
             severity="error"
@@ -198,141 +182,94 @@ const ActiveRide: React.FC = () => {
         )}
       </Box>
 
-      {/* ── Bottom sheet ─────────────────────────────────────────── */}
-      <Slide direction="up" in mountOnEnter>
-        <Card sx={{
-          borderRadius: '20px 20px 0 0',
-          boxShadow: '0 -4px 20px rgba(0,0,0,0.12)',
-          maxHeight: '45vh',
-          overflow: 'auto',
-        }}>
-          {/* Drag handle */}
-          <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1.5, pb: 0.5 }}>
-            <Box sx={{ width: 40, height: 4, borderRadius: 2, bgcolor: 'grey.300' }} />
-          </Box>
+      <Card sx={{
+        borderRadius: '20px 20px 0 0',
+        boxShadow: '0 -4px 20px rgba(0,0,0,0.12)',
+        maxHeight: '45vh',
+        overflow: 'auto',
+      }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1.5, pb: 0.5 }}>
+          <Box sx={{ width: 40, height: 4, borderRadius: 2, bgcolor: 'grey.300' }} />
+        </Box>
 
-          <CardContent sx={{ pt: 1 }}>
-            {/* ── Customer info ───────────────────────────────────── */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-              <Avatar sx={{ width: 50, height: 50, bgcolor: 'primary.main', fontSize: 20 }}>
-                {currentRide.customer?.firstName?.[0]}{currentRide.customer?.lastName?.[0]}
-              </Avatar>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  {currentRide.customer?.firstName} {currentRide.customer?.lastName}
-                </Typography>
-                {currentRide.customer?.rating && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <StarRate sx={{ color: '#FFC107', fontSize: 16 }} />
-                    <Typography variant="body2" color="text.secondary">
-                      {currentRide.customer.rating.toFixed(1)}
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
-
-              {/* Call customer */}
-              {currentRide.customer?.phoneNumber && (
-                <IconButton
-                  color="primary"
-                  href={`tel:${currentRide.customer.phoneNumber}`}
-                  sx={{ bgcolor: 'primary.50', '&:hover': { bgcolor: 'primary.100' } }}
-                >
-                  <Phone />
-                </IconButton>
+        <CardContent sx={{ pt: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <Avatar sx={{ width: 50, height: 50, bgcolor: 'primary.main', fontSize: 20 }}>
+              {currentRide.customer?.firstName?.[0]}{currentRide.customer?.lastName?.[0]}
+            </Avatar>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="subtitle1" fontWeight={600}>
+                {currentRide.customer?.firstName} {currentRide.customer?.lastName}
+              </Typography>
+              {currentRide.customer?.rating && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <StarRate sx={{ color: '#FFC107', fontSize: 16 }} />
+                  <Typography variant="body2" color="text.secondary">
+                    {currentRide.customer.rating.toFixed(1)}
+                  </Typography>
+                </Box>
               )}
             </Box>
 
-            {/* ── Pickup / Dropoff ────────────────────────────────── */}
-            <Box sx={{ mb: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                <Box sx={{
-                  width: 12, height: 12, borderRadius: '50%', mt: 0.8,
-                  bgcolor: '#4CAF50', border: '2px solid white',
-                  boxShadow: '0 0 0 2px #4CAF50',
-                }} />
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="caption" color="text.secondary">PICKUP</Typography>
-                  <Typography variant="body2" fontWeight={500}>
-                    {currentRide.pickupLocation?.address || `${currentRide.pickupLocation.lat.toFixed(5)}, ${currentRide.pickupLocation.lng.toFixed(5)}`}
-                  </Typography>
-                </Box>
-              </Box>
-
-              <Box sx={{ width: 2, height: 20, bgcolor: 'grey.300', ml: '5px', my: 0.5 }} />
-
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                <Box sx={{
-                  width: 12, height: 12, borderRadius: 1, mt: 0.8,
-                  bgcolor: '#F44336', border: '2px solid white',
-                  boxShadow: '0 0 0 2px #F44336',
-                }} />
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="caption" color="text.secondary">DROPOFF</Typography>
-                  <Typography variant="body2" fontWeight={500}>
-                    {currentRide.dropoffLocation?.address || `${currentRide.dropoffLocation.lat.toFixed(5)}, ${currentRide.dropoffLocation.lng.toFixed(5)}`}
-                  </Typography>
-                </Box>
-              </Box>
-            </Box>
-
-            <Divider sx={{ my: 1.5 }} />
-
-            {/* Fare */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="body2" color="text.secondary">
-                {t('activeRide.fare')}
-              </Typography>
-              <Typography variant="h5" fontWeight={700} color="success.main">
-                {currentRide.fare ? formatCurrency(currentRide.fare) : 'N/A'}
-              </Typography>
-            </Box>
-
-            {/* ── Primary action button (per phase) ───────────────── */}
-            {status === 'ACCEPTED' && (
-              <Button
-                fullWidth variant="contained" size="large"
-                onClick={handleStartRide}
-                disabled={loading}
-                startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <Navigation />}
-                sx={{
-                  borderRadius: 3, py: 1.8, fontSize: 16, fontWeight: 700,
-                  bgcolor: '#2196F3',
-                  '&:hover': { bgcolor: '#1976D2' },
-                }}
-              >
-                {t('activeRide.startRide', 'Arrived - Start Ride')}
-              </Button>
+            {currentRide.customer?.phoneNumber && (
+              <IconButton color="primary" href={`tel:${currentRide.customer.phoneNumber}`} sx={{ bgcolor: 'primary.50', '&:hover': { bgcolor: 'primary.100' } }}>
+                <Phone />
+              </IconButton>
             )}
+          </Box>
 
-            {status === 'IN_PROGRESS' && (
-              <Button
-                fullWidth variant="contained" color="success" size="large"
-                onClick={handleCompleteRide}
-                disabled={loading}
-                startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <CheckCircle />}
-                sx={{
-                  borderRadius: 3, py: 1.8, fontSize: 16, fontWeight: 700,
-                }}
-              >
-                {t('activeRide.completeRide', 'Complete Ride')}
-              </Button>
-            )}
+          <Stack spacing={1} sx={{ mb: 2 }}>
+            <Typography variant="body2"><strong>Pickup:</strong> {currentRide.pickupLocation?.address || `${currentRide.pickupLocation.lat.toFixed(5)}, ${currentRide.pickupLocation.lng.toFixed(5)}`}</Typography>
+            <Typography variant="body2"><strong>Dropoff:</strong> {currentRide.dropoffLocation?.address || `${currentRide.dropoffLocation.lat.toFixed(5)}, ${currentRide.dropoffLocation.lng.toFixed(5)}`}</Typography>
+          </Stack>
 
-            {/* Cancel button (only before trip starts) */}
-            {status !== 'IN_PROGRESS' && status !== 'COMPLETED' && (
-              <Button
-                fullWidth variant="outlined" color="error" size="small"
-                onClick={() => setShowCancelDialog(true)}
-                startIcon={<Cancel />}
-                sx={{ borderRadius: 3, mt: 1, py: 1 }}
-              >
-                {t('activeRide.cancelRide')}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      </Slide>
+          <Divider sx={{ my: 1.5 }} />
+
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              {t('activeRide.fare')}
+            </Typography>
+            <Typography variant="h5" fontWeight={700} color="success.main">
+              {currentRide.fare ? formatCurrency(currentRide.fare) : 'N/A'}
+            </Typography>
+          </Box>
+
+          {status === 'ACCEPTED' && (
+            <Button
+              fullWidth variant="contained" size="large"
+              onClick={handleStartRide}
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <Navigation />}
+              sx={{ borderRadius: 3, py: 1.8, fontSize: 16, fontWeight: 700, bgcolor: '#2196F3', '&:hover': { bgcolor: '#1976D2' } }}
+            >
+              {t('activeRide.startRide', 'Arrived - Start Ride')}
+            </Button>
+          )}
+
+          {status === 'IN_PROGRESS' && (
+            <Button
+              fullWidth variant="contained" color="success" size="large"
+              onClick={handleCompleteRide}
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <CheckCircle />}
+              sx={{ borderRadius: 3, py: 1.8, fontSize: 16, fontWeight: 700 }}
+            >
+              {t('activeRide.completeRide', 'Complete Ride')}
+            </Button>
+          )}
+
+          {status !== 'IN_PROGRESS' && status !== 'COMPLETED' && (
+            <Button
+              fullWidth variant="outlined" color="error" size="small"
+              onClick={() => setShowCancelDialog(true)}
+              startIcon={<Cancel />}
+              sx={{ borderRadius: 3, mt: 1, py: 1 }}
+            >
+              {t('activeRide.cancelRide')}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── Cancel confirmation dialog ────────────────────────────── */}
       <Dialog

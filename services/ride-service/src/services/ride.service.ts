@@ -1,11 +1,11 @@
 import { PrismaClient, Ride, RideStatus } from '../generated/prisma-client';
 import { v4 as uuidv4 } from 'uuid';
-import axios from 'axios';
 import { config } from '../config';
 import { RideStateMachine } from '../domain/ride-state-machine';
 import { EventPublisher } from '../events/publisher';
 import { logger } from '../utils/logger';
 import { DriverOfferManager } from './driver-offer-manager';
+import { pricingGrpcClient } from '../grpc/pricing.client';
 
 interface CreateRideInput {
   customerId: string;
@@ -70,19 +70,14 @@ export class RideService {
     let duration = 0;
 
     try {
-      const pricingResponse = await axios.post(
-        `${config.services.pricing}/api/pricing/estimate`,
-        {
-          pickupLat: input.pickup.lat,
-          pickupLng: input.pickup.lng,
-          dropoffLat: input.dropoff.lat,
-          dropoffLng: input.dropoff.lng,
-          vehicleType: input.vehicleType || 'ECONOMY',
-        },
-        { timeout: 1500 }
-      );
+      const payload = await pricingGrpcClient.estimateFare({
+        pickupLat: input.pickup.lat,
+        pickupLng: input.pickup.lng,
+        dropoffLat: input.dropoff.lat,
+        dropoffLng: input.dropoff.lng,
+        vehicleType: input.vehicleType || 'ECONOMY',
+      });
 
-      const payload = pricingResponse.data?.data ?? pricingResponse.data ?? {};
       surgeMultiplier = payload.surgeMultiplier ?? payload.surge_multiplier ?? 1.0;
       estimatedFare = payload.fare ?? payload.estimated_fare ?? 0;
       distance = payload.distance ?? payload.distance_km ?? 0;

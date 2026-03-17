@@ -1,16 +1,18 @@
 import React, { useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { useAppSelector } from './store/hooks';
 import { socketService } from './socket/customer.socket';
+import MobileAppShell from './components/layout/MobileAppShell';
 
-// Pages (will be created)
 import Login from './pages/Login';
 import Register from './pages/Register';
 import HomeMap from './pages/HomeMap';
 import RideTracking from './pages/RideTracking';
 import RideHistory from './pages/RideHistory';
 import Profile from './pages/Profile';
+import Activity from './pages/Activity';
+import Messages from './pages/Messages';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -59,15 +61,24 @@ function App() {
           }
         />
 
-        {/* Protected Routes */}
         <Route
-          path="/home"
+          path="/"
           element={
             <ProtectedRoute>
-              <HomeMap />
+              <MobileAppShell>
+                <Outlet />
+              </MobileAppShell>
             </ProtectedRoute>
           }
-        />
+        >
+          <Route index element={<Navigate to="home" replace />} />
+          <Route path="home" element={<HomeMap />} />
+          <Route path="activity" element={<Activity />} />
+          <Route path="messages" element={<Messages />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="history" element={<RideHistory />} />
+        </Route>
+
         <Route
           path="/ride/:rideId"
           element={
@@ -76,26 +87,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/history"
-          element={
-            <ProtectedRoute>
-              <RideHistory />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <Profile />
-            </ProtectedRoute>
-          }
-        />
 
-        {/* Default Routes */}
-        <Route path="/" element={<Navigate to="/home" replace />} />
-        <Route path="*" element={<Navigate to="/home" replace />} />
+        <Route path="*" element={<Navigate to={isAuthenticated ? '/home' : '/login'} replace />} />
       </Routes>
     </Box>
   );

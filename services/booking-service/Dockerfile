@@ -1,15 +1,20 @@
 FROM node:20-slim
 
-WORKDIR /app
+WORKDIR /workspace/services/booking-service
 
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends openssl ca-certificates \
 	&& rm -rf /var/lib/apt/lists/*
 
-COPY package*.json ./
+COPY services/booking-service/package*.json ./
 RUN npm install
 
-COPY . .
+COPY shared/package*.json /workspace/shared/
+RUN npm install --prefix /workspace/shared --omit=dev
+
+COPY services/booking-service .
+COPY shared/dist /workspace/shared/dist
+
 RUN npm run build
 
 EXPOSE 3008

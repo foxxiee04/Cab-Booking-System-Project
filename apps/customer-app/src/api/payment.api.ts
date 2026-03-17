@@ -3,13 +3,21 @@ import { Payment } from '../types';
 
 export interface PaymentResponse {
   success: boolean;
-  data: Payment;
+  data: {
+    payment: Payment;
+  };
 }
 
 export const paymentApi = {
   getPaymentByRide: async (rideId: string): Promise<PaymentResponse> => {
     const response = await axiosInstance.get(`/payments/ride/${rideId}`);
-    return response.data;
+    const payload = response.data?.data || response.data;
+    return {
+      ...response.data,
+      data: {
+        payment: payload?.payment || payload,
+      },
+    };
   },
 
   // Payment retry - NOT IMPLEMENTED IN BACKEND

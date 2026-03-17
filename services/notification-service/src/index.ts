@@ -5,6 +5,7 @@ import { config } from './config';
 import { connectRabbitMQ, closeRabbitMQ, isRabbitMQConnected } from './events/rabbitmq.consumer';
 import { emailService } from './services/email.service';
 import { smsService } from './services/sms.service';
+import { createHealthServiceRegistration, createHttpBridgeServiceRegistration, shutdownGrpcServer, startGrpcServer } from '../../../shared/dist';
 
 export async function start() {
   console.log('📦 Connecting to MongoDB...');
@@ -25,21 +26,32 @@ export async function start() {
   await smsService.initialize();
 
   await connectRabbitMQ();
+  const getReadiness = async () => ({
+    mongodb: mongoose.connection.readyState === 1,
+    redis: redisClient.isOpen && (await redisClient.ping()) === 'PONG',
+    rabbitmq: isRabbitMQConnected(),
+  });
 
   const app = createApp({
-    getReadiness: async () => ({
-      mongodb: mongoose.connection.readyState === 1,
-      redis: redisClient.isOpen && (await redisClient.ping()) === 'PONG',
-      rabbitmq: isRabbitMQConnected(),
-    }),
+    getReadiness,
+  });
+
+  const grpcServer = await startGrpcServer({
+    address: `0.0.0.0:${config.grpcPort}`,
+    registrations: [
+      createHealthServiceRegistration(config.serviceName, getReadiness),
+      createHttpBridgeServiceRegistration(`http://127.0.0.1:${config.port}`),
+    ],
   });
 
   const server = app.listen(config.port, () => {
     console.log(`🚀 ${config.serviceName} running on port ${config.port}`);
+    console.log(`🚀 ${config.serviceName} gRPC running on port ${config.grpcPort}`);
   });
 
   process.on('SIGTERM', async () => {
     console.log('SIGTERM received, closing connections...');
+    await shutdownGrpcServer(grpcServer);
     await closeRabbitMQ();
     await mongoose.connection.close();
     await redisClient.quit();

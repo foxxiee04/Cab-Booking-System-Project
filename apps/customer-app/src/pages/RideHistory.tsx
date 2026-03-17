@@ -49,7 +49,7 @@ const RideHistory: React.FC = () => {
     };
 
     fetchHistory();
-  }, [page]);
+  }, [page, t]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 

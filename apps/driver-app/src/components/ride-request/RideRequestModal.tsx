@@ -10,6 +10,7 @@ import {
   Chip,
   Grid,
   LinearProgress,
+  Stack,
 } from '@mui/material';
 import {
   LocationOn,
@@ -23,6 +24,9 @@ import { formatCurrency, getVehicleTypeLabel } from '../../utils/format.utils';
 import { formatDistance, formatDuration } from '../../utils/map.utils';
 import CountdownTimer from './CountdownTimer';
 import { useTranslation } from 'react-i18next';
+import { useAppSelector } from '../../store/hooks';
+import DriverTripMap from '../../features/trip/components/DriverTripMap';
+import SwipeToConfirm from '../../features/trip/components/SwipeToConfirm';
 
 interface RideRequestModalProps {
   ride: Ride | null;
@@ -42,6 +46,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
   loading = false,
 }) => {
   const { t } = useTranslation();
+  const { currentLocation } = useAppSelector((state) => state.driver);
   const [timeLeft, setTimeLeft] = useState(timeoutSeconds);
 
   useEffect(() => {
@@ -69,10 +74,9 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
       disableEscapeKeyDown
     >
       <DialogContent sx={{ p: 0 }}>
-        {/* Header with countdown */}
         <Box
           sx={{
-            bgcolor: 'primary.main',
+            background: 'linear-gradient(135deg, #0f172a 0%, #0f766e 100%)',
             color: 'white',
             p: 3,
             textAlign: 'center',
@@ -96,11 +100,17 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
           />
         </Box>
 
-        {/* Ride details */}
         <Box sx={{ p: 3 }}>
-          {/* Customer info */}
+          <DriverTripMap
+            currentLocation={currentLocation}
+            pickupLocation={ride.pickupLocation}
+            dropoffLocation={ride.dropoffLocation}
+            mode="request"
+            height={220}
+          />
+
           {ride.customer && (
-            <Card variant="outlined" sx={{ mb: 2 }}>
+            <Card variant="outlined" sx={{ mt: 2, mb: 2, borderRadius: 4 }}>
               <CardContent>
                 <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                   {t('rideRequest.customer')}
@@ -125,7 +135,6 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
             </Card>
           )}
 
-          {/* Pickup location */}
           <Box sx={{ display: 'flex', mb: 2 }}>
             <LocationOn sx={{ color: 'success.main', mr: 1 }} />
             <Box sx={{ flex: 1 }}>
@@ -138,7 +147,6 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
             </Box>
           </Box>
 
-          {/* Dropoff location */}
           <Box sx={{ display: 'flex', mb: 2 }}>
             <Flag sx={{ color: 'error.main', mr: 1 }} />
             <Box sx={{ flex: 1 }}>
@@ -151,10 +159,9 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
             </Box>
           </Box>
 
-          {/* Trip details */}
           <Grid container spacing={2} sx={{ mb: 2 }}>
             <Grid item xs={4}>
-              <Card variant="outlined" sx={{ textAlign: 'center', p: 1 }}>
+              <Card variant="outlined" sx={{ textAlign: 'center', p: 1, borderRadius: 4 }}>
                 <DirectionsCar sx={{ color: 'primary.main', mb: 0.5 }} />
                 <Typography variant="caption" color="text.secondary">
                   {t('rideRequest.vehicle')}
@@ -165,7 +172,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
               </Card>
             </Grid>
             <Grid item xs={4}>
-              <Card variant="outlined" sx={{ textAlign: 'center', p: 1 }}>
+              <Card variant="outlined" sx={{ textAlign: 'center', p: 1, borderRadius: 4 }}>
                 <Typography variant="caption" color="text.secondary">
                   {t('rideRequest.distance')}
                 </Typography>
@@ -175,7 +182,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
               </Card>
             </Grid>
             <Grid item xs={4}>
-              <Card variant="outlined" sx={{ textAlign: 'center', p: 1 }}>
+              <Card variant="outlined" sx={{ textAlign: 'center', p: 1, borderRadius: 4 }}>
                 <Typography variant="caption" color="text.secondary">
                   {t('rideRequest.duration')}
                 </Typography>
@@ -186,8 +193,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
             </Grid>
           </Grid>
 
-          {/* Fare */}
-          <Card variant="outlined" sx={{ bgcolor: 'success.50', mb: 3 }}>
+          <Card variant="outlined" sx={{ bgcolor: 'success.50', mb: 3, borderRadius: 4 }}>
             <CardContent sx={{ textAlign: 'center' }}>
               <Typography variant="subtitle2" color="text.secondary">
                 {t('rideRequest.estimatedEarnings')}
@@ -198,31 +204,24 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
             </CardContent>
           </Card>
 
-          {/* Action buttons */}
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Stack spacing={1.5}>
+            <SwipeToConfirm
+              label={t('rideRequest.accept', 'Vuốt để nhận chuyến')}
+              confirmLabel={t('rideRequest.accepting', 'Đang nhận chuyến')}
+              loading={loading}
+              onConfirm={onAccept}
+            />
             <Button
               variant="outlined"
               color="error"
-              fullWidth
               size="large"
               onClick={onReject}
               disabled={loading}
-              sx={{ py: 1.5 }}
+              sx={{ py: 1.5, borderRadius: 999 }}
             >
               {t('rideRequest.reject')}
             </Button>
-            <Button
-              variant="contained"
-              color="success"
-              fullWidth
-              size="large"
-              onClick={onAccept}
-              disabled={loading}
-              sx={{ py: 1.5 }}
-            >
-              {loading ? t('rideRequest.accepting') : t('rideRequest.accept')}
-            </Button>
-          </Box>
+          </Stack>
         </Box>
       </DialogContent>
     </Dialog>

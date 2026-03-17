@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import axios from 'axios';
 import { config } from '../config';
 import { requireRole } from '../middleware/auth';
 
@@ -21,23 +20,84 @@ const getAuthHeaders = (req: Request) => ({
   'x-user-role': req.headers['x-user-role'] as string || '',
 });
 
+const unwrapPayload = <T = any>(response: any): T => {
+  if (response?.data?.data) {
+    return response.data.data as T;
+  }
+
+  if (response?.data) {
+    return response.data as T;
+  }
+
+  return response as T;
+};
+
+async function callHttpService<T = any>(
+  service: keyof typeof config.services,
+  req: Request,
+  path: string,
+  query: Record<string, unknown> = {},
+): Promise<T> {
+  const url = new URL(path, config.services[service]);
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((entry) => {
+        if (entry !== undefined && entry !== null) {
+          url.searchParams.append(key, String(entry));
+        }
+      });
+      return;
+    }
+
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, String(value));
+    }
+  });
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: getAuthHeaders(req),
+  });
+
+  const text = await response.text();
+  let body: T;
+
+  try {
+    body = (text ? JSON.parse(text) : {}) as T;
+  } catch {
+    body = text as T;
+  }
+
+  if (!response.ok) {
+    const error = new Error(`HTTP service ${service} responded with status ${response.status}`) as Error & { statusCode?: number; body?: unknown };
+    error.statusCode = response.status;
+    error.body = body;
+    throw error;
+  }
+
+  return body;
+}
+
 router.get('/rides', async (req: Request, res: Response) => {
   try {
     const { limit, page } = getPaging(req);
     const status = req.query.status as string | undefined;
 
-    const response = await axios.get(`${config.services.ride}/api/rides/admin`, {
-      params: { page, limit, status },
-      headers: getAuthHeaders(req),
-    });
+    const response = await callHttpService<any>(
+      'ride',
+      req,
+      '/api/rides/admin',
+      { page, limit, status },
+    );
 
-    const payload = response.data?.data || response.data;
+    const payload = unwrapPayload<any>(response);
     const rides = payload.rides || [];
-    const total = payload.total ?? response.data?.meta?.total ?? rides.length;
+    const total = payload.total ?? response?.meta?.total ?? rides.length;
 
     res.json({ success: true, data: { rides, total } });
   } catch (error: any) {
-    res.status(error.response?.status || 500).json({
+    res.status(error.statusCode || error.response?.status || 500).json({
       success: false,
       error: { code: 'ADMIN_RIDES_FAILED', message: 'Failed to load rides' },
     });
@@ -49,22 +109,16 @@ router.get('/drivers', async (req: Request, res: Response) => {
     const { limit, page } = getPaging(req);
     const userLimit = Math.max(limit * 5, 1000);
 
-    const headers = getAuthHeaders(req);
     const [driverResponse, userResponse] = await Promise.all([
-      axios.get(`${config.services.driver}/api/drivers`, {
-        params: { page, limit },
-        headers,
-      }),
-      axios.get(`${config.services.auth}/api/auth/users`, {
-        params: { page: 1, limit: userLimit },
-        headers,
-      }),
+      callHttpService<any>('driver', req, '/api/drivers', { page, limit }),
+      callHttpService<any>('auth', req, '/api/auth/users', { page: 1, limit: userLimit }),
     ]);
 
-    const payload = driverResponse.data?.data || driverResponse.data;
-    const rawDrivers = payload.drivers || [];
-    const usersPayload = userResponse.data?.data || userResponse.data;
-    const users = usersPayload.users || [];
+    const payload = unwrapPayload<any>(driverResponse);
+    let rawDrivers = Array.isArray(payload.drivers) ? payload.drivers : [];
+    const usersPayload = unwrapPayload<any>(userResponse);
+    let users = Array.isArray(usersPayload.users) ? usersPayload.users : [];
+
     const usersById = new Map(
       users.map((user: any) => [
         user.id,
@@ -100,11 +154,11 @@ router.get('/drivers', async (req: Request, res: Response) => {
       updatedAt: driver.updatedAt,
     }));
 
-    const total = driverResponse.data?.meta?.total ?? drivers.length;
+    const total = payload.total ?? driverResponse?.meta?.total ?? drivers.length;
 
     res.json({ success: true, data: { drivers, total } });
   } catch (error: any) {
-    res.status(error.response?.status || 500).json({
+    res.status(error.statusCode || error.response?.status || 500).json({
       success: false,
       error: { code: 'ADMIN_DRIVERS_FAILED', message: 'Failed to load drivers' },
     });
@@ -115,12 +169,9 @@ router.get('/customers', async (req: Request, res: Response) => {
   try {
     const { limit, page } = getPaging(req);
 
-    const response = await axios.get(`${config.services.auth}/api/auth/users`, {
-      params: { page, limit },
-      headers: getAuthHeaders(req),
-    });
+    const response = await callHttpService<any>('auth', req, '/api/auth/users', { page, limit });
 
-    const payload = response.data?.data || response.data;
+    const payload = unwrapPayload<any>(response);
     const users = payload.users || [];
 
     const customers = users
@@ -139,7 +190,7 @@ router.get('/customers', async (req: Request, res: Response) => {
 
     res.json({ success: true, data: { customers, total: customers.length } });
   } catch (error: any) {
-    res.status(error.response?.status || 500).json({
+    res.status(error.statusCode || error.response?.status || 500).json({
       success: false,
       error: { code: 'ADMIN_CUSTOMERS_FAILED', message: 'Failed to load customers' },
     });
@@ -151,18 +202,15 @@ router.get('/payments', async (req: Request, res: Response) => {
     const { limit, page } = getPaging(req);
     const status = req.query.status as string | undefined;
 
-    const response = await axios.get(`${config.services.payment}/api/payments/admin`, {
-      params: { page, limit, status },
-      headers: getAuthHeaders(req),
-    });
+    const response = await callHttpService<any>('payment', req, '/api/payments/admin', { page, limit, status });
 
-    const payload = response.data?.data || response.data;
+    const payload = unwrapPayload<any>(response);
     const payments = payload.payments || [];
     const total = payload.total ?? payments.length;
 
     res.json({ success: true, data: { payments, total } });
   } catch (error: any) {
-    res.status(error.response?.status || 500).json({
+    res.status(error.statusCode || error.response?.status || 500).json({
       success: false,
       error: { code: 'ADMIN_PAYMENTS_FAILED', message: 'Failed to load payments' },
     });
@@ -176,19 +224,17 @@ router.get('/logs', async (_req: Request, res: Response) => {
 // Stats handler function
 const handleStats = async (req: Request, res: Response) => {
   try {
-    const headers = getAuthHeaders(req);
-
     const [rideRes, paymentRes, driverRes, userRes] = await Promise.all([
-      axios.get(`${config.services.ride}/api/rides/admin/stats`, { headers }),
-      axios.get(`${config.services.payment}/api/payments/admin/stats`, { headers }),
-      axios.get(`${config.services.driver}/api/drivers`, { params: { page: 1, limit: 1000 }, headers }),
-      axios.get(`${config.services.auth}/api/auth/users`, { params: { page: 1, limit: 1000 }, headers }),
+      callHttpService<any>('ride', req, '/api/rides/admin/stats'),
+      callHttpService<any>('payment', req, '/api/payments/admin/stats'),
+      callHttpService<any>('driver', req, '/api/drivers', { page: 1, limit: 1000 }),
+      callHttpService<any>('auth', req, '/api/auth/users', { page: 1, limit: 1000 }),
     ]);
 
-    const rideStats = rideRes.data?.data?.stats || {};
-    const paymentStats = paymentRes.data?.data || {};
-    const drivers = driverRes.data?.data?.drivers || [];
-    const users = userRes.data?.data?.users || [];
+    const rideStats = unwrapPayload<any>(rideRes)?.stats || {};
+    const paymentStats = unwrapPayload<any>(paymentRes) || {};
+    const drivers = unwrapPayload<any>(driverRes)?.drivers || [];
+    const users = unwrapPayload<any>(userRes)?.users || [];
 
     const online = drivers.filter((driver: any) => driver.availabilityStatus === 'ONLINE').length;
     const busy = drivers.filter((driver: any) => driver.availabilityStatus === 'BUSY').length;
@@ -224,7 +270,7 @@ const handleStats = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    res.status(error.response?.status || 500).json({
+    res.status(error.statusCode || error.response?.status || 500).json({
       success: false,
       error: { code: 'ADMIN_STATS_FAILED', message: 'Failed to load stats' },
     });

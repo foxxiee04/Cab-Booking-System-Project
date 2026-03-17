@@ -14,6 +14,12 @@ interface AIPrediction {
   distance_km: number;
   time_of_day: AITimeOfDay;
   day_type: AIDayType;
+  insights?: {
+    demand_level: 'LOW' | 'MEDIUM' | 'HIGH';
+    eta_confidence: 'LOW' | 'MEDIUM' | 'HIGH';
+    recommended_driver_radius_km: number;
+    surge_reason: string;
+  };
 }
 
 export class PricingService {
@@ -87,6 +93,13 @@ export class PricingService {
       durationMinutes,
       surgeMultiplier,
       aiPrediction,
+      operationalHints: {
+        predictionSource: aiPrediction ? 'AI' : 'RULE_ENGINE',
+        demandLevel: aiPrediction?.insights?.demand_level || 'LOW',
+        etaConfidence: aiPrediction?.insights?.eta_confidence || 'MEDIUM',
+        recommendedDriverRadiusKm: aiPrediction?.insights?.recommended_driver_radius_km || 3,
+        surgeReason: aiPrediction?.insights?.surge_reason || 'Deterministic pricing fallback is active',
+      },
       breakdown: {
         baseFare,
         distanceFare: Math.round(distanceFare),

@@ -42,12 +42,12 @@ const Logs: React.FC = () => {
           limit: PAGE_SIZE,
           offset: page * PAGE_SIZE,
         });
-        const logs = (response.data.logs || []).map((log: any, index: number) => ({
+        const logs = (response.data?.logs || []).map((log: any, index: number) => ({
           ...log,
           __id: log.id || `log-${page * PAGE_SIZE + index}`,
         }));
         setRows(logs);
-        setTotal(response.data.total || 0);
+        setTotal(response.data?.total || 0);
       } catch (err: any) {
         setError(err.response?.data?.error?.message || t('errors.loadLogs'));
       } finally {
@@ -56,7 +56,7 @@ const Logs: React.FC = () => {
     };
 
     fetchLogs();
-  }, [page]);
+  }, [page, t]);
 
   const columns: GridColDef<SystemLog>[] = [
     {

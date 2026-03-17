@@ -15,6 +15,7 @@ function getRequiredEnv(name: string): string {
 export const config = {
   serviceName: 'notification-service',
   port: parseInt(process.env.PORT || '3005', 10),
+  grpcPort: parseInt(process.env.GRPC_PORT || '50058', 10),
   mongodbUri: getRequiredEnv('MONGODB_URI'),
   redis: {
     url: getRequiredEnv('REDIS_URL'),

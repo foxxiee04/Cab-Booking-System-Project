@@ -83,7 +83,7 @@ export const reverseGeocode = async (lat: number, lng: number): Promise<string> 
       params: { lat, lng },
     });
 
-    const address = response.data?.data?.display_name || 'Unknown location';
+    const address = response.data?.data?.address || response.data?.data?.display_name || 'Unknown location';
 
     // Store in cache
     reverseGeocodeCache.set(cacheKey, { address, timestamp: Date.now() });
@@ -93,7 +93,7 @@ export const reverseGeocode = async (lat: number, lng: number): Promise<string> 
   } catch (error) {
     console.error('Reverse geocoding error:', error);
     // Return cached result if available, even if expired
-    return cached?.address || 'Unknown location';
+    return cached?.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   }
 };
 

@@ -13,3 +13,6 @@ export * from './types';
 
 // Export Utilities
 export * from './utils';
+
+// Export gRPC helpers
+export * from './grpc';

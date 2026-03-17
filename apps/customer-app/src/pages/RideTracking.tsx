@@ -1,156 +1,174 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
+  Alert,
+  Avatar,
   Box,
+  Button,
   Card,
   CardContent,
   Chip,
-  Divider,
-  Typography,
-  Button,
   CircularProgress,
-  Alert,
-  Avatar,
+  Divider,
   IconButton,
-  Slide,
-  LinearProgress,
+  Rating,
   Skeleton,
+  Stack,
+  TextField,
+  Typography,
 } from '@mui/material';
-import {
-  ArrowBack,
-  Phone,
-  Chat,
-  Cancel,
-  MyLocation,
-  FiberManualRecord,
-  NavigateNext,
-  StarRate,
-  DirectionsCar,
-} from '@mui/icons-material';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { rideApi } from '../api/ride.api';
-import { clearRide, setCurrentRide } from '../store/ride.slice';
-import MapView from '../components/map/MapView';
-import PickupMarker from '../components/map/PickupMarker';
-import DropoffMarker from '../components/map/DropoffMarker';
-import DriverMarker from '../components/map/DriverMarker';
-import RouteLine from '../components/map/RouteLine';
-import {
-  formatCurrency,
-  getRideStatusColor,
-  getVehicleTypeLabel,
-  getPaymentMethodLabel,
-} from '../utils/format.utils';
+import { ArrowBack, Cancel, Chat, PaymentRounded, Phone, StarRate } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { RideStatus } from '../types';
+import { BookingMap, useSocket } from '../features/booking';
+import { paymentApi } from '../api/payment.api';
+import { reviewApi, RideReview } from '../api/review.api';
+import { rideApi } from '../api/ride.api';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { clearRide, setCurrentRide, setDriver, updateRideStatus } from '../store/ride.slice';
+import { Payment } from '../types';
+import { formatCurrency, formatDate, getPaymentMethodLabel, getVehicleTypeLabel } from '../utils/format.utils';
 
-// ── Status configuration ────────────────────────────────────────
-const STATUS_CONFIG: Record<string, {
-  label: string;
-  description: string;
-  color: string;
-  showCancel: boolean;
-  showDriverInfo: boolean;
-  showRoute: boolean;
-  pulseAnimation: boolean;
-}> = {
+const STATUS_META: Record<string, { label: string; description: string; color: string; allowCancel: boolean }> = {
   PENDING: {
-    label: 'Searching for Driver',
-    description: 'Looking for the nearest available driver...',
-    color: '#FF9800',
-    showCancel: true,
-    showDriverInfo: false,
-    showRoute: false,
-    pulseAnimation: true,
+    label: 'Dang tim tai xe',
+    description: 'He thong dang ghep tai xe gan nhat cho chuyen di cua ban.',
+    color: '#f59e0b',
+    allowCancel: true,
   },
   ASSIGNED: {
-    label: 'Driver Found!',
-    description: 'A driver has been assigned to your ride',
-    color: '#2196F3',
-    showCancel: true,
-    showDriverInfo: true,
-    showRoute: true,
-    pulseAnimation: false,
+    label: 'Da co tai xe nhan chuyen',
+    description: 'Tai xe da duoc gan va dang chuan bi di chuyen toi ban.',
+    color: '#2563eb',
+    allowCancel: true,
   },
   ACCEPTED: {
-    label: 'Driver is Coming',
-    description: 'Your driver is on the way to pick you up',
-    color: '#2196F3',
-    showCancel: true,
-    showDriverInfo: true,
-    showRoute: true,
-    pulseAnimation: false,
+    label: 'Tai xe dang toi don',
+    description: 'Theo doi vi tri tai xe theo thoi gian thuc tren ban do.',
+    color: '#2563eb',
+    allowCancel: true,
   },
   IN_PROGRESS: {
-    label: 'Trip in Progress',
-    description: 'Enjoy your ride!',
-    color: '#4CAF50',
-    showCancel: false,
-    showDriverInfo: true,
-    showRoute: true,
-    pulseAnimation: false,
+    label: 'Dang trong chuyen di',
+    description: 'Chuyen di dang dien ra. Hay kiem tra lo trinh va cuoc phi.',
+    color: '#16a34a',
+    allowCancel: false,
   },
   COMPLETED: {
-    label: 'Trip Completed',
-    description: 'Thank you for riding with us!',
-    color: '#4CAF50',
-    showCancel: false,
-    showDriverInfo: true,
-    showRoute: false,
-    pulseAnimation: false,
+    label: 'Chuyen di da hoan thanh',
+    description: 'Xem hoa don va de lai danh gia cho tai xe.',
+    color: '#16a34a',
+    allowCancel: false,
   },
   CANCELLED: {
-    label: 'Ride Cancelled',
-    description: 'This ride has been cancelled',
-    color: '#F44336',
-    showCancel: false,
-    showDriverInfo: false,
-    showRoute: false,
-    pulseAnimation: false,
+    label: 'Chuyen di da huy',
+    description: 'Ban co the quay ve trang chu de dat chuyen khac.',
+    color: '#dc2626',
+    allowCancel: false,
   },
   NO_DRIVER_AVAILABLE: {
-    label: 'No Drivers Available',
-    description: 'Sorry, no drivers are available right now. Please try again.',
-    color: '#F44336',
-    showCancel: false,
-    showDriverInfo: false,
-    showRoute: false,
-    pulseAnimation: false,
+    label: 'Khong co tai xe phu hop',
+    description: 'Hay thu lai sau it phut hoac doi diem don.',
+    color: '#dc2626',
+    allowCancel: false,
   },
 };
 
-// ── Pulse animation keyframes (CSS-in-JS) ──────────────────────
-const pulseKeyframes = `
-@keyframes radar-pulse {
-  0% { transform: scale(1); opacity: 0.8; }
-  100% { transform: scale(3); opacity: 0; }
-}
-@keyframes searching-dot {
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1); }
-}
-`;
+const formatDistanceKm = (distance: number | null | undefined) => {
+  if (!distance || Number.isNaN(distance)) {
+    return '0 km';
+  }
+
+  return distance >= 1000 ? `${(distance / 1000).toFixed(1)} km` : `${distance.toFixed(1)} km`;
+};
+
+const formatDuration = (duration: number | null | undefined) => {
+  if (!duration || Number.isNaN(duration)) {
+    return '0 phut';
+  }
+
+  const minutes = duration > 180 ? Math.round(duration / 60) : Math.round(duration);
+  return `${minutes} phut`;
+};
 
 const RideTracking: React.FC = () => {
   const { rideId } = useParams();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
-
   const { currentRide, driver } = useAppSelector((state) => state.ride);
+  const { accessToken } = useAppSelector((state) => state.auth);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [cancelling, setCancelling] = useState(false);
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [payment, setPayment] = useState<Payment | null>(null);
+  const [existingReview, setExistingReview] = useState<RideReview | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [rating, setRating] = useState<number | null>(5);
+  const [comment, setComment] = useState('');
 
-  // Poll for ride updates every 5 seconds
+  const hydrateRide = useCallback(async () => {
+    if (!rideId) {
+      return;
+    }
+
+    const response = await rideApi.getRide(rideId);
+    const ride = response.data.ride;
+    dispatch(setCurrentRide(ride));
+    if ((ride as any).driver) {
+      dispatch(setDriver((ride as any).driver));
+    }
+  }, [dispatch, rideId]);
+
+  const hydrateReceipt = useCallback(async () => {
+    if (!rideId) {
+      return;
+    }
+
+    setPaymentLoading(true);
+    setReviewLoading(true);
+
+    try {
+      const [paymentResult, reviewResult] = await Promise.allSettled([
+        paymentApi.getPaymentByRide(rideId),
+        reviewApi.getRideReviews(rideId),
+      ]);
+
+      if (paymentResult.status === 'fulfilled') {
+        setPayment(paymentResult.value.data.payment || null);
+      }
+
+      if (reviewResult.status === 'fulfilled') {
+        const review = reviewResult.value.reviews?.[0] || null;
+        setExistingReview(review);
+        if (review) {
+          setRating(review.rating);
+          setComment(review.comment || '');
+        }
+      }
+    } finally {
+      setPaymentLoading(false);
+      setReviewLoading(false);
+    }
+  }, [rideId]);
+
+  const { driverLocation, lastRideStatus } = useSocket({
+    token: accessToken,
+    rideId,
+    driverId: currentRide?.driverId || undefined,
+    enabled: Boolean(accessToken && rideId),
+  });
+
   useEffect(() => {
-    if (!rideId) return;
+    if (!rideId) {
+      return;
+    }
 
     const fetchRide = async () => {
       try {
-        const response = await rideApi.getRide(rideId);
-        dispatch(setCurrentRide(response.data.ride));
+        await hydrateRide();
       } catch (err: any) {
         if (!currentRide) {
           setError(err.response?.data?.error?.message || t('errors.loadRide'));
@@ -158,24 +176,43 @@ const RideTracking: React.FC = () => {
       }
     };
 
-    // Initial fetch only if we don't have the ride
     if (!currentRide || currentRide.id !== rideId) {
       setLoading(true);
       fetchRide().finally(() => setLoading(false));
     }
 
-    // Poll for updates while ride is active
-    const interval = setInterval(() => {
+    const interval = window.setInterval(() => {
       if (currentRide?.status !== 'COMPLETED' && currentRide?.status !== 'CANCELLED') {
         fetchRide();
       }
-    }, 5000);
+    }, 12000);
 
-    return () => clearInterval(interval);
-  }, [dispatch, rideId]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => window.clearInterval(interval);
+  }, [currentRide, hydrateRide, rideId, t]);
+
+  useEffect(() => {
+    if (!lastRideStatus || !rideId) {
+      return;
+    }
+
+    dispatch(updateRideStatus({ rideId: lastRideStatus.rideId, status: lastRideStatus.status }));
+    hydrateRide().catch(() => undefined);
+  }, [dispatch, hydrateRide, lastRideStatus, rideId]);
+
+  useEffect(() => {
+    if (currentRide?.status === 'COMPLETED') {
+      hydrateReceipt().catch((err) => {
+        console.error(err);
+        setError('Khong the tai hoa don chuyen di.');
+      });
+    }
+  }, [currentRide?.status, hydrateReceipt]);
 
   const handleCancel = useCallback(async () => {
-    if (!currentRide) return;
+    if (!currentRide) {
+      return;
+    }
+
     setCancelling(true);
     try {
       await rideApi.cancelRide(currentRide.id, 'Customer cancelled');
@@ -185,44 +222,75 @@ const RideTracking: React.FC = () => {
       setError(err.response?.data?.error?.message || t('errors.cancelRide'));
     } finally {
       setCancelling(false);
-      setShowCancelConfirm(false);
     }
   }, [currentRide, dispatch, navigate, t]);
 
+  const handleSubmitReview = useCallback(async () => {
+    if (!currentRide?.id || !currentRide.driverId || !driver || !rating) {
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      const response = await reviewApi.createRideReview({
+        rideId: currentRide.id,
+        revieweeId: currentRide.driverId,
+        revieweeName: `${driver.firstName || ''} ${driver.lastName || ''}`.trim() || 'Tai xe',
+        rating,
+        comment: comment.trim() || undefined,
+      });
+      setExistingReview(response.review);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Khong the gui danh gia luc nay.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  }, [comment, currentRide, driver, rating]);
+
   const status = currentRide?.status || 'PENDING';
-  const statusCfg = STATUS_CONFIG[status] || STATUS_CONFIG.PENDING;
+  const statusMeta = STATUS_META[status] || STATUS_META.PENDING;
 
-  const mapCenter = useMemo(() => {
-    if (driver?.currentLocation) return driver.currentLocation;
-    if (currentRide?.pickup) return currentRide.pickup;
-    return { lat: 10.762622, lng: 106.660172 };
-  }, [driver?.currentLocation, currentRide?.pickup]);
+  const effectiveDriverLocation = useMemo(() => {
+    if (driverLocation) {
+      return driverLocation;
+    }
 
-  // ── Loading state ─────────────────────────────────────────────
+    if (driver?.currentLocation) {
+      return {
+        driverId: driver.id,
+        lat: driver.currentLocation.lat,
+        lng: driver.currentLocation.lng,
+      };
+    }
+
+    return null;
+  }, [driver, driverLocation]);
+
   if (loading && !currentRide) {
     return (
-      <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-        <Box sx={{ p: 2 }}>
-          <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 2 }} />
-          <Skeleton variant="text" sx={{ mt: 2, fontSize: 28 }} />
-          <Skeleton variant="text" sx={{ fontSize: 16 }} />
-          <Skeleton variant="rectangular" height={100} sx={{ mt: 2, borderRadius: 2 }} />
-        </Box>
+      <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', p: 2 }}>
+        <Skeleton variant="rectangular" height={320} sx={{ borderRadius: 4 }} />
+        <Skeleton variant="text" sx={{ mt: 2, fontSize: 32 }} />
+        <Skeleton variant="text" sx={{ fontSize: 18 }} />
+        <Skeleton variant="rectangular" height={240} sx={{ mt: 2, borderRadius: 4 }} />
       </Box>
     );
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: '#f5f5f5' }}>
-      {/* Inject animation keyframes */}
-      <style>{pulseKeyframes}</style>
-
-      {/* ── Top bar ─────────────────────────────────────────────── */}
-      <Box sx={{
-        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1100,
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.5) 0%, transparent 100%)',
-        p: 1, pt: 2,
-      }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: '#e5eefb' }}>
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1100,
+          background: 'linear-gradient(180deg, rgba(15,23,42,0.72) 0%, rgba(15,23,42,0) 100%)',
+          p: 1,
+          pt: 2,
+        }}
+      >
         <IconButton
           onClick={() => {
             if (status === 'COMPLETED' || status === 'CANCELLED' || status === 'NO_DRIVER_AVAILABLE') {
@@ -230,271 +298,135 @@ const RideTracking: React.FC = () => {
               navigate('/home');
             }
           }}
-          sx={{ bgcolor: 'white', boxShadow: 2, '&:hover': { bgcolor: 'grey.100' } }}
-          disabled={status !== 'COMPLETED' && status !== 'CANCELLED' && status !== 'NO_DRIVER_AVAILABLE'}
+          sx={{ bgcolor: 'white', boxShadow: 3, '&:hover': { bgcolor: 'grey.100' } }}
         >
           <ArrowBack />
         </IconButton>
       </Box>
 
-      {/* ── Map (full screen background) ────────────────────────── */}
-      <Box sx={{ flexGrow: 1, position: 'relative' }}>
-        <MapView center={mapCenter} height="100%">
-          {currentRide?.pickup && <PickupMarker location={currentRide.pickup} />}
-          {currentRide?.dropoff && <DropoffMarker location={currentRide.dropoff} />}
-          {driver?.currentLocation && <DriverMarker driver={driver} />}
+      <Box sx={{ flex: currentRide?.status === 'COMPLETED' ? '0 0 44vh' : 1, position: 'relative' }}>
+        <BookingMap
+          pickup={currentRide?.pickup || null}
+          dropoff={currentRide?.dropoff || null}
+          driverLocation={effectiveDriverLocation}
+          mode="tracking"
+          onError={setError}
+          height="100%"
+        />
 
-          {/* Route: driver → pickup (when en route) */}
-          {statusCfg.showRoute && driver?.currentLocation && currentRide?.pickup &&
-            (status === 'ASSIGNED' || status === 'ACCEPTED') && (
-            <RouteLine from={driver.currentLocation} to={currentRide.pickup} color="#2196F3" />
-          )}
-          {/* Route: driver → dropoff (during trip) */}
-          {statusCfg.showRoute && driver?.currentLocation && currentRide?.dropoff &&
-            status === 'IN_PROGRESS' && (
-            <RouteLine from={driver.currentLocation} to={currentRide.dropoff} color="#4CAF50" />
-          )}
-        </MapView>
-
-        {/* ── Radar pulse animation while searching ──────────────── */}
-        {statusCfg.pulseAnimation && currentRide?.pickup && (
-          <Box sx={{
-            position: 'absolute', top: '40%', left: '50%',
-            transform: 'translate(-50%, -50%)', zIndex: 1000,
-            pointerEvents: 'none',
-          }}>
-            <Box sx={{
-              width: 60, height: 60, borderRadius: '50%',
-              bgcolor: 'primary.main', opacity: 0.3,
-              animation: 'radar-pulse 2s infinite',
-            }} />
-          </Box>
-        )}
-
-        {/* ── Error alert ─────────────────────────────────────────── */}
         {error && (
-          <Alert
-            severity="error"
-            onClose={() => setError('')}
-            action={
-              <Button color="inherit" size="small" onClick={() => window.location.reload()}>
-                Retry
-              </Button>
-            }
-            sx={{ position: 'absolute', top: 60, left: 16, right: 16, zIndex: 1100 }}
-          >
+          <Alert severity="error" onClose={() => setError('')} sx={{ position: 'absolute', top: 72, left: 16, right: 16, zIndex: 1200, borderRadius: 3 }}>
             {error}
           </Alert>
         )}
       </Box>
 
-      {/* ── Bottom sheet ─────────────────────────────────────────── */}
-      <Slide direction="up" in mountOnEnter>
-        <Card sx={{
-          borderRadius: '20px 20px 0 0',
-          boxShadow: '0 -4px 20px rgba(0,0,0,0.12)',
-          maxHeight: '55vh',
-          overflow: 'auto',
-        }}>
-          {/* Drag handle */}
-          <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1.5, pb: 0.5 }}>
-            <Box sx={{ width: 40, height: 4, borderRadius: 2, bgcolor: 'grey.300' }} />
-          </Box>
-
-          <CardContent sx={{ pt: 1 }}>
-            {/* ── Status header ───────────────────────────────────── */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-              {statusCfg.pulseAnimation ? (
-                /* Animated searching dots */
-                <Box sx={{ display: 'flex', gap: 0.5, px: 1 }}>
-                  {[0, 1, 2].map((i) => (
-                    <Box key={i} sx={{
-                      width: 10, height: 10, borderRadius: '50%',
-                      bgcolor: statusCfg.color,
-                      animation: `searching-dot 1.4s ${i * 0.16}s infinite both`,
-                    }} />
-                  ))}
-                </Box>
-              ) : (
-                <FiberManualRecord sx={{ color: statusCfg.color, fontSize: 16 }} />
-              )}
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="h6" fontWeight={700} sx={{ color: statusCfg.color }}>
-                  {statusCfg.label}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {statusCfg.description}
-                </Typography>
-              </Box>
+      <Card sx={{ borderRadius: '24px 24px 0 0', boxShadow: '0 -20px 45px rgba(15,23,42,0.14)', overflow: 'auto', minHeight: currentRide?.status === 'COMPLETED' ? '56vh' : '34vh' }}>
+        <CardContent sx={{ p: 3 }}>
+          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2.5 }}>
+            <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: statusMeta.color }} />
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="h6" fontWeight={800}>{statusMeta.label}</Typography>
+              <Typography variant="body2" color="text.secondary">{statusMeta.description}</Typography>
             </Box>
+            <Chip label={status} size="small" sx={{ bgcolor: `${statusMeta.color}18`, color: statusMeta.color, fontWeight: 700 }} />
+          </Stack>
 
-            {/* ── Searching progress bar ──────────────────────────── */}
-            {status === 'PENDING' && (
-              <LinearProgress
-                sx={{ mb: 2, borderRadius: 1, height: 6, bgcolor: '#FFE0B2',
-                  '& .MuiLinearProgress-bar': { bgcolor: '#FF9800' } }}
-              />
-            )}
-
-            {/* ── Driver info card ────────────────────────────────── */}
-            {statusCfg.showDriverInfo && driver && (
-              <Card variant="outlined" sx={{ mb: 2, borderRadius: 3 }}>
-                <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Avatar
-                      sx={{ width: 56, height: 56, bgcolor: 'primary.main', fontSize: 24 }}
-                    >
-                      {driver.firstName?.[0]}{driver.lastName?.[0]}
-                    </Avatar>
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="subtitle1" fontWeight={600}>
-                        {driver.firstName} {driver.lastName}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                        <StarRate sx={{ color: '#FFC107', fontSize: 18 }} />
-                        <Typography variant="body2" fontWeight={500}>
-                          {driver.rating?.toFixed(1) || '0.0'}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          ({driver.totalRides || 0} rides)
-                        </Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                        <DirectionsCar sx={{ fontSize: 16, color: 'text.secondary' }} />
-                        <Typography variant="body2" color="text.secondary">
-                          {driver.vehicleColor} {driver.vehicleMake} {driver.vehicleModel}
-                        </Typography>
-                      </Box>
-                      {driver.licensePlate && (
-                        <Chip
-                          label={driver.licensePlate}
-                          size="small"
-                          variant="outlined"
-                          sx={{ mt: 0.5, fontWeight: 700, letterSpacing: 1 }}
-                        />
-                      )}
-                    </Box>
-
-                    {/* Call button */}
-                    {driver.phoneNumber && (
-                      <IconButton
-                        color="primary"
-                        href={`tel:${driver.phoneNumber}`}
-                        sx={{ bgcolor: 'primary.50', '&:hover': { bgcolor: 'primary.100' } }}
-                      >
-                        <Phone />
-                      </IconButton>
-                    )}
-                  </Box>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* ── Pickup / Dropoff ────────────────────────────────── */}
-            {currentRide && (
-              <Box sx={{ mb: 2 }}>
-                {/* Pickup */}
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                  <Box sx={{
-                    width: 12, height: 12, borderRadius: '50%', mt: 0.8,
-                    bgcolor: '#4CAF50', border: '2px solid white',
-                    boxShadow: '0 0 0 2px #4CAF50',
-                  }} />
+          {driver && status !== 'CANCELLED' && status !== 'NO_DRIVER_AVAILABLE' && (
+            <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#f8fafc' }}>
+              <CardContent>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Avatar sx={{ width: 56, height: 56, bgcolor: '#1d4ed8' }} src={driver.avatar}>
+                    {driver.firstName?.[0] || 'D'}
+                  </Avatar>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" color="text.secondary">PICKUP</Typography>
-                    <Typography variant="body2" fontWeight={500}>
-                      {currentRide.pickup?.address || 'Pickup location'}
-                    </Typography>
+                    <Typography variant="subtitle1" fontWeight={800}>{`${driver.firstName || ''} ${driver.lastName || ''}`.trim() || 'Tai xe'}</Typography>
+                    <Typography variant="body2" color="text.secondary">{[driver.vehicleColor, driver.vehicleMake, driver.vehicleModel].filter(Boolean).join(' ')}</Typography>
+                    <Typography variant="body2" fontWeight={700}>{driver.licensePlate}</Typography>
                   </Box>
-                </Box>
+                  <Chip icon={<StarRate sx={{ color: '#f59e0b !important' }} />} label={(driver.rating || 5).toFixed(1)} variant="outlined" />
+                </Stack>
+                <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
+                  <Button variant="outlined" fullWidth startIcon={<Phone />} sx={{ borderRadius: 3, py: 1.2 }}>Call</Button>
+                  <Button variant="outlined" fullWidth startIcon={<Chat />} sx={{ borderRadius: 3, py: 1.2 }}>Chat</Button>
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
 
-                {/* Connecting line */}
-                <Box sx={{
-                  width: 2, height: 24, bgcolor: 'grey.300',
-                  ml: '5px', my: 0.5,
-                }} />
+          {currentRide && (
+            <Card sx={{ borderRadius: 4, mb: 2.5 }}>
+              <CardContent>
+                <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1.5 }}>Chi tiet chuyen di</Typography>
+                <Stack spacing={1.2}>
+                  <Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="body2" color="text.secondary">Diem don</Typography><Typography variant="body2" fontWeight={600} textAlign="right">{currentRide.pickup?.address || '-'}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="body2" color="text.secondary">Diem den</Typography><Typography variant="body2" fontWeight={600} textAlign="right">{currentRide.dropoff?.address || '-'}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Loai xe</Typography><Typography variant="body2" fontWeight={600}>{getVehicleTypeLabel(currentRide.vehicleType || 'ECONOMY')}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thanh toan</Typography><Typography variant="body2" fontWeight={600}>{getPaymentMethodLabel(currentRide.paymentMethod || 'CASH')}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Quang duong</Typography><Typography variant="body2" fontWeight={600}>{formatDistanceKm(currentRide.distance)}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thoi luong</Typography><Typography variant="body2" fontWeight={600}>{formatDuration(currentRide.duration)}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Cuoc phi</Typography><Typography variant="body2" fontWeight={800}>{formatCurrency(currentRide.fare || 0)}</Typography></Stack>
+                </Stack>
 
-                {/* Dropoff */}
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                  <Box sx={{
-                    width: 12, height: 12, borderRadius: 1, mt: 0.8,
-                    bgcolor: '#F44336', border: '2px solid white',
-                    boxShadow: '0 0 0 2px #F44336',
-                  }} />
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" color="text.secondary">DROPOFF</Typography>
-                    <Typography variant="body2" fontWeight={500}>
-                      {currentRide.dropoff?.address || 'Dropoff location'}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-            )}
-
-            <Divider sx={{ my: 1.5 }} />
-
-            {/* ── Fare & ride info ────────────────────────────────── */}
-            {currentRide && (
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    {currentRide.vehicleType && getVehicleTypeLabel(currentRide.vehicleType)}
-                    {currentRide.paymentMethod && ` • ${getPaymentMethodLabel(currentRide.paymentMethod)}`}
-                  </Typography>
-                </Box>
-                <Typography variant="h5" fontWeight={700} color="primary.main">
-                  {currentRide.fare ? formatCurrency(currentRide.fare) : '---'}
-                </Typography>
-              </Box>
-            )}
-
-            {/* ── Action buttons ──────────────────────────────────── */}
-            {statusCfg.showCancel && (
-              <>
-                {showCancelConfirm ? (
-                  <Box sx={{ display: 'flex', gap: 1.5 }}>
-                    <Button
-                      fullWidth variant="outlined" size="large"
-                      onClick={() => setShowCancelConfirm(false)}
-                      sx={{ borderRadius: 3, py: 1.5 }}
-                    >
-                      Keep Ride
-                    </Button>
-                    <Button
-                      fullWidth variant="contained" color="error" size="large"
-                      onClick={handleCancel}
-                      disabled={cancelling}
-                      sx={{ borderRadius: 3, py: 1.5 }}
-                    >
-                      {cancelling ? <CircularProgress size={22} color="inherit" /> : 'Yes, Cancel'}
-                    </Button>
-                  </Box>
-                ) : (
-                  <Button
-                    fullWidth variant="outlined" color="error" size="large"
-                    startIcon={<Cancel />}
-                    onClick={() => setShowCancelConfirm(true)}
-                    sx={{ borderRadius: 3, py: 1.5 }}
-                  >
-                    Cancel Ride
+                {statusMeta.allowCancel && (
+                  <Button color="error" variant="outlined" startIcon={cancelling ? <CircularProgress size={16} /> : <Cancel />} fullWidth onClick={handleCancel} disabled={cancelling} sx={{ borderRadius: 3, py: 1.2, mt: 2.5 }}>
+                    Huy chuyen
                   </Button>
                 )}
-              </>
-            )}
+              </CardContent>
+            </Card>
+          )}
 
-            {/* Completed / cancelled → go home */}
-            {(status === 'COMPLETED' || status === 'CANCELLED' || status === 'NO_DRIVER_AVAILABLE') && (
-              <Button
-                fullWidth variant="contained" size="large"
-                onClick={() => { dispatch(clearRide()); navigate('/home'); }}
-                sx={{ borderRadius: 3, py: 1.5 }}
-              >
-                {status === 'COMPLETED' ? 'Rate & Go Home' : 'Back to Home'}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      </Slide>
+          {status === 'COMPLETED' && currentRide && (
+            <>
+              <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#eff6ff' }}>
+                <CardContent>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                    <Typography variant="subtitle1" fontWeight={800}>Hoa don chuyen di</Typography>
+                    {(paymentLoading || reviewLoading) && <CircularProgress size={18} />}
+                  </Stack>
+                  <Stack spacing={1.25}>
+                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Ma chuyen</Typography><Typography variant="body2" fontWeight={600}>{currentRide.id.slice(0, 8).toUpperCase()}</Typography></Stack>
+                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thoi gian dat</Typography><Typography variant="body2" fontWeight={600}>{formatDate(currentRide.requestedAt)}</Typography></Stack>
+                    {currentRide.completedAt && <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Hoan thanh luc</Typography><Typography variant="body2" fontWeight={600}>{formatDate(currentRide.completedAt)}</Typography></Stack>}
+                    <Divider sx={{ my: 0.5 }} />
+                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">So tien</Typography><Typography variant="h6" fontWeight={900}>{formatCurrency(payment?.amount || currentRide.fare || 0)}</Typography></Stack>
+                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Phuong thuc</Typography><Typography variant="body2" fontWeight={600}>{getPaymentMethodLabel(payment?.method || currentRide.paymentMethod || 'CASH')}</Typography></Stack>
+                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Trang thai thanh toan</Typography><Chip size="small" icon={<PaymentRounded />} label={payment?.status || 'PENDING'} color={payment?.status === 'COMPLETED' ? 'success' : payment?.status === 'FAILED' ? 'error' : 'warning'} /></Stack>
+                  </Stack>
+                </CardContent>
+              </Card>
+
+              <Card sx={{ borderRadius: 4 }}>
+                <CardContent>
+                  <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>{existingReview ? 'Danh gia cua ban' : 'Danh gia tai xe'}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Phan hoi cua ban giup cai thien chat luong phuc vu va xep hang tai xe.</Typography>
+                  <Stack alignItems="flex-start" spacing={1.5}>
+                    <Rating value={rating} size="large" onChange={(_, nextValue) => { if (!existingReview) { setRating(nextValue); } }} readOnly={Boolean(existingReview)} />
+                    <TextField fullWidth multiline minRows={4} label="Nhan xet" value={comment} onChange={(event) => { if (!existingReview) { setComment(event.target.value); } }} InputProps={{ readOnly: Boolean(existingReview) }} />
+                  </Stack>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2.5 }}>
+                    {!existingReview && (
+                      <Button variant="contained" onClick={handleSubmitReview} disabled={!rating || submittingReview || !driver || !currentRide.driverId} sx={{ borderRadius: 3, py: 1.3, fontWeight: 700 }}>
+                        {submittingReview ? 'Dang gui...' : 'Gui danh gia'}
+                      </Button>
+                    )}
+                    <Button variant={existingReview ? 'contained' : 'outlined'} onClick={() => { dispatch(clearRide()); navigate('/home'); }} sx={{ borderRadius: 3, py: 1.3, fontWeight: 700 }}>
+                      Ve trang chu
+                    </Button>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {(status === 'CANCELLED' || status === 'NO_DRIVER_AVAILABLE') && (
+            <Button variant="contained" fullWidth onClick={() => { dispatch(clearRide()); navigate('/home'); }} sx={{ borderRadius: 3, py: 1.4, fontWeight: 700 }}>
+              Quay ve trang chu
+            </Button>
+          )}
+        </CardContent>
+      </Card>
     </Box>
   );
 };

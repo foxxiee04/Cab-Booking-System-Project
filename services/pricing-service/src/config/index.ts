@@ -11,6 +11,7 @@ function getRequiredEnv(name: string): string {
 export const config = {
   serviceName: 'pricing-service',
   port: parseInt(process.env.PORT || '3009', 10),
+  grpcPort: parseInt(process.env.GRPC_PORT || '50057', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   
   ai: {

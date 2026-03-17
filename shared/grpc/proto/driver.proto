@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package cab.booking.grpc.driver;
+
+service DriverService {
+  rpc GetDriverById(GetDriverByIdRequest) returns (DriverResponse);
+  rpc GetDriverByUserId(GetDriverByUserIdRequest) returns (DriverResponse);
+}
+
+message GetDriverByIdRequest {
+  string driverId = 1;
+}
+
+message GetDriverByUserIdRequest {
+  string userId = 1;
+}
+
+message DriverData {
+  string id = 1;
+  string userId = 2;
+  string status = 3;
+  string availabilityStatus = 4;
+  double lastLocationLat = 5;
+  double lastLocationLng = 6;
+}
+
+message DriverResponse {
+  DriverData driver = 1;
+}

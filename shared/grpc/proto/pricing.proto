@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package cab.booking.grpc.pricing;
+
+service PricingService {
+  rpc EstimateFare(EstimateFareRequest) returns (EstimateFareResponse);
+}
+
+message EstimateFareRequest {
+  double pickupLat = 1;
+  double pickupLng = 2;
+  double dropoffLat = 3;
+  double dropoffLng = 4;
+  string vehicleType = 5;
+}
+
+message FareBreakdown {
+  double baseFare = 1;
+  double distanceFare = 2;
+  double timeFare = 3;
+  double subtotal = 4;
+  double surgeAmount = 5;
+}
+
+message EstimateFareResponse {
+  double fare = 1;
+  double distance = 2;
+  double duration = 3;
+  double durationMinutes = 4;
+  double surgeMultiplier = 5;
+  FareBreakdown breakdown = 6;
+}

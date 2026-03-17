@@ -1,37 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
+  Alert,
   Box,
-  Typography,
-  Stepper,
-  Step,
-  StepLabel,
+  Button,
   Card,
   CardContent,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  Drawer,
+  FormControl,
+  FormControlLabel,
   Grid,
   Radio,
   RadioGroup,
-  FormControlLabel,
-  FormControl,
-  CircularProgress,
-  Alert,
-  Divider,
-  Chip,
+  Stack,
+  Step,
+  StepLabel,
+  Stepper,
+  Typography,
+  useMediaQuery,
 } from '@mui/material';
 import {
+  AccountBalanceWallet,
+  AirportShuttle,
+  CreditCard,
   DirectionsCar,
   LocalTaxi,
-  AirportShuttle,
-  Payment,
-  CreditCard,
-  AccountBalanceWallet,
   MoneyOff,
 } from '@mui/icons-material';
-import { useTranslation } from 'react-i18next';
+import { useTheme } from '@mui/material/styles';
 import { formatCurrency } from '../../utils/format.utils';
 import { formatDistance } from '../../utils/map.utils';
 import { pricingApi } from '../../api/pricing.api';
@@ -102,7 +104,8 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
   dropoff,
   onRideCreated,
 }) => {
-  const { t } = useTranslation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [activeStep, setActiveStep] = useState(0);
   const [selectedVehicle, setSelectedVehicle] = useState<'ECONOMY' | 'COMFORT' | 'PREMIUM'>('ECONOMY');
   const [selectedPayment, setSelectedPayment] = useState<'CASH' | 'CARD' | 'WALLET'>('CASH');
@@ -111,16 +114,10 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const steps = ['Select Vehicle', 'Payment Method', 'Confirm'];
+  const steps = ['Chọn xe', 'Thanh toán', 'Xác nhận'];
 
   // Fetch price estimates for all vehicle types
-  useEffect(() => {
-    if (open && pickup && dropoff) {
-      fetchPriceEstimates();
-    }
-  }, [open, pickup, dropoff]);
-
-  const fetchPriceEstimates = async () => {
+  const fetchPriceEstimates = useCallback(async () => {
     setLoading(true);
     setError('');
 
@@ -149,7 +146,13 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [dropoff, pickup]);
+
+  useEffect(() => {
+    if (open && pickup && dropoff) {
+      fetchPriceEstimates();
+    }
+  }, [dropoff, fetchPriceEstimates, open, pickup]);
 
   const handleNext = () => {
     setActiveStep((prev) => prev + 1);
@@ -187,8 +190,8 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
       case 0: // Vehicle Selection
         return (
           <Box>
-            <Typography variant="h6" gutterBottom>
-              Choose your ride
+            <Typography variant="h6" gutterBottom fontWeight={800}>
+              Chọn loại xe phù hợp
             </Typography>
             <Grid container spacing={2}>
               {vehicleOptions.map((vehicle) => {
@@ -200,8 +203,9 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                       sx={{
                         cursor: 'pointer',
                         border: selectedVehicle === vehicle.type ? 2 : 1,
-                        borderColor:
-                          selectedVehicle === vehicle.type ? 'primary.main' : 'divider',
+                        borderColor: selectedVehicle === vehicle.type ? 'primary.main' : 'divider',
+                        borderRadius: 4,
+                        boxShadow: selectedVehicle === vehicle.type ? '0 10px 28px rgba(37,99,235,0.18)' : undefined,
                       }}
                       onClick={() => setSelectedVehicle(vehicle.type)}
                     >
@@ -210,7 +214,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                           <Box display="flex" alignItems="center" gap={2}>
                             <Box color="primary.main">{vehicle.icon}</Box>
                             <Box>
-                              <Typography variant="h6">{vehicle.name}</Typography>
+                              <Typography variant="h6" fontWeight={800}>{vehicle.name}</Typography>
                               <Typography variant="body2" color="text.secondary">
                                 {vehicle.description} • {vehicle.capacity} seats
                               </Typography>
@@ -254,7 +258,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
         return (
           <Box>
             <Typography variant="h6" gutterBottom>
-              Payment Method
+              Phương thức thanh toán
             </Typography>
             <FormControl component="fieldset" fullWidth>
               <RadioGroup
@@ -265,7 +269,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                   <Card
                     key={option.method}
                     variant="outlined"
-                    sx={{ mb: 2, cursor: 'pointer' }}
+                    sx={{ mb: 2, cursor: 'pointer', borderRadius: 4 }}
                     onClick={() => setSelectedPayment(option.method as any)}
                   >
                     <CardContent>
@@ -291,37 +295,37 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
         return (
           <Box>
             <Typography variant="h6" gutterBottom>
-              Confirm Your Ride
+              Xác nhận chuyến đi
             </Typography>
-            <Card variant="outlined">
+            <Card variant="outlined" sx={{ borderRadius: 4 }}>
               <CardContent>
                 <Box mb={2}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Pickup
+                    Điểm đón
                   </Typography>
                   <Typography>{pickup.address || 'Selected location'}</Typography>
                 </Box>
                 <Box mb={2}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Dropoff
+                    Điểm đến
                   </Typography>
                   <Typography>{dropoff.address || 'Selected location'}</Typography>
                 </Box>
                 <Divider sx={{ my: 2 }} />
                 <Box display="flex" justifyContent="space-between" mb={1}>
-                  <Typography>Vehicle</Typography>
+                  <Typography>Loại xe</Typography>
                   <Typography fontWeight="bold">
                     {vehicleOptions.find((v) => v.type === selectedVehicle)?.name}
                   </Typography>
                 </Box>
                 <Box display="flex" justifyContent="space-between" mb={1}>
-                  <Typography>Payment</Typography>
+                  <Typography>Thanh toán</Typography>
                   <Typography fontWeight="bold">
                     {paymentOptions.find((p) => p.method === selectedPayment)?.label}
                   </Typography>
                 </Box>
                 <Box display="flex" justifyContent="space-between">
-                  <Typography variant="h6">Total Fare</Typography>
+                  <Typography variant="h6">Tổng cước</Typography>
                   <Typography variant="h6" color="primary">
                     {selectedEstimate && formatCurrency(selectedEstimate.fare)}
                   </Typography>
@@ -329,8 +333,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
               </CardContent>
             </Card>
             <Alert severity="info" sx={{ mt: 2 }}>
-              We'll find the nearest available driver for you. This usually takes less than a
-              minute.
+              Hệ thống sẽ chuyển sang bước tìm tài xế gần nhất ngay sau khi bạn xác nhận chuyến.
             </Alert>
           </Box>
         );
@@ -340,16 +343,24 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
     }
   };
 
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        <Stepper activeStep={activeStep}>
-          {steps.map((label) => (
-            <Step key={label}>
-              <StepLabel>{label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
+  const content = (
+    <>
+      <DialogTitle sx={{ pb: 1.5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+          <Box sx={{ width: 42, height: 4, borderRadius: 999, bgcolor: 'grey.300' }} />
+        </Box>
+        <Stack spacing={1}>
+          <Typography variant="h6" fontWeight={800}>
+            Hoàn tất đặt xe
+          </Typography>
+          <Stepper activeStep={activeStep} alternativeLabel={!isMobile}>
+            {steps.map((label) => (
+              <Step key={label}>
+                <StepLabel>{label}</StepLabel>
+              </Step>
+            ))}
+          </Stepper>
+        </Stack>
       </DialogTitle>
       <DialogContent>
         {error && (
@@ -365,33 +376,49 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
           renderStepContent()
         )}
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ px: 3, pb: 3, pt: 1.5 }}>
         <Button onClick={onClose} disabled={creating}>
-          Cancel
+          Hủy
         </Button>
         {activeStep > 0 && (
           <Button onClick={handleBack} disabled={creating}>
-            Back
+            Quay lại
           </Button>
         )}
         {activeStep < steps.length - 1 ? (
-          <Button
-            onClick={handleNext}
-            variant="contained"
-            disabled={loading || !selectedEstimate}
-          >
-            Next
+          <Button onClick={handleNext} variant="contained" disabled={loading || !selectedEstimate} sx={{ borderRadius: 3, minWidth: 132 }}>
+            Tiếp tục
           </Button>
         ) : (
-          <Button
-            onClick={handleConfirmBooking}
-            variant="contained"
-            disabled={creating || loading}
-          >
-            {creating ? <CircularProgress size={24} /> : 'Confirm & Find Driver'}
+          <Button onClick={handleConfirmBooking} variant="contained" disabled={creating || loading} sx={{ borderRadius: 3, minWidth: 182 }}>
+            {creating ? <CircularProgress size={24} /> : 'Xác nhận và tìm tài xế'}
           </Button>
         )}
       </DialogActions>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer
+        anchor="bottom"
+        open={open}
+        onClose={onClose}
+        PaperProps={{
+          sx: {
+            borderRadius: '24px 24px 0 0',
+            maxHeight: '92vh',
+          },
+        }}
+      >
+        {content}
+      </Drawer>
+    );
+  }
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 5 } }}>
+      {content}
     </Dialog>
   );
 };

@@ -1,11 +1,10 @@
 import React from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   AppBar,
   Toolbar,
   Typography,
   IconButton,
-  Box,
   Menu,
   MenuItem,
   Avatar,
@@ -36,7 +35,6 @@ const NavigationBar: React.FC<NavigationBarProps> = ({
   onMenuClick,
 }) => {
   const navigate = useNavigate();
-  const location = useLocation();
   const dispatch = useAppDispatch();
   const { t, i18n } = useTranslation();
   const { user } = useAppSelector((state) => state.auth);

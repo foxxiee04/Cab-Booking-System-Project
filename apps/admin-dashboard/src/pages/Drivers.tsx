@@ -24,8 +24,8 @@ const Drivers: React.FC = () => {
           limit: PAGE_SIZE,
           offset: page * PAGE_SIZE,
         });
-        setRows(response.data.drivers || []);
-        setTotal(response.data.total || 0);
+        setRows(response.data?.drivers || []);
+        setTotal(response.data?.total || 0);
       } catch (err: any) {
         setError(err.response?.data?.error?.message || t('errors.loadDrivers'));
       } finally {
@@ -34,7 +34,7 @@ const Drivers: React.FC = () => {
     };
 
     fetchDrivers();
-  }, [page]);
+  }, [page, t]);
 
   const columns: GridColDef<Driver>[] = [
     { field: 'id', headerName: t('columns.driverId'), flex: 1, minWidth: 200 },

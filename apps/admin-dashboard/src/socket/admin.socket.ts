@@ -6,8 +6,27 @@ import { Ride, Payment } from '../types';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
 
+export interface AdminRealtimeEvent {
+  id: string;
+  type: 'ride:created' | 'ride:completed' | 'ride:cancelled' | 'driver:online' | 'driver:offline' | 'payment:completed';
+  timestamp: string;
+  title: string;
+  detail: string;
+  tone: 'info' | 'success' | 'warning';
+}
+
 class AdminSocketService {
   private socket: Socket | null = null;
+  private listeners = new Set<() => void>();
+  private eventListeners = new Set<(event: AdminRealtimeEvent) => void>();
+
+  private notifyListeners() {
+    this.listeners.forEach((listener) => listener());
+  }
+
+  private emitRealtimeEvent(event: AdminRealtimeEvent) {
+    this.eventListeners.forEach((listener) => listener(event));
+  }
 
   connect(accessToken: string) {
     if (this.socket?.connected) {
@@ -59,6 +78,17 @@ class AdminSocketService {
           message: `New ride created: ${data.ride.id.substring(0, 8)}`,
         })
       );
+
+      this.emitRealtimeEvent({
+        id: `ride-created-${data.ride.id}-${Date.now()}`,
+        type: 'ride:created',
+        timestamp: new Date().toISOString(),
+        title: 'Ride created',
+        detail: `Chuyen ${data.ride.id.substring(0, 8)} vua duoc tao.`,
+        tone: 'info',
+      });
+
+      this.notifyListeners();
     });
 
     // Listen for completed rides
@@ -88,6 +118,17 @@ class AdminSocketService {
           message: `Ride completed: ${data.ride.id.substring(0, 8)}`,
         })
       );
+
+      this.emitRealtimeEvent({
+        id: `ride-completed-${data.ride.id}-${Date.now()}`,
+        type: 'ride:completed',
+        timestamp: new Date().toISOString(),
+        title: 'Ride completed',
+        detail: `Chuyen ${data.ride.id.substring(0, 8)} da hoan thanh voi doanh thu ${data.ride.fare.toLocaleString('vi-VN')} VND.`,
+        tone: 'success',
+      });
+
+      this.notifyListeners();
     });
 
     // Listen for cancelled rides
@@ -105,6 +146,17 @@ class AdminSocketService {
           })
         );
       }
+
+      this.emitRealtimeEvent({
+        id: `ride-cancelled-${data.rideId}-${Date.now()}`,
+        type: 'ride:cancelled',
+        timestamp: new Date().toISOString(),
+        title: 'Ride cancelled',
+        detail: `Chuyen ${data.rideId.substring(0, 8)} da bi huy.`,
+        tone: 'warning',
+      });
+
+      this.notifyListeners();
     });
 
     // Listen for driver status changes
@@ -123,6 +175,17 @@ class AdminSocketService {
           })
         );
       }
+
+      this.emitRealtimeEvent({
+        id: `driver-online-${data.driverId}-${Date.now()}`,
+        type: 'driver:online',
+        timestamp: new Date().toISOString(),
+        title: 'Driver online',
+        detail: `Tai xe ${data.driverId.substring(0, 8)} da online.`,
+        tone: 'success',
+      });
+
+      this.notifyListeners();
     });
 
     this.socket.on('driver:offline', (data: { driverId: string }) => {
@@ -140,6 +203,17 @@ class AdminSocketService {
           })
         );
       }
+
+      this.emitRealtimeEvent({
+        id: `driver-offline-${data.driverId}-${Date.now()}`,
+        type: 'driver:offline',
+        timestamp: new Date().toISOString(),
+        title: 'Driver offline',
+        detail: `Tai xe ${data.driverId.substring(0, 8)} da offline.`,
+        tone: 'warning',
+      });
+
+      this.notifyListeners();
     });
 
     // Listen for payments
@@ -158,7 +232,34 @@ class AdminSocketService {
           })
         );
       }
+
+      this.emitRealtimeEvent({
+        id: `payment-completed-${data.payment.id}-${Date.now()}`,
+        type: 'payment:completed',
+        timestamp: new Date().toISOString(),
+        title: 'Payment completed',
+        detail: `Thanh toan ${data.payment.id.substring(0, 8)} da thanh cong.`,
+        tone: 'success',
+      });
+
+      this.notifyListeners();
     });
+  }
+
+  subscribe(listener: () => void) {
+    this.listeners.add(listener);
+
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  subscribeToEvents(listener: (event: AdminRealtimeEvent) => void) {
+    this.eventListeners.add(listener);
+
+    return () => {
+      this.eventListeners.delete(listener);
+    };
   }
 
   disconnect() {

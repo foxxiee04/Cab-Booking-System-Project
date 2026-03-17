@@ -1,8 +1,6 @@
 import { Router } from 'express';
-import { PrismaClient } from '../generated/prisma-client';
 import { PaymentService } from '../services/payment.service';
 import { PaymentController } from '../controllers/payment.controller';
-import { EventPublisher } from '../events/publisher';
 import { authMiddleware } from '../middleware/auth';
 import {
   validateCreatePaymentIntent,
@@ -10,16 +8,17 @@ import {
   validateRefund,
 } from '../validators/payment.validator';
 
-export const createPaymentRoutes = (prisma: PrismaClient, eventPublisher: EventPublisher) => {
+export const createPaymentRoutes = (paymentService: PaymentService) => {
   const router = Router();
-  const paymentService = new PaymentService(prisma, eventPublisher);
   const controller = new PaymentController(paymentService);
 
   // Create card payment intent (modern flow with client secret)
   router.post('/intents', authMiddleware, validateCreatePaymentIntent, controller.createPaymentIntent);
 
-  // Mock webhook endpoint (replace with provider-specific webhook in production)
+  // Webhook endpoints for provider callbacks and local smoke tests.
   router.post('/webhook/mock', validateWebhook, controller.handleWebhook);
+  router.post('/webhooks/mock', validateWebhook, controller.handleWebhook);
+  router.post('/webhooks/momo', controller.handleMomoWebhook);
 
   // Get payment by ride ID
   router.get('/ride/:rideId', authMiddleware, controller.getPaymentByRideId);

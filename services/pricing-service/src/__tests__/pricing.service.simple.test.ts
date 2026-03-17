@@ -107,6 +107,12 @@ describe('PricingService - Simple Test Suite', () => {
           distance_km: 5.5,
           time_of_day: 'RUSH_HOUR',
           day_type: 'WEEKDAY',
+          insights: {
+            demand_level: 'MEDIUM',
+            eta_confidence: 'HIGH',
+            recommended_driver_radius_km: 4,
+            surge_reason: 'Rush hour demand is increasing ETA and fare pressure',
+          },
         },
       });
 
@@ -131,6 +137,14 @@ describe('PricingService - Simple Test Suite', () => {
         expect.objectContaining({
           eta_minutes: 18,
           price_multiplier: 1.4,
+        })
+      );
+      expect(result.operationalHints).toEqual(
+        expect.objectContaining({
+          predictionSource: 'AI',
+          demandLevel: 'MEDIUM',
+          etaConfidence: 'HIGH',
+          recommendedDriverRadiusKm: 4,
         })
       );
     });
@@ -194,6 +208,7 @@ describe('PricingService - Simple Test Suite', () => {
       expect(result.aiPrediction).toBeNull();
       expect(result.surgeMultiplier).toBe(1.2);
       expect(result.durationMinutes).toBe(17);
+      expect(result.operationalHints.predictionSource).toBe('RULE_ENGINE');
     });
 
     it('should keep Redis surge if AI suggests lower multiplier', async () => {

@@ -5,13 +5,16 @@ import { logger } from './utils/logger';
 import { SocketServer } from './socket/socket-server';
 import { EventConsumer } from './events/consumer';
 import { closeMapRedis } from './routes/map';
+import { createServiceHealthChecker } from './grpc/health';
 
 export async function start() {
+  const serviceHealthChecker = createServiceHealthChecker();
   const app = createApp({
     getReadiness: async () => ({
       redis: socketServer.isReady(),
       rabbitmq: eventConsumer.isConnected(),
     }),
+    serviceHealthChecker,
   });
   const httpServer = createServer(app);
   const socketServer = new SocketServer(httpServer);

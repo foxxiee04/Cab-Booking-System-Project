@@ -1,0 +1,9 @@
+{
+  "short_name": "Cab Booking",
+  "name": "Cab Booking Customer App",
+  "icons": [],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#2E7D32",
+  "background_color": "#ffffff"
+}

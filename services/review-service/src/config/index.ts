@@ -15,5 +15,6 @@ function getRequiredEnv(name: string): string {
 export const config = {
   serviceName: 'review-service',
   port: parseInt(process.env.PORT || '3010', 10),
+  grpcPort: parseInt(process.env.GRPC_PORT || '50059', 10),
   mongodbUri: getRequiredEnv('MONGODB_URI'),
 };

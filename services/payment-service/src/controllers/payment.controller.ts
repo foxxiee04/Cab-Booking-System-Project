@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { PaymentService } from '../services/payment.service';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { PaymentStatus } from '../generated/prisma-client';
+import { config } from '../config';
 
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
@@ -37,6 +38,33 @@ export class PaymentController {
         failureReason 
       });
 
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  handleStripeWebhook = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const signature = req.header('stripe-signature');
+
+      if (!signature) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'stripe-signature header is required' },
+        });
+      }
+
+      await this.paymentService.handleStripeWebhook(req.body, signature);
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  handleMomoWebhook = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      await this.paymentService.handleMomoWebhook(req.body);
       res.json({ success: true });
     } catch (error) {
       next(error);
@@ -145,8 +173,9 @@ export class PaymentController {
     try {
       const methods = [
         { id: 'CASH', name: 'Tiền mặt', icon: 'cash', enabled: true },
-        { id: 'CARD', name: 'Thẻ tín dụng/ghi nợ', icon: 'card', enabled: true },
-        { id: 'WALLET', name: 'Ví điện tử', icon: 'wallet', enabled: true },
+        { id: 'CARD', name: 'Thẻ tín dụng/ghi nợ', icon: 'card', enabled: config.stripe.enabled, provider: 'STRIPE' },
+        { id: 'MOMO', name: 'MoMo', icon: 'wallet', enabled: config.momo.enabled, provider: 'MOMO' },
+        { id: 'ZALOPAY', name: 'ZaloPay', icon: 'wallet', enabled: config.zalopay.enabled, provider: 'ZALOPAY' },
       ];
       
       res.json({ success: true, data: { methods } });

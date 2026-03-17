@@ -16,12 +16,14 @@ import { swaggerSpec } from './swagger';
 interface GatewayAppOptions {
   getReadiness: () => Promise<Record<string, boolean>>;
   fetchImpl?: typeof fetch;
+  serviceHealthChecker?: () => Promise<Record<string, string>>;
   enableRateLimit?: boolean;
 }
 
 export function createApp({
   getReadiness,
   fetchImpl = fetch,
+  serviceHealthChecker,
   enableRateLimit = false,
 }: GatewayAppOptions) {
   const app = express();
@@ -39,6 +41,7 @@ export function createApp({
   app.use(morgan(':method :url :status :response-time ms request_id=:request-id', {
     stream: { write: (message) => logger.info(message.trim()) },
   }));
+  app.use(express.json({ limit: '10mb' }));
 
   if (enableRateLimit) {
     app.use(generalLimiter);
@@ -64,15 +67,21 @@ export function createApp({
   });
 
   app.get('/health/services', async (_req, res) => {
-    const services = config.services;
-    const results: Record<string, string> = {};
+    let results: Record<string, string>;
 
-    for (const [name, url] of Object.entries(services)) {
-      try {
-        const response = await fetchImpl(`${url}/health`);
-        results[name] = response.ok ? 'healthy' : 'unhealthy';
-      } catch {
-        results[name] = 'unreachable';
+    if (serviceHealthChecker) {
+      results = await serviceHealthChecker();
+    } else {
+      const services = config.services;
+      results = {};
+
+      for (const [name, url] of Object.entries(services)) {
+        try {
+          const response = await fetchImpl(`${url}/health`);
+          results[name] = response.ok ? 'healthy' : 'unhealthy';
+        } catch {
+          results[name] = 'unreachable';
+        }
       }
     }
 
@@ -92,7 +101,6 @@ export function createApp({
   app.use(authMiddleware);
   app.use('/api/admin', adminRoutes);
   app.use(proxyRoutes);
-  app.use(express.json({ limit: '10mb' }));
 
   app.use((req, res) => {
     res.status(404).json({

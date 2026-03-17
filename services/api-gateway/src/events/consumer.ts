@@ -1,9 +1,9 @@
 import amqp, { Channel, Connection, ConsumeMessage } from 'amqplib';
-import axios from 'axios';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { SocketServer } from '../socket/socket-server';
 import Redis from 'ioredis';
+import { driverGrpcClient } from '../grpc/driver.client';
 
 const EXCHANGE_NAME = 'domain-events';
 const QUEUE_NAME = 'api-gateway-events';
@@ -435,14 +435,8 @@ export class EventConsumer {
     }
 
     try {
-      const response = await axios.get(`${config.services.driver}/internal/drivers/${driverId}`, {
-        headers: {
-          'x-internal-token': config.internalServiceToken,
-        },
-        timeout: 3000,
-      });
-
-      const userId = response.data?.data?.driver?.userId;
+      const driver = await driverGrpcClient.getDriverById(driverId);
+      const userId = driver?.userId;
       if (userId) {
         this.driverUserCache.set(driverId, userId);
         return userId;

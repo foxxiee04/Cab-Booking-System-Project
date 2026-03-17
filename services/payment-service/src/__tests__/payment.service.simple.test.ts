@@ -23,6 +23,7 @@ jest.mock('../generated/prisma-client', () => ({
   PaymentStatus: {
     PENDING: 'PENDING',
     PROCESSING: 'PROCESSING',
+    REQUIRES_ACTION: 'REQUIRES_ACTION',
     COMPLETED: 'COMPLETED',
     FAILED: 'FAILED',
     REFUNDED: 'REFUNDED',
@@ -30,11 +31,15 @@ jest.mock('../generated/prisma-client', () => ({
   PaymentMethod: {
     CASH: 'CASH',
     CARD: 'CARD',
-    E_WALLET: 'E_WALLET',
+    WALLET: 'WALLET',
+    MOMO: 'MOMO',
+    VISA: 'VISA',
   },
   PaymentProvider: {
+    MOCK: 'MOCK',
     STRIPE: 'STRIPE',
     MOMO: 'MOMO',
+    VISA: 'VISA',
     ZALOPAY: 'ZALOPAY',
   },
 }));

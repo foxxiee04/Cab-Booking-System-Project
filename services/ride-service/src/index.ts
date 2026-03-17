@@ -6,6 +6,7 @@ import { EventPublisher } from './events/publisher';
 import { EventConsumer } from './events/consumer';
 import { RideService } from './services/ride.service';
 import { DriverOfferManager } from './services/driver-offer-manager';
+import { createHealthServiceRegistration, createHttpBridgeServiceRegistration, shutdownGrpcServer, startGrpcServer } from '../../../shared/dist';
 
 const prisma = new PrismaClient();
 
@@ -48,12 +49,29 @@ export async function start() {
     }),
   });
 
+  const getReadiness = async () => ({
+    postgres: await prisma.$queryRawUnsafe('SELECT 1').then(() => true).catch(() => false),
+    redis: await offerManager.ping(),
+    rabbitmqPublisher: eventPublisher.isConnected(),
+    rabbitmqConsumer: eventConsumer.isConnected(),
+  });
+
+  const grpcServer = await startGrpcServer({
+    address: `0.0.0.0:${config.grpcPort}`,
+    registrations: [
+      createHealthServiceRegistration(config.serviceName, getReadiness),
+      createHttpBridgeServiceRegistration(`http://127.0.0.1:${config.port}`),
+    ],
+  });
+
   const server = app.listen(config.port, () => {
     logger.info(`Ride Service running on port ${config.port}`);
+    logger.info(`Ride gRPC Service running on port ${config.grpcPort}`);
   });
 
   process.on('SIGTERM', async () => {
     logger.info('SIGTERM received, shutting down...');
+    await shutdownGrpcServer(grpcServer);
     await eventConsumer.close();
     await eventPublisher.close();
     await offerManager.close();

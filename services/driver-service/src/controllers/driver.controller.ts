@@ -199,7 +199,30 @@ export class DriverController {
       const lng = parseFloat(req.query.lng as string);
       const radius = parseFloat(req.query.radius as string) || 5;
 
-      const drivers: any[] = [];
+      const nearbyDrivers = await this.driverService.getNearbyDrivers({ lat, lng }, radius);
+      const drivers = (
+        await Promise.all(
+          nearbyDrivers.map(async (candidate) => {
+            const driverId = String(candidate.driverId);
+            const driver = await this.driverService.getDriverById(driverId);
+            if (!driver) {
+              return null;
+            }
+
+            return {
+              id: driver.id,
+              userId: driver.userId,
+              vehicleType: driver.vehicleType,
+              availabilityStatus: driver.availabilityStatus,
+              lat: driver.lastLocationLat,
+              lng: driver.lastLocationLng,
+              distanceKm: candidate.distance,
+              rating: driver.ratingAverage ?? 0,
+            };
+          })
+        )
+      ).filter(Boolean);
+
       res.json({ success: true, data: { drivers } });
     } catch (err) {
       logger.error('Find nearby drivers error:', err);

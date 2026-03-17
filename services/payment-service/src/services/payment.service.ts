@@ -3,7 +3,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { EventPublisher } from '../events/publisher';
 import { logger } from '../utils/logger';
-import { PaymentGatewayFactory, PaymentGatewayType } from './payment-gateway.mock';
+import { momoGateway } from './momo.gateway';
+import { paymentGatewayManager, PaymentGatewayType } from './payment-gateway.manager';
+import { stripeGateway } from './stripe.gateway';
+import { zaloPayGateway } from './zalopay.gateway';
 
 interface RideCompletedPayload {
   rideId: string;
@@ -24,6 +27,77 @@ export class PaymentService {
   constructor(prisma: PrismaClient, eventPublisher: EventPublisher) {
     this.prisma = prisma;
     this.eventPublisher = eventPublisher;
+  }
+
+  async handleStripeWebhook(payload: Buffer | string, signature: string): Promise<void> {
+    const event = stripeGateway.constructWebhookEvent(payload, signature);
+    const intent = event.data as Record<string, any>;
+    const paymentIntentId = String(intent.id || '');
+
+    if (!paymentIntentId) {
+      throw new Error('Stripe webhook missing payment intent ID');
+    }
+
+    switch (event.type) {
+      case 'payment_intent.succeeded':
+        await this.synchronizePaymentByIntentId({
+          paymentIntentId,
+          nextStatus: PaymentStatus.COMPLETED,
+          transactionId: String(intent.latest_charge || intent.id),
+          gatewayMetadata: intent,
+        });
+        return;
+      case 'payment_intent.processing':
+        await this.synchronizePaymentByIntentId({
+          paymentIntentId,
+          nextStatus: PaymentStatus.PROCESSING,
+          gatewayMetadata: intent,
+        });
+        return;
+      case 'payment_intent.requires_action':
+        await this.synchronizePaymentByIntentId({
+          paymentIntentId,
+          nextStatus: PaymentStatus.REQUIRES_ACTION,
+          gatewayMetadata: intent,
+        });
+        return;
+      case 'payment_intent.payment_failed':
+      case 'payment_intent.canceled':
+        await this.synchronizePaymentByIntentId({
+          paymentIntentId,
+          nextStatus: PaymentStatus.FAILED,
+          failureReason: String(intent.last_payment_error?.message || intent.cancellation_reason || 'Stripe reported failure'),
+          gatewayMetadata: intent,
+        });
+        return;
+      default:
+        logger.info(`Ignoring unsupported Stripe webhook event: ${event.type}`);
+    }
+  }
+
+  async handleMomoWebhook(payload: Record<string, any>): Promise<void> {
+    const signature = payload.signature as string | undefined;
+
+    if (config.momo.enabled && signature) {
+      const { signature: _, ...data } = payload;
+      if (!momoGateway.verifyWebhookSignature(data, signature)) {
+        throw new Error('Invalid MoMo webhook signature');
+      }
+    }
+
+    const rideId = String(payload.orderId || payload.order_id || '');
+    if (!rideId) {
+      throw new Error('MoMo webhook missing orderId');
+    }
+
+    const resultCode = Number(payload.resultCode ?? payload.result_code ?? -1);
+    await this.synchronizePaymentByRideId({
+      rideId,
+      nextStatus: resultCode === 0 ? PaymentStatus.COMPLETED : PaymentStatus.FAILED,
+      transactionId: payload.transId ? String(payload.transId) : undefined,
+      failureReason: resultCode === 0 ? undefined : String(payload.message || 'MoMo reported failure'),
+      gatewayMetadata: payload,
+    });
   }
 
   async handleMockWebhook(input: {
@@ -120,6 +194,9 @@ export class PaymentService {
     idempotencyKey?: string;
   }) {
     const { rideId, customerId, amount, currency, paymentMethod, idempotencyKey } = input;
+    const normalizedMethod = this.mapPaymentMethod(paymentMethod);
+    const providerType = this.resolveGatewayType(normalizedMethod);
+    const provider = this.mapPaymentProviderFromGateway(providerType);
 
     // Idempotency: reuse existing intent for same ride + key
     const existing = await this.prisma.payment.findFirst({
@@ -130,11 +207,53 @@ export class PaymentService {
     });
 
     if (existing) {
-      return { created: false, paymentIntentId: existing.paymentIntentId, clientSecret: existing.clientSecret, status: existing.status };
+      const existingGatewayResponse = this.parseGatewayResponse(existing.gatewayResponse);
+      return {
+        created: false,
+        paymentId: existing.id,
+        paymentIntentId: existing.paymentIntentId,
+        clientSecret: existing.clientSecret,
+        paymentUrl: existingGatewayResponse?.paymentUrl,
+        provider: existing.provider,
+        status: existing.status,
+      };
     }
 
-    const paymentIntentId = `pi_${uuidv4()}`;
-    const clientSecret = `cs_${uuidv4()}`;
+    if (normalizedMethod === PaymentMethod.CASH) {
+      const payment = await this.prisma.payment.create({
+        data: {
+          rideId,
+          customerId,
+          amount,
+          currency,
+          method: PaymentMethod.CASH,
+          provider: PaymentProvider.MOCK,
+          status: PaymentStatus.PENDING,
+          idempotencyKey,
+        },
+      });
+
+      return {
+        created: true,
+        paymentId: payment.id,
+        status: payment.status,
+        provider: payment.provider,
+      };
+    }
+
+    const gatewayResult = await paymentGatewayManager.createPayment({
+      provider: providerType,
+      orderId: rideId,
+      amount,
+      currency,
+      description: `Payment for ride ${rideId}`,
+      customerId,
+      metadata: {
+        rideId,
+        customerId,
+        paymentMethod: normalizedMethod,
+      },
+    });
 
     const payment = await this.prisma.payment.create({
       data: {
@@ -142,25 +261,37 @@ export class PaymentService {
         customerId,
         amount,
         currency,
-        method: paymentMethod === 'CASH' ? PaymentMethod.CASH : PaymentMethod.CARD,
-        provider: PaymentProvider.MOCK,
+        method: normalizedMethod,
+        provider,
         status: PaymentStatus.REQUIRES_ACTION,
-        paymentIntentId,
-        clientSecret,
+        paymentIntentId: gatewayResult.intentId,
+        clientSecret: gatewayResult.clientSecret,
         idempotencyKey,
+        gatewayResponse: JSON.stringify({
+          paymentUrl: gatewayResult.paymentUrl,
+          metadata: gatewayResult.metadata || {},
+        }),
       },
     });
 
     await this.eventPublisher.publish('payment.intent.created', {
       rideId,
       customerId,
-      paymentIntentId,
+      paymentIntentId: payment.paymentIntentId,
       amount,
       currency,
-      provider: payment.provider,
+      provider: gatewayResult.provider,
     }, rideId);
 
-    return { created: true, paymentIntentId: payment.paymentIntentId, clientSecret: payment.clientSecret, status: payment.status };
+    return {
+      created: true,
+      paymentId: payment.id,
+      paymentIntentId: payment.paymentIntentId,
+      clientSecret: payment.clientSecret,
+      paymentUrl: gatewayResult.paymentUrl,
+      provider: payment.provider,
+      status: payment.status,
+    };
   }
 
   async processRideCompleted(payload: RideCompletedPayload): Promise<void> {
@@ -400,36 +531,32 @@ export class PaymentService {
     const { rideId } = payment;
 
     try {
+      const gatewayType = this.resolveGatewayType(payment.method);
+
       // Update to processing
       await this.prisma.payment.update({
         where: { id: payment.id },
         data: { 
           status: PaymentStatus.PROCESSING,
-          paymentIntentId: `pi_${uuidv4()}`, // Simulate payment intent creation
         },
       });
 
       logger.info(`Processing ${payment.method} payment for ride ${rideId}`);
 
-      // Get appropriate gateway based on payment method
-      let gatewayType: PaymentGatewayType;
-      if (payment.method === PaymentMethod.MOMO) {
-        gatewayType = PaymentGatewayType.MOMO;
-      } else if (payment.method === PaymentMethod.VISA || payment.method === PaymentMethod.CARD) {
-        gatewayType = PaymentGatewayType.VISA;
-      } else {
-        throw new Error(`Unsupported electronic payment method: ${payment.method}`);
-      }
-
-      const gateway = PaymentGatewayFactory.getGateway(gatewayType);
-
-      // Process payment through gateway (with delay and random success/failure)
-      const result = await gateway.processPayment(
-        payment.amount,
-        payment.currency,
-        rideId,
-        { customerId: payment.customerId }
-      );
+      const result = await paymentGatewayManager.createPayment({
+        provider: gatewayType,
+        orderId: rideId,
+        amount: payment.amount,
+        currency: payment.currency,
+        description: `Payment for ride ${rideId}`,
+        customerId: payment.customerId,
+        metadata: {
+          rideId,
+          customerId: payment.customerId,
+          paymentId: payment.id,
+          paymentMethod: payment.method,
+        },
+      });
 
       if (result.success) {
         // Payment succeeded
@@ -439,8 +566,13 @@ export class PaymentService {
             data: {
               status: PaymentStatus.COMPLETED,
               completedAt: new Date(),
-              transactionId: result.transactionId,
-              gatewayResponse: JSON.stringify(result.providerResponse),
+              transactionId: result.intentId || result.orderId,
+              paymentIntentId: result.intentId,
+              clientSecret: result.clientSecret,
+              gatewayResponse: JSON.stringify({
+                paymentUrl: result.paymentUrl,
+                metadata: result.metadata || {},
+              }),
             },
           });
 
@@ -455,7 +587,7 @@ export class PaymentService {
                 amount: payment.amount,
                 method: payment.method,
                 provider: payment.provider,
-                transactionId: result.transactionId,
+                transactionId: result.intentId || result.orderId,
               }),
               correlationId: payment.rideId,
             },
@@ -470,10 +602,10 @@ export class PaymentService {
           amount: payment.amount,
           method: payment.method,
           provider: payment.provider,
-          transactionId: result.transactionId,
+          transactionId: result.intentId || result.orderId,
         }, payment.rideId);
 
-        logger.info(`${payment.method} payment completed for ride ${rideId} - Transaction: ${result.transactionId}`);
+        logger.info(`${payment.method} payment completed for ride ${rideId} - Transaction: ${result.intentId || result.orderId}`);
       } else {
         // Payment failed
         await this.prisma.$transaction(async (tx) => {
@@ -482,8 +614,11 @@ export class PaymentService {
             data: {
               status: PaymentStatus.FAILED,
               failedAt: new Date(),
-              failureReason: result.message,
-              gatewayResponse: JSON.stringify(result.providerResponse),
+              failureReason: 'Provider reported failure',
+              gatewayResponse: JSON.stringify({
+                paymentUrl: result.paymentUrl,
+                metadata: result.metadata || {},
+              }),
             },
           });
 
@@ -496,7 +631,7 @@ export class PaymentService {
                 customerId: payment.customerId,
                 method: payment.method,
                 provider: payment.provider,
-                reason: result.message,
+                reason: 'Provider reported failure',
               }),
               correlationId: payment.rideId,
             },
@@ -509,10 +644,10 @@ export class PaymentService {
           customerId: payment.customerId,
           method: payment.method,
           provider: payment.provider,
-          reason: result.message,
+          reason: 'Provider reported failure',
         }, payment.rideId);
 
-        logger.warn(`${payment.method} payment failed for ride ${rideId} - Reason: ${result.message}`);
+        logger.warn(`${payment.method} payment failed for ride ${rideId} - Reason: Provider reported failure`);
       }
     } catch (error) {
       // Handle unexpected errors
@@ -604,6 +739,34 @@ export class PaymentService {
 
     if (payment.status !== PaymentStatus.COMPLETED) {
       throw new Error('Can only refund completed payments');
+    }
+
+    if (payment.provider === PaymentProvider.STRIPE && payment.paymentIntentId) {
+      await paymentGatewayManager.createRefund({
+        provider: PaymentGatewayType.STRIPE,
+        paymentIntentId: payment.paymentIntentId,
+        amount: payment.amount,
+        reason,
+      });
+    }
+
+    if (payment.provider === PaymentProvider.MOMO && payment.transactionId && config.momo.enabled) {
+      await momoGateway.createRefund({
+        orderId: payment.rideId,
+        requestId: `refund_${uuidv4()}`,
+        amount: Math.round(payment.amount),
+        transId: payment.transactionId,
+        description: reason,
+      });
+    }
+
+    if (payment.provider === PaymentProvider.ZALOPAY && payment.transactionId && config.zalopay.enabled) {
+      await zaloPayGateway.createRefund({
+        zpTransId: payment.transactionId,
+        amount: Math.round(payment.amount),
+        description: reason,
+        refundId: uuidv4(),
+      });
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -797,5 +960,192 @@ export class PaymentService {
       default:
         return PaymentProvider.MOCK;
     }
+  }
+
+  private resolveGatewayType(method: PaymentMethod): PaymentGatewayType {
+    switch (method) {
+      case PaymentMethod.MOMO:
+        return config.momo.enabled ? PaymentGatewayType.MOMO : PaymentGatewayType.MOCK;
+      case PaymentMethod.WALLET:
+        if (config.momo.enabled) {
+          return PaymentGatewayType.MOMO;
+        }
+        if (config.zalopay.enabled) {
+          return PaymentGatewayType.ZALOPAY;
+        }
+        return PaymentGatewayType.MOCK;
+      case PaymentMethod.VISA:
+      case PaymentMethod.CARD:
+        return config.stripe.enabled ? PaymentGatewayType.STRIPE : PaymentGatewayType.MOCK;
+      case PaymentMethod.CASH:
+      default:
+        return PaymentGatewayType.MOCK;
+    }
+  }
+
+  private mapPaymentProviderFromGateway(provider: PaymentGatewayType): PaymentProvider {
+    switch (provider) {
+      case PaymentGatewayType.STRIPE:
+        return PaymentProvider.STRIPE;
+      case PaymentGatewayType.MOMO:
+        return PaymentProvider.MOMO;
+      case PaymentGatewayType.ZALOPAY:
+        return PaymentProvider.ZALOPAY;
+      case PaymentGatewayType.MOCK:
+      default:
+        return PaymentProvider.MOCK;
+    }
+  }
+
+  private parseGatewayResponse(raw: string | null): Record<string, any> | null {
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  private async synchronizePaymentByIntentId(input: {
+    paymentIntentId: string;
+    nextStatus: PaymentStatus;
+    transactionId?: string;
+    failureReason?: string;
+    gatewayMetadata?: Record<string, any>;
+  }): Promise<void> {
+    const payment = await this.prisma.payment.findFirst({
+      where: { paymentIntentId: input.paymentIntentId },
+    });
+
+    if (!payment) {
+      throw new Error('Payment intent not found');
+    }
+
+    await this.persistPaymentStatusTransition(payment, input);
+  }
+
+  private async synchronizePaymentByRideId(input: {
+    rideId: string;
+    nextStatus: PaymentStatus;
+    transactionId?: string;
+    failureReason?: string;
+    gatewayMetadata?: Record<string, any>;
+  }): Promise<void> {
+    const payment = await this.prisma.payment.findUnique({ where: { rideId: input.rideId } });
+
+    if (!payment) {
+      throw new Error('Payment not found for ride');
+    }
+
+    await this.persistPaymentStatusTransition(payment, input);
+  }
+
+  private async persistPaymentStatusTransition(
+    payment: {
+      id: string;
+      rideId: string;
+      customerId: string;
+      driverId?: string | null;
+      amount: number;
+      status: PaymentStatus;
+    },
+    input: {
+      nextStatus: PaymentStatus;
+      transactionId?: string;
+      failureReason?: string;
+      gatewayMetadata?: Record<string, any>;
+    },
+  ): Promise<void> {
+    if (payment.status === input.nextStatus) {
+      return;
+    }
+
+    const gatewayResponse = input.gatewayMetadata ? JSON.stringify(input.gatewayMetadata) : undefined;
+
+    if (input.nextStatus === PaymentStatus.COMPLETED) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: PaymentStatus.COMPLETED,
+            completedAt: new Date(),
+            transactionId: input.transactionId ?? payment.id,
+            gatewayResponse,
+            failureReason: null,
+          },
+        });
+
+        await tx.outboxEvent.create({
+          data: {
+            eventType: 'payment.completed',
+            payload: JSON.stringify({
+              paymentId: payment.id,
+              rideId: payment.rideId,
+              customerId: payment.customerId,
+              driverId: payment.driverId,
+              amount: payment.amount,
+              transactionId: input.transactionId,
+            }),
+            correlationId: payment.rideId,
+          },
+        });
+      });
+
+      await this.eventPublisher.publish('payment.completed', {
+        paymentId: payment.id,
+        rideId: payment.rideId,
+        customerId: payment.customerId,
+        driverId: payment.driverId,
+        amount: payment.amount,
+        transactionId: input.transactionId,
+      }, payment.rideId);
+      return;
+    }
+
+    if (input.nextStatus === PaymentStatus.FAILED) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: PaymentStatus.FAILED,
+            failedAt: new Date(),
+            failureReason: input.failureReason ?? 'Provider reported failure',
+            gatewayResponse,
+          },
+        });
+
+        await tx.outboxEvent.create({
+          data: {
+            eventType: 'payment.failed',
+            payload: JSON.stringify({
+              paymentId: payment.id,
+              rideId: payment.rideId,
+              customerId: payment.customerId,
+              reason: input.failureReason ?? 'Provider reported failure',
+            }),
+            correlationId: payment.rideId,
+          },
+        });
+      });
+
+      await this.eventPublisher.publish('payment.failed', {
+        paymentId: payment.id,
+        rideId: payment.rideId,
+        customerId: payment.customerId,
+        reason: input.failureReason ?? 'Provider reported failure',
+      }, payment.rideId);
+      return;
+    }
+
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: input.nextStatus,
+        gatewayResponse,
+      },
+    });
   }
 }

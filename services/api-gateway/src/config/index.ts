@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { getRequiredEnv } from '../../../../shared/dist';
+import { getRequiredEnv, grpcAddressFromHttpUrl } from '../../../../shared/dist';
 dotenv.config();
 
 export const config = {
@@ -20,6 +20,18 @@ export const config = {
     driver: process.env.DRIVER_SERVICE_URL || 'http://localhost:3003',
     payment: process.env.PAYMENT_SERVICE_URL || 'http://localhost:3004',
     notification: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3005',
+  },
+
+  grpcServices: {
+    auth: process.env.AUTH_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.AUTH_SERVICE_URL || 'http://localhost:3001', 50051),
+    user: process.env.USER_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.USER_SERVICE_URL || 'http://localhost:3007', 50052),
+    booking: process.env.BOOKING_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.BOOKING_SERVICE_URL || 'http://localhost:3008', 50053),
+    ride: process.env.RIDE_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.RIDE_SERVICE_URL || 'http://localhost:3002', 50054),
+    driver: process.env.DRIVER_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.DRIVER_SERVICE_URL || 'http://localhost:3003', 50055),
+    payment: process.env.PAYMENT_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.PAYMENT_SERVICE_URL || 'http://localhost:3004', 50056),
+    pricing: process.env.PRICING_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.PRICING_SERVICE_URL || 'http://localhost:3009', 50057),
+    notification: process.env.NOTIFICATION_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3005', 50058),
+    review: process.env.REVIEW_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.REVIEW_SERVICE_URL || 'http://localhost:3010', 50059),
   },
   
   rateLimit: {

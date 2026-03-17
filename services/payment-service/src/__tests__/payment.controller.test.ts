@@ -25,6 +25,8 @@ describe('PaymentController', () => {
   const paymentService = {
     createPaymentIntent: jest.fn(),
     handleMockWebhook: jest.fn(),
+    handleStripeWebhook: jest.fn(),
+    handleMomoWebhook: jest.fn(),
     getPaymentByRideId: jest.fn(),
     getCustomerPayments: jest.fn(),
     getDriverEarnings: jest.fn(),
@@ -121,7 +123,7 @@ describe('PaymentController', () => {
     expect(res.status).toHaveBeenCalledWith(403);
   });
 
-  it('getPaymentMethods should return static enabled methods', async () => {
+  it('getPaymentMethods should return provider-aware methods', async () => {
     const req = mockReq();
     const res = mockRes();
 
@@ -132,8 +134,9 @@ describe('PaymentController', () => {
       data: {
         methods: [
           { id: 'CASH', name: 'Tiền mặt', icon: 'cash', enabled: true },
-          { id: 'CARD', name: 'Thẻ tín dụng/ghi nợ', icon: 'card', enabled: true },
-          { id: 'WALLET', name: 'Ví điện tử', icon: 'wallet', enabled: true },
+          { id: 'CARD', name: 'Thẻ tín dụng/ghi nợ', icon: 'card', enabled: false, provider: 'STRIPE' },
+          { id: 'MOMO', name: 'MoMo', icon: 'wallet', enabled: false, provider: 'MOMO' },
+          { id: 'ZALOPAY', name: 'ZaloPay', icon: 'wallet', enabled: false, provider: 'ZALOPAY' },
         ],
       },
     });
