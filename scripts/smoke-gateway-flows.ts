@@ -38,6 +38,15 @@ interface RideRecord {
   dropoffAddress: string;
 }
 
+interface PaymentRecord {
+  id: string;
+  rideId: string;
+  amount: number;
+  status: string;
+  method: string;
+  transactionId?: string | null;
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -99,6 +108,20 @@ async function getRide(rideId: string, token: string): Promise<RideRecord> {
   return response.data.data.ride;
 }
 
+async function getDriverProfile(token: string) {
+  const response = await request<{ success: boolean; data: { driver: JsonValue } } | { success: boolean; data: JsonValue }>('/api/drivers/me', {}, token);
+  assertCondition(response.status === 200, `Get driver profile failed: ${response.status}`);
+  const payload = (response.data as any).data || response.data;
+  return payload.driver || payload;
+}
+
+async function getPaymentByRide(rideId: string, token: string): Promise<PaymentRecord> {
+  const response = await request<{ success: boolean; data: { payment: PaymentRecord } }>(`/api/payments/ride/${rideId}`, {}, token);
+  assertCondition(response.status === 200, `Get payment for ride ${rideId} failed: ${response.status}`);
+  const payload = (response.data as any).data || {};
+  return payload.payment || payload;
+}
+
 async function getCustomerActiveRide(token: string): Promise<RideRecord | null> {
   const response = await request<{ success: boolean; data: { ride: RideRecord | null } }>('/api/rides/customer/active', {}, token);
   assertCondition(response.status === 200, `Get customer active ride failed: ${response.status}`);
@@ -158,20 +181,35 @@ async function waitForRideStatus(rideId: string, token: string, allowedStatuses:
   throw new Error(`Ride ${rideId} did not reach one of [${allowedStatuses.join(', ')}], current status=${latestRide.status}`);
 }
 
-async function advanceRideToCompleted(ride: RideRecord, customerToken: string, driverToken: string, expectedDriverUserId: string) {
+async function waitForPaymentStatus(rideId: string, token: string, allowedStatuses: string[], attempts = 12): Promise<PaymentRecord> {
+  let latestPayment = await getPaymentByRide(rideId, token);
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (allowedStatuses.includes(latestPayment.status)) {
+      return latestPayment;
+    }
+
+    await sleep(1500);
+    latestPayment = await getPaymentByRide(rideId, token);
+  }
+
+  throw new Error(`Payment for ride ${rideId} did not reach one of [${allowedStatuses.join(', ')}], current status=${latestPayment.status}`);
+}
+
+async function advanceRideToCompleted(ride: RideRecord, customerToken: string, driverToken: string, expectedDriverId: string) {
   let currentRide = ride;
 
   if (currentRide.status === 'COMPLETED') {
     return currentRide;
   }
 
-  if (currentRide.driverId && currentRide.driverId !== expectedDriverUserId && currentRide.status !== 'REQUESTED') {
+  if (currentRide.driverId && currentRide.driverId !== expectedDriverId && !['REQUESTED', 'PENDING', 'CREATED', 'FINDING_DRIVER'].includes(currentRide.status)) {
     await cancelRide(currentRide.id, customerToken);
     currentRide = await createRide(customerToken);
   }
 
-  if (['CREATED', 'REQUESTED', 'FINDING_DRIVER'].includes(currentRide.status)) {
-    const acceptResponse = await request(`/api/rides/${currentRide.id}/driver-accept`, {
+  if (['CREATED', 'REQUESTED', 'PENDING', 'FINDING_DRIVER'].includes(currentRide.status)) {
+    const acceptResponse = await request(`/api/drivers/me/rides/${currentRide.id}/accept`, {
       method: 'POST',
       body: JSON.stringify({}),
     }, driverToken);
@@ -225,6 +263,9 @@ async function main() {
     login(accounts.driver),
   ]);
 
+  const driverProfile = await getDriverProfile(driver.tokens.accessToken);
+  assertCondition(Boolean(driverProfile?.id), 'Driver profile is missing id');
+
   const locationResponse = await request('/api/drivers/me/location', {
     method: 'POST',
     body: JSON.stringify({ lat: 10.7628, lng: 106.6825 }),
@@ -250,8 +291,10 @@ async function main() {
     ride,
     customer.tokens.accessToken,
     driver.tokens.accessToken,
-    driver.user.id,
+    driverProfile.id,
   );
+
+  const payment = await waitForPaymentStatus(completedRide.id, customer.tokens.accessToken, ['COMPLETED', 'FAILED']);
 
   const reviewListResponse = await request<{ success: boolean; count?: number; reviews?: Array<JsonValue> }>(
     `/api/reviews/ride/${completedRide.id}`,
@@ -269,7 +312,7 @@ async function main() {
         bookingId: completedRide.id,
         type: 'CUSTOMER_TO_DRIVER',
         reviewerName: `${customer.user.firstName || 'Smoke'} ${customer.user.lastName || 'Customer'}`.trim(),
-        revieweeId: completedRide.driverId || driver.user.id,
+        revieweeId: completedRide.driverId || driverProfile.id,
         revieweeName: `${driver.user.firstName || 'Smoke'} ${driver.user.lastName || 'Driver'}`.trim(),
         rating: 5,
         comment: 'Smoke test review',
@@ -290,6 +333,25 @@ async function main() {
   assertCondition(reviewAfterCreate.status === 200, `Re-fetch ride reviews failed: ${reviewAfterCreate.status}`);
   assertCondition((reviewAfterCreate.data.reviews || []).length > 0, 'Post-trip review flow returned no persisted review');
 
+  const adminRidesResponse = await request<{ success: boolean; data: { rides: Array<RideRecord> } }>(
+    '/api/admin/rides?limit=200',
+    {},
+    admin.tokens.accessToken,
+  );
+  assertCondition(adminRidesResponse.status === 200, `Admin rides failed: ${adminRidesResponse.status}`);
+  const adminRide = (adminRidesResponse.data.data.rides || []).find((entry) => entry.id === completedRide.id);
+  assertCondition(adminRide?.status === 'COMPLETED', `Admin ride status mismatch: ${adminRide?.status || 'missing'}`);
+
+  const adminPaymentsResponse = await request<{ success: boolean; data: { payments: Array<PaymentRecord> } }>(
+    '/api/admin/payments?limit=200',
+    {},
+    admin.tokens.accessToken,
+  );
+  assertCondition(adminPaymentsResponse.status === 200, `Admin payments failed: ${adminPaymentsResponse.status}`);
+  const adminPayment = (adminPaymentsResponse.data.data.payments || []).find((entry) => entry.rideId === completedRide.id);
+  assertCondition(Boolean(adminPayment), 'Admin payment record is missing for completed ride');
+  assertCondition(adminPayment?.status === payment.status, `Admin payment status mismatch: api=${payment.status}, admin=${adminPayment?.status || 'missing'}`);
+
   const adminDriversResponse = await request<{ success: boolean; data: { drivers: Array<JsonValue>; total: number } }>(
     '/api/admin/drivers?limit=200',
     {},
@@ -304,6 +366,8 @@ async function main() {
   const summary = {
     nearbyDrivers: nearbyDrivers.length,
     completedRideId: completedRide.id,
+    paymentId: payment.id,
+    paymentStatus: payment.status,
     reviewCount: (reviewAfterCreate.data.reviews || []).length,
     adminDrivers: adminDrivers.length,
     heatmapDrivers: heatmapDrivers.length,

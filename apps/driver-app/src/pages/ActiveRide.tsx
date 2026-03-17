@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -30,7 +30,7 @@ import {
   StarRate,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { updateRideStatus, clearCurrentRide } from '../store/ride.slice';
+import { updateRideStatus, clearCurrentRide, setCurrentRide } from '../store/ride.slice';
 import { rideApi } from '../api/ride.api';
 import { formatCurrency } from '../utils/format.utils';
 import { useTranslation } from 'react-i18next';
@@ -48,6 +48,12 @@ const PHASE_CONFIG: Record<string, {
     color: '#2196F3',
     bgColor: '#E3F2FD',
     icon: <Navigation sx={{ fontSize: 20 }} />,
+  },
+  PICKING_UP: {
+    label: 'Arrived at Pickup',
+    color: '#0F766E',
+    bgColor: '#CCFBF1',
+    icon: <FiberManualRecord sx={{ fontSize: 16 }} />,
   },
   IN_PROGRESS: {
     label: 'Trip in Progress',
@@ -71,9 +77,50 @@ const ActiveRide: React.FC = () => {
   const { currentLocation } = useAppSelector((state) => state.driver);
   const { currentRide } = useAppSelector((state) => state.ride);
 
+  const [initializing, setInitializing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+
+  useEffect(() => {
+    if (currentRide) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadActiveRide = async () => {
+      setInitializing(true);
+      try {
+        const response = await rideApi.getActiveRide();
+        const activeRide = response.data.ride;
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (activeRide) {
+          dispatch(setCurrentRide(activeRide));
+        }
+      } catch (err: any) {
+        if (!isMounted) {
+          return;
+        }
+
+        setError(err.response?.data?.error?.message || t('activeRide.noActiveRide'));
+      } finally {
+        if (isMounted) {
+          setInitializing(false);
+        }
+      }
+    };
+
+    void loadActiveRide();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentRide, dispatch, t]);
 
   const handleStartRide = useCallback(async () => {
     if (!currentRide) return;
@@ -83,6 +130,19 @@ const ActiveRide: React.FC = () => {
       dispatch(updateRideStatus(response.data.ride.status));
     } catch (err: any) {
       setError(err.response?.data?.error?.message || t('errors.startRide'));
+    } finally {
+      setLoading(false);
+    }
+  }, [currentRide, dispatch, t]);
+
+  const handlePickupRide = useCallback(async () => {
+    if (!currentRide) return;
+    setLoading(true);
+    try {
+      const response = await rideApi.pickupRide(currentRide.id);
+      dispatch(updateRideStatus(response.data.ride.status));
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || t('errors.pickupRide', 'Failed to mark pickup'));
     } finally {
       setLoading(false);
     }
@@ -120,6 +180,15 @@ const ActiveRide: React.FC = () => {
   const mapCenter = useMemo(() => {
     return currentLocation || currentRide?.pickupLocation || { lat: 10.762622, lng: 106.660172 };
   }, [currentLocation, currentRide?.pickupLocation]);
+
+  if (initializing && !currentRide) {
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 2 }}>
+        <CircularProgress />
+        <Typography color="text.secondary">{t('common.loading', 'Loading...')}</Typography>
+      </Box>
+    );
+  }
 
   if (!currentRide) {
     return (
@@ -234,11 +303,25 @@ const ActiveRide: React.FC = () => {
             </Typography>
           </Box>
 
-          {status === 'ACCEPTED' && (
+          {(status === 'ASSIGNED' || status === 'ACCEPTED') && (
+            <Button
+              fullWidth variant="contained" size="large"
+              onClick={handlePickupRide}
+              disabled={loading}
+              data-testid="pickup-ride-button"
+              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <FiberManualRecord />}
+              sx={{ borderRadius: 3, py: 1.8, fontSize: 16, fontWeight: 700, bgcolor: '#0f766e', '&:hover': { bgcolor: '#115e59' } }}
+            >
+              {t('activeRide.arrivedPickup', 'Đã tới điểm đón')}
+            </Button>
+          )}
+
+          {status === 'PICKING_UP' && (
             <Button
               fullWidth variant="contained" size="large"
               onClick={handleStartRide}
               disabled={loading}
+              data-testid="start-ride-button"
               startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <Navigation />}
               sx={{ borderRadius: 3, py: 1.8, fontSize: 16, fontWeight: 700, bgcolor: '#2196F3', '&:hover': { bgcolor: '#1976D2' } }}
             >
@@ -251,6 +334,7 @@ const ActiveRide: React.FC = () => {
               fullWidth variant="contained" color="success" size="large"
               onClick={handleCompleteRide}
               disabled={loading}
+              data-testid="complete-ride-button"
               startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <CheckCircle />}
               sx={{ borderRadius: 3, py: 1.8, fontSize: 16, fontWeight: 700 }}
             >

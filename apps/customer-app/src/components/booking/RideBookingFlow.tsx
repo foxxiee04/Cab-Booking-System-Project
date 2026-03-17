@@ -363,6 +363,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
         </Stack>
       </DialogTitle>
       <DialogContent>
+        <Box data-testid="ride-booking-flow">
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
@@ -375,22 +376,23 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
         ) : (
           renderStepContent()
         )}
+        </Box>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3, pt: 1.5 }}>
         <Button onClick={onClose} disabled={creating}>
           Hủy
         </Button>
         {activeStep > 0 && (
-          <Button onClick={handleBack} disabled={creating}>
+          <Button onClick={handleBack} disabled={creating} data-testid="ride-booking-back">
             Quay lại
           </Button>
         )}
         {activeStep < steps.length - 1 ? (
-          <Button onClick={handleNext} variant="contained" disabled={loading || !selectedEstimate} sx={{ borderRadius: 3, minWidth: 132 }}>
+          <Button onClick={handleNext} variant="contained" disabled={loading || !selectedEstimate} data-testid="ride-booking-next" sx={{ borderRadius: 3, minWidth: 132 }}>
             Tiếp tục
           </Button>
         ) : (
-          <Button onClick={handleConfirmBooking} variant="contained" disabled={creating || loading} sx={{ borderRadius: 3, minWidth: 182 }}>
+          <Button onClick={handleConfirmBooking} variant="contained" disabled={creating || loading} data-testid="confirm-booking-button" sx={{ borderRadius: 3, minWidth: 182 }}>
             {creating ? <CircularProgress size={24} /> : 'Xác nhận và tìm tài xế'}
           </Button>
         )}

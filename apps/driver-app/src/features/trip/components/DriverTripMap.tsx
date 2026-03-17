@@ -56,9 +56,9 @@ function getLeafletIcon(key: string, html: string, size: [number, number], ancho
 function createLeafletPin(color: string) {
   return getLeafletIcon(
     `driver-pin-${color}`,
-    `<div style="width:24px;height:24px;border-radius:999px;background:${color};border:3px solid #ffffff;box-shadow:0 10px 24px rgba(15,23,42,0.18);"></div>`,
-    [24, 24],
-    [12, 12],
+    `<div style="width:28px;height:28px;border-radius:999px;background:${color};border:3px solid #ffffff;box-shadow:0 10px 24px rgba(15,23,42,0.18);"></div>`,
+    [28, 28],
+    [14, 14],
   );
 }
 
@@ -140,6 +140,104 @@ function getMarkerIcon(color: string): google.maps.Symbol {
   };
 }
 
+interface GoogleDriverTripMapCanvasProps {
+  googleMapsApiKey: string;
+  center: google.maps.LatLngLiteral;
+  themeMode: 'light' | 'dark';
+  mode: 'request' | 'pickup' | 'trip';
+  currentLocation?: Location | null;
+  pickupLocation?: Location | null;
+  dropoffLocation?: Location | null;
+  routeSummary: RouteSummary | null;
+  mapRef: React.MutableRefObject<google.maps.Map | null>;
+  onMapLoad: (points: google.maps.LatLngLiteral[]) => void;
+  fallback: React.ReactNode;
+}
+
+const GoogleDriverTripMapCanvas: React.FC<GoogleDriverTripMapCanvasProps> = ({
+  googleMapsApiKey,
+  center,
+  themeMode,
+  mode,
+  currentLocation,
+  pickupLocation,
+  dropoffLocation,
+  routeSummary,
+  mapRef,
+  onMapLoad,
+  fallback,
+}) => {
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'cab-driver-google-maps',
+    googleMapsApiKey,
+    libraries,
+  });
+
+  if (loadError) {
+    return <>{fallback}</>;
+  }
+
+  if (!isLoaded) {
+    return <Box sx={{ width: '100%', height: '100%', bgcolor: '#e2e8f0' }} />;
+  }
+
+  return (
+    <GoogleMap
+      mapContainerStyle={{ width: '100%', height: '100%' }}
+      center={center}
+      zoom={14}
+      onLoad={(map) => {
+        mapRef.current = map;
+        onMapLoad([currentLocation, pickupLocation, dropoffLocation].filter(Boolean) as google.maps.LatLngLiteral[]);
+      }}
+      onUnmount={() => {
+        mapRef.current = null;
+      }}
+      options={{
+        disableDefaultUI: true,
+        zoomControl: true,
+        streetViewControl: false,
+        mapTypeControl: false,
+        fullscreenControl: false,
+        clickableIcons: false,
+        styles: themeMode === 'dark' ? darkMapStyles : undefined,
+      }}
+    >
+      {pickupLocation && (
+        <MarkerF position={pickupLocation} icon={getMarkerIcon('#16a34a')} title="Pickup" />
+      )}
+      {dropoffLocation && (
+        <MarkerF position={dropoffLocation} icon={getMarkerIcon('#ef4444')} title="Dropoff" />
+      )}
+      {currentLocation && (
+        <MarkerF position={currentLocation} icon={getCarSymbol(0, '#2563eb')} title="Your location" />
+      )}
+      {routeSummary && (
+        <>
+          <PolylineF
+            path={routeSummary.polylinePath}
+            options={{
+              strokeColor: '#ffffff',
+              strokeOpacity: 0.92,
+              strokeWeight: 10,
+              zIndex: 10,
+            }}
+          />
+          <PolylineF
+            path={routeSummary.polylinePath}
+            options={{
+              strokeColor: mode === 'trip' ? '#16a34a' : '#2563eb',
+              strokeOpacity: 0.98,
+              strokeWeight: 6,
+              zIndex: 11,
+            }}
+          />
+        </>
+      )}
+    </GoogleMap>
+  );
+};
+
 export const DriverTripMap: React.FC<DriverTripMapProps> = ({
   googleMapsApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || '',
   currentLocation,
@@ -153,11 +251,6 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
   const mapRef = useRef<google.maps.Map | null>(null);
   const themeMode = resolveColorMode(colorMode);
   const hasGoogleMapsApiKey = googleMapsApiKey.trim().length > 0;
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'cab-driver-google-maps',
-    googleMapsApiKey,
-    libraries,
-  });
 
   const center = useMemo(() => {
     if (currentLocation) {
@@ -179,40 +272,6 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
       return;
     }
 
-    if (isLoaded && window.google) {
-      const directionsService = new google.maps.DirectionsService();
-      directionsService.route(
-        {
-          origin: currentLocation,
-          destination,
-          travelMode: google.maps.TravelMode.DRIVING,
-          provideRouteAlternatives: false,
-        },
-        (result, status) => {
-          if (cancelled) {
-            return;
-          }
-
-          if (status !== google.maps.DirectionsStatus.OK || !result?.routes?.[0]?.legs?.[0]) {
-            setRouteSummary(null);
-            return;
-          }
-
-          const primaryRoute = result.routes[0];
-          const leg = primaryRoute.legs[0];
-          setRouteSummary({
-            distanceText: leg.distance?.text || 'N/A',
-            durationText: leg.duration?.text || 'N/A',
-            polylinePath: primaryRoute.overview_path.map((point) => ({ lat: point.lat(), lng: point.lng() })),
-          });
-        },
-      );
-
-      return () => {
-        cancelled = true;
-      };
-    }
-
     void (async () => {
       const route = await getRoute(currentLocation, destination);
       if (cancelled || !route) {
@@ -232,7 +291,7 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [currentLocation, destination, isLoaded]);
+  }, [currentLocation, destination]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -253,77 +312,109 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
     map.fitBounds(bounds, 56);
   }, [currentLocation, dropoffLocation, pickupLocation, routeSummary]);
 
-  const shouldUseGoogleMap = hasGoogleMapsApiKey && isLoaded && !loadError;
+  const leafletMap = (
+    <LeafletMapContainer
+      center={[center.lat, center.lng]}
+      zoom={14}
+      style={{ width: '100%', height: '100%' }}
+      zoomControl
+      scrollWheelZoom
+    >
+      <LeafletTileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+        maxZoom={20}
+      />
+      <LeafletViewportController points={[currentLocation, pickupLocation, dropoffLocation].filter(Boolean) as google.maps.LatLngLiteral[]} />
+      {pickupLocation && <LeafletMarker position={[pickupLocation.lat, pickupLocation.lng]} icon={createLeafletPin('#16a34a')} />}
+      {dropoffLocation && <LeafletMarker position={[dropoffLocation.lat, dropoffLocation.lng]} icon={createLeafletPin('#ef4444')} />}
+      {currentLocation && <LeafletMarker position={[currentLocation.lat, currentLocation.lng]} icon={createLeafletDriverIcon()} />}
+      {routeSummary && (
+        <>
+          <LeafletPolyline
+            positions={routeSummary.polylinePath.map((point) => [point.lat, point.lng])}
+            pathOptions={{
+              color: '#ffffff',
+              opacity: 0.92,
+              weight: 10,
+            }}
+          />
+          <LeafletPolyline
+            positions={routeSummary.polylinePath.map((point) => [point.lat, point.lng])}
+            pathOptions={{
+              color: mode === 'trip' ? '#16a34a' : '#2563eb',
+              opacity: 0.98,
+              weight: 6,
+            }}
+          />
+        </>
+      )}
+    </LeafletMapContainer>
+  );
 
   return (
-    <Box sx={{ position: 'relative', width: '100%', height, borderRadius: 5, overflow: 'hidden' }}>
-      {shouldUseGoogleMap ? (
-        <GoogleMap
-          mapContainerStyle={{ width: '100%', height: '100%' }}
+    <Box sx={{ position: 'relative', width: '100%', height, borderRadius: 5, overflow: 'hidden', bgcolor: '#dbeafe' }}>
+      {hasGoogleMapsApiKey ? (
+        <GoogleDriverTripMapCanvas
+          googleMapsApiKey={googleMapsApiKey}
           center={center}
-          zoom={14}
-          onLoad={(map) => {
-            mapRef.current = map;
+          themeMode={themeMode}
+          mode={mode}
+          currentLocation={currentLocation}
+          pickupLocation={pickupLocation}
+          dropoffLocation={dropoffLocation}
+          routeSummary={routeSummary}
+          mapRef={mapRef}
+          onMapLoad={(points) => {
+            const map = mapRef.current;
+            if (!map || !points.length || !window.google) {
+              return;
+            }
+
+            if (points.length === 1) {
+              map.panTo(points[0]);
+              map.setZoom(15);
+              return;
+            }
+
+            const bounds = new google.maps.LatLngBounds();
+            points.forEach((point) => bounds.extend(point));
+            map.fitBounds(bounds, 56);
           }}
-          options={{
-            disableDefaultUI: true,
-            zoomControl: true,
-            streetViewControl: false,
-            mapTypeControl: false,
-            fullscreenControl: false,
-            clickableIcons: false,
-            styles: themeMode === 'dark' ? darkMapStyles : undefined,
-          }}
-        >
-          {pickupLocation && (
-            <MarkerF position={pickupLocation} icon={getMarkerIcon('#16a34a')} title="Pickup" />
-          )}
-          {dropoffLocation && (
-            <MarkerF position={dropoffLocation} icon={getMarkerIcon('#ef4444')} title="Dropoff" />
-          )}
-          {currentLocation && (
-            <MarkerF position={currentLocation} icon={getCarSymbol(0, '#2563eb')} title="Your location" />
-          )}
-          {routeSummary && (
-            <PolylineF
-              path={routeSummary.polylinePath}
-              options={{
-                strokeColor: mode === 'trip' ? '#16a34a' : '#2563eb',
-                strokeOpacity: 0.95,
-                strokeWeight: 6,
-              }}
-            />
-          )}
-        </GoogleMap>
-      ) : (
-        <LeafletMapContainer
-          center={[center.lat, center.lng]}
-          zoom={14}
-          style={{ width: '100%', height: '100%' }}
-          zoomControl
-          scrollWheelZoom
-        >
-          <LeafletTileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            maxZoom={20}
-          />
-          <LeafletViewportController points={[currentLocation, pickupLocation, dropoffLocation].filter(Boolean) as google.maps.LatLngLiteral[]} />
-          {pickupLocation && <LeafletMarker position={[pickupLocation.lat, pickupLocation.lng]} icon={createLeafletPin('#16a34a')} />}
-          {dropoffLocation && <LeafletMarker position={[dropoffLocation.lat, dropoffLocation.lng]} icon={createLeafletPin('#ef4444')} />}
-          {currentLocation && <LeafletMarker position={[currentLocation.lat, currentLocation.lng]} icon={createLeafletDriverIcon()} />}
-          {routeSummary && (
-            <LeafletPolyline
-              positions={routeSummary.polylinePath.map((point) => [point.lat, point.lng])}
-              pathOptions={{
-                color: mode === 'trip' ? '#16a34a' : '#2563eb',
-                opacity: 0.95,
-                weight: 6,
-              }}
-            />
-          )}
-        </LeafletMapContainer>
-      )}
+          fallback={leafletMap}
+        />
+      ) : leafletMap}
+
+      <Box
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 34%, rgba(15,23,42,0.05) 100%)',
+        }}
+      />
+
+      <Paper
+        elevation={0}
+        sx={{
+          position: 'absolute',
+          top: 12,
+          left: 12,
+          zIndex: 2,
+          px: 1.25,
+          py: 0.85,
+          borderRadius: 999,
+          backgroundColor: themeMode === 'dark' ? 'rgba(17,24,39,0.86)' : 'rgba(255,255,255,0.92)',
+          border: '1px solid rgba(148,163,184,0.18)',
+          backdropFilter: 'blur(10px)',
+        }}
+      >
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+          <Chip size="small" label="Điểm đón" sx={{ bgcolor: 'rgba(22,163,74,0.12)', color: '#15803d' }} />
+          <Chip size="small" label="Tuyến đường" sx={{ bgcolor: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }} />
+          <Chip size="small" label="Điểm đến" sx={{ bgcolor: 'rgba(239,68,68,0.12)', color: '#b91c1c' }} />
+        </Stack>
+      </Paper>
 
       <Paper
         elevation={8}

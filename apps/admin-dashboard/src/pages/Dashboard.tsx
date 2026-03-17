@@ -195,6 +195,36 @@ const HeatmapViewportController: React.FC<{ drivers: Driver[]; hotspots: Hotspot
   return null;
 };
 
+const GoogleDriverHeatmap: React.FC<{
+  googleMapsApiKey: string;
+  mapCenter: { lat: number; lng: number };
+  drivers: Driver[];
+  fallback: React.ReactNode;
+}> = ({ googleMapsApiKey, mapCenter, drivers, fallback }) => {
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'admin-dashboard-google-maps',
+    googleMapsApiKey,
+    libraries: mapLibraries,
+  });
+
+  if (loadError) {
+    return <>{fallback}</>;
+  }
+
+  if (!isLoaded) {
+    return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box>;
+  }
+
+  const heatmapData = drivers.map((driver) => new google.maps.LatLng(driver.currentLocation!.lat, driver.currentLocation!.lng));
+
+  return (
+    <GoogleMap mapContainerStyle={{ width: '100%', height: '100%' }} center={mapCenter} zoom={12} options={{ disableDefaultUI: true, zoomControl: true, streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}>
+      {heatmapData.length > 0 && <HeatmapLayerF data={heatmapData} options={{ radius: 38, opacity: 0.7, gradient: heatmapGradient }} />}
+      {drivers.slice(0, 120).map((driver) => <MarkerF key={driver.id} position={{ lat: driver.currentLocation!.lat, lng: driver.currentLocation!.lng }} title={`${driver.user?.firstName || 'Driver'} ${driver.user?.lastName || ''}`.trim()} />)}
+    </GoogleMap>
+  );
+};
+
 const Dashboard: React.FC = () => {
   const dispatch = useAppDispatch();
   const { stats } = useAppSelector((state) => state.admin);
@@ -207,12 +237,6 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState('');
   const { t } = useTranslation();
   const googleMapsApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || '';
-
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'admin-dashboard-google-maps',
-    googleMapsApiKey,
-    libraries: mapLibraries,
-  });
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -253,14 +277,6 @@ const Dashboard: React.FC = () => {
 
   const filteredDrivers = useMemo(() => drivers.filter((driver) => matchesRegion(driver, selectedRegion)), [drivers, selectedRegion]);
 
-  const heatmapData = useMemo(() => {
-    if (!isLoaded || !window.google) {
-      return [] as google.maps.LatLng[];
-    }
-
-    return filteredDrivers.map((driver) => new google.maps.LatLng(driver.currentLocation!.lat, driver.currentLocation!.lng));
-  }, [filteredDrivers, isLoaded]);
-
   const mapCenter = useMemo(() => {
     if (!filteredDrivers.length) {
       return defaultCenter;
@@ -273,7 +289,53 @@ const Dashboard: React.FC = () => {
 
   const hotspots = useMemo(() => buildHotspots(filteredDrivers), [filteredDrivers]);
   const timeline = useMemo(() => buildTimeline(rides, payments, filteredDrivers), [filteredDrivers, payments, rides]);
-  const shouldUseGoogleHeatmap = Boolean(googleMapsApiKey.trim()) && isLoaded && !loadError;
+  const hasGoogleMapsApiKey = Boolean(googleMapsApiKey.trim());
+
+  const leafletHeatmap = (
+    <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+      <LeafletMapContainer center={[mapCenter.lat, mapCenter.lng]} zoom={12} style={{ width: '100%', height: '100%' }} zoomControl scrollWheelZoom>
+        <LeafletTileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          maxZoom={20}
+        />
+        <HeatmapViewportController drivers={filteredDrivers} hotspots={hotspots} />
+        {hotspots.map((hotspot, index) => {
+          const color = getHotspotColor(index);
+          return (
+            <LeafletCircle
+              key={hotspot.key}
+              center={[hotspot.center.lat, hotspot.center.lng]}
+              radius={Math.max(260, hotspot.driverCount * 170)}
+              pathOptions={{
+                color,
+                fillColor: color,
+                fillOpacity: 0.14,
+                opacity: 0.6,
+                weight: 2,
+              }}
+            />
+          );
+        })}
+        {filteredDrivers.slice(0, 220).map((driver) => (
+          <LeafletCircleMarker
+            key={driver.id}
+            center={[driver.currentLocation!.lat, driver.currentLocation!.lng]}
+            radius={driver.isOnline || driver.isAvailable ? 7 : 5}
+            pathOptions={{
+              color: '#ffffff',
+              weight: 2,
+              fillColor: driver.isOnline || driver.isAvailable ? '#2563eb' : '#94a3b8',
+              fillOpacity: 0.95,
+            }}
+          />
+        ))}
+      </LeafletMapContainer>
+      <Alert severity="info" sx={{ position: 'absolute', top: 16, left: 16, right: 16, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.92)' }}>
+        Dang dung fallback OpenStreetMap do admin chua co Google Maps key hoac Google Maps khong tai duoc. Heat hotspot va vi tri driver van hoat dong binh thuong.
+      </Alert>
+    </Box>
+  );
 
   if (loading) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress size={60} /></Box>;
@@ -330,104 +392,9 @@ const Dashboard: React.FC = () => {
               </Box>
 
               <Box sx={{ height: 520, bgcolor: '#e2e8f0' }}>
-                {shouldUseGoogleHeatmap ? (
-                  <GoogleMap mapContainerStyle={{ width: '100%', height: '100%' }} center={mapCenter} zoom={12} options={{ disableDefaultUI: true, zoomControl: true, streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}>
-                    {heatmapData.length > 0 && <HeatmapLayerF data={heatmapData} options={{ radius: 38, opacity: 0.7, gradient: heatmapGradient }} />}
-                    {filteredDrivers.slice(0, 120).map((driver) => <MarkerF key={driver.id} position={{ lat: driver.currentLocation!.lat, lng: driver.currentLocation!.lng }} title={`${driver.user?.firstName || 'Driver'} ${driver.user?.lastName || ''}`.trim()} />)}
-                  </GoogleMap>
-                ) : !googleMapsApiKey.trim() ? (
-                  <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
-                    <LeafletMapContainer center={[mapCenter.lat, mapCenter.lng]} zoom={12} style={{ width: '100%', height: '100%' }} zoomControl scrollWheelZoom>
-                      <LeafletTileLayer
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-                        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                        maxZoom={20}
-                      />
-                      <HeatmapViewportController drivers={filteredDrivers} hotspots={hotspots} />
-                      {hotspots.map((hotspot, index) => {
-                        const color = getHotspotColor(index);
-                        return (
-                          <LeafletCircle
-                            key={hotspot.key}
-                            center={[hotspot.center.lat, hotspot.center.lng]}
-                            radius={Math.max(260, hotspot.driverCount * 170)}
-                            pathOptions={{
-                              color,
-                              fillColor: color,
-                              fillOpacity: 0.14,
-                              opacity: 0.6,
-                              weight: 2,
-                            }}
-                          />
-                        );
-                      })}
-                      {filteredDrivers.slice(0, 220).map((driver) => (
-                        <LeafletCircleMarker
-                          key={driver.id}
-                          center={[driver.currentLocation!.lat, driver.currentLocation!.lng]}
-                          radius={driver.isOnline || driver.isAvailable ? 7 : 5}
-                          pathOptions={{
-                            color: '#ffffff',
-                            weight: 2,
-                            fillColor: driver.isOnline || driver.isAvailable ? '#2563eb' : '#94a3b8',
-                            fillOpacity: 0.95,
-                          }}
-                        />
-                      ))}
-                    </LeafletMapContainer>
-                    <Alert severity="info" sx={{ position: 'absolute', top: 16, left: 16, right: 16, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.92)' }}>
-                      Dang dung fallback OpenStreetMap do admin chua co Google Maps key. Heat hotspot va vi tri driver van hoat dong binh thuong.
-                    </Alert>
-                  </Box>
-                ) : loadError ? (
-                  <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
-                    <LeafletMapContainer center={[mapCenter.lat, mapCenter.lng]} zoom={12} style={{ width: '100%', height: '100%' }} zoomControl scrollWheelZoom>
-                      <LeafletTileLayer
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-                        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                        maxZoom={20}
-                      />
-                      <HeatmapViewportController drivers={filteredDrivers} hotspots={hotspots} />
-                      {hotspots.map((hotspot, index) => {
-                        const color = getHotspotColor(index);
-                        return (
-                          <LeafletCircle
-                            key={hotspot.key}
-                            center={[hotspot.center.lat, hotspot.center.lng]}
-                            radius={Math.max(260, hotspot.driverCount * 170)}
-                            pathOptions={{
-                              color,
-                              fillColor: color,
-                              fillOpacity: 0.14,
-                              opacity: 0.6,
-                              weight: 2,
-                            }}
-                          />
-                        );
-                      })}
-                      {filteredDrivers.slice(0, 220).map((driver) => (
-                        <LeafletCircleMarker
-                          key={driver.id}
-                          center={[driver.currentLocation!.lat, driver.currentLocation!.lng]}
-                          radius={driver.isOnline || driver.isAvailable ? 7 : 5}
-                          pathOptions={{
-                            color: '#ffffff',
-                            weight: 2,
-                            fillColor: driver.isOnline || driver.isAvailable ? '#2563eb' : '#94a3b8',
-                            fillOpacity: 0.95,
-                          }}
-                        />
-                      ))}
-                    </LeafletMapContainer>
-                    <Alert severity="warning" sx={{ position: 'absolute', top: 16, left: 16, right: 16, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.92)' }}>
-                      Google Maps khong tai duoc, da chuyen sang fallback OpenStreetMap de giu heatmap va marker admin hoat dong.
-                    </Alert>
-                  </Box>
-                ) : !isLoaded ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box>
-                ) : (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box>
-                )}
+                {hasGoogleMapsApiKey ? (
+                  <GoogleDriverHeatmap googleMapsApiKey={googleMapsApiKey} mapCenter={mapCenter} drivers={filteredDrivers} fallback={leafletHeatmap} />
+                ) : leafletHeatmap}
               </Box>
 
               <Box sx={{ px: 3, py: 2, borderTop: '1px solid rgba(148,163,184,0.16)', background: 'linear-gradient(180deg, rgba(248,250,252,0.9), rgba(255,255,255,0.95))' }}>

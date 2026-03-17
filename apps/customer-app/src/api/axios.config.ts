@@ -1,4 +1,7 @@
 import axios from 'axios';
+import { store } from '../store';
+import { logout, updateTokens } from '../store/auth.slice';
+import { AuthTokens } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
@@ -10,6 +13,34 @@ export const axiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+let refreshPromise: Promise<AuthTokens> | null = null;
+
+export const refreshAuthSession = async (): Promise<AuthTokens> => {
+  if (!refreshPromise) {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    refreshPromise = axios
+      .post(`${API_BASE_URL}/auth/refresh`, { refreshToken })
+      .then((response) => {
+        const tokens = response.data?.data?.tokens;
+        if (!tokens?.accessToken || !tokens?.refreshToken) {
+          throw new Error('Refresh payload missing tokens');
+        }
+
+        store.dispatch(updateTokens(tokens));
+        return tokens as AuthTokens;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
+};
 
 // Request interceptor - Add auth token
 axiosInstance.interceptors.request.use(
@@ -38,34 +69,24 @@ axiosInstance.interceptors.response.use(
     const originalRequest = error.config;
 
     // Token expired
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (
+      error.response?.status === 401
+      && !originalRequest._retry
+      && !originalRequest.url?.includes('/auth/refresh')
+    ) {
       originalRequest._retry = true;
 
-      const refreshToken = localStorage.getItem('refreshToken');
-
-      if (refreshToken) {
-        try {
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refreshToken,
-          });
-
-          const { accessToken, refreshToken: newRefreshToken } = response.data.data.tokens;
-          localStorage.setItem('accessToken', accessToken);
-          localStorage.setItem('refreshToken', newRefreshToken);
-
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-          return axiosInstance(originalRequest);
-        } catch (refreshError) {
-          // Refresh failed - logout
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-          localStorage.removeItem('user');
+      try {
+        const tokens = await refreshAuthSession();
+        originalRequest.headers = originalRequest.headers || {};
+        originalRequest.headers.Authorization = `Bearer ${tokens.accessToken}`;
+        return axiosInstance(originalRequest);
+      } catch (refreshError) {
+        store.dispatch(logout());
+        if (window.location.pathname !== '/login') {
           window.location.href = '/login';
-          return Promise.reject(refreshError);
         }
-      } else {
-        // No refresh token - logout
-        window.location.href = '/login';
+        return Promise.reject(refreshError);
       }
     }
 

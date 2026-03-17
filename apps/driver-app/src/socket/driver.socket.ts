@@ -1,15 +1,84 @@
 import { io, Socket } from 'socket.io-client';
 import { store } from '../store';
+import { logout, updateTokens } from '../store/auth.slice';
 import { setPendingRide, clearPendingRide, updateRideStatus } from '../store/ride.slice';
 import { showNotification } from '../store/ui.slice';
 import { Ride, VehicleType } from '../types';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 class DriverSocketService {
   private socket: Socket | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
+  private authFailureHandled = false;
+
+  private isAuthError(error: unknown) {
+    const message = typeof error === 'string'
+      ? error
+      : error && typeof error === 'object' && 'message' in error
+        ? String((error as { message?: string }).message || '')
+        : '';
+
+    return /invalid|expired|authentication|required|jwt/i.test(message);
+  }
+
+  private handleAuthFailure() {
+    if (this.authFailureHandled) {
+      return;
+    }
+
+    this.authFailureHandled = true;
+    this.disconnect();
+
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      store.dispatch(logout());
+      store.dispatch(
+        showNotification({
+          type: 'warning',
+          message: 'Phiên đăng nhập của tài xế đã hết hạn. Vui lòng đăng nhập lại.',
+        })
+      );
+      window.location.href = '/login';
+      return;
+    }
+
+    void (async () => {
+      try {
+        const response = await fetch(`${API_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Refresh failed');
+        }
+
+        const payload = await response.json();
+        const tokens = payload?.data?.tokens;
+
+        if (!tokens?.accessToken || !tokens?.refreshToken) {
+          throw new Error('Refresh payload missing tokens');
+        }
+
+        store.dispatch(updateTokens(tokens));
+        this.authFailureHandled = false;
+        this.connect(tokens.accessToken);
+      } catch {
+        store.dispatch(logout());
+        store.dispatch(
+          showNotification({
+            type: 'warning',
+            message: 'Phiên đăng nhập của tài xế đã hết hạn. Vui lòng đăng nhập lại.',
+          })
+        );
+        window.location.href = '/login';
+      }
+    })();
+  }
 
   connect(accessToken: string) {
     if (this.socket?.connected) {
@@ -19,7 +88,8 @@ class DriverSocketService {
 
     this.socket = io(SOCKET_URL, {
       auth: { token: accessToken },
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
+      upgrade: true,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
@@ -29,6 +99,7 @@ class DriverSocketService {
     this.socket.on('connect', () => {
       console.log('✅ Driver socket connected:', this.socket?.id);
       this.reconnectAttempts = 0;
+      this.authFailureHandled = false;
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -36,6 +107,11 @@ class DriverSocketService {
     });
 
     this.socket.on('connect_error', (error) => {
+      if (this.isAuthError(error)) {
+        this.handleAuthFailure();
+        return;
+      }
+
       console.error('Socket connection error:', error);
       this.reconnectAttempts++;
 

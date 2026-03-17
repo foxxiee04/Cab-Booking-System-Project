@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -34,6 +34,7 @@ interface RideRequestModalProps {
   open: boolean;
   onAccept: () => void;
   onReject: () => void;
+  onTimeout: () => void;
   loading?: boolean;
 }
 
@@ -43,17 +44,40 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
   open,
   onAccept,
   onReject,
+  onTimeout,
   loading = false,
 }) => {
   const { t } = useTranslation();
   const { currentLocation } = useAppSelector((state) => state.driver);
   const [timeLeft, setTimeLeft] = useState(timeoutSeconds);
+  const timeoutHandledForRideRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (open) {
+    if (open && ride) {
       setTimeLeft(timeoutSeconds);
+      timeoutHandledForRideRef.current = null;
     }
-  }, [open, timeoutSeconds]);
+  }, [open, ride, timeoutSeconds]);
+
+  useEffect(() => {
+    if (!open || !ride) {
+      return;
+    }
+
+    if (timeLeft <= 0) {
+      if (timeoutHandledForRideRef.current !== ride.id) {
+        timeoutHandledForRideRef.current = ride.id;
+        onTimeout();
+      }
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      setTimeLeft((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearTimeout(timerId);
+  }, [onTimeout, open, ride, timeLeft]);
 
   if (!ride) return null;
 
@@ -89,8 +113,6 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
           <CountdownTimer
             seconds={timeLeft}
             totalSeconds={timeoutSeconds}
-            onTick={(remaining) => setTimeLeft(remaining)}
-            onComplete={onReject}
           />
           <LinearProgress
             variant="determinate"
@@ -207,9 +229,12 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
           <Stack spacing={1.5}>
             <SwipeToConfirm
               label={t('rideRequest.accept', 'Vuốt để nhận chuyến')}
+              actionLabel={t('rideRequest.acceptNow', 'Nhận chuyến')}
               confirmLabel={t('rideRequest.accepting', 'Đang nhận chuyến')}
               loading={loading}
               onConfirm={onAccept}
+              testId="accept-ride-swipe"
+              actionButtonTestId="accept-ride-button"
             />
             <Button
               variant="outlined"
@@ -217,6 +242,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
               size="large"
               onClick={onReject}
               disabled={loading}
+              data-testid="reject-ride-button"
               sx={{ py: 1.5, borderRadius: 999 }}
             >
               {t('rideRequest.reject')}

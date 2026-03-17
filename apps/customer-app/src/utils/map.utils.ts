@@ -35,9 +35,9 @@ const cleanCache = (cache: Map<string, any>) => {
  */
 export const geocodeAddress = async (
   address: string,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; contextLabel?: string }
 ): Promise<Location[]> => {
-  const cacheKey = address.toLowerCase().trim();
+  const cacheKey = `${address.toLowerCase().trim()}::${options?.contextLabel?.toLowerCase().trim() || ''}`;
 
   // Check cache first
   const cached = geocodeCache.get(cacheKey);
@@ -47,7 +47,7 @@ export const geocodeAddress = async (
 
   try {
     const response = await axiosInstance.get('/map/geocode', {
-      params: { q: address, limit: 7 },
+      params: { q: address, limit: 7, ...(options?.contextLabel ? { context: options.contextLabel } : {}) },
       signal: options?.signal,
     });
 

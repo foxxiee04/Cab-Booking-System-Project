@@ -1,8 +1,10 @@
 import { io, Socket } from 'socket.io-client';
 import { store } from '../store';
+import { logout } from '../store/auth.slice';
 import { updateStats } from '../store/admin.slice';
 import { showNotification } from '../store/ui.slice';
 import { Ride, Payment } from '../types';
+import { refreshAuthSession } from '../api/axios.config';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
 
@@ -19,6 +21,46 @@ class AdminSocketService {
   private socket: Socket | null = null;
   private listeners = new Set<() => void>();
   private eventListeners = new Set<(event: AdminRealtimeEvent) => void>();
+  private authFailureHandled = false;
+
+  private isAuthError(error: unknown) {
+    const message = typeof error === 'string'
+      ? error
+      : error && typeof error === 'object' && 'message' in error
+        ? String((error as { message?: string }).message || '')
+        : '';
+
+    return /invalid|expired|authentication|required|jwt/i.test(message);
+  }
+
+  private handleAuthFailure() {
+    if (this.authFailureHandled) {
+      return;
+    }
+
+    this.authFailureHandled = true;
+    this.disconnect();
+
+    void (async () => {
+      try {
+        const tokens = await refreshAuthSession();
+        this.authFailureHandled = false;
+        this.connect(tokens.accessToken);
+      } catch {
+        store.dispatch(logout());
+        store.dispatch(
+          showNotification({
+            type: 'warning',
+            message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+          })
+        );
+
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+      }
+    })();
+  }
 
   private notifyListeners() {
     this.listeners.forEach((listener) => listener());
@@ -36,7 +78,8 @@ class AdminSocketService {
 
     this.socket = io(SOCKET_URL, {
       auth: { token: accessToken },
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
+      upgrade: true,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
@@ -45,6 +88,7 @@ class AdminSocketService {
 
     this.socket.on('connect', () => {
       console.log('✅ Admin socket connected:', this.socket?.id);
+      this.authFailureHandled = false;
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -52,6 +96,11 @@ class AdminSocketService {
     });
 
     this.socket.on('connect_error', (error) => {
+      if (this.isAuthError(error)) {
+        this.handleAuthFailure();
+        return;
+      }
+
       console.error('Socket connection error:', error);
     });
 

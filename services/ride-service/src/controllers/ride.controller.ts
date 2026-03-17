@@ -12,6 +12,19 @@ interface AuthRequest extends Request {
 export class RideController {
   constructor(private readonly rideService: RideService) {}
 
+  private async resolveDriverActorId(userId: string): Promise<string> {
+    try {
+      const driver = await driverGrpcClient.getDriverByUserId(userId);
+      if (driver?.id) {
+        return driver.id;
+      }
+    } catch (err) {
+      logger.warn('Could not fetch driver profile, using userId as driverId');
+    }
+
+    return userId;
+  }
+
   getAllRides = async (req: AuthRequest, res: Response) => {
     try {
       if (req.user!.role !== UserRole.ADMIN) {
@@ -227,7 +240,8 @@ export class RideController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
 
-      const { rides, total } = await this.rideService.getDriverRides(req.user!.userId, page, limit);
+      const driverId = await this.resolveDriverActorId(req.user!.userId);
+      const { rides, total } = await this.rideService.getDriverRides(driverId, page, limit);
       res.json({ success: true, data: { rides }, meta: { page, limit, total } });
     } catch (err) {
       logger.error('Get driver rides error:', err);
@@ -247,7 +261,8 @@ export class RideController {
         });
       }
 
-      const ride = await this.rideService.acceptRide(req.params.rideId, req.user!.userId);
+      const driverId = await this.resolveDriverActorId(req.user!.userId);
+      const ride = await this.rideService.acceptRide(req.params.rideId, driverId);
       res.json({ success: true, data: { ride } });
     } catch (err) {
       logger.error('Accept ride error:', err);
@@ -268,7 +283,8 @@ export class RideController {
         });
       }
 
-      const ride = await this.rideService.rejectRide(req.params.rideId, req.user!.userId);
+      const driverId = await this.resolveDriverActorId(req.user!.userId);
+      const ride = await this.rideService.rejectRide(req.params.rideId, driverId);
       res.json({ success: true, data: { ride } });
     } catch (err) {
       logger.error('Reject ride error:', err);
@@ -289,7 +305,8 @@ export class RideController {
         });
       }
 
-      const ride = await this.rideService.startRide(req.params.rideId, req.user!.userId);
+      const driverId = await this.resolveDriverActorId(req.user!.userId);
+      const ride = await this.rideService.startRide(req.params.rideId, driverId);
       res.json({ success: true, data: { ride } });
     } catch (err) {
       logger.error('Start ride error:', err);
@@ -332,7 +349,8 @@ export class RideController {
         });
       }
 
-      const ride = await this.rideService.markPickedUp(req.params.rideId, req.user!.userId);
+      const driverId = await this.resolveDriverActorId(req.user!.userId);
+      const ride = await this.rideService.markPickedUp(req.params.rideId, driverId);
       res.json({ success: true, data: { ride } });
     } catch (err) {
       logger.error('Pickup error:', err);
@@ -353,7 +371,8 @@ export class RideController {
         });
       }
 
-      const ride = await this.rideService.completeRide(req.params.rideId, req.user!.userId);
+      const driverId = await this.resolveDriverActorId(req.user!.userId);
+      const ride = await this.rideService.completeRide(req.params.rideId, driverId);
       res.json({ success: true, data: { ride } });
     } catch (err) {
       logger.error('Complete ride error:', err);
@@ -370,9 +389,13 @@ export class RideController {
       const { reason } = req.body;
       const userType = req.user!.role === UserRole.DRIVER ? 'DRIVER' : 'CUSTOMER';
 
+      const actorId = userType === 'DRIVER'
+        ? await this.resolveDriverActorId(req.user!.userId)
+        : req.user!.userId;
+
       const ride = await this.rideService.cancelRide(
         req.params.rideId,
-        req.user!.userId,
+        actorId,
         userType as 'CUSTOMER' | 'DRIVER',
         reason
       );

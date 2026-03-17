@@ -62,6 +62,36 @@ interface PlacePredictionOption {
   lng: number;
 }
 
+const DEFAULT_SEARCH_CONTEXT = 'Thành phố Hồ Chí Minh';
+
+function stripVietnamese(value: string) {
+  return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+}
+
+function getSearchContextLabel(...addresses: Array<string | undefined>) {
+  for (const address of addresses) {
+    if (!address) {
+      continue;
+    }
+
+    const parts = address.split(',').map((part) => part.trim()).filter(Boolean);
+    const directMatch = [...parts].reverse().find((part) => {
+      const normalized = stripVietnamese(part);
+      return normalized.includes('thanh pho') || normalized.includes('tinh') || normalized.includes('ho chi minh') || normalized.includes('ha noi');
+    });
+
+    if (directMatch) {
+      return directMatch;
+    }
+
+    if (parts.length >= 2) {
+      return parts[parts.length - 2];
+    }
+  }
+
+  return DEFAULT_SEARCH_CONTEXT;
+}
+
 function getPredictionLabel(option: PlacePredictionOption | string) {
   return typeof option === 'string' ? option : option.description;
 }
@@ -169,6 +199,138 @@ function getMarkerIcon(label: string, color: string): google.maps.Symbol {
   };
 }
 
+interface GoogleBookingMapCanvasProps {
+  googleMapsApiKey: string;
+  currentCenter: google.maps.LatLngLiteral;
+  themeMode: 'light' | 'dark';
+  pickup: BookingMapLocation | null;
+  dropoff: BookingMapLocation | null;
+  nearbyDrivers: NearbyDriver[];
+  animatedDriverPosition: google.maps.LatLngLiteral | null;
+  driverHeading: number;
+  routeSummary: RouteSummary | null;
+  mapRef: React.MutableRefObject<google.maps.Map | null>;
+  onMapLoad: (points: google.maps.LatLngLiteral[]) => void;
+  fallback: React.ReactNode;
+}
+
+const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
+  googleMapsApiKey,
+  currentCenter,
+  themeMode,
+  pickup,
+  dropoff,
+  nearbyDrivers,
+  animatedDriverPosition,
+  driverHeading,
+  routeSummary,
+  mapRef,
+  onMapLoad,
+  fallback,
+}) => {
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'cab-booking-google-maps',
+    googleMapsApiKey,
+    libraries,
+  });
+
+  if (loadError) {
+    return <>{fallback}</>;
+  }
+
+  if (!isLoaded) {
+    return (
+      <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+        <Skeleton variant="rectangular" width="100%" height="100%" sx={{ borderRadius: 6 }} />
+      </Box>
+    );
+  }
+
+  return (
+    <GoogleMap
+      mapContainerStyle={{ width: '100%', height: '100%' }}
+      center={currentCenter}
+      zoom={14}
+      onLoad={(map) => {
+        mapRef.current = map;
+        onMapLoad([pickup, dropoff].filter(Boolean) as google.maps.LatLngLiteral[]);
+      }}
+      onUnmount={() => {
+        mapRef.current = null;
+      }}
+      options={{
+        disableDefaultUI: true,
+        zoomControl: true,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        rotateControl: false,
+        clickableIcons: false,
+        styles: themeMode === 'dark' ? darkMapStyles : undefined,
+      }}
+    >
+      {pickup && (
+        <MarkerF
+          position={pickup}
+          icon={getMarkerIcon('A', '#16a34a')}
+          label={{ text: 'A', color: '#ffffff', fontWeight: '700' }}
+          title={pickup.address || 'Pickup'}
+        />
+      )}
+
+      {dropoff && (
+        <MarkerF
+          position={dropoff}
+          icon={getMarkerIcon('B', '#dc2626')}
+          label={{ text: 'B', color: '#ffffff', fontWeight: '700' }}
+          title={dropoff.address || 'Dropoff'}
+        />
+      )}
+
+      {routeSummary && (
+        <>
+          <PolylineF
+            path={routeSummary.polylinePath}
+            options={{
+              strokeColor: '#ffffff',
+              strokeOpacity: 0.92,
+              strokeWeight: 10,
+              zIndex: 10,
+            }}
+          />
+          <PolylineF
+            path={routeSummary.polylinePath}
+            options={{
+              strokeColor: '#0f62fe',
+              strokeOpacity: 0.98,
+              strokeWeight: 6,
+              zIndex: 11,
+            }}
+          />
+        </>
+      )}
+
+      {nearbyDrivers.map((driver) => (
+        <MarkerF
+          key={driver.id}
+          position={{ lat: driver.lat, lng: driver.lng }}
+          icon={getCarSymbol(driver.heading || 0, '#111827', 0.75)}
+          title={driver.status || 'Nearby driver'}
+        />
+      ))}
+
+      {animatedDriverPosition && (
+        <MarkerF
+          position={animatedDriverPosition}
+          icon={getCarSymbol(driverHeading, '#f97316', 1)}
+          title="Driver live location"
+          zIndex={999}
+        />
+      )}
+    </GoogleMap>
+  );
+};
+
 function formatDistance(meters: number): string {
   return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
 }
@@ -203,6 +365,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
   const hasGoogleMapsApiKey = googleMapsApiKey.trim().length > 0;
   const animationFrameRef = useRef<number | null>(null);
   const predictionRequestRef = useRef(0);
+  const predictionDebounceRef = useRef<Partial<Record<SearchField, number>>>({});
   const mapRef = useRef<google.maps.Map | null>(null);
   const animatedDriverRef = useRef<google.maps.LatLngLiteral | null>(null);
   const driverHeadingRef = useRef(0);
@@ -214,12 +377,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
   const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
   const [animatedDriverPosition, setAnimatedDriverPosition] = useState<google.maps.LatLngLiteral | null>(null);
   const [driverHeading, setDriverHeading] = useState(0);
-
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'cab-booking-google-maps',
-    googleMapsApiKey,
-    libraries,
-  });
+  const searchContextLabel = useMemo(() => getSearchContextLabel(pickup?.address, dropoff?.address), [dropoff?.address, pickup?.address]);
 
   useEffect(() => {
     setPickupInput(pickup?.address || '');
@@ -243,26 +401,41 @@ export const BookingMap: React.FC<BookingMapProps> = ({
     }
 
     try {
-      const results = await geocodeAddress(query);
+      const results = await geocodeAddress(query, { contextLabel: searchContextLabel });
       if (predictionRequestRef.current !== requestId) {
         return;
       }
 
-      const normalized = results.slice(0, 7).map((result, index) => {
-        const [primaryText, ...secondaryParts] = (result.address || query)
-          .split(',')
-          .map((part) => part.trim())
-          .filter(Boolean);
+      const seenDescriptions = new Set<string>();
+      const normalized = results
+        .filter((result) => {
+          const description = (result.address || query)
+            .trim()
+            .replace(/\s+/g, ' ')
+            .toLowerCase();
+          if (seenDescriptions.has(description)) {
+            return false;
+          }
 
-        return {
-          description: result.address || query,
-          placeId: `${field}-${index}-${result.lat}-${result.lng}`,
-          primaryText: primaryText || result.address || query,
-          secondaryText: secondaryParts.join(', '),
-          lat: result.lat,
-          lng: result.lng,
-        };
-      });
+          seenDescriptions.add(description);
+          return true;
+        })
+        .slice(0, 7)
+        .map((result, index) => {
+          const [primaryText, ...secondaryParts] = (result.address || query)
+            .split(',')
+            .map((part) => part.trim())
+            .filter(Boolean);
+
+          return {
+            description: result.address || query,
+            placeId: `${field}-${index}-${result.lat}-${result.lng}`,
+            primaryText: primaryText || result.address || query,
+            secondaryText: secondaryParts.join(', '),
+            lat: result.lat,
+            lng: result.lng,
+          };
+        });
 
       if (field === 'pickup') {
         setPickupOptions(normalized);
@@ -276,7 +449,17 @@ export const BookingMap: React.FC<BookingMapProps> = ({
           setDropoffOptions([]);
         }
     }
-  }, []);
+  }, [searchContextLabel]);
+
+  const queuePredictionFetch = useCallback((field: SearchField, value: string) => {
+    if (predictionDebounceRef.current[field]) {
+      window.clearTimeout(predictionDebounceRef.current[field]);
+    }
+
+    predictionDebounceRef.current[field] = window.setTimeout(() => {
+      void fetchPredictions(field, value);
+    }, 280);
+  }, [fetchPredictions]);
 
   const fitMapToLocations = useCallback((points: google.maps.LatLngLiteral[]) => {
     const map = mapRef.current;
@@ -323,7 +506,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
       let resolvedOption: PlacePredictionOption;
 
       if (typeof option === 'string') {
-        const [result] = await geocodeAddress(option);
+        const [result] = await geocodeAddress(option, { contextLabel: searchContextLabel });
 
         if (!result) {
           onError?.(`Không tìm thấy địa điểm phù hợp cho "${option}".`);
@@ -364,7 +547,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
 
       commitLocation(field, location);
     },
-    [commitLocation, onError],
+    [commitLocation, onError, searchContextLabel],
   );
 
   useEffect(() => {
@@ -376,77 +559,36 @@ export const BookingMap: React.FC<BookingMapProps> = ({
       return;
     }
 
-    if (isLoaded && window.google) {
-      const directionsService = new google.maps.DirectionsService();
-      directionsService.route(
-        {
-          origin: pickup,
-          destination: dropoff,
-          travelMode: google.maps.TravelMode.DRIVING,
-          provideRouteAlternatives: false,
-        },
-        (result, status) => {
-          if (cancelled) {
-            return;
-          }
-
-          if (status !== google.maps.DirectionsStatus.OK || !result?.routes?.[0]?.legs?.[0]) {
-            setRouteSummary(null);
-            onRouteComputed?.(null);
-            onError?.('Không thể tính tuyến đường giữa điểm đón và điểm đến.');
-            return;
-          }
-
-          const primaryRoute = result.routes[0];
-          const leg = primaryRoute.legs[0];
-          const summary: RouteSummary = {
-            distanceMeters: leg.distance?.value || 0,
-            durationSeconds: leg.duration?.value || 0,
-            distanceText: leg.distance?.text || formatDistance(leg.distance?.value || 0),
-            durationText: leg.duration?.text || `${Math.round((leg.duration?.value || 0) / 60)} min`,
-            polylinePath: primaryRoute.overview_path.map((point) => ({
-              lat: point.lat(),
-              lng: point.lng(),
-            })),
-          };
-
-          setRouteSummary(summary);
-          onRouteComputed?.(summary);
-          fitMapToLocations([pickup, dropoff]);
-        },
-      );
-    } else {
-      void (async () => {
-        try {
-          const route = await getRoute(pickup, dropoff);
-          if (cancelled || !route) {
-            return;
-          }
-
-          const summary: RouteSummary = {
-            distanceMeters: route.distance,
-            durationSeconds: route.duration,
-            distanceText: formatDistance(route.distance),
-            durationText: `${Math.max(1, Math.round(route.duration / 60))} min`,
-            polylinePath: (route.geometry?.coordinates || []).map(([lng, lat]) => ({ lat, lng })),
-          };
-
-          setRouteSummary(summary);
-          onRouteComputed?.(summary);
-          fitMapToLocations([pickup, dropoff]);
-        } catch {
-          if (!cancelled) {
-            setRouteSummary(null);
-            onRouteComputed?.(null);
-          }
+    void (async () => {
+      try {
+        const route = await getRoute(pickup, dropoff);
+        if (cancelled || !route) {
+          return;
         }
-      })();
-    }
+
+        const summary: RouteSummary = {
+          distanceMeters: route.distance,
+          durationSeconds: route.duration,
+          distanceText: formatDistance(route.distance),
+          durationText: `${Math.max(1, Math.round(route.duration / 60))} min`,
+          polylinePath: (route.geometry?.coordinates || []).map(([lng, lat]) => ({ lat, lng })),
+        };
+
+        setRouteSummary(summary);
+        onRouteComputed?.(summary);
+        fitMapToLocations([pickup, dropoff]);
+      } catch {
+        if (!cancelled) {
+          setRouteSummary(null);
+          onRouteComputed?.(null);
+        }
+      }
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [dropoff, fitMapToLocations, isLoaded, onError, onRouteComputed, pickup]);
+  }, [dropoff, fitMapToLocations, onRouteComputed, pickup]);
 
   useEffect(() => {
     if (!driverLocation) {
@@ -506,6 +648,13 @@ export const BookingMap: React.FC<BookingMapProps> = ({
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+
+      if (predictionDebounceRef.current.pickup) {
+        window.clearTimeout(predictionDebounceRef.current.pickup);
+      }
+      if (predictionDebounceRef.current.dropoff) {
+        window.clearTimeout(predictionDebounceRef.current.dropoff);
+      }
     };
   }, []);
 
@@ -551,18 +700,18 @@ export const BookingMap: React.FC<BookingMapProps> = ({
     <Paper
       elevation={8}
       sx={{
-        position: 'absolute',
-        top: 16,
-        left: 16,
-        right: 16,
         p: 2,
         borderRadius: 4,
-        backgroundColor: themeMode === 'dark' ? 'rgba(17, 24, 39, 0.88)' : 'rgba(255, 255, 255, 0.92)',
+        backgroundColor: themeMode === 'dark' ? 'rgba(17, 24, 39, 0.9)' : 'rgba(255, 255, 255, 0.94)',
         backdropFilter: 'blur(12px)',
-        zIndex: 2,
+        border: '1px solid rgba(148, 163, 184, 0.2)',
       }}
     >
       <Stack spacing={1.5}>
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+          <Chip size="small" label={`Gợi ý quanh ${searchContextLabel}`} variant="outlined" />
+          <Chip size="small" label="Tìm được bến xe, ga, sân bay, địa chỉ cụ thể" sx={{ bgcolor: 'rgba(37,99,235,0.08)', color: '#1d4ed8' }} />
+        </Stack>
         <Autocomplete
           freeSolo
           clearOnBlur={false}
@@ -573,7 +722,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
           onInputChange={(_event, value, reason) => {
             setPickupInput(value);
             if (reason === 'input') {
-              void fetchPredictions('pickup', value);
+              queuePredictionFetch('pickup', value);
             }
           }}
           onChange={(_event, option) => resolvePrediction('pickup', option)}
@@ -584,6 +733,10 @@ export const BookingMap: React.FC<BookingMapProps> = ({
               placeholder="Nhập vị trí đón"
               size="small"
               fullWidth
+              inputProps={{
+                ...params.inputProps,
+                'data-testid': 'pickup-location-input',
+              }}
               InputProps={{
                 ...params.InputProps,
                 startAdornment: (
@@ -611,7 +764,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
           onInputChange={(_event, value, reason) => {
             setDropoffInput(value);
             if (reason === 'input') {
-              void fetchPredictions('dropoff', value);
+              queuePredictionFetch('dropoff', value);
             }
           }}
           onChange={(_event, option) => resolvePrediction('dropoff', option)}
@@ -622,6 +775,10 @@ export const BookingMap: React.FC<BookingMapProps> = ({
               placeholder="Bạn muốn đi đâu?"
               size="small"
               fullWidth
+              inputProps={{
+                ...params.inputProps,
+                'data-testid': 'dropoff-location-input',
+              }}
               InputProps={{
                 ...params.InputProps,
                 startAdornment: (
@@ -695,167 +852,117 @@ export const BookingMap: React.FC<BookingMapProps> = ({
     </Paper>
   );
 
-  if (!hasGoogleMapsApiKey || loadError) {
-    return (
-      <Box sx={{ position: 'relative', width: '100%', height, borderRadius: 6, overflow: 'hidden', bgcolor: '#e2e8f0' }}>
-        <LeafletMapContainer
-          center={[currentCenter.lat, currentCenter.lng]}
-          zoom={14}
-          style={{ width: '100%', height: '100%' }}
-          zoomControl
-          scrollWheelZoom
-        >
-          <LeafletTileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            maxZoom={20}
+  const leafletMap = (
+    <LeafletMapContainer
+      center={[currentCenter.lat, currentCenter.lng]}
+      zoom={14}
+      style={{ width: '100%', height: '100%' }}
+      zoomControl
+      scrollWheelZoom
+    >
+      <LeafletTileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+        maxZoom={20}
+      />
+      <LeafletViewportController points={[pickup, dropoff].filter(Boolean) as google.maps.LatLngLiteral[]} />
+      {pickup && <LeafletMarker position={[pickup.lat, pickup.lng]} icon={createLeafletPin('A', '#16a34a')} />}
+      {dropoff && <LeafletMarker position={[dropoff.lat, dropoff.lng]} icon={createLeafletPin('B', '#dc2626')} />}
+      {routeSummary && (
+        <>
+          <LeafletPolyline
+            positions={routeSummary.polylinePath.map((point) => [point.lat, point.lng])}
+            pathOptions={{ color: '#ffffff', opacity: 0.92, weight: 10 }}
           />
-          <LeafletViewportController points={[pickup, dropoff].filter(Boolean) as google.maps.LatLngLiteral[]} />
-          {pickup && <LeafletMarker position={[pickup.lat, pickup.lng]} icon={createLeafletPin('A', '#16a34a')} />}
-          {dropoff && <LeafletMarker position={[dropoff.lat, dropoff.lng]} icon={createLeafletPin('B', '#2563eb')} />}
-          {routeSummary && (
-            <LeafletPolyline
-              positions={routeSummary.polylinePath.map((point) => [point.lat, point.lng])}
-              pathOptions={{ color: '#0f62fe', opacity: 0.95, weight: 6 }}
-            />
-          )}
-          {nearbyDrivers.map((driver) => (
-            <LeafletMarker
-              key={driver.id}
-              position={[driver.lat, driver.lng]}
-              icon={createLeafletDriverIcon('#111827', driver.heading || 0)}
-            />
-          ))}
-          {animatedDriverPosition && (
-            <LeafletMarker
-              position={[animatedDriverPosition.lat, animatedDriverPosition.lng]}
-              icon={createLeafletDriverIcon('#f97316', driverHeading, true)}
-            />
-          )}
-        </LeafletMapContainer>
-        {searchPanel}
+          <LeafletPolyline
+            positions={routeSummary.polylinePath.map((point) => [point.lat, point.lng])}
+            pathOptions={{ color: '#0f62fe', opacity: 0.98, weight: 6 }}
+          />
+        </>
+      )}
+      {nearbyDrivers.map((driver) => (
+        <LeafletMarker
+          key={driver.id}
+          position={[driver.lat, driver.lng]}
+          icon={createLeafletDriverIcon('#111827', driver.heading || 0)}
+        />
+      ))}
+      {animatedDriverPosition && (
+        <LeafletMarker
+          position={[animatedDriverPosition.lat, animatedDriverPosition.lng]}
+          icon={createLeafletDriverIcon('#f97316', driverHeading, true)}
+        />
+      )}
+    </LeafletMapContainer>
+  );
+
+  const renderSearchPanelAsSection = mode === 'booking';
+
+  return (
+    <Box
+      sx={{
+        width: '100%',
+        height,
+        display: 'grid',
+        gridTemplateRows: renderSearchPanelAsSection ? 'auto 1fr' : '1fr',
+        gap: renderSearchPanelAsSection ? 1.5 : 0,
+      }}
+    >
+      {renderSearchPanelAsSection && searchPanel}
+
+      <Box sx={{ position: 'relative', minHeight: 0, overflow: 'hidden', borderRadius: 6, bgcolor: '#dbeafe' }}>
+        {hasGoogleMapsApiKey ? (
+          <GoogleBookingMapCanvas
+            googleMapsApiKey={googleMapsApiKey}
+            currentCenter={currentCenter}
+            themeMode={themeMode}
+            pickup={pickup}
+            dropoff={dropoff}
+            nearbyDrivers={nearbyDrivers}
+            animatedDriverPosition={animatedDriverPosition}
+            driverHeading={driverHeading}
+            routeSummary={routeSummary}
+            mapRef={mapRef}
+            onMapLoad={fitMapToLocations}
+            fallback={leafletMap}
+          />
+        ) : leafletMap}
+
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 26%, rgba(15,23,42,0.04) 100%)',
+            zIndex: 1,
+          }}
+        />
+
+        {!renderSearchPanelAsSection && (
+          <Box sx={{ position: 'absolute', top: 16, left: 16, right: 16, zIndex: 2 }}>
+            {searchPanel}
+          </Box>
+        )}
+
         <Box sx={{ position: 'absolute', right: 16, bottom: 144, zIndex: 2 }}>
           <IconButton
             onClick={handleLocateMe}
             sx={{
               width: 52,
               height: 52,
-              backgroundColor: '#ffffff',
+              backgroundColor: themeMode === 'dark' ? 'rgba(17, 24, 39, 0.9)' : '#ffffff',
               boxShadow: 4,
               '&:hover': {
-                backgroundColor: '#f8fafc',
+                backgroundColor: themeMode === 'dark' ? 'rgba(31, 41, 55, 0.95)' : '#f8fafc',
               },
             }}
           >
             <MyLocationRounded color="primary" />
           </IconButton>
         </Box>
+
         {summaryPanel}
       </Box>
-    );
-  }
-
-  if (!isLoaded) {
-    return (
-      <Box sx={{ position: 'relative', width: '100%', height }}>
-        <Skeleton variant="rectangular" width="100%" height="100%" sx={{ borderRadius: 6 }} />
-        <Paper sx={{ position: 'absolute', top: 16, left: 16, right: 16, p: 2, borderRadius: 4 }}>
-          <Skeleton height={56} sx={{ mb: 1 }} />
-          <Skeleton height={56} />
-        </Paper>
-      </Box>
-    );
-  }
-
-  return (
-    <Box sx={{ position: 'relative', width: '100%', height, overflow: 'hidden', borderRadius: 6 }}>
-      <GoogleMap
-        mapContainerStyle={{ width: '100%', height: '100%' }}
-        center={currentCenter}
-        zoom={14}
-        onLoad={(map) => {
-          mapRef.current = map;
-          fitMapToLocations([pickup, dropoff].filter(Boolean) as google.maps.LatLngLiteral[]);
-        }}
-        options={{
-          disableDefaultUI: true,
-          zoomControl: true,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: false,
-          rotateControl: false,
-          clickableIcons: false,
-          styles: themeMode === 'dark' ? darkMapStyles : undefined,
-        }}
-      >
-        {pickup && (
-          <MarkerF
-            position={pickup}
-            icon={getMarkerIcon('A', '#16a34a')}
-            label={{ text: 'A', color: '#ffffff', fontWeight: '700' }}
-            title={pickup.address || 'Pickup'}
-          />
-        )}
-
-        {dropoff && (
-          <MarkerF
-            position={dropoff}
-            icon={getMarkerIcon('B', '#2563eb')}
-            label={{ text: 'B', color: '#ffffff', fontWeight: '700' }}
-            title={dropoff.address || 'Dropoff'}
-          />
-        )}
-
-        {routeSummary && (
-          <PolylineF
-            path={routeSummary.polylinePath}
-            options={{
-              strokeColor: '#0f62fe',
-              strokeOpacity: 0.95,
-              strokeWeight: 6,
-            }}
-          />
-        )}
-
-        {nearbyDrivers.map((driver) => (
-          <MarkerF
-            key={driver.id}
-            position={{ lat: driver.lat, lng: driver.lng }}
-            icon={getCarSymbol(driver.heading || 0, '#111827', 0.75)}
-            title={driver.status || 'Nearby driver'}
-          />
-        ))}
-
-        {animatedDriverPosition && (
-          <MarkerF
-            position={animatedDriverPosition}
-            icon={getCarSymbol(driverHeading, '#f97316', 1)}
-            title="Driver live location"
-            zIndex={999}
-          />
-        )}
-      </GoogleMap>
-
-      {searchPanel}
-
-      <Box sx={{ position: 'absolute', right: 16, bottom: 144, zIndex: 2 }}>
-        <IconButton
-          onClick={handleLocateMe}
-          sx={{
-            width: 52,
-            height: 52,
-            backgroundColor: themeMode === 'dark' ? 'rgba(17, 24, 39, 0.9)' : '#ffffff',
-            boxShadow: 4,
-            '&:hover': {
-              backgroundColor: themeMode === 'dark' ? 'rgba(31, 41, 55, 0.95)' : '#f8fafc',
-            },
-          }}
-        >
-          <MyLocationRounded color="primary" />
-        </IconButton>
-      </Box>
-
-      {summaryPanel}
     </Box>
   );
 };

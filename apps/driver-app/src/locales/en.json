@@ -38,6 +38,7 @@
   },
   "dashboard": {
     "title": "Driver Dashboard",
+    "welcome": "Hello, {{name}}",
     "online": "ONLINE",
     "offline": "OFFLINE",
     "earnings": "Earnings",
@@ -124,6 +125,7 @@
     "PENDING": "Finding driver...",
     "ASSIGNED": "Assigned",
     "ACCEPTED": "Accepted",
+    "PICKING_UP": "Picking up",
     "IN_PROGRESS": "In progress",
     "COMPLETED": "Completed",
     "CANCELLED": "Cancelled"

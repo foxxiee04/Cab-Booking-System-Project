@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Avatar,
@@ -26,8 +26,9 @@ import {
   setProfile,
   setOnlineStatus,
   setCurrentLocation,
+  setEarnings,
 } from '../store/driver.slice';
-import { clearPendingRide, setCurrentRide } from '../store/ride.slice';
+import { clearPendingRide, setCurrentRide, setPendingRide } from '../store/ride.slice';
 import RideRequestModal from '../components/ride-request/RideRequestModal';
 import { driverApi } from '../api/driver.api';
 import { rideApi } from '../api/ride.api';
@@ -37,6 +38,7 @@ import { formatCurrency } from '../utils/format.utils';
 import DriverTripMap from '../features/trip/components/DriverTripMap';
 
 const Dashboard: React.FC = () => {
+  const ignoredRideIdsRef = useRef<Map<string, number>>(new Map());
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -45,7 +47,7 @@ const Dashboard: React.FC = () => {
   const { profile, isOnline, currentLocation, earnings } = useAppSelector(
     (state) => state.driver
   );
-  const { pendingRide, timeoutSeconds } = useAppSelector(
+  const { pendingRide, currentRide, timeoutSeconds } = useAppSelector(
     (state) => state.ride
   );
 
@@ -53,15 +55,23 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [watchId, setWatchId] = useState<number | null>(null);
 
+  const dismissPendingRide = (rideId: string) => {
+    const holdUntil = Date.now() + 30_000;
+    ignoredRideIdsRef.current.set(rideId, holdUntil);
+    dispatch(clearPendingRide());
+  };
+
   // Fetch driver profile
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const response = await driverApi.getProfile();
-        dispatch(setProfile(response.data.driver));
+        const [profileResponse, earningsResponse] = await Promise.all([
+          driverApi.getProfile(),
+          driverApi.getEarnings(),
+        ]);
 
-        // Fetch earnings
-        await driverApi.getEarnings();
+        dispatch(setProfile(profileResponse.data.driver));
+        dispatch(setEarnings(earningsResponse.data.earnings));
       } catch (error: any) {
         console.error('Failed to fetch profile:', error);
         if (error.response?.status === 404) {
@@ -131,16 +141,66 @@ const Dashboard: React.FC = () => {
     checkActiveRide();
   }, [dispatch, navigate]);
 
+  // Fallback polling for available rides when realtime delivery is delayed.
+  useEffect(() => {
+    if (!isOnline || pendingRide || currentRide) {
+      return;
+    }
+
+    const location = currentLocation || profile?.currentLocation;
+    if (!location) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const pollAvailableRides = async () => {
+      try {
+        const now = Date.now();
+        ignoredRideIdsRef.current.forEach((expiresAt, ignoredRideId) => {
+          if (expiresAt <= now) {
+            ignoredRideIdsRef.current.delete(ignoredRideId);
+          }
+        });
+
+        const response = await rideApi.getAvailableRides({
+          lat: location.lat,
+          lng: location.lng,
+          radius: 8,
+        });
+
+        const nextRide = response.data?.rides?.find(
+          (ride) => !ignoredRideIdsRef.current.has(ride.id)
+        );
+        if (!cancelled && nextRide) {
+          dispatch(setPendingRide({ ride: nextRide, timeoutSeconds: 20 }));
+        }
+      } catch (pollError) {
+        console.error('Failed to poll available rides:', pollError);
+      }
+    };
+
+    pollAvailableRides();
+    const intervalId = window.setInterval(pollAvailableRides, 8000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [currentLocation, currentRide, dispatch, isOnline, pendingRide, profile?.currentLocation]);
+
   // Handle go online/offline
   const handleToggleOnline = async () => {
     setLoading(true);
     setError('');
     try {
       if (isOnline) {
-        await driverApi.goOffline();
+        const response = await driverApi.goOffline();
+        dispatch(setProfile(response.data.driver));
         dispatch(setOnlineStatus(false));
       } else {
-        await driverApi.goOnline();
+        const response = await driverApi.goOnline();
+        dispatch(setProfile(response.data.driver));
         dispatch(setOnlineStatus(true));
       }
     } catch (error: any) {
@@ -161,6 +221,7 @@ const Dashboard: React.FC = () => {
     if (!pendingRide) return;
 
     setLoading(true);
+    ignoredRideIdsRef.current.delete(pendingRide.id);
     try {
       const response = await rideApi.acceptRide(pendingRide.id);
       dispatch(setCurrentRide(response.data.ride));
@@ -178,6 +239,11 @@ const Dashboard: React.FC = () => {
   const handleRejectRide = async () => {
     if (!pendingRide) return;
 
+    if (!pendingRide.driverId || pendingRide.status === 'PENDING') {
+      dismissPendingRide(pendingRide.id);
+      return;
+    }
+
     try {
       await rideApi.rejectRide(pendingRide.id);
       dispatch(clearPendingRide());
@@ -185,6 +251,14 @@ const Dashboard: React.FC = () => {
       console.error('Failed to reject ride:', error);
       dispatch(clearPendingRide());
     }
+  };
+
+  const handlePendingRideTimeout = () => {
+    if (!pendingRide) {
+      return;
+    }
+
+    dismissPendingRide(pendingRide.id);
   };
 
   // Handle logout
@@ -205,7 +279,7 @@ const Dashboard: React.FC = () => {
           </Avatar>
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="body2" color="text.secondary">
-              {t('app.welcome', { name: user?.firstName || 'tài xế' })}
+              {t('dashboard.welcome', { name: user?.firstName || 'tài xế' })}
             </Typography>
             <Typography variant="h6" fontWeight={800}>
               {isOnline ? t('dashboard.readyToAccept') : t('dashboard.goOnlineHint')}
@@ -279,6 +353,7 @@ const Dashboard: React.FC = () => {
                   onChange={handleToggleOnline}
                   disabled={loading}
                   color="success"
+                  inputProps={{ 'data-testid': 'driver-online-toggle' }}
                 />
               }
               label=""
@@ -307,6 +382,7 @@ const Dashboard: React.FC = () => {
           open={!!pendingRide}
           onAccept={handleAcceptRide}
           onReject={handleRejectRide}
+          onTimeout={handlePendingRideTimeout}
           loading={loading}
         />
       )}

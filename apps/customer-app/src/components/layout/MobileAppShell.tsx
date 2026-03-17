@@ -39,9 +39,28 @@ const tabs = [
   { value: '/profile', icon: <PersonRounded />, labelKey: 'shell.profile', fallback: 'Tài khoản' },
 ];
 
+const secondaryViews = [
+  { value: '/history', tab: '/activity', labelKey: 'rideHistory.title', fallback: 'Lịch sử chuyến đi' },
+];
+
 const resolveTab = (pathname: string) => {
   const match = tabs.find((tab) => pathname === tab.value || pathname.startsWith(`${tab.value}/`));
   return match?.value || '/home';
+};
+
+const resolveView = (pathname: string) => {
+  const secondaryView = secondaryViews.find((view) => pathname === view.value || pathname.startsWith(`${view.value}/`));
+  if (secondaryView) {
+    return secondaryView;
+  }
+
+  const tab = tabs.find((item) => item.value === resolveTab(pathname)) || tabs[0];
+  return {
+    value: tab.value,
+    tab: tab.value,
+    labelKey: tab.labelKey,
+    fallback: tab.fallback,
+  };
 };
 
 const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
@@ -52,8 +71,8 @@ const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
   const { user } = useAppSelector((state) => state.auth);
   const { currentRide } = useAppSelector((state) => state.ride);
 
-  const currentTab = resolveTab(location.pathname);
-  const currentTabConfig = tabs.find((tab) => tab.value === currentTab) || tabs[0];
+  const currentView = resolveView(location.pathname);
+  const currentTab = currentView.tab;
 
   const [profileAnchorEl, setProfileAnchorEl] = React.useState<null | HTMLElement>(null);
   const [langAnchorEl, setLangAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -95,7 +114,7 @@ const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
               Cab Booking
             </Typography>
             <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.15 }}>
-              {t(currentTabConfig.labelKey, currentTabConfig.fallback)}
+              {t(currentView.labelKey, currentView.fallback)}
             </Typography>
             <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
               <Chip

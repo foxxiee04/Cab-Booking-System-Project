@@ -63,6 +63,34 @@ interface DriverRecipient {
   userId: string;
 }
 
+function getCompatibleDriverVehicleTypes(requestedVehicleType?: string): string[] | null {
+  switch ((requestedVehicleType || '').toUpperCase()) {
+    case 'ECONOMY':
+      return ['CAR', 'MOTORCYCLE'];
+    case 'COMFORT':
+      return ['CAR'];
+    case 'PREMIUM':
+      return ['SUV'];
+    case 'CAR':
+      return ['CAR'];
+    case 'SUV':
+      return ['SUV'];
+    case 'MOTORCYCLE':
+      return ['MOTORCYCLE'];
+    default:
+      return null;
+  }
+}
+
+function isCompatibleDriverVehicleType(driverVehicleType: string | undefined, requestedVehicleType?: string): boolean {
+  const compatibleDriverTypes = getCompatibleDriverVehicleTypes(requestedVehicleType);
+  if (!compatibleDriverTypes || !driverVehicleType) {
+    return true;
+  }
+
+  return compatibleDriverTypes.includes(driverVehicleType.toUpperCase());
+}
+
 export class EventConsumer {
   private connection: Connection | null = null;
   private channel: Channel | null = null;
@@ -167,7 +195,8 @@ export class EventConsumer {
       const nearbyDrivers = await this.findNearbyOnlineDrivers(
         payload.pickup,
         this.getMatchRadiusMeters(payload.searchRadiusKm),
-        payload.excludeDriverIds
+        payload.excludeDriverIds,
+        payload.vehicleType,
       );
 
       if (nearbyDrivers.length === 0) {
@@ -378,7 +407,8 @@ export class EventConsumer {
   private async findNearbyOnlineDrivers(
     location: { lat: number; lng: number },
     radiusMeters: number,
-    excludeDriverIds: string[] = []
+    excludeDriverIds: string[] = [],
+    requestedVehicleType?: string,
   ): Promise<DriverRecipient[]> {
     try {
       const results = await this.redis.georadius(
@@ -403,8 +433,14 @@ export class EventConsumer {
           continue;
         }
 
-        const userId = await this.resolveDriverUserId(driverId);
+        const driver = await driverGrpcClient.getDriverById(driverId);
+        const userId = driver?.userId || await this.resolveDriverUserId(driverId);
+        if (!isCompatibleDriverVehicleType(driver?.vehicleType, requestedVehicleType)) {
+          continue;
+        }
+
         if (userId && this.socketServer.isUserOnline(userId)) {
+          this.driverUserCache.set(driverId, userId);
           driverRecipients.push({ driverId, userId });
         }
       }

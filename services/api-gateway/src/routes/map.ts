@@ -43,8 +43,94 @@ const NOMINATIM_HEADERS = {
   Accept: 'application/json',
 };
 
+interface GeocodeResult {
+  lat: number;
+  lng: number;
+  address: string;
+  name?: string;
+  category?: string;
+  type?: string;
+}
+
+function normalizeText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+}
+
+function scoreGeocodeResult(result: GeocodeResult, query: string): number {
+  const normalizedQuery = normalizeText(query);
+  const normalizedName = normalizeText(result.name || result.address);
+  const normalizedAddress = normalizeText(result.address);
+  let score = 0;
+
+  if (normalizedName.startsWith(normalizedQuery)) {
+    score += 5;
+  }
+  if (normalizedName.includes(normalizedQuery)) {
+    score += 3;
+  }
+  if (normalizedAddress.includes(normalizedQuery)) {
+    score += 2;
+  }
+  if (result.category === 'amenity' || result.category === 'railway' || result.category === 'aeroway') {
+    score += 2;
+  }
+  if (result.type === 'bus_station' || result.type === 'station' || result.type === 'stop' || result.type === 'terminal') {
+    score += 2;
+  }
+  if (result.category === 'highway') {
+    score -= 2;
+  }
+
+  return score;
+}
+
+async function searchNominatim(query: string, limit: number): Promise<GeocodeResult[]> {
+  const response = await axios.get(`${config.map.nominatimUrl}/search`, {
+    timeout: config.map.timeoutMs,
+    headers: NOMINATIM_HEADERS,
+    params: {
+      q: query,
+      limit,
+      ...NOMINATIM_PARAMS,
+      ...(config.map.nominatimEmail ? { email: config.map.nominatimEmail } : {}),
+    },
+  });
+
+  return (response.data || []).map((item: any) => ({
+    lat: parseFloat(item.lat),
+    lng: parseFloat(item.lon),
+    address: item.display_name,
+    name: item.name,
+    category: item.category,
+    type: item.type,
+  }));
+}
+
+function mergeGeocodeResults(primary: GeocodeResult[], secondary: GeocodeResult[], limit: number): GeocodeResult[] {
+  const merged = [...primary, ...secondary];
+  const seen = new Set<string>();
+
+  return merged.filter((result) => {
+    const key = `${result.lat.toFixed(5)}:${result.lng.toFixed(5)}:${result.address}`;
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  }).slice(0, limit);
+}
+
+function sortGeocodeResults(results: GeocodeResult[], query: string): GeocodeResult[] {
+  return [...results].sort((left, right) => scoreGeocodeResult(right, query) - scoreGeocodeResult(left, query));
+}
+
 router.get('/geocode', async (req, res) => {
   const q = String(req.query.q || '').trim();
+  const context = String(req.query.context || '').trim();
   const limit = Math.min(Math.max(parseInt(String(req.query.limit || '7'), 10), 1), 10);
 
   if (!q) {
@@ -55,22 +141,19 @@ router.get('/geocode', async (req, res) => {
   }
 
   try {
-    const response = await axios.get(`${config.map.nominatimUrl}/search`, {
-      timeout: config.map.timeoutMs,
-      headers: NOMINATIM_HEADERS,
-      params: {
-        q,
-        limit,
-        ...NOMINATIM_PARAMS,
-        ...(config.map.nominatimEmail ? { email: config.map.nominatimEmail } : {}),
-      },
-    });
+    const primaryResults = await searchNominatim(q, limit);
+    let results = primaryResults;
 
-    const results = (response.data || []).map((item: any) => ({
-      lat: parseFloat(item.lat),
-      lng: parseFloat(item.lon),
-      address: item.display_name,
-    }));
+    if (context && !q.includes(',') && primaryResults.length <= 1) {
+      const contextualResults = await searchNominatim(`${q}, ${context}`, limit);
+      if (contextualResults.length > primaryResults.length) {
+        results = mergeGeocodeResults(contextualResults, primaryResults, limit);
+      } else {
+        results = mergeGeocodeResults(primaryResults, contextualResults, limit);
+      }
+    }
+
+    results = sortGeocodeResults(results, q).map(({ lat, lng, address }) => ({ lat, lng, address }));
 
     return res.json({ success: true, data: { results } });
   } catch (error) {

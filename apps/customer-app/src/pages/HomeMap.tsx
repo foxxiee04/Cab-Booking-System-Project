@@ -34,9 +34,11 @@ const HomeMap: React.FC = () => {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const { user } = useAppSelector((state) => state.auth);
+  const { isAuthenticated, accessToken } = useAppSelector((state) => state.auth);
   const { pickupLocation, dropoffLocation } = useAppSelector((state) => state.ride);
 
   const [error, setErrorMessage] = useState('');
+  const [locationNotice, setLocationNotice] = useState('');
   const [bookingFlowOpen, setBookingFlowOpen] = useState(false);
   const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
   const [bootstrappingLocation, setBootstrappingLocation] = useState(false);
@@ -47,13 +49,19 @@ const HomeMap: React.FC = () => {
       setBootstrappingLocation(true);
       try {
         const location = await getCurrentLocation();
+        setLocationNotice('');
         dispatch(setCurrentLocation(location));
         dispatch(setPickupLocation(location));
 
         const address = await reverseGeocode(location.lat, location.lng);
         dispatch(setPickupLocation({ ...location, address }));
-      } catch (fetchLocationError) {
-        console.error('Failed to get location:', fetchLocationError);
+      } catch (fetchLocationError: any) {
+        if (fetchLocationError?.code === 1) {
+          setLocationNotice('Trình duyệt đang chặn vị trí của bạn. Bạn vẫn có thể nhập điểm đón thủ công để tiếp tục đặt xe.');
+        } else {
+          console.error('Failed to get location:', fetchLocationError);
+          setLocationNotice('Không lấy được vị trí hiện tại. Hãy nhập điểm đón thủ công để tiếp tục.');
+        }
       } finally {
         setBootstrappingLocation(false);
       }
@@ -79,12 +87,13 @@ const HomeMap: React.FC = () => {
   }, [dispatch, navigate]);
 
   useEffect(() => {
-    if (!pickupLocation?.lat || !pickupLocation?.lng) {
+    if (!pickupLocation?.lat || !pickupLocation?.lng || !isAuthenticated || !accessToken) {
       setNearbyDrivers([]);
       return;
     }
 
     let cancelled = false;
+    let stopPolling = false;
 
     const fetchNearbyDrivers = async () => {
       try {
@@ -97,8 +106,13 @@ const HomeMap: React.FC = () => {
         if (!cancelled) {
           setNearbyDrivers(response.data.drivers);
         }
-      } catch (nearbyDriversError) {
+      } catch (nearbyDriversError: any) {
         if (!cancelled) {
+          if (nearbyDriversError?.response?.status === 401) {
+            stopPolling = true;
+            return;
+          }
+
           console.error('Failed to fetch nearby drivers:', nearbyDriversError);
           setNearbyDrivers([]);
         }
@@ -106,13 +120,17 @@ const HomeMap: React.FC = () => {
     };
 
     fetchNearbyDrivers();
-    const interval = window.setInterval(fetchNearbyDrivers, 20000);
+    const interval = window.setInterval(() => {
+      if (!stopPolling) {
+        void fetchNearbyDrivers();
+      }
+    }, 20000);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [pickupLocation?.lat, pickupLocation?.lng]);
+  }, [accessToken, isAuthenticated, pickupLocation?.lat, pickupLocation?.lng]);
 
   const handleOpenBooking = () => {
     if (pickupLocation && dropoffLocation) {
@@ -150,7 +168,7 @@ const HomeMap: React.FC = () => {
   };
 
   return (
-    <Box sx={{ height: '100%', display: 'grid', gridTemplateRows: 'auto 1fr auto', gap: 1.5, pb: 1.5 }}>
+    <Box sx={{ height: '100%', display: 'grid', gridTemplateRows: 'auto 1fr auto', gap: 1.5, pb: { xs: 8, sm: 1.5 } }}>
       <Paper
         elevation={0}
         sx={{
@@ -205,11 +223,13 @@ const HomeMap: React.FC = () => {
         sx={{
           borderRadius: 5,
           p: 2.25,
+          mb: { xs: 2.5, sm: 0 },
           backgroundColor: 'rgba(255,255,255,0.96)',
           backdropFilter: 'blur(18px)',
           border: '1px solid rgba(148,163,184,0.14)',
         }}
       >
+        {locationNotice && <Alert severity="info" sx={{ mb: error ? 1.5 : 2, borderRadius: 2 }} onClose={() => setLocationNotice('')}>{locationNotice}</Alert>}
         {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setErrorMessage('')}>{error}</Alert>}
 
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
@@ -247,6 +267,7 @@ const HomeMap: React.FC = () => {
           size="large"
           onClick={handleOpenBooking}
           disabled={!pickupLocation || !dropoffLocation}
+          data-testid="open-booking-flow"
           sx={{
             py: 1.65,
             fontSize: '1rem',

@@ -29,7 +29,9 @@ export class DriverGrpcClient {
     if (config.nodeEnv !== 'test' && client) {
       try {
         const response = await invokeUnary<{ driverId: string }, any>(client, 'GetDriverById', { driverId }, 1500);
-        return response?.driver?.id ? response.driver : null;
+        if (response?.driver?.id && response.driver.userId && response.driver.vehicleType) {
+          return response.driver;
+        }
       } catch {
         // fall through to HTTP fallback
       }

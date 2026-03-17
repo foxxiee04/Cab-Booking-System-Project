@@ -28,6 +28,9 @@ interface Location {
   lng: number;
 }
 
+type DriverVehicleType = 'CAR' | 'SUV' | 'MOTORCYCLE';
+type RequestedRideVehicleType = 'ECONOMY' | 'COMFORT' | 'PREMIUM';
+
 export class RideService {
   private prisma: PrismaClient;
   private eventPublisher: EventPublisher;
@@ -594,11 +597,13 @@ export class RideService {
   }
 
   async getAvailableRides(driverLat: number, driverLng: number, radiusKm: number, vehicleType?: string): Promise<any[]> {
+    const compatibleRideTypes = this.getCompatibleRideTypesForDriver(vehicleType);
+
     // Fetch rides looking for drivers
     const rides = await this.prisma.ride.findMany({
       where: {
         status: RideStatus.FINDING_DRIVER,
-        ...(vehicleType && { vehicleType }),
+        ...(compatibleRideTypes ? { vehicleType: { in: compatibleRideTypes } } : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: 50,
@@ -618,6 +623,27 @@ export class RideService {
       }));
 
     return availableRides;
+  }
+
+  private getCompatibleRideTypesForDriver(vehicleType?: string): RequestedRideVehicleType[] | undefined {
+    if (!vehicleType) {
+      return undefined;
+    }
+
+    switch (vehicleType.toUpperCase() as DriverVehicleType | RequestedRideVehicleType) {
+      case 'CAR':
+        return ['ECONOMY', 'COMFORT'];
+      case 'SUV':
+        return ['PREMIUM'];
+      case 'MOTORCYCLE':
+        return ['ECONOMY'];
+      case 'ECONOMY':
+      case 'COMFORT':
+      case 'PREMIUM':
+        return [vehicleType.toUpperCase() as RequestedRideVehicleType];
+      default:
+        return undefined;
+    }
   }
 
   /**

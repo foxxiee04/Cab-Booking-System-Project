@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { config } from '../config';
 import { logger } from '../utils/logger';
 import { grpcBridgeClient, ForwardableRequestLike } from '../grpc/bridge.client';
 
@@ -14,9 +15,81 @@ function normalizeProxyPath(service: keyof typeof import('../config').config.grp
   return path;
 }
 
+const getForwardHeaders = (req: Request) => {
+  const headers: Record<string, string> = {
+    Authorization: req.header('authorization') || '',
+    'x-user-id': String(req.headers['x-user-id'] || ''),
+    'x-user-email': String(req.headers['x-user-email'] || ''),
+    'x-user-role': String(req.headers['x-user-role'] || ''),
+  };
+
+  const contentType = req.header('content-type');
+  if (contentType) {
+    headers['Content-Type'] = contentType;
+  }
+
+  return headers;
+};
+
+const shouldForwardOverHttp = (
+  service: keyof typeof import('../config').config.grpcServices,
+  normalizedPath: string,
+) => {
+  if (service !== 'driver') {
+    return false;
+  }
+
+  return /^\/api\/drivers\/me\/(online|offline|location|available-rides)$/.test(normalizedPath)
+    || /^\/api\/drivers\/me\/rides\/[^/]+\/accept$/.test(normalizedPath);
+};
+
+async function forwardOverHttp(
+  service: keyof typeof import('../config').config.grpcServices,
+  req: Request,
+  res: Response,
+  normalizedPath: string,
+) {
+  const url = new URL(normalizedPath, config.services[service]);
+
+  Object.entries(req.query).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((entry) => {
+        if (entry !== undefined && entry !== null) {
+          url.searchParams.append(key, String(entry));
+        }
+      });
+      return;
+    }
+
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, String(value));
+    }
+  });
+
+  const response = await fetch(url.toString(), {
+    method: req.method,
+    headers: getForwardHeaders(req),
+    body: ['GET', 'HEAD'].includes(req.method.toUpperCase()) ? undefined : JSON.stringify(req.body || {}),
+  });
+
+  const text = await response.text();
+
+  try {
+    res.status(response.status).json(text ? JSON.parse(text) : {});
+  } catch {
+    res.status(response.status).send(text);
+  }
+}
+
 async function forward(service: keyof typeof import('../config').config.grpcServices, req: Request, res: Response) {
   try {
     const normalizedPath = normalizeProxyPath(service, req.originalUrl);
+
+    if (shouldForwardOverHttp(service, normalizedPath)) {
+      await forwardOverHttp(service, req, res, normalizedPath);
+      return;
+    }
+
     const forwardedRequest: ForwardableRequestLike = {
       method: req.method,
       originalUrl: normalizedPath,

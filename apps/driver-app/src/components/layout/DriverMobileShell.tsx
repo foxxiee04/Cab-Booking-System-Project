@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   AppBar,
   Avatar,
@@ -27,6 +27,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { logout } from '../../store/auth.slice';
+import { driverApi } from '../../api/driver.api';
+import { setProfile } from '../../store/driver.slice';
 
 interface DriverMobileShellProps {
   children: React.ReactNode;
@@ -51,13 +53,40 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
   const { t, i18n } = useTranslation();
   const { user } = useAppSelector((state) => state.auth);
   const { currentRide } = useAppSelector((state) => state.ride);
-  const { isOnline } = useAppSelector((state) => state.driver);
+  const { isOnline, profile } = useAppSelector((state) => state.driver);
 
   const currentTab = resolveTab(location.pathname);
   const currentTabConfig = tabs.find((tab) => tab.value === currentTab) || tabs[0];
 
   const [profileAnchorEl, setProfileAnchorEl] = React.useState<null | HTMLElement>(null);
   const [langAnchorEl, setLangAnchorEl] = React.useState<null | HTMLElement>(null);
+
+  useEffect(() => {
+    if (profile) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const hydrateProfile = async () => {
+      try {
+        const response = await driverApi.getProfile();
+        if (isMounted) {
+          dispatch(setProfile(response.data.driver));
+        }
+      } catch {
+        // Keep shell resilient on routes that do not require profile details.
+      }
+    };
+
+    void hydrateProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [dispatch, profile]);
+
+  const effectiveOnline = isOnline || profile?.isOnline || false;
 
   const handleLogout = () => {
     dispatch(logout());
@@ -101,9 +130,9 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
             <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
               <Chip
                 size="small"
-                color={currentRide ? 'primary' : isOnline ? 'success' : 'default'}
-                variant={currentRide || isOnline ? 'filled' : 'outlined'}
-                label={currentRide ? t('shell.currentRide', 'Đang có cuốc xe') : isOnline ? t('shell.online', 'Đang trực tuyến') : t('shell.offline', 'Đang ngoại tuyến')}
+                color={currentRide ? 'primary' : effectiveOnline ? 'success' : 'default'}
+                variant={currentRide || effectiveOnline ? 'filled' : 'outlined'}
+                label={currentRide ? t('shell.currentRide', 'Đang có cuốc xe') : effectiveOnline ? t('shell.online', 'Đang trực tuyến') : t('shell.offline', 'Đang ngoại tuyến')}
               />
             </Stack>
           </Box>

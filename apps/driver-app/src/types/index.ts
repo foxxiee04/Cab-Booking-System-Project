@@ -64,6 +64,7 @@ export type RideStatus =
   | 'PENDING'
   | 'ASSIGNED'
   | 'ACCEPTED'
+  | 'PICKING_UP'
   | 'IN_PROGRESS'
   | 'COMPLETED'
   | 'CANCELLED';

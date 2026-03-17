@@ -1,4 +1,6 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
+import { store } from '../store';
+import { logout, updateTokens } from '../store/auth.slice';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
@@ -56,18 +58,14 @@ axiosInstance.interceptors.response.use(
 
         const { accessToken, refreshToken: newRefreshToken } = response.data.data.tokens;
 
-        // Save new tokens
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', newRefreshToken);
+        store.dispatch(updateTokens({ accessToken, refreshToken: newRefreshToken }));
 
         // Retry original request
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return axiosInstance(originalRequest);
       } catch (refreshError) {
         // Refresh failed - logout
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
+        store.dispatch(logout());
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }

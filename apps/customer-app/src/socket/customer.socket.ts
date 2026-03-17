@@ -1,13 +1,66 @@
 import { io, Socket } from 'socket.io-client';
 import { store } from '../store';
+import { logout, updateTokens } from '../store/auth.slice';
 import { setCurrentRide, setDriver, updateRideStatus, updateDriverLocation } from '../store/ride.slice';
 import { showNotification } from '../store/ui.slice';
+import { refreshAuthSession } from '../api/axios.config';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 class SocketService {
   private socket: Socket | null = null;
   private isConnected = false;
+  private authFailureHandled = false;
+
+  private isAuthError(error: unknown) {
+    const message = typeof error === 'string'
+      ? error
+      : error && typeof error === 'object' && 'message' in error
+        ? String((error as { message?: string }).message || '')
+        : '';
+
+    return /invalid|expired|authentication|required|jwt/i.test(message);
+  }
+
+  private handleAuthFailure() {
+    if (this.authFailureHandled) {
+      return;
+    }
+
+    this.authFailureHandled = true;
+    this.disconnect();
+
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      store.dispatch(logout());
+      store.dispatch(
+        showNotification({
+          type: 'warning',
+          message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+        })
+      );
+      window.location.href = '/login';
+      return;
+    }
+
+    void (async () => {
+      try {
+        const tokens = await refreshAuthSession();
+        this.authFailureHandled = false;
+        this.connect(tokens.accessToken);
+      } catch {
+        store.dispatch(logout());
+        store.dispatch(
+          showNotification({
+            type: 'warning',
+            message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+          })
+        );
+        window.location.href = '/login';
+      }
+    })();
+  }
 
   /**
    * Connect to socket server
@@ -20,7 +73,8 @@ class SocketService {
 
     this.socket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
+      upgrade: true,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 5,
@@ -39,6 +93,7 @@ class SocketService {
     this.socket.on('connect', () => {
       console.log('✅ Socket connected:', this.socket?.id);
       this.isConnected = true;
+      this.authFailureHandled = false;
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -47,6 +102,11 @@ class SocketService {
     });
 
     this.socket.on('connect_error', (error) => {
+      if (this.isAuthError(error)) {
+        this.handleAuthFailure();
+        return;
+      }
+
       console.error('Socket connection error:', error);
       store.dispatch(
         showNotification({

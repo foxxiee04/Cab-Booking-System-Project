@@ -38,6 +38,7 @@
   },
   "dashboard": {
     "title": "Bảng điều khiển",
+    "welcome": "Xin chào, {{name}}",
     "online": "TRỰC TUYẾN",
     "offline": "NGOẠI TUYẾN",
     "earnings": "Thu nhập",
@@ -124,6 +125,7 @@
     "PENDING": "Đang tìm tài xế...",
     "ASSIGNED": "Đã gán",
     "ACCEPTED": "Đã nhận",
+    "PICKING_UP": "Đang đón khách",
     "IN_PROGRESS": "Đang chạy",
     "COMPLETED": "Hoàn tất",
     "CANCELLED": "Đã hủy"

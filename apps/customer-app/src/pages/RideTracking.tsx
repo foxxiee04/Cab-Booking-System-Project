@@ -47,6 +47,12 @@ const STATUS_META: Record<string, { label: string; description: string; color: s
     color: '#2563eb',
     allowCancel: true,
   },
+  PICKING_UP: {
+    label: 'Tai xe da toi diem don',
+    description: 'Tai xe da den noi. Chuyen di se bat dau ngay khi ban len xe.',
+    color: '#0f766e',
+    allowCancel: false,
+  },
   IN_PROGRESS: {
     label: 'Dang trong chuyen di',
     description: 'Chuyen di dang dien ra. Hay kiem tra lo trinh va cuoc phi.',
@@ -208,6 +214,24 @@ const RideTracking: React.FC = () => {
     }
   }, [currentRide?.status, hydrateReceipt]);
 
+  useEffect(() => {
+    if (currentRide?.status !== 'COMPLETED') {
+      return;
+    }
+
+    if (payment?.status === 'COMPLETED' || payment?.status === 'FAILED') {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      hydrateReceipt().catch((err) => {
+        console.error(err);
+      });
+    }, 4000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [currentRide?.status, hydrateReceipt, payment?.status]);
+
   const handleCancel = useCallback(async () => {
     if (!currentRide) {
       return;
@@ -226,16 +250,18 @@ const RideTracking: React.FC = () => {
   }, [currentRide, dispatch, navigate, t]);
 
   const handleSubmitReview = useCallback(async () => {
-    if (!currentRide?.id || !currentRide.driverId || !driver || !rating) {
+    if (!currentRide?.id || !currentRide.driverId || !rating) {
       return;
     }
 
     setSubmittingReview(true);
     try {
+      const revieweeName = `${driver?.firstName || ''} ${driver?.lastName || ''}`.trim() || 'Tai xe';
+
       const response = await reviewApi.createRideReview({
         rideId: currentRide.id,
         revieweeId: currentRide.driverId,
-        revieweeName: `${driver.firstName || ''} ${driver.lastName || ''}`.trim() || 'Tai xe',
+        revieweeName,
         rating,
         comment: comment.trim() || undefined,
       });
@@ -392,7 +418,7 @@ const RideTracking: React.FC = () => {
                     <Divider sx={{ my: 0.5 }} />
                     <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">So tien</Typography><Typography variant="h6" fontWeight={900}>{formatCurrency(payment?.amount || currentRide.fare || 0)}</Typography></Stack>
                     <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Phuong thuc</Typography><Typography variant="body2" fontWeight={600}>{getPaymentMethodLabel(payment?.method || currentRide.paymentMethod || 'CASH')}</Typography></Stack>
-                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Trang thai thanh toan</Typography><Chip size="small" icon={<PaymentRounded />} label={payment?.status || 'PENDING'} color={payment?.status === 'COMPLETED' ? 'success' : payment?.status === 'FAILED' ? 'error' : 'warning'} /></Stack>
+                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Trang thai thanh toan</Typography><Chip size="small" icon={<PaymentRounded />} label={payment?.status || 'PENDING'} data-testid="payment-status-chip" color={payment?.status === 'COMPLETED' ? 'success' : payment?.status === 'FAILED' ? 'error' : 'warning'} /></Stack>
                   </Stack>
                 </CardContent>
               </Card>
@@ -403,11 +429,12 @@ const RideTracking: React.FC = () => {
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Phan hoi cua ban giup cai thien chat luong phuc vu va xep hang tai xe.</Typography>
                   <Stack alignItems="flex-start" spacing={1.5}>
                     <Rating value={rating} size="large" onChange={(_, nextValue) => { if (!existingReview) { setRating(nextValue); } }} readOnly={Boolean(existingReview)} />
-                    <TextField fullWidth multiline minRows={4} label="Nhan xet" value={comment} onChange={(event) => { if (!existingReview) { setComment(event.target.value); } }} InputProps={{ readOnly: Boolean(existingReview) }} />
+                    <TextField fullWidth multiline minRows={4} label="Nhan xet" value={comment} onChange={(event) => { if (!existingReview) { setComment(event.target.value); } }} inputProps={{ 'data-testid': 'review-comment-input' }} InputProps={{ readOnly: Boolean(existingReview) }} />
                   </Stack>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2.5 }}>
                     {!existingReview && (
-                      <Button variant="contained" onClick={handleSubmitReview} disabled={!rating || submittingReview || !driver || !currentRide.driverId} sx={{ borderRadius: 3, py: 1.3, fontWeight: 700 }}>
+                      <Button variant="contained" onClick={handleSubmitReview} disabled={!rating || submittingReview || !currentRide.driverId} sx={{ borderRadius: 3, py: 1.3, fontWeight: 700 }}>
+                        data-testid="submit-review-button"
                         {submittingReview ? 'Dang gui...' : 'Gui danh gia'}
                       </Button>
                     )}

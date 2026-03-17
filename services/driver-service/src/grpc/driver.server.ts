@@ -6,6 +6,7 @@ function mapDriver(driver: any) {
   return {
     id: driver?.id || '',
     userId: driver?.userId || '',
+    vehicleType: driver?.vehicleType || '',
     status: driver?.status || '',
     availabilityStatus: driver?.availabilityStatus || '',
     lastLocationLat: driver?.lastLocationLat ?? 0,
