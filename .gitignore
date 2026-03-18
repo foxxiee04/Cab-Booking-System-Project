@@ -366,7 +366,7 @@ lib-cov/
 .pnp.*
 
 
-.doc/
+
 
 
 tests/postman/Cab-Booking-System-Backend.guide.md
