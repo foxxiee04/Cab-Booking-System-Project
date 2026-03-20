@@ -14,10 +14,8 @@ import {
 import {
   AccessTimeRounded,
   DirectionsCarFilledRounded,
-  LocalFireDepartmentRounded,
   MyLocationRounded,
   RouteRounded,
-  StarsRounded,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
@@ -205,8 +203,7 @@ const HomeMap: React.FC = () => {
 
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 2 }}>
           <Chip icon={<DirectionsCarFilledRounded />} label={`${nearbyDrivers.length} ${t('home.nearbyDrivers', 'tài xế gần bạn')}`} color="primary" />
-          <Chip icon={<StarsRounded />} label={t('home.premiumExperience', 'Luồng đặt xe mobile-first')} variant="outlined" />
-          <Chip icon={<LocalFireDepartmentRounded />} label={t('home.fastEta', 'ETA và giá được cập nhật tức thì')} variant="outlined" />
+          <Chip icon={<MyLocationRounded />} label={pickupLocation?.address || t('home.pickupHint', 'Chọn điểm đón')} variant="outlined" />
         </Stack>
       </Paper>
 

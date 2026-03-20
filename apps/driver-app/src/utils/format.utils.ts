@@ -57,7 +57,7 @@ export const getRideStatusLabel = (status: RideStatus): string => {
     PENDING: i18n.t('status.PENDING'),
     ASSIGNED: i18n.t('status.ASSIGNED'),
     ACCEPTED: i18n.t('status.ACCEPTED'),
-    PICKING_UP: i18n.t('status.PICKING_UP', 'Dang don khach'),
+    PICKING_UP: i18n.t('status.PICKING_UP', 'Đang đón khách'),
     IN_PROGRESS: i18n.t('status.IN_PROGRESS'),
     COMPLETED: i18n.t('status.COMPLETED'),
     CANCELLED: i18n.t('status.CANCELLED'),

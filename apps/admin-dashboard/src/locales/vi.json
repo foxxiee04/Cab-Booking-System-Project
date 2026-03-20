@@ -158,11 +158,14 @@
   },
   "rideStatus": {
     "PENDING": "Đang chờ",
+    "FINDING_DRIVER": "Đang tìm tài xế",
     "ASSIGNED": "Đã gán tài xế",
     "ACCEPTED": "Tài xế đã nhận",
+    "PICKING_UP": "Đang đón khách",
     "IN_PROGRESS": "Đang chạy",
     "COMPLETED": "Hoàn tất",
-    "CANCELLED": "Đã hủy"
+    "CANCELLED": "Đã hủy",
+    "NO_DRIVER_AVAILABLE": "Không có tài xế phù hợp"
   },
   "pricing": {
     "title": "Quản lý giá tăng",

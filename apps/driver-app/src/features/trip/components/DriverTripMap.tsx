@@ -204,13 +204,13 @@ const GoogleDriverTripMapCanvas: React.FC<GoogleDriverTripMapCanvasProps> = ({
       }}
     >
       {pickupLocation && (
-        <MarkerF position={pickupLocation} icon={getMarkerIcon('#16a34a')} title="Pickup" />
+        <MarkerF position={pickupLocation} icon={getMarkerIcon('#16a34a')} title="Điểm đón" />
       )}
       {dropoffLocation && (
-        <MarkerF position={dropoffLocation} icon={getMarkerIcon('#ef4444')} title="Dropoff" />
+        <MarkerF position={dropoffLocation} icon={getMarkerIcon('#ef4444')} title="Điểm đến" />
       )}
       {currentLocation && (
-        <MarkerF position={currentLocation} icon={getCarSymbol(0, '#2563eb')} title="Your location" />
+        <MarkerF position={currentLocation} icon={getCarSymbol(0, '#2563eb')} title="Vị trí của bạn" />
       )}
       {routeSummary && (
         <>

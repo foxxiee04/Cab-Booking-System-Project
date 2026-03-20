@@ -33,11 +33,14 @@ export const formatNumber = (num: number): string => {
 export const getRideStatusColor = (status: string): 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'success' => {
   const colors: Record<string, any> = {
     PENDING: 'warning',
+    FINDING_DRIVER: 'warning',
     ASSIGNED: 'info',
     ACCEPTED: 'primary',
+    PICKING_UP: 'primary',
     IN_PROGRESS: 'secondary',
     COMPLETED: 'success',
     CANCELLED: 'error',
+    NO_DRIVER_AVAILABLE: 'error',
   };
   return colors[status] || 'default';
 };

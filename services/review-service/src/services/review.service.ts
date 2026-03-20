@@ -1,4 +1,6 @@
+import axios from 'axios';
 import { ReviewModel, IReview, ReviewType } from '../models/review.model';
+import { config } from '../config';
 
 export interface CreateReviewDto {
   rideId: string;
@@ -22,6 +24,19 @@ export interface ReviewStats {
 }
 
 class ReviewService {
+  private async syncDriverRating(driverId: string, rating: number): Promise<void> {
+    await axios.post(
+      `${config.driverServiceUrl}/internal/drivers/${driverId}/rating`,
+      { rating },
+      {
+        headers: {
+          'x-internal-token': config.internalServiceToken,
+        },
+        timeout: 5000,
+      }
+    );
+  }
+
   async createReview(dto: CreateReviewDto): Promise<IReview> {
     // Validate rating
     if (dto.rating < 1 || dto.rating > 5) {
@@ -39,6 +54,16 @@ class ReviewService {
     }
 
     const review = await ReviewModel.create(dto);
+
+    try {
+      if (dto.type === ReviewType.CUSTOMER_TO_DRIVER) {
+        await this.syncDriverRating(dto.revieweeId, dto.rating);
+      }
+    } catch (error) {
+      await ReviewModel.findByIdAndDelete(review._id);
+      throw error;
+    }
+
     return review;
   }
 

@@ -505,16 +505,31 @@ export class RideService {
     return { rides, total };
   }
 
-  async getDriverRides(driverId: string, page = 1, limit = 20): Promise<{ rides: Ride[]; total: number }> {
+  async getDriverRides(
+    driverIdOrIds: string | string[],
+    page = 1,
+    limit = 20,
+    statuses?: RideStatus[]
+  ): Promise<{ rides: Ride[]; total: number }> {
     const skip = (page - 1) * limit;
+    const driverIds = Array.isArray(driverIdOrIds) ? driverIdOrIds : [driverIdOrIds];
+    const normalizedDriverIds = [...new Set(driverIds.filter(Boolean))];
+
+    const where = {
+      driverId: normalizedDriverIds.length === 1 ? normalizedDriverIds[0] : { in: normalizedDriverIds },
+      ...(statuses && statuses.length > 0
+        ? { status: statuses.length === 1 ? statuses[0] : { in: statuses } }
+        : {}),
+    };
+
     const [rides, total] = await Promise.all([
       this.prisma.ride.findMany({
-        where: { driverId },
+        where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ completedAt: 'desc' }, { createdAt: 'desc' }],
       }),
-      this.prisma.ride.count({ where: { driverId } }),
+      this.prisma.ride.count({ where }),
     ]);
     return { rides, total };
   }

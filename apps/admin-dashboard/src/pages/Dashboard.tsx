@@ -21,6 +21,15 @@ const heatmapGradient = [
   'rgba(249, 115, 22, 1)',
   'rgba(220, 38, 38, 1)',
 ];
+const darkMapStyles: google.maps.MapTypeStyle[] = [
+  { elementType: 'geometry', stylers: [{ color: '#111827' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#d1d5db' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#111827' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#2563eb' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
+];
 
 type RegionFilter = 'ALL' | 'NORTH' | 'CENTRAL' | 'SOUTH';
 
@@ -218,7 +227,21 @@ const GoogleDriverHeatmap: React.FC<{
   const heatmapData = drivers.map((driver) => new google.maps.LatLng(driver.currentLocation!.lat, driver.currentLocation!.lng));
 
   return (
-    <GoogleMap mapContainerStyle={{ width: '100%', height: '100%' }} center={mapCenter} zoom={12} options={{ disableDefaultUI: true, zoomControl: true, streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}>
+    <GoogleMap
+      mapContainerStyle={{ width: '100%', height: '100%' }}
+      center={mapCenter}
+      zoom={12}
+      options={{
+        disableDefaultUI: true,
+        zoomControl: true,
+        streetViewControl: false,
+        mapTypeControl: false,
+        fullscreenControl: false,
+        rotateControl: false,
+        clickableIcons: false,
+        styles: darkMapStyles,
+      }}
+    >
       {heatmapData.length > 0 && <HeatmapLayerF data={heatmapData} options={{ radius: 38, opacity: 0.7, gradient: heatmapGradient }} />}
       {drivers.slice(0, 120).map((driver) => <MarkerF key={driver.id} position={{ lat: driver.currentLocation!.lat, lng: driver.currentLocation!.lng }} title={`${driver.user?.firstName || 'Driver'} ${driver.user?.lastName || ''}`.trim()} />)}
     </GoogleMap>
@@ -296,7 +319,7 @@ const Dashboard: React.FC = () => {
       <LeafletMapContainer center={[mapCenter.lat, mapCenter.lng]} zoom={12} style={{ width: '100%', height: '100%' }} zoomControl scrollWheelZoom>
         <LeafletTileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
           maxZoom={20}
         />
         <HeatmapViewportController drivers={filteredDrivers} hotspots={hotspots} />
@@ -391,7 +414,7 @@ const Dashboard: React.FC = () => {
                 </Stack>
               </Box>
 
-              <Box sx={{ height: 520, bgcolor: '#e2e8f0' }}>
+              <Box sx={{ height: 520, bgcolor: '#dbeafe' }}>
                 {hasGoogleMapsApiKey ? (
                   <GoogleDriverHeatmap googleMapsApiKey={googleMapsApiKey} mapCenter={mapCenter} drivers={filteredDrivers} fallback={leafletHeatmap} />
                 ) : leafletHeatmap}

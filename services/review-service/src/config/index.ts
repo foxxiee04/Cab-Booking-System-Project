@@ -17,4 +17,6 @@ export const config = {
   port: parseInt(process.env.PORT || '3010', 10),
   grpcPort: parseInt(process.env.GRPC_PORT || '50059', 10),
   mongodbUri: getRequiredEnv('MONGODB_URI'),
+  driverServiceUrl: process.env.DRIVER_SERVICE_URL || 'http://driver-service:3003',
+  internalServiceToken: process.env.INTERNAL_SERVICE_TOKEN || 'test-internal-token',
 };

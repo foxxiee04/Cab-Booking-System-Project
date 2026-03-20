@@ -30,53 +30,59 @@ import { formatCurrency, formatDate, getPaymentMethodLabel, getVehicleTypeLabel 
 
 const STATUS_META: Record<string, { label: string; description: string; color: string; allowCancel: boolean }> = {
   PENDING: {
-    label: 'Dang tim tai xe',
-    description: 'He thong dang ghep tai xe gan nhat cho chuyen di cua ban.',
+    label: 'Đang tìm tài xế',
+    description: 'Hệ thống đang ghép tài xế gần nhất cho chuyến đi của bạn.',
     color: '#f59e0b',
     allowCancel: true,
   },
   ASSIGNED: {
-    label: 'Da co tai xe nhan chuyen',
-    description: 'Tai xe da duoc gan va dang chuan bi di chuyen toi ban.',
+    label: 'Đã có tài xế nhận chuyến',
+    description: 'Tài xế đã được gán và đang chuẩn bị di chuyển tới bạn.',
     color: '#2563eb',
     allowCancel: true,
   },
   ACCEPTED: {
-    label: 'Tai xe dang toi don',
-    description: 'Theo doi vi tri tai xe theo thoi gian thuc tren ban do.',
+    label: 'Tài xế đang tới đón',
+    description: 'Theo dõi vị trí tài xế theo thời gian thực trên bản đồ.',
     color: '#2563eb',
     allowCancel: true,
   },
   PICKING_UP: {
-    label: 'Tai xe da toi diem don',
-    description: 'Tai xe da den noi. Chuyen di se bat dau ngay khi ban len xe.',
+    label: 'Tài xế đã tới điểm đón',
+    description: 'Tài xế đã đến nơi. Chuyến đi sẽ bắt đầu ngay khi bạn lên xe.',
     color: '#0f766e',
     allowCancel: false,
   },
   IN_PROGRESS: {
-    label: 'Dang trong chuyen di',
-    description: 'Chuyen di dang dien ra. Hay kiem tra lo trinh va cuoc phi.',
+    label: 'Đang trong chuyến đi',
+    description: 'Chuyến đi đang diễn ra. Hãy kiểm tra lộ trình và cước phí.',
     color: '#16a34a',
     allowCancel: false,
   },
   COMPLETED: {
-    label: 'Chuyen di da hoan thanh',
-    description: 'Xem hoa don va de lai danh gia cho tai xe.',
+    label: 'Chuyến đi đã hoàn thành',
+    description: 'Xem hóa đơn và để lại đánh giá cho tài xế.',
     color: '#16a34a',
     allowCancel: false,
   },
   CANCELLED: {
-    label: 'Chuyen di da huy',
-    description: 'Ban co the quay ve trang chu de dat chuyen khac.',
+    label: 'Chuyến đi đã hủy',
+    description: 'Bạn có thể quay về trang chủ để đặt chuyến khác.',
     color: '#dc2626',
     allowCancel: false,
   },
   NO_DRIVER_AVAILABLE: {
-    label: 'Khong co tai xe phu hop',
-    description: 'Hay thu lai sau it phut hoac doi diem don.',
+    label: 'Không có tài xế phù hợp',
+    description: 'Hãy thử lại sau ít phút hoặc đổi điểm đón.',
     color: '#dc2626',
     allowCancel: false,
   },
+};
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Đang chờ',
+  COMPLETED: 'Đã thanh toán',
+  FAILED: 'Thất bại',
 };
 
 const formatDistanceKm = (distance: number | null | undefined) => {
@@ -89,11 +95,11 @@ const formatDistanceKm = (distance: number | null | undefined) => {
 
 const formatDuration = (duration: number | null | undefined) => {
   if (!duration || Number.isNaN(duration)) {
-    return '0 phut';
+    return '0 phút';
   }
 
   const minutes = duration > 180 ? Math.round(duration / 60) : Math.round(duration);
-  return `${minutes} phut`;
+  return `${minutes} phút`;
 };
 
 const RideTracking: React.FC = () => {
@@ -209,7 +215,7 @@ const RideTracking: React.FC = () => {
     if (currentRide?.status === 'COMPLETED') {
       hydrateReceipt().catch((err) => {
         console.error(err);
-        setError('Khong the tai hoa don chuyen di.');
+        setError('Không thể tải hóa đơn chuyến đi.');
       });
     }
   }, [currentRide?.status, hydrateReceipt]);
@@ -239,7 +245,7 @@ const RideTracking: React.FC = () => {
 
     setCancelling(true);
     try {
-      await rideApi.cancelRide(currentRide.id, 'Customer cancelled');
+      await rideApi.cancelRide(currentRide.id, 'Khách hàng hủy chuyến');
       dispatch(clearRide());
       navigate('/home');
     } catch (err: any) {
@@ -256,7 +262,7 @@ const RideTracking: React.FC = () => {
 
     setSubmittingReview(true);
     try {
-      const revieweeName = `${driver?.firstName || ''} ${driver?.lastName || ''}`.trim() || 'Tai xe';
+      const revieweeName = `${driver?.firstName || ''} ${driver?.lastName || ''}`.trim() || 'Tài xế';
 
       const response = await reviewApi.createRideReview({
         rideId: currentRide.id,
@@ -267,7 +273,7 @@ const RideTracking: React.FC = () => {
       });
       setExistingReview(response.review);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Khong the gui danh gia luc nay.');
+      setError(err.response?.data?.error || 'Không thể gửi đánh giá lúc này.');
     } finally {
       setSubmittingReview(false);
     }
@@ -355,7 +361,7 @@ const RideTracking: React.FC = () => {
               <Typography variant="h6" fontWeight={800}>{statusMeta.label}</Typography>
               <Typography variant="body2" color="text.secondary">{statusMeta.description}</Typography>
             </Box>
-            <Chip label={status} size="small" sx={{ bgcolor: `${statusMeta.color}18`, color: statusMeta.color, fontWeight: 700 }} />
+            <Chip label={statusMeta.label} size="small" sx={{ bgcolor: `${statusMeta.color}18`, color: statusMeta.color, fontWeight: 700 }} />
           </Stack>
 
           {driver && status !== 'CANCELLED' && status !== 'NO_DRIVER_AVAILABLE' && (
@@ -366,15 +372,15 @@ const RideTracking: React.FC = () => {
                     {driver.firstName?.[0] || 'D'}
                   </Avatar>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="subtitle1" fontWeight={800}>{`${driver.firstName || ''} ${driver.lastName || ''}`.trim() || 'Tai xe'}</Typography>
+                    <Typography variant="subtitle1" fontWeight={800}>{`${driver.firstName || ''} ${driver.lastName || ''}`.trim() || 'Tài xế'}</Typography>
                     <Typography variant="body2" color="text.secondary">{[driver.vehicleColor, driver.vehicleMake, driver.vehicleModel].filter(Boolean).join(' ')}</Typography>
                     <Typography variant="body2" fontWeight={700}>{driver.licensePlate}</Typography>
                   </Box>
                   <Chip icon={<StarRate sx={{ color: '#f59e0b !important' }} />} label={(driver.rating || 5).toFixed(1)} variant="outlined" />
                 </Stack>
                 <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
-                  <Button variant="outlined" fullWidth startIcon={<Phone />} sx={{ borderRadius: 3, py: 1.2 }}>Call</Button>
-                  <Button variant="outlined" fullWidth startIcon={<Chat />} sx={{ borderRadius: 3, py: 1.2 }}>Chat</Button>
+                  <Button variant="outlined" fullWidth startIcon={<Phone />} sx={{ borderRadius: 3, py: 1.2 }}>Gọi</Button>
+                  <Button variant="outlined" fullWidth startIcon={<Chat />} sx={{ borderRadius: 3, py: 1.2 }}>Nhắn tin</Button>
                 </Stack>
               </CardContent>
             </Card>
@@ -383,20 +389,20 @@ const RideTracking: React.FC = () => {
           {currentRide && (
             <Card sx={{ borderRadius: 4, mb: 2.5 }}>
               <CardContent>
-                <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1.5 }}>Chi tiet chuyen di</Typography>
+                <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1.5 }}>Chi tiết chuyến đi</Typography>
                 <Stack spacing={1.2}>
-                  <Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="body2" color="text.secondary">Diem don</Typography><Typography variant="body2" fontWeight={600} textAlign="right">{currentRide.pickup?.address || '-'}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="body2" color="text.secondary">Diem den</Typography><Typography variant="body2" fontWeight={600} textAlign="right">{currentRide.dropoff?.address || '-'}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Loai xe</Typography><Typography variant="body2" fontWeight={600}>{getVehicleTypeLabel(currentRide.vehicleType || 'ECONOMY')}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thanh toan</Typography><Typography variant="body2" fontWeight={600}>{getPaymentMethodLabel(currentRide.paymentMethod || 'CASH')}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Quang duong</Typography><Typography variant="body2" fontWeight={600}>{formatDistanceKm(currentRide.distance)}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thoi luong</Typography><Typography variant="body2" fontWeight={600}>{formatDuration(currentRide.duration)}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Cuoc phi</Typography><Typography variant="body2" fontWeight={800}>{formatCurrency(currentRide.fare || 0)}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="body2" color="text.secondary">Điểm đón</Typography><Typography variant="body2" fontWeight={600} textAlign="right">{currentRide.pickup?.address || '-'}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="body2" color="text.secondary">Điểm đến</Typography><Typography variant="body2" fontWeight={600} textAlign="right">{currentRide.dropoff?.address || '-'}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Loại xe</Typography><Typography variant="body2" fontWeight={600}>{getVehicleTypeLabel(currentRide.vehicleType || 'ECONOMY')}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thanh toán</Typography><Typography variant="body2" fontWeight={600}>{getPaymentMethodLabel(currentRide.paymentMethod || 'CASH')}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Quãng đường</Typography><Typography variant="body2" fontWeight={600}>{formatDistanceKm(currentRide.distance)}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thời lượng</Typography><Typography variant="body2" fontWeight={600}>{formatDuration(currentRide.duration)}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Cước phí</Typography><Typography variant="body2" fontWeight={800}>{formatCurrency(currentRide.fare || 0)}</Typography></Stack>
                 </Stack>
 
                 {statusMeta.allowCancel && (
                   <Button color="error" variant="outlined" startIcon={cancelling ? <CircularProgress size={16} /> : <Cancel />} fullWidth onClick={handleCancel} disabled={cancelling} sx={{ borderRadius: 3, py: 1.2, mt: 2.5 }}>
-                    Huy chuyen
+                    Hủy chuyến
                   </Button>
                 )}
               </CardContent>
@@ -408,37 +414,37 @@ const RideTracking: React.FC = () => {
               <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#eff6ff' }}>
                 <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
-                    <Typography variant="subtitle1" fontWeight={800}>Hoa don chuyen di</Typography>
+                    <Typography variant="subtitle1" fontWeight={800}>Hóa đơn chuyến đi</Typography>
                     {(paymentLoading || reviewLoading) && <CircularProgress size={18} />}
                   </Stack>
                   <Stack spacing={1.25}>
-                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Ma chuyen</Typography><Typography variant="body2" fontWeight={600}>{currentRide.id.slice(0, 8).toUpperCase()}</Typography></Stack>
-                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thoi gian dat</Typography><Typography variant="body2" fontWeight={600}>{formatDate(currentRide.requestedAt)}</Typography></Stack>
-                    {currentRide.completedAt && <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Hoan thanh luc</Typography><Typography variant="body2" fontWeight={600}>{formatDate(currentRide.completedAt)}</Typography></Stack>}
+                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Mã chuyến</Typography><Typography variant="body2" fontWeight={600}>{currentRide.id.slice(0, 8).toUpperCase()}</Typography></Stack>
+                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thời gian đặt</Typography><Typography variant="body2" fontWeight={600}>{formatDate(currentRide.requestedAt)}</Typography></Stack>
+                    {currentRide.completedAt && <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Hoàn thành lúc</Typography><Typography variant="body2" fontWeight={600}>{formatDate(currentRide.completedAt)}</Typography></Stack>}
                     <Divider sx={{ my: 0.5 }} />
-                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">So tien</Typography><Typography variant="h6" fontWeight={900}>{formatCurrency(payment?.amount || currentRide.fare || 0)}</Typography></Stack>
-                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Phuong thuc</Typography><Typography variant="body2" fontWeight={600}>{getPaymentMethodLabel(payment?.method || currentRide.paymentMethod || 'CASH')}</Typography></Stack>
-                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Trang thai thanh toan</Typography><Chip size="small" icon={<PaymentRounded />} label={payment?.status || 'PENDING'} data-testid="payment-status-chip" color={payment?.status === 'COMPLETED' ? 'success' : payment?.status === 'FAILED' ? 'error' : 'warning'} /></Stack>
+                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Số tiền</Typography><Typography variant="h6" fontWeight={900}>{formatCurrency(payment?.amount || currentRide.fare || 0)}</Typography></Stack>
+                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Phương thức</Typography><Typography variant="body2" fontWeight={600}>{getPaymentMethodLabel(payment?.method || currentRide.paymentMethod || 'CASH')}</Typography></Stack>
+                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Trạng thái thanh toán</Typography><Chip size="small" icon={<PaymentRounded />} label={PAYMENT_STATUS_LABELS[payment?.status || 'PENDING'] || 'Đang chờ'} data-testid="payment-status-chip" color={payment?.status === 'COMPLETED' ? 'success' : payment?.status === 'FAILED' ? 'error' : 'warning'} /></Stack>
                   </Stack>
                 </CardContent>
               </Card>
 
               <Card sx={{ borderRadius: 4 }}>
                 <CardContent>
-                  <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>{existingReview ? 'Danh gia cua ban' : 'Danh gia tai xe'}</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Phan hoi cua ban giup cai thien chat luong phuc vu va xep hang tai xe.</Typography>
+                  <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>{existingReview ? 'Đánh giá của bạn' : 'Đánh giá tài xế'}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Phản hồi của bạn giúp cải thiện chất lượng phục vụ và xếp hạng tài xế.</Typography>
                   <Stack alignItems="flex-start" spacing={1.5}>
                     <Rating value={rating} size="large" onChange={(_, nextValue) => { if (!existingReview) { setRating(nextValue); } }} readOnly={Boolean(existingReview)} />
-                    <TextField fullWidth multiline minRows={4} label="Nhan xet" value={comment} onChange={(event) => { if (!existingReview) { setComment(event.target.value); } }} inputProps={{ 'data-testid': 'review-comment-input' }} InputProps={{ readOnly: Boolean(existingReview) }} />
+                    <TextField fullWidth multiline minRows={4} label="Nhận xét" value={comment} onChange={(event) => { if (!existingReview) { setComment(event.target.value); } }} inputProps={{ 'data-testid': 'review-comment-input' }} InputProps={{ readOnly: Boolean(existingReview) }} />
                   </Stack>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2.5 }}>
                     {!existingReview && (
                       <Button variant="contained" onClick={handleSubmitReview} disabled={!rating || submittingReview || !currentRide.driverId} data-testid="submit-review-button" sx={{ borderRadius: 3, py: 1.3, fontWeight: 700 }}>
-                        {submittingReview ? 'Dang gui...' : 'Gui danh gia'}
+                        {submittingReview ? 'Đang gửi...' : 'Gửi đánh giá'}
                       </Button>
                     )}
                     <Button variant={existingReview ? 'contained' : 'outlined'} onClick={() => { dispatch(clearRide()); navigate('/home'); }} sx={{ borderRadius: 3, py: 1.3, fontWeight: 700 }}>
-                      Ve trang chu
+                      Về trang chủ
                     </Button>
                   </Stack>
                 </CardContent>
@@ -448,7 +454,7 @@ const RideTracking: React.FC = () => {
 
           {(status === 'CANCELLED' || status === 'NO_DRIVER_AVAILABLE') && (
             <Button variant="contained" fullWidth onClick={() => { dispatch(clearRide()); navigate('/home'); }} sx={{ borderRadius: 3, py: 1.4, fontWeight: 700 }}>
-              Quay ve trang chu
+              Quay về trang chủ
             </Button>
           )}
         </CardContent>

@@ -294,9 +294,13 @@ services:
       - GRPC_PORT=50059
       - MONGODB_URI=mongodb://${MONGO_USER:-mongo}:${MONGO_PASSWORD:-mongo}@mongodb:27017/review_db?authSource=admin
       - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
+      - DRIVER_SERVICE_URL=http://driver-service:3003
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
     depends_on:
       mongodb:
         condition: service_healthy
+      driver-service:
+        condition: service_started
     restart: unless-stopped
 
 

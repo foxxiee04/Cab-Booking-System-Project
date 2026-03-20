@@ -36,7 +36,8 @@ import { formatCurrency } from '../utils/format.utils';
 import { useTranslation } from 'react-i18next';
 import DriverTripMap from '../features/trip/components/DriverTripMap';
 
-// ── Phase configuration ─────────────────────────────────────────
+const getOptimisticCompletedRidesKey = (userId?: string) => `driver:completedRidesCount:${userId || 'anonymous'}`;
+
 const PHASE_CONFIG: Record<string, {
   label: string;
   color: string;
@@ -44,25 +45,25 @@ const PHASE_CONFIG: Record<string, {
   icon: React.ReactNode;
 }> = {
   ACCEPTED: {
-    label: 'Head to Pickup',
+    label: 'Đang tới điểm đón',
     color: '#2196F3',
     bgColor: '#E3F2FD',
     icon: <Navigation sx={{ fontSize: 20 }} />,
   },
   PICKING_UP: {
-    label: 'Arrived at Pickup',
+    label: 'Đã tới điểm đón',
     color: '#0F766E',
     bgColor: '#CCFBF1',
     icon: <FiberManualRecord sx={{ fontSize: 16 }} />,
   },
   IN_PROGRESS: {
-    label: 'Trip in Progress',
+    label: 'Đang chở khách',
     color: '#4CAF50',
     bgColor: '#E8F5E9',
     icon: <PlayArrow sx={{ fontSize: 20 }} />,
   },
   COMPLETED: {
-    label: 'Trip Completed',
+    label: 'Chuyến đi đã hoàn tất',
     color: '#4CAF50',
     bgColor: '#E8F5E9',
     icon: <CheckCircle sx={{ fontSize: 20 }} />,
@@ -73,6 +74,7 @@ const ActiveRide: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
+  const { user } = useAppSelector((state) => state.auth);
 
   const { currentLocation } = useAppSelector((state) => state.driver);
   const { currentRide } = useAppSelector((state) => state.ride);
@@ -142,7 +144,7 @@ const ActiveRide: React.FC = () => {
       const response = await rideApi.pickupRide(currentRide.id);
       dispatch(updateRideStatus(response.data.ride.status));
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || t('errors.pickupRide', 'Failed to mark pickup'));
+      setError(err.response?.data?.error?.message || 'Không thể xác nhận đã tới điểm đón');
     } finally {
       setLoading(false);
     }
@@ -153,6 +155,9 @@ const ActiveRide: React.FC = () => {
     setLoading(true);
     try {
       await rideApi.completeRide(currentRide.id);
+      const storageKey = getOptimisticCompletedRidesKey(user?.id);
+      const currentCompletedRides = Number(sessionStorage.getItem(storageKey) || '0');
+      sessionStorage.setItem(storageKey, String(currentCompletedRides + 1));
       dispatch(clearCurrentRide());
       navigate('/dashboard');
     } catch (err: any) {
@@ -160,13 +165,13 @@ const ActiveRide: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentRide, dispatch, navigate, t]);
+  }, [currentRide, dispatch, navigate, t, user?.id]);
 
   const handleCancelRide = useCallback(async () => {
     if (!currentRide) return;
     setLoading(true);
     try {
-      await rideApi.cancelRide(currentRide.id, 'Driver cancelled');
+      await rideApi.cancelRide(currentRide.id, 'Tài xế hủy chuyến');
       dispatch(clearCurrentRide());
       navigate('/dashboard');
     } catch (err: any) {
@@ -185,7 +190,7 @@ const ActiveRide: React.FC = () => {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 2 }}>
         <CircularProgress />
-        <Typography color="text.secondary">{t('common.loading', 'Loading...')}</Typography>
+        <Typography color="text.secondary">{t('common.loading', 'Đang tải...')}</Typography>
       </Box>
     );
   }
@@ -195,7 +200,7 @@ const ActiveRide: React.FC = () => {
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 2 }}>
         <Typography color="text.secondary">{t('activeRide.noActiveRide')}</Typography>
         <Button variant="contained" onClick={() => navigate('/dashboard')}>
-          {t('common.backToDashboard', 'Back to Dashboard')}
+          {t('common.backToDashboard', 'Quay về bảng điều khiển')}
         </Button>
       </Box>
     );
@@ -288,8 +293,8 @@ const ActiveRide: React.FC = () => {
           </Box>
 
           <Stack spacing={1} sx={{ mb: 2 }}>
-            <Typography variant="body2"><strong>Pickup:</strong> {currentRide.pickupLocation?.address || `${currentRide.pickupLocation.lat.toFixed(5)}, ${currentRide.pickupLocation.lng.toFixed(5)}`}</Typography>
-            <Typography variant="body2"><strong>Dropoff:</strong> {currentRide.dropoffLocation?.address || `${currentRide.dropoffLocation.lat.toFixed(5)}, ${currentRide.dropoffLocation.lng.toFixed(5)}`}</Typography>
+            <Typography variant="body2"><strong>Điểm đón:</strong> {currentRide.pickupLocation?.address || `${currentRide.pickupLocation.lat.toFixed(5)}, ${currentRide.pickupLocation.lng.toFixed(5)}`}</Typography>
+            <Typography variant="body2"><strong>Điểm đến:</strong> {currentRide.dropoffLocation?.address || `${currentRide.dropoffLocation.lat.toFixed(5)}, ${currentRide.dropoffLocation.lng.toFixed(5)}`}</Typography>
           </Stack>
 
           <Divider sx={{ my: 1.5 }} />
@@ -299,7 +304,7 @@ const ActiveRide: React.FC = () => {
               {t('activeRide.fare')}
             </Typography>
             <Typography variant="h5" fontWeight={700} color="success.main">
-              {currentRide.fare ? formatCurrency(currentRide.fare) : 'N/A'}
+              {currentRide.fare ? formatCurrency(currentRide.fare) : 'Chưa có'}
             </Typography>
           </Box>
 
@@ -325,7 +330,7 @@ const ActiveRide: React.FC = () => {
               startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <Navigation />}
               sx={{ borderRadius: 3, py: 1.8, fontSize: 16, fontWeight: 700, bgcolor: '#2196F3', '&:hover': { bgcolor: '#1976D2' } }}
             >
-              {t('activeRide.startRide', 'Arrived - Start Ride')}
+              {t('activeRide.startRide', 'Đón khách và bắt đầu chuyến đi')}
             </Button>
           )}
 
@@ -362,11 +367,11 @@ const ActiveRide: React.FC = () => {
         PaperProps={{ sx: { borderRadius: 3 } }}
       >
         <DialogTitle sx={{ fontWeight: 700 }}>
-          {t('activeRide.confirmCancelTitle', 'Cancel this ride?')}
+          {t('activeRide.confirmCancelTitle', 'Hủy chuyến đi này?')}
         </DialogTitle>
         <DialogContent>
           <DialogContentText>
-            {t('activeRide.confirmCancelMessage', 'Are you sure you want to cancel? This may affect your acceptance rate.')}
+            {t('activeRide.confirmCancelMessage', 'Bạn có chắc muốn hủy chuyến? Thao tác này có thể ảnh hưởng đến tỷ lệ nhận chuyến của bạn.')}
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ p: 2, pt: 0 }}>
@@ -375,7 +380,7 @@ const ActiveRide: React.FC = () => {
             variant="outlined"
             sx={{ borderRadius: 2 }}
           >
-            {t('common.no', 'Keep Ride')}
+            {t('common.no', 'Tiếp tục chuyến này')}
           </Button>
           <Button
             onClick={handleCancelRide}
@@ -384,7 +389,7 @@ const ActiveRide: React.FC = () => {
             disabled={loading}
             sx={{ borderRadius: 2 }}
           >
-            {loading ? <CircularProgress size={20} color="inherit" /> : t('common.yes', 'Yes, Cancel')}
+            {loading ? <CircularProgress size={20} color="inherit" /> : t('common.yes', 'Xác nhận hủy chuyến')}
           </Button>
         </DialogActions>
       </Dialog>

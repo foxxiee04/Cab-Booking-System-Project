@@ -315,7 +315,7 @@ const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
           key={driver.id}
           position={{ lat: driver.lat, lng: driver.lng }}
           icon={getCarSymbol(driver.heading || 0, '#111827', 0.75)}
-          title={driver.status || 'Nearby driver'}
+          title={driver.status || 'Tài xế gần bạn'}
         />
       ))}
 
@@ -323,7 +323,7 @@ const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
         <MarkerF
           position={animatedDriverPosition}
           icon={getCarSymbol(driverHeading, '#f97316', 1)}
-          title="Driver live location"
+          title="Vị trí tài xế theo thời gian thực"
           zIndex={999}
         />
       )}

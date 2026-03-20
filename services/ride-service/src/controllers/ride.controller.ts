@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { config } from '../config';
+import { RideStatus as PrismaRideStatus } from '../generated/prisma-client';
 import { RideService } from '../services/ride.service';
 import { logger } from '../utils/logger';
 import { UserRole } from '../enums/ride-status.enum';
@@ -12,17 +13,39 @@ interface AuthRequest extends Request {
 export class RideController {
   constructor(private readonly rideService: RideService) {}
 
-  private async resolveDriverActorId(userId: string): Promise<string> {
+  private async resolveDriverActorIds(userId: string): Promise<string[]> {
+    const actorIds = [userId];
+
     try {
       const driver = await driverGrpcClient.getDriverByUserId(userId);
       if (driver?.id) {
-        return driver.id;
+        actorIds.unshift(driver.id);
       }
     } catch (err) {
       logger.warn('Could not fetch driver profile, using userId as driverId');
     }
 
-    return userId;
+    return [...new Set(actorIds.filter(Boolean))];
+  }
+
+  private async resolveDriverActorId(userId: string): Promise<string> {
+    const [driverActorId] = await this.resolveDriverActorIds(userId);
+    return driverActorId;
+  }
+
+  private parseRideStatuses(rawStatus: unknown): PrismaRideStatus[] | undefined {
+    const requestedValues = Array.isArray(rawStatus)
+      ? rawStatus.flatMap((value) => String(value).split(','))
+      : typeof rawStatus === 'string'
+        ? rawStatus.split(',')
+        : [];
+
+    const validStatuses = new Set<string>(Object.values(PrismaRideStatus));
+    const parsedStatuses = requestedValues
+      .map((value) => value.trim().toUpperCase())
+      .filter((value): value is PrismaRideStatus => validStatuses.has(value));
+
+    return parsedStatuses.length > 0 ? parsedStatuses : undefined;
   }
 
   getAllRides = async (req: AuthRequest, res: Response) => {
@@ -239,10 +262,11 @@ export class RideController {
 
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
+      const statuses = this.parseRideStatuses(req.query.status);
 
-      const driverId = await this.resolveDriverActorId(req.user!.userId);
-      const { rides, total } = await this.rideService.getDriverRides(driverId, page, limit);
-      res.json({ success: true, data: { rides }, meta: { page, limit, total } });
+      const driverActorIds = await this.resolveDriverActorIds(req.user!.userId);
+      const { rides, total } = await this.rideService.getDriverRides(driverActorIds, page, limit, statuses);
+      res.json({ success: true, data: { rides, total }, meta: { page, limit, total } });
     } catch (err) {
       logger.error('Get driver rides error:', err);
       res.status(500).json({

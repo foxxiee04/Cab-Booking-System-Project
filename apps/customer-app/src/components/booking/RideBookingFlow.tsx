@@ -164,11 +164,13 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
       })
     );
 
+    const estimate = response.data;
+
     return {
-      fare: response.data.fare,
-      distance: response.data.distance,
-      duration: response.data.duration,
-      surgeMultiplier: response.data.surgeMultiplier || 1.0,
+      fare: estimate.fare,
+      distance: estimate.distance,
+      duration: estimate.duration,
+      surgeMultiplier: estimate.surgeMultiplier || 1.0,
     };
   }, [dropoffAddress, dropoffLat, dropoffLng, pickupAddress, pickupLat, pickupLng]);
 
@@ -192,16 +194,17 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
       setPriceEstimates({ [primaryVehicle]: primaryEstimate });
       setSelectedVehicle(primaryVehicle);
       setActiveStep(0); // Start at vehicle selection step
+      setLoading(false);
 
       setLoadingMore(true);
       const remainingVehicles = VEHICLE_FETCH_ORDER.filter((vehicleType) => vehicleType !== primaryVehicle);
 
-      for (const vehicleType of remainingVehicles) {
-        if (estimateRequestIdRef.current !== requestId) {
-          return;
-        }
+      await Promise.allSettled(
+        remainingVehicles.map(async (vehicleType) => {
+          if (estimateRequestIdRef.current !== requestId) {
+            return;
+          }
 
-        try {
           const estimate = await fetchEstimate(vehicleType);
 
           if (estimateRequestIdRef.current !== requestId) {
@@ -209,10 +212,8 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
           }
 
           setPriceEstimates((prev) => ({ ...prev, [vehicleType]: estimate }));
-        } catch {
-          // Keep the flow usable even if a secondary estimate fails.
-        }
-      }
+        })
+      );
     } catch (err: any) {
       if (estimateRequestIdRef.current === requestId) {
         setError(err.response?.data?.error?.message || err.message || 'Không thể tải giá cước dự kiến');
@@ -464,12 +465,12 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
             {error}
           </Alert>
         )}
-        {loading ? (
+        {loading && !selectedEstimate ? (
           <Box display="flex" justifyContent="center" py={4}>
             <Stack spacing={1.5} alignItems="center">
               <CircularProgress />
               <Typography variant="body2" color="text.secondary">
-                Đang tải bảng giá, bạn vẫn có thể đóng khung này nếu muốn chọn lại hành trình.
+                Đang tải giá chuyến đầu tiên để bạn chọn xe.
               </Typography>
             </Stack>
           </Box>

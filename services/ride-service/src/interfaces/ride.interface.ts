@@ -41,6 +41,7 @@ export interface IRideService {
   getActiveRideForCustomer(customerId: string): Promise<IRide | null>;
   getActiveRideForDriver(driverId: string): Promise<IRide | null>;
   getCustomerRides(customerId: string, page: number, limit: number): Promise<{ rides: IRide[]; total: number }>;
+  getDriverRides(driverIdOrIds: string | string[], page: number, limit: number, statuses?: RideStatus[]): Promise<{ rides: IRide[]; total: number }>;
 }
 
 export interface ICreateRideInput {

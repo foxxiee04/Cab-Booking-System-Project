@@ -65,7 +65,7 @@ Ghi chú:
 ## 4. Các khoảng trống chức năng đã xác nhận từ code review
 
 Phần này rất quan trọng để người test không hiểu nhầm lỗi với thiếu tính năng.
-
+2
 ### 4.1. Các khoảng trống đã xác nhận
 
 - Customer App hiện chưa có màn hình chỉnh sửa hồ sơ khách hàng, mới chỉ xem hồ sơ.

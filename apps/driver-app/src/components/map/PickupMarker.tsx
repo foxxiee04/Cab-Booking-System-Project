@@ -25,7 +25,7 @@ const PickupMarker: React.FC<PickupMarkerProps> = ({ location }) => {
     <Marker position={[location.lat, location.lng]} icon={pickupIcon}>
       <Popup>
         <div>
-          <strong>📍 Pickup Location</strong>
+          <strong>📍 Điểm đón</strong>
           <p style={{ margin: '5px 0 0', fontSize: '12px' }}>
             {location.address || `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`}
           </p>

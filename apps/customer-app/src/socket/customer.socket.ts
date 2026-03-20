@@ -107,7 +107,7 @@ class SocketService {
       store.dispatch(
         showNotification({
           type: 'error',
-          message: 'Connection error. Please check your internet connection.',
+          message: 'Lỗi kết nối. Vui lòng kiểm tra mạng Internet của bạn.',
         })
       );
     });
@@ -131,7 +131,7 @@ class SocketService {
       store.dispatch(
         showNotification({
           type: 'success',
-          message: data.message || 'Ride completed successfully!',
+          message: data.message || 'Chuyến đi đã hoàn tất thành công.',
         })
       );
     });
@@ -143,7 +143,7 @@ class SocketService {
       store.dispatch(
         showNotification({
           type: 'success',
-          message: `Driver ${data.driver.firstName} has been assigned to your ride!`,
+          message: `Tài xế ${data.driver.firstName} đã được gán cho chuyến đi của bạn.`,
         })
       );
     });
@@ -158,7 +158,7 @@ class SocketService {
       store.dispatch(
         showNotification({
           type: 'warning',
-          message: `Ride cancelled: ${data.reason}`,
+          message: `Chuyến đi đã bị hủy: ${data.reason}`,
         })
       );
     });
@@ -167,7 +167,7 @@ class SocketService {
       store.dispatch(
         showNotification({
           type: 'warning',
-          message: 'Searching for another driver...',
+          message: 'Đang tìm tài xế khác...',
         })
       );
     });

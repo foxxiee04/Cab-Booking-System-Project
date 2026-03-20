@@ -25,7 +25,7 @@ const DropoffMarker: React.FC<DropoffMarkerProps> = ({ location }) => {
     <Marker position={[location.lat, location.lng]} icon={dropoffIcon}>
       <Popup>
         <div>
-          <strong>🏁 Dropoff Location</strong>
+          <strong>🏁 Điểm đến</strong>
           <p style={{ margin: '5px 0 0', fontSize: '12px' }}>
             {location.address || `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`}
           </p>

@@ -46,6 +46,7 @@ jest.mock('../config', () => ({
 
 import { RideService } from '../services/ride.service';
 import { EventPublisher } from '../events/publisher';
+import { RideStatus } from '../generated/prisma-client';
 import axios from 'axios';
 
 describe('RideService - Simple Test Suite', () => {
@@ -509,6 +510,42 @@ describe('RideService - Simple Test Suite', () => {
 
       expect(result.rides).toHaveLength(1);
       expect(result.total).toBe(1);
+      expect(mockPrisma.ride.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { driverId: 'driver-123' },
+        skip: 0,
+        take: 10,
+      }));
+      expect(mockPrisma.ride.count).toHaveBeenCalledWith({ where: { driverId: 'driver-123' } });
+    });
+
+    it('should include legacy driver userId records and status filter', async () => {
+      mockPrisma.ride.findMany.mockResolvedValue([
+        { id: 'ride-1', driverId: 'driver-profile-123', status: 'COMPLETED' },
+        { id: 'ride-2', driverId: 'driver-user-123', status: 'COMPLETED' },
+      ]);
+      mockPrisma.ride.count.mockResolvedValue(2);
+
+      const result = await rideService.getDriverRides(
+        ['driver-profile-123', 'driver-user-123'],
+        1,
+        20,
+        ['COMPLETED' as RideStatus]
+      );
+
+      expect(result.rides).toHaveLength(2);
+      expect(result.total).toBe(2);
+      expect(mockPrisma.ride.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: {
+          driverId: { in: ['driver-profile-123', 'driver-user-123'] },
+          status: 'COMPLETED',
+        },
+      }));
+      expect(mockPrisma.ride.count).toHaveBeenCalledWith({
+        where: {
+          driverId: { in: ['driver-profile-123', 'driver-user-123'] },
+          status: 'COMPLETED',
+        },
+      });
     });
   });
 

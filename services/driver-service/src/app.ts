@@ -79,6 +79,30 @@ export function createApp({ driverService, getReadiness }: DriverAppOptions) {
     }
   });
 
+  app.post('/internal/drivers/:driverId/rating', async (req, res) => {
+    try {
+      const rating = Number(req.body?.rating);
+
+      if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_RATING', message: 'Rating must be between 1 and 5' },
+        });
+      }
+
+      await driverService.updateRating(req.params.driverId, rating);
+      const driver = await driverService.getDriverById(req.params.driverId);
+
+      return res.json({ success: true, data: { driver } });
+    } catch (err) {
+      logger.error('Internal update driver rating error:', err);
+      return res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to update driver rating' },
+      });
+    }
+  });
+
   app.use('/api/drivers', authenticate, createDriverRouter(driverService));
 
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

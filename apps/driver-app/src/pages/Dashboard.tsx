@@ -16,7 +16,6 @@ import {
 import {
   AttachMoneyRounded,
   DriveEtaRounded,
-  LocalFireDepartmentRounded,
   MyLocationRounded,
   RouteRounded,
 } from '@mui/icons-material';
@@ -37,6 +36,8 @@ import { watchPosition, clearWatch } from '../utils/map.utils';
 import { formatCurrency } from '../utils/format.utils';
 import DriverTripMap from '../features/trip/components/DriverTripMap';
 
+const getOptimisticCompletedRidesKey = (userId?: string) => `driver:completedRidesCount:${userId || 'anonymous'}`;
+
 const Dashboard: React.FC = () => {
   const ignoredRideIdsRef = useRef<Map<string, number>>(new Map());
   const navigate = useNavigate();
@@ -54,6 +55,7 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [watchId, setWatchId] = useState<number | null>(null);
+  const [completedRidesCount, setCompletedRidesCount] = useState(0);
 
   const dismissPendingRide = (rideId: string) => {
     const holdUntil = Date.now() + 30_000;
@@ -72,6 +74,17 @@ const Dashboard: React.FC = () => {
 
         dispatch(setProfile(profileResponse.data.driver));
         dispatch(setEarnings(earningsResponse.data.earnings));
+
+        const remoteCompletedRides = Math.max(
+          earningsResponse.data.earnings?.totalRides ?? 0,
+          profileResponse.data.driver?.totalRides ?? 0
+        );
+        const storageKey = getOptimisticCompletedRidesKey(user?.id);
+        const optimisticCompletedRides = Number(sessionStorage.getItem(storageKey) || '0');
+        const resolvedCompletedRides = Math.max(remoteCompletedRides, optimisticCompletedRides);
+
+        sessionStorage.setItem(storageKey, String(resolvedCompletedRides));
+        setCompletedRidesCount(resolvedCompletedRides);
       } catch (error: any) {
         console.error('Failed to fetch profile:', error);
         if (error.response?.status === 404) {
@@ -82,7 +95,7 @@ const Dashboard: React.FC = () => {
     };
 
     fetchProfile();
-  }, [dispatch, navigate]);
+  }, [dispatch, navigate, user?.id]);
 
   // Connect socket when online
   useEffect(() => {
@@ -298,8 +311,7 @@ const Dashboard: React.FC = () => {
 
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 2 }}>
           <Chip icon={<DriveEtaRounded />} label={isOnline ? t('dashboard.youOnline') : t('dashboard.youOffline')} color={isOnline ? 'success' : 'default'} />
-          <Chip icon={<RouteRounded />} label={pendingRide ? t('dashboard.newRideRequest', 'Đang có yêu cầu mới') : t('dashboard.waitingRide', 'Đang chờ cuốc xe mới')} variant="outlined" />
-          <Chip icon={<LocalFireDepartmentRounded />} label={t('dashboard.fastEta', 'Bản đồ và ETA cập nhật trực tiếp')} variant="outlined" />
+          <Chip icon={<RouteRounded />} label={pendingRide ? t('dashboard.newRideRequest', 'Đang có yêu cầu mới') : t('dashboard.ridesCompleted', { count: completedRidesCount })} variant="outlined" />
         </Stack>
       </Paper>
 
@@ -344,7 +356,7 @@ const Dashboard: React.FC = () => {
 
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
           {currentLocation && <Chip icon={<MyLocationRounded />} label={`${currentLocation.lat.toFixed(5)}, ${currentLocation.lng.toFixed(5)}`} size="small" variant="outlined" />}
-          <Chip icon={<AttachMoneyRounded />} label={t('dashboard.ridesCompleted', { count: profile?.totalRides || 0 })} size="small" variant="outlined" />
+          <Chip icon={<AttachMoneyRounded />} label={t('dashboard.ridesCompleted', { count: completedRidesCount })} size="small" variant="outlined" />
         </Stack>
 
         <Grid container spacing={2} alignItems="center">

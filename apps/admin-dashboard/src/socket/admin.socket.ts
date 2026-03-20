@@ -133,7 +133,7 @@ class AdminSocketService {
         type: 'ride:created',
         timestamp: new Date().toISOString(),
         title: 'Ride created',
-        detail: `Chuyen ${data.ride.id.substring(0, 8)} vua duoc tao.`,
+        detail: `Chuyến ${data.ride.id.substring(0, 8)} vừa được tạo.`,
         tone: 'info',
       });
 
@@ -164,7 +164,7 @@ class AdminSocketService {
       store.dispatch(
         showNotification({
           type: 'success',
-          message: `Ride completed: ${data.ride.id.substring(0, 8)}`,
+          message: `Chuyến ${data.ride.id.substring(0, 8)} đã hoàn tất`,
         })
       );
 
@@ -172,8 +172,8 @@ class AdminSocketService {
         id: `ride-completed-${data.ride.id}-${Date.now()}`,
         type: 'ride:completed',
         timestamp: new Date().toISOString(),
-        title: 'Ride completed',
-        detail: `Chuyen ${data.ride.id.substring(0, 8)} da hoan thanh voi doanh thu ${data.ride.fare.toLocaleString('vi-VN')} VND.`,
+        title: 'Chuyến đi hoàn tất',
+        detail: `Chuyến ${data.ride.id.substring(0, 8)} đã hoàn thành với doanh thu ${data.ride.fare.toLocaleString('vi-VN')} VND.`,
         tone: 'success',
       });
 
@@ -200,8 +200,8 @@ class AdminSocketService {
         id: `ride-cancelled-${data.rideId}-${Date.now()}`,
         type: 'ride:cancelled',
         timestamp: new Date().toISOString(),
-        title: 'Ride cancelled',
-        detail: `Chuyen ${data.rideId.substring(0, 8)} da bi huy.`,
+        title: 'Chuyến đi bị hủy',
+        detail: `Chuyến ${data.rideId.substring(0, 8)} đã bị hủy.`,
         tone: 'warning',
       });
 
@@ -229,8 +229,8 @@ class AdminSocketService {
         id: `driver-online-${data.driverId}-${Date.now()}`,
         type: 'driver:online',
         timestamp: new Date().toISOString(),
-        title: 'Driver online',
-        detail: `Tai xe ${data.driverId.substring(0, 8)} da online.`,
+        title: 'Tài xế trực tuyến',
+        detail: `Tài xế ${data.driverId.substring(0, 8)} đã trực tuyến.`,
         tone: 'success',
       });
 
@@ -257,8 +257,8 @@ class AdminSocketService {
         id: `driver-offline-${data.driverId}-${Date.now()}`,
         type: 'driver:offline',
         timestamp: new Date().toISOString(),
-        title: 'Driver offline',
-        detail: `Tai xe ${data.driverId.substring(0, 8)} da offline.`,
+        title: 'Tài xế ngoại tuyến',
+        detail: `Tài xế ${data.driverId.substring(0, 8)} đã ngoại tuyến.`,
         tone: 'warning',
       });
 
@@ -286,8 +286,8 @@ class AdminSocketService {
         id: `payment-completed-${data.payment.id}-${Date.now()}`,
         type: 'payment:completed',
         timestamp: new Date().toISOString(),
-        title: 'Payment completed',
-        detail: `Thanh toan ${data.payment.id.substring(0, 8)} da thanh cong.`,
+        title: 'Thanh toán hoàn tất',
+        detail: `Thanh toán ${data.payment.id.substring(0, 8)} đã thành công.`,
         tone: 'success',
       });
 

@@ -119,7 +119,7 @@ class DriverSocketService {
         store.dispatch(
           showNotification({
             type: 'error',
-            message: 'Connection lost. Please check your internet.',
+            message: 'Mất kết nối. Vui lòng kiểm tra mạng Internet.',
           })
         );
       }
@@ -137,12 +137,12 @@ class DriverSocketService {
         pickupLocation: {
           lat: data.pickup?.lat || data.pickup?.latitude || 0,
           lng: data.pickup?.lng || data.pickup?.longitude || 0,
-          address: data.pickup?.address || 'Pickup location'
+          address: data.pickup?.address || 'Điểm đón'
         },
         dropoffLocation: {
           lat: data.dropoff?.lat || data.dropoff?.latitude || 0,
           lng: data.dropoff?.lng || data.dropoff?.longitude || 0,
-          address: data.dropoff?.address || 'Dropoff location'
+          address: data.dropoff?.address || 'Điểm đến'
         },
         fare: data.estimatedFare || 0,
         vehicleType: (data.vehicleType as VehicleType) || 'ECONOMY',
@@ -151,7 +151,7 @@ class DriverSocketService {
         estimatedDuration: data.duration,
         status: 'PENDING',
         customer: data.customer ? {
-          firstName: data.customer.firstName || 'Customer',
+          firstName: data.customer.firstName || 'Khách hàng',
           lastName: data.customer.lastName || '',
           phoneNumber: data.customer.phoneNumber,
           rating: data.customer.rating
@@ -163,7 +163,7 @@ class DriverSocketService {
       store.dispatch(
         showNotification({
           type: 'info',
-          message: `New ride request! ${data.timeoutSeconds || 30}s to accept`,
+          message: `Có yêu cầu chuyến mới. Bạn có ${data.timeoutSeconds || 30} giây để nhận.`,
         })
       );
 
@@ -187,7 +187,7 @@ class DriverSocketService {
       store.dispatch(
         showNotification({
           type: 'warning',
-          message: 'Ride request expired',
+          message: 'Yêu cầu chuyến đã hết thời gian phản hồi',
         })
       );
     });
@@ -209,7 +209,7 @@ class DriverSocketService {
       store.dispatch(
         showNotification({
           type: 'warning',
-          message: `Ride cancelled: ${data.reason}`,
+          message: `Chuyến đi đã bị hủy: ${data.reason}`,
         })
       );
     });
@@ -223,7 +223,7 @@ class DriverSocketService {
       store.dispatch(
         showNotification({
           type: 'info',
-          message: 'Ride assigned to another driver',
+          message: 'Chuyến đi đã được gán cho tài xế khác',
         })
       );
     });
