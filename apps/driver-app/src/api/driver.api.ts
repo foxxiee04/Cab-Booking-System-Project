@@ -1,33 +1,37 @@
 import axiosInstance from './axios.config';
 import { ApiResponse, Driver, DriverRegistration, Location, Earnings } from '../types';
 
-const normalizeDriver = (driver: any): Driver => ({
-  id: driver.id,
-  userId: driver.userId,
-  vehicleType: driver.vehicleType,
-  vehicleMake: driver.vehicleMake || driver.vehicleBrand || '',
-  vehicleModel: driver.vehicleModel || '',
-  vehicleColor: driver.vehicleColor || '',
-  vehicleYear: driver.vehicleYear || undefined,
-  licensePlate: driver.licensePlate || driver.vehiclePlate || '',
-  licenseNumber: driver.licenseNumber || '',
-  licenseExpiryDate: driver.licenseExpiryDate || undefined,
-  status: driver.status,
-  rating: driver.rating ?? driver.ratingAverage ?? 0,
-  reviewCount: driver.reviewCount ?? driver.ratingCount ?? 0,
-  totalRides: driver.totalRides ?? driver.ratingCount ?? 0,
-  isOnline: driver.isOnline ?? ['ONLINE', 'BUSY'].includes(driver.availabilityStatus),
-  isAvailable: driver.isAvailable ?? driver.availabilityStatus === 'ONLINE',
-  currentLocation:
-    driver.currentLocation || (driver.lastLocationLat != null && driver.lastLocationLng != null
-      ? {
-          lat: driver.lastLocationLat,
-          lng: driver.lastLocationLng,
-        }
-      : null),
-  createdAt: driver.createdAt,
-  updatedAt: driver.updatedAt,
-});
+const normalizeDriver = (driver: any): Driver => {
+  const reviewCount = driver.reviewCount ?? driver.ratingCount ?? 0;
+
+  return {
+    id: driver.id,
+    userId: driver.userId,
+    vehicleType: driver.vehicleType,
+    vehicleMake: driver.vehicleMake || driver.vehicleBrand || '',
+    vehicleModel: driver.vehicleModel || '',
+    vehicleColor: driver.vehicleColor || '',
+    vehicleYear: driver.vehicleYear || undefined,
+    licensePlate: driver.licensePlate || driver.vehiclePlate || '',
+    licenseNumber: driver.licenseNumber || '',
+    licenseExpiryDate: driver.licenseExpiryDate || undefined,
+    status: driver.status,
+    rating: reviewCount > 0 ? (driver.rating ?? driver.ratingAverage ?? 0) : 0,
+    reviewCount,
+    totalRides: driver.totalRides ?? driver.ratingCount ?? 0,
+    isOnline: driver.isOnline ?? ['ONLINE', 'BUSY'].includes(driver.availabilityStatus),
+    isAvailable: driver.isAvailable ?? driver.availabilityStatus === 'ONLINE',
+    currentLocation:
+      driver.currentLocation || (driver.lastLocationLat != null && driver.lastLocationLng != null
+        ? {
+            lat: driver.lastLocationLat,
+            lng: driver.lastLocationLng,
+          }
+        : null),
+    createdAt: driver.createdAt,
+    updatedAt: driver.updatedAt,
+  };
+};
 
 const mapVehicleType = (type: DriverRegistration['vehicleType']): 'CAR' | 'SUV' | 'MOTORCYCLE' => {
   switch (type) {

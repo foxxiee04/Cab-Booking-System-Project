@@ -143,12 +143,13 @@ const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
         sx={{
           flexGrow: 1,
           minHeight: 0,
+          overflowY: 'auto',
           pt: 'calc(88px + env(safe-area-inset-top))',
-          pb: 'calc(92px + env(safe-area-inset-bottom))',
+          pb: 'calc(128px + env(safe-area-inset-bottom))',
           px: { xs: 1.5, sm: 2 },
         }}
       >
-        <Box sx={{ height: '100%' }}>{children}</Box>
+        <Box sx={{ minHeight: '100%' }}>{children}</Box>
       </Box>
 
       <Paper

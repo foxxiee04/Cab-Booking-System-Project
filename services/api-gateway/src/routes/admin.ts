@@ -143,10 +143,11 @@ router.get('/rides', async (req: Request, res: Response) => {
 router.get('/drivers', async (req: Request, res: Response) => {
   try {
     const { limit, page } = getPaging(req);
+    const status = req.query.status as string | undefined;
     const userLimit = Math.max(limit * 5, 1000);
 
     const [driverResponse, userResponse] = await Promise.all([
-      callHttpService<any>('driver', req, '/api/drivers', { page, limit }),
+      callHttpService<any>('driver', req, '/api/drivers', { page, limit, status }),
       callHttpService<any>('auth', req, '/api/auth/users', { page: 1, limit: userLimit }),
     ]);
 
@@ -176,8 +177,10 @@ router.get('/drivers', async (req: Request, res: Response) => {
       vehicleMake: driver.vehicleBrand,
       vehicleModel: driver.vehicleModel,
       vehicleColor: driver.vehicleColor,
+      vehicleYear: driver.vehicleYear,
       licensePlate: driver.vehiclePlate,
       licenseNumber: driver.licenseNumber,
+      licenseExpiryDate: driver.licenseExpiryDate,
       reviewCount: driver.ratingCount ?? driver.reviewCount ?? 0,
       rating: (driver.ratingCount ?? driver.reviewCount ?? 0) > 0 ? (driver.ratingAverage ?? driver.rating ?? 0) : 0,
       totalRides: driver.totalRides ?? 0,

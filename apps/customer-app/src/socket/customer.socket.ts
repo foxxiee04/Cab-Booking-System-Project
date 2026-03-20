@@ -66,7 +66,6 @@ class SocketService {
    */
   connect(token: string) {
     if (this.socket?.connected) {
-      console.log('Socket already connected');
       return;
     }
 
@@ -90,13 +89,11 @@ class SocketService {
 
     // Connection events
     this.socket.on('connect', () => {
-      console.log('✅ Socket connected:', this.socket?.id);
       this.isConnected = true;
       this.authFailureHandled = false;
     });
 
     this.socket.on('disconnect', (reason) => {
-      console.log('❌ Socket disconnected:', reason);
       this.isConnected = false;
     });
 
@@ -117,7 +114,6 @@ class SocketService {
 
     // Ride events - matching backend event names
     this.socket.on('RIDE_STATUS_UPDATE', (data: { rideId: string; status: string; message?: string; driverId?: string }) => {
-      console.log('📝 Ride status update:', data);
       store.dispatch(updateRideStatus({ rideId: data.rideId, status: data.status }));
 
       if (data.message) {
@@ -131,7 +127,6 @@ class SocketService {
     });
 
     this.socket.on('RIDE_COMPLETED', (data: { rideId: string; status: string; fare?: number; message: string }) => {
-      console.log('✅ Ride completed:', data);
       store.dispatch(updateRideStatus({ rideId: data.rideId, status: 'COMPLETED' }));
       store.dispatch(
         showNotification({
@@ -143,7 +138,6 @@ class SocketService {
 
     // Legacy event names for backward compatibility
     this.socket.on('ride:assigned', (data: { ride: any; driver: any }) => {
-      console.log('🚗 Ride assigned:', data);
       store.dispatch(setCurrentRide(data.ride));
       store.dispatch(setDriver(data.driver));
       store.dispatch(
@@ -160,7 +154,6 @@ class SocketService {
     });
 
     this.socket.on('ride:cancelled', (data: { rideId: string; reason: string }) => {
-      console.log('❌ Ride cancelled:', data);
       store.dispatch(updateRideStatus({ rideId: data.rideId, status: 'CANCELLED' }));
       store.dispatch(
         showNotification({
@@ -171,7 +164,6 @@ class SocketService {
     });
 
     this.socket.on('ride:timeout', (data: { rideId: string }) => {
-      console.log('⏱️ Ride timeout:', data);
       store.dispatch(
         showNotification({
           type: 'warning',
@@ -189,7 +181,6 @@ class SocketService {
       this.socket.disconnect();
       this.socket = null;
       this.isConnected = false;
-      console.log('Socket disconnected');
     }
   }
 
@@ -207,7 +198,7 @@ class SocketService {
     if (this.socket?.connected) {
       this.socket.emit(event, data);
     } else {
-      console.warn('Socket not connected. Cannot emit event:', event);
+      console.warn('Socket not connected. Cannot emit event.');
     }
   }
 }

@@ -105,8 +105,10 @@ export interface Driver {
   vehicleMake: string;
   vehicleModel: string;
   vehicleColor: string;
+  vehicleYear?: number;
   licensePlate: string;
   licenseNumber: string;
+  licenseExpiryDate?: string;
   rating: number;
   reviewCount: number;
   totalRides: number;

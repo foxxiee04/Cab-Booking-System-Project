@@ -52,7 +52,7 @@ export interface DriverRegistration {
   vehicleMake: string;
   vehicleModel: string;
   vehicleColor: string;
-  vehicleYear?: number;
+  vehicleYear: number;
   licensePlate: string;
   licenseNumber: string;
   licenseExpiryDate: string;

@@ -21,6 +21,7 @@ export const adminApi = {
   // Get all drivers with normalized user data
   getDrivers: async (params?: {
     isOnline?: boolean;
+    status?: string;
     limit?: number;
     offset?: number;
   }): Promise<ApiResponse<{ drivers: Driver[]; total: number }>> => {

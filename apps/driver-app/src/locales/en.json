@@ -29,6 +29,7 @@
     "vehicleMake": "Vehicle Make",
     "vehicleModel": "Vehicle Model",
     "vehicleColor": "Vehicle Color",
+    "vehicleYear": "Vehicle Year",
     "licensePlate": "License Plate",
     "licenseNumber": "Driver License Number",
     "licenseExpiry": "License Expiry Date",
@@ -169,6 +170,13 @@
     "passwordNumber": "Password must contain at least one number",
     "passwordMismatch": "Passwords do not match",
     "phoneInvalid": "Phone number must be 10-15 digits",
-    "authRequired": "User not authenticated"
+    "authRequired": "User not authenticated",
+    "vehicleMakeInvalid": "Vehicle make must have at least 2 characters",
+    "vehicleModelInvalid": "Vehicle model must have at least 2 characters",
+    "vehicleColorInvalid": "Vehicle color must have at least 2 characters",
+    "vehicleYearInvalid": "Vehicle year must be between 1990 and next year",
+    "licensePlateInvalid": "License plate format is invalid",
+    "licenseNumberInvalid": "License number must be 8-16 alphanumeric characters",
+    "licenseExpiryPast": "License expiry date must be in the future"
   }
 }

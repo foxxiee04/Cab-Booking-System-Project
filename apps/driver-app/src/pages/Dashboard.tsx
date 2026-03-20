@@ -263,7 +263,16 @@ const Dashboard: React.FC = () => {
 
   // Handle logout
   return (
-    <Box sx={{ height: '100%', display: 'grid', gridTemplateRows: 'auto 1fr auto', gap: 1.5, pb: 1.5 }}>
+    <Box
+      sx={{
+        minHeight: '100%',
+        display: 'grid',
+        gridTemplateRows: 'auto 1fr auto',
+        gap: 1.5,
+        pb: 1.5,
+        background: 'radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 28%), linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%)',
+      }}
+    >
       <Paper
         elevation={0}
         sx={{
@@ -294,8 +303,8 @@ const Dashboard: React.FC = () => {
         </Stack>
       </Paper>
 
-      <Box sx={{ position: 'relative', minHeight: 0, borderRadius: 6, overflow: 'hidden', bgcolor: '#eff6ff', boxShadow: '0 18px 48px rgba(15,23,42,0.12)' }}>
-        <DriverTripMap currentLocation={currentLocation} mode="request" height="100%" />
+      <Box sx={{ position: 'relative', minHeight: 0, borderRadius: 6, overflow: 'hidden', background: 'linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)', boxShadow: '0 18px 48px rgba(15,23,42,0.12)', border: '1px solid rgba(59,130,246,0.12)' }}>
+        <DriverTripMap currentLocation={currentLocation} mode="request" height="100%" colorMode="light" />
       </Box>
 
       <Paper
@@ -320,7 +329,9 @@ const Dashboard: React.FC = () => {
           <Grid item xs={12} sm={4}>
             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3 }}>
               <Typography variant="overline" color="text.secondary">{t('dashboard.rating', 'Đánh giá')}</Typography>
-              <Typography variant="subtitle2" fontWeight={800}>{(profile?.rating ?? 0).toFixed(1)} / 5</Typography>
+              <Typography variant="subtitle2" fontWeight={800}>
+                {(profile?.reviewCount ?? 0) > 0 ? `${(profile?.rating ?? 0).toFixed(1)} / 5` : t('profile.noReviews')}
+              </Typography>
             </Paper>
           </Grid>
           <Grid item xs={12} sm={4}>

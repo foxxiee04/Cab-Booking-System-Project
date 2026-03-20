@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -16,6 +16,7 @@ import {
   FormControl,
   FormControlLabel,
   Grid,
+  Paper,
   Radio,
   RadioGroup,
   Stack,
@@ -46,6 +47,7 @@ interface RideBookingFlowProps {
   pickup: Location;
   dropoff: Location;
   onRideCreated: (rideId: string) => void;
+  presentation?: 'modal' | 'inline';
 }
 
 interface PriceEstimate {
@@ -67,35 +69,55 @@ interface VehicleOption {
 const vehicleOptions: VehicleOption[] = [
   {
     type: 'ECONOMY',
-    name: 'Economy',
+    name: 'Phổ thông',
     icon: <DirectionsCar fontSize="large" />,
-    description: 'Affordable rides',
+    description: 'Tiết kiệm, dễ đặt',
     capacity: 4,
     priceMultiplier: 1.0,
   },
   {
     type: 'COMFORT',
-    name: 'Comfort',
+    name: 'Tiện nghi',
     icon: <LocalTaxi fontSize="large" />,
-    description: 'More space',
+    description: 'Thoải mái hơn',
     capacity: 4,
     priceMultiplier: 1.3,
   },
   {
     type: 'PREMIUM',
-    name: 'Premium',
+    name: 'Cao cấp',
     icon: <AirportShuttle fontSize="large" />,
-    description: 'Luxury experience',
+    description: 'Không gian rộng, trải nghiệm tốt hơn',
     capacity: 6,
     priceMultiplier: 1.8,
   },
 ];
 
 const paymentOptions = [
-  { method: 'CASH', label: 'Cash', icon: <MoneyOff /> },
-  { method: 'CARD', label: 'Credit Card', icon: <CreditCard /> },
-  { method: 'WALLET', label: 'E-Wallet', icon: <AccountBalanceWallet /> },
+  { method: 'CASH', label: 'Tiền mặt', icon: <MoneyOff /> },
+  { method: 'CARD', label: 'Thẻ', icon: <CreditCard /> },
+  { method: 'WALLET', label: 'Ví điện tử', icon: <AccountBalanceWallet /> },
 ];
+
+const VEHICLE_FETCH_ORDER: Array<'ECONOMY' | 'COMFORT' | 'PREMIUM'> = ['ECONOMY', 'COMFORT', 'PREMIUM'];
+
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs = 5000): Promise<T> => {
+  let timeoutHandle: number | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = window.setTimeout(() => {
+      reject(new Error('Hệ thống đang phản hồi chậm. Vui lòng thử lại.'));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutHandle) {
+      window.clearTimeout(timeoutHandle);
+    }
+  }
+};
 
 const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
   open,
@@ -103,6 +125,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
   pickup,
   dropoff,
   onRideCreated,
+  presentation = 'modal',
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -111,64 +134,108 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
   const [selectedPayment, setSelectedPayment] = useState<'CASH' | 'CARD' | 'WALLET'>('CASH');
   const [priceEstimates, setPriceEstimates] = useState<Record<string, PriceEstimate>>({});
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
+  const estimateRequestIdRef = useRef(0);
+  const pickupLat = pickup?.lat;
+  const pickupLng = pickup?.lng;
+  const pickupAddress = pickup?.address;
+  const dropoffLat = dropoff?.lat;
+  const dropoffLng = dropoff?.lng;
+  const dropoffAddress = dropoff?.address;
 
   const steps = ['Chọn xe', 'Thanh toán', 'Xác nhận'];
 
-  // Fetch price estimates for all vehicle types
+  const fetchEstimate = useCallback(async (vehicleType: 'ECONOMY' | 'COMFORT' | 'PREMIUM') => {
+    const response = await withTimeout(
+      pricingApi.estimateFare({
+        pickup: {
+          lat: pickupLat,
+          lng: pickupLng,
+          address: pickupAddress,
+        },
+        dropoff: {
+          lat: dropoffLat,
+          lng: dropoffLng,
+          address: dropoffAddress,
+        },
+        vehicleType,
+      })
+    );
+
+    return {
+      fare: response.data.fare,
+      distance: response.data.distance,
+      duration: response.data.duration,
+      surgeMultiplier: response.data.surgeMultiplier || 1.0,
+    };
+  }, [dropoffAddress, dropoffLat, dropoffLng, pickupAddress, pickupLat, pickupLng]);
+
   const fetchPriceEstimates = useCallback(async () => {
+    const requestId = estimateRequestIdRef.current + 1;
+    estimateRequestIdRef.current = requestId;
+
     setLoading(true);
+    setLoadingMore(false);
     setError('');
+    setPriceEstimates({});
 
     try {
-      const responses = await Promise.allSettled(
-        vehicleOptions.map(async (vehicle) => ({
-          vehicleType: vehicle.type,
-          response: await pricingApi.estimateFare({
-            pickup,
-            dropoff,
-            vehicleType: vehicle.type,
-          }),
-        }))
-      );
+      const primaryVehicle: 'ECONOMY' | 'COMFORT' | 'PREMIUM' = 'ECONOMY';
+      const primaryEstimate = await fetchEstimate(primaryVehicle);
 
-      const estimates: Record<string, PriceEstimate> = {};
-      responses.forEach((result) => {
-        if (result.status !== 'fulfilled') {
+      if (estimateRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setPriceEstimates({ [primaryVehicle]: primaryEstimate });
+      setSelectedVehicle(primaryVehicle);
+      setActiveStep(0); // Start at vehicle selection step
+
+      setLoadingMore(true);
+      const remainingVehicles = VEHICLE_FETCH_ORDER.filter((vehicleType) => vehicleType !== primaryVehicle);
+
+      for (const vehicleType of remainingVehicles) {
+        if (estimateRequestIdRef.current !== requestId) {
           return;
         }
 
-        const { vehicleType, response } = result.value;
-        estimates[vehicleType] = {
-          fare: response.data.fare,
-          distance: response.data.distance,
-          duration: response.data.duration,
-          surgeMultiplier: response.data.surgeMultiplier || 1.0,
-        };
-      });
+        try {
+          const estimate = await fetchEstimate(vehicleType);
 
-      if (!Object.keys(estimates).length) {
-        throw new Error('Không thể tải bảng giá lúc này. Vui lòng thử lại sau ít phút.');
-      }
+          if (estimateRequestIdRef.current !== requestId) {
+            return;
+          }
 
-      setPriceEstimates(estimates);
-      if (!estimates[selectedVehicle]) {
-        setSelectedVehicle(Object.keys(estimates)[0] as 'ECONOMY' | 'COMFORT' | 'PREMIUM');
+          setPriceEstimates((prev) => ({ ...prev, [vehicleType]: estimate }));
+        } catch {
+          // Keep the flow usable even if a secondary estimate fails.
+        }
       }
-      setActiveStep(0); // Start at vehicle selection step
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || err.message || 'Không thể tải giá cước dự kiến');
+      if (estimateRequestIdRef.current === requestId) {
+        setError(err.response?.data?.error?.message || err.message || 'Không thể tải giá cước dự kiến');
+      }
     } finally {
-      setLoading(false);
+      if (estimateRequestIdRef.current === requestId) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
-  }, [dropoff, pickup, selectedVehicle]);
+  }, [fetchEstimate]);
 
   useEffect(() => {
-    if (open && pickup && dropoff) {
+    if (open && pickupLat && pickupLng && dropoffLat && dropoffLng) {
       fetchPriceEstimates();
     }
-  }, [dropoff, fetchPriceEstimates, open, pickup]);
+  }, [dropoffLat, dropoffLng, fetchPriceEstimates, open, pickupLat, pickupLng]);
+
+  useEffect(() => {
+    if (!open) {
+      estimateRequestIdRef.current += 1;
+    }
+  }, [open]);
 
   const handleNext = () => {
     setActiveStep((prev) => prev + 1);
@@ -193,7 +260,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
       onRideCreated(response.data.ride.id);
       onClose();
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to create ride');
+      setError(err.response?.data?.error?.message || 'Không thể tạo chuyến xe');
     } finally {
       setCreating(false);
     }
@@ -209,6 +276,11 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
             <Typography variant="h6" gutterBottom fontWeight={800}>
               Chọn loại xe phù hợp
             </Typography>
+            {loadingMore && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Đang tải thêm giá cho các loại xe còn lại. Bạn vẫn có thể tiếp tục với lựa chọn hiện tại.
+              </Alert>
+            )}
             <Grid container spacing={2}>
               {vehicleOptions.map((vehicle) => {
                 const estimate = priceEstimates[vehicle.type];
@@ -237,7 +309,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                             <Box>
                               <Typography variant="h6" fontWeight={800}>{vehicle.name}</Typography>
                               <Typography variant="body2" color="text.secondary">
-                                {vehicle.description} • {vehicle.capacity} seats
+                                {vehicle.description} • {vehicle.capacity} chỗ
                               </Typography>
                               {estimate && (
                                 <Typography variant="caption" color="text.secondary">
@@ -256,7 +328,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                                 {estimate.surgeMultiplier > 1 && (
                                   <Chip
                                     size="small"
-                                    label={`${estimate.surgeMultiplier}x surge`}
+                                    label={`Tăng giá ${estimate.surgeMultiplier}x`}
                                     color="error"
                                   />
                                 )}
@@ -326,13 +398,13 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                   <Typography variant="subtitle2" color="text.secondary">
                     Điểm đón
                   </Typography>
-                  <Typography>{pickup.address || 'Selected location'}</Typography>
+                  <Typography>{pickup.address || 'Điểm đã chọn'}</Typography>
                 </Box>
                 <Box mb={2}>
                   <Typography variant="subtitle2" color="text.secondary">
                     Điểm đến
                   </Typography>
-                  <Typography>{dropoff.address || 'Selected location'}</Typography>
+                  <Typography>{dropoff.address || 'Điểm đã chọn'}</Typography>
                 </Box>
                 <Divider sx={{ my: 2 }} />
                 <Box display="flex" justifyContent="space-between" mb={1}>
@@ -368,7 +440,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
 
   const content = (
     <>
-      <DialogTitle sx={{ pb: 1.5 }}>
+      <DialogTitle sx={{ pb: 1.5, px: presentation === 'inline' ? 0 : undefined }}>
         <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
           <Box sx={{ width: 42, height: 4, borderRadius: 999, bgcolor: 'grey.300' }} />
         </Box>
@@ -385,7 +457,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
           </Stepper>
         </Stack>
       </DialogTitle>
-      <DialogContent>
+      <DialogContent sx={{ px: presentation === 'inline' ? 0 : undefined }}>
         <Box data-testid="ride-booking-flow">
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -394,16 +466,21 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
         )}
         {loading ? (
           <Box display="flex" justifyContent="center" py={4}>
-            <CircularProgress />
+            <Stack spacing={1.5} alignItems="center">
+              <CircularProgress />
+              <Typography variant="body2" color="text.secondary">
+                Đang tải bảng giá, bạn vẫn có thể đóng khung này nếu muốn chọn lại hành trình.
+              </Typography>
+            </Stack>
           </Box>
         ) : (
           renderStepContent()
         )}
         </Box>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 3, pt: 1.5 }}>
+      <DialogActions sx={{ px: presentation === 'inline' ? 0 : 3, pb: presentation === 'inline' ? 0 : 3, pt: 1.5 }}>
         <Button onClick={onClose} disabled={creating}>
-          Hủy
+          {presentation === 'inline' ? 'Đóng' : 'Hủy'}
         </Button>
         {activeStep > 0 && (
           <Button onClick={handleBack} disabled={creating} data-testid="ride-booking-back">
@@ -422,6 +499,27 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
       </DialogActions>
     </>
   );
+
+  if (!open) {
+    return null;
+  }
+
+  if (presentation === 'inline') {
+    return (
+      <Paper
+        elevation={0}
+        sx={{
+          borderRadius: 5,
+          p: 2.5,
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96))',
+          border: '1px solid rgba(148,163,184,0.16)',
+          boxShadow: '0 18px 42px rgba(15,23,42,0.10)',
+        }}
+      >
+        {content}
+      </Paper>
+    );
+  }
 
   if (isMobile) {
     return (

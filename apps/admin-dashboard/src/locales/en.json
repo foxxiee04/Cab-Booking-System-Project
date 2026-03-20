@@ -7,6 +7,7 @@
     "dashboard": "Dashboard",
     "rides": "Rides",
     "drivers": "Drivers",
+    "approvals": "Approvals",
     "customers": "Customers",
     "payments": "Payments",
     "pricing": "Pricing",
@@ -46,6 +47,7 @@
   },
   "tables": {
     "drivers": "Drivers Management",
+    "driverApprovals": "Driver Approvals",
     "customers": "Customers Management",
     "rides": "Rides Management",
     "payments": "Payments Management",
@@ -114,6 +116,24 @@
     "loadLogs": "Failed to load logs",
     "approveDriver": "Failed to approve driver",
     "rejectDriver": "Failed to reject driver"
+  },
+  "approvals": {
+    "subtitle": "Review the driver profile details carefully before approving or rejecting.",
+    "empty": "There are no pending driver applications right now.",
+    "driverInfo": "Driver information",
+    "vehicleInfo": "Vehicle information",
+    "licenseInfo": "License information",
+    "approveConfirmTitle": "Approve this application",
+    "approveConfirmBody": "This driver will be allowed to go online and receive rides immediately after approval.",
+    "rejectConfirmTitle": "Reject this application",
+    "rejectConfirmBody": "Are you sure you want to reject this application? You can add a reason for tracking.",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "createdAt": "Submitted at",
+    "vehicleType": "Vehicle type",
+    "vehicleYear": "Vehicle year",
+    "licenseExpiry": "License expiry",
+    "reviewSummary": "Current review summary"
   },
   "dashboardExtras": {
     "overviewBody": "Track platform health, real-time driver density, and operational signals from one place.",

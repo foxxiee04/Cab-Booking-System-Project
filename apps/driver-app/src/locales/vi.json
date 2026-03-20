@@ -29,6 +29,7 @@
     "vehicleMake": "Hãng xe",
     "vehicleModel": "Dòng xe",
     "vehicleColor": "Màu xe",
+    "vehicleYear": "Năm sản xuất",
     "licensePlate": "Biển số",
     "licenseNumber": "Số GPLX",
     "licenseExpiry": "Ngày hết hạn GPLX",
@@ -170,6 +171,13 @@
     "passwordNumber": "Mật khẩu phải có ít nhất 1 chữ số",
     "passwordMismatch": "Mật khẩu không khớp",
     "phoneInvalid": "Số điện thoại phải gồm đúng 10 chữ số và bắt đầu bằng số 0",
-    "authRequired": "Chưa xác thực người dùng"
+    "authRequired": "Chưa xác thực người dùng",
+    "vehicleMakeInvalid": "Hãng xe phải có ít nhất 2 ký tự",
+    "vehicleModelInvalid": "Dòng xe phải có ít nhất 2 ký tự",
+    "vehicleColorInvalid": "Màu xe phải có ít nhất 2 ký tự",
+    "vehicleYearInvalid": "Năm sản xuất phải từ 1990 đến năm sau",
+    "licensePlateInvalid": "Biển số xe không đúng định dạng",
+    "licenseNumberInvalid": "Số GPLX phải dài 8-16 ký tự chữ hoặc số",
+    "licenseExpiryPast": "Ngày hết hạn GPLX phải ở tương lai"
   }
 }

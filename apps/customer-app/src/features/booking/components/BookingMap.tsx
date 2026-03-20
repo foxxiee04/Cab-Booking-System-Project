@@ -127,9 +127,9 @@ function createLeafletPin(label: string, color: string) {
 }
 
 function createLeafletDriverIcon(color: string, heading = 0, emphasize = false) {
-  const size = emphasize ? 26 : 20;
+  const size = emphasize ? 30 : 24;
   return getLeafletMarkerIcon(
-    `<div style="width:${size}px;height:${size}px;border-radius:999px;background:${color};border:3px solid #ffffff;box-shadow:0 10px 24px rgba(15,23,42,0.22);transform:rotate(${heading}deg);"></div>`,
+    `<div style="width:${size}px;height:${size}px;border-radius:999px;background:${color};border:3px solid #ffffff;box-shadow:0 10px 24px rgba(15,23,42,0.22);display:flex;align-items:center;justify-content:center;transform:rotate(${heading}deg);"><span style="display:block;font-size:${emphasize ? 14 : 12}px;line-height:1;transform:rotate(${-heading}deg);">🚕</span></div>`,
     emphasize ? 'booking-leaflet-driver-live' : 'booking-leaflet-driver',
     [size, size],
     [Math.round(size / 2), Math.round(size / 2)],
@@ -884,7 +884,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
     >
       <LeafletTileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         maxZoom={20}
       />
       <LeafletViewportController points={[pickup, dropoff].filter(Boolean) as google.maps.LatLngLiteral[]} />
@@ -932,7 +932,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
     >
       {renderSearchPanelAsSection && searchPanel}
 
-      <Box sx={{ position: 'relative', minHeight: 0, overflow: 'hidden', borderRadius: 6, bgcolor: '#dbeafe' }}>
+      <Box sx={{ position: 'relative', minHeight: 0, overflow: 'hidden', borderRadius: 6, bgcolor: '#dbeafe', border: '1px solid rgba(148,163,184,0.12)' }}>
         {hasGoogleMapsApiKey ? (
           <GoogleBookingMapCanvas
             googleMapsApiKey={googleMapsApiKey}

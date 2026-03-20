@@ -7,6 +7,18 @@ interface AuthRequest extends Request {
 }
 
 export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
+  const forwardedUserId = req.headers['x-user-id'];
+  const forwardedUserRole = req.headers['x-user-role'];
+
+  if (typeof forwardedUserId === 'string' && typeof forwardedUserRole === 'string' && forwardedUserId && forwardedUserRole) {
+    req.user = {
+      userId: forwardedUserId,
+      role: forwardedUserRole,
+    };
+    next();
+    return;
+  }
+
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

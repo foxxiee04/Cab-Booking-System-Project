@@ -56,18 +56,18 @@ function getLeafletIcon(key: string, html: string, size: [number, number], ancho
 function createLeafletPin(color: string) {
   return getLeafletIcon(
     `driver-pin-${color}`,
-    `<div style="width:28px;height:28px;border-radius:999px;background:${color};border:3px solid #ffffff;box-shadow:0 10px 24px rgba(15,23,42,0.18);"></div>`,
-    [28, 28],
-    [14, 14],
+    `<div style="width:30px;height:30px;border-radius:999px;background:${color};border:3px solid #ffffff;color:#ffffff;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px rgba(15,23,42,0.18);">●</div>`,
+    [30, 30],
+    [15, 15],
   );
 }
 
 function createLeafletDriverIcon() {
   return getLeafletIcon(
     'driver-current-location',
-    '<div style="width:24px;height:24px;border-radius:999px;background:#2563eb;border:3px solid #ffffff;box-shadow:0 10px 24px rgba(37,99,235,0.28);"></div>',
-    [24, 24],
-    [12, 12],
+    '<div style="width:30px;height:30px;border-radius:999px;background:#2563eb;border:3px solid #ffffff;box-shadow:0 10px 24px rgba(37,99,235,0.28);display:flex;align-items:center;justify-content:center;"><span style="font-size:14px;line-height:1;">🚕</span></div>',
+    [30, 30],
+    [15, 15],
   );
 }
 
@@ -322,7 +322,7 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
     >
       <LeafletTileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         maxZoom={20}
       />
       <LeafletViewportController points={[currentLocation, pickupLocation, dropoffLocation].filter(Boolean) as google.maps.LatLngLiteral[]} />
@@ -353,7 +353,7 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
   );
 
   return (
-    <Box sx={{ position: 'relative', width: '100%', height, borderRadius: 5, overflow: 'hidden', bgcolor: '#dbeafe' }}>
+    <Box sx={{ position: 'relative', width: '100%', height, borderRadius: 5, overflow: 'hidden', bgcolor: '#dbeafe', border: '1px solid rgba(148,163,184,0.12)' }}>
       {hasGoogleMapsApiKey ? (
         <GoogleDriverTripMapCanvas
           googleMapsApiKey={googleMapsApiKey}

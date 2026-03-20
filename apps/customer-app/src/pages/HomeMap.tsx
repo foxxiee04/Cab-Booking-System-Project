@@ -134,6 +134,7 @@ const HomeMap: React.FC = () => {
 
   const handleOpenBooking = () => {
     if (pickupLocation && dropoffLocation) {
+      setErrorMessage('');
       setBookingFlowOpen(true);
     } else {
       setErrorMessage(t('errors.selectLocations'));
@@ -141,6 +142,7 @@ const HomeMap: React.FC = () => {
   };
 
   const handleRideCreated = (rideId: string) => {
+    setBookingFlowOpen(false);
     navigate(`/ride/${rideId}`);
   };
 
@@ -168,7 +170,16 @@ const HomeMap: React.FC = () => {
   };
 
   return (
-    <Box sx={{ height: '100%', display: 'grid', gridTemplateRows: 'auto 1fr auto', gap: 1.5, pb: { xs: 8, sm: 1.5 } }}>
+    <Box
+      sx={{
+        minHeight: '100%',
+        display: 'grid',
+        gridTemplateRows: bookingFlowOpen ? 'auto minmax(440px, 1fr) auto' : 'auto minmax(520px, 1fr) auto',
+        gap: 1.5,
+        pb: { xs: 14, sm: 2 },
+        background: 'radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 28%), linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%)',
+      }}
+    >
       <Paper
         elevation={0}
         sx={{
@@ -199,7 +210,17 @@ const HomeMap: React.FC = () => {
         </Stack>
       </Paper>
 
-      <Box sx={{ position: 'relative', minHeight: 0, borderRadius: 6, overflow: 'hidden', bgcolor: '#eff6ff', boxShadow: '0 18px 48px rgba(15,23,42,0.12)' }}>
+      <Box
+        sx={{
+          position: 'relative',
+          minHeight: { xs: 400, md: 560 },
+          borderRadius: 6,
+          overflow: 'hidden',
+          background: 'linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)',
+          boxShadow: '0 18px 48px rgba(15,23,42,0.12)',
+          border: '1px solid rgba(59,130,246,0.12)',
+        }}
+      >
         {bootstrappingLocation && !pickupLocation ? (
           <Box sx={{ p: 2, height: '100%' }}>
             <Skeleton variant="rectangular" width="100%" height="100%" sx={{ minHeight: 420, borderRadius: 6 }} />
@@ -209,6 +230,7 @@ const HomeMap: React.FC = () => {
             pickup={normalizeLocation(pickupLocation)}
             dropoff={normalizeLocation(dropoffLocation)}
             nearbyDrivers={nearbyDrivers}
+            colorMode="light"
             onPickupChange={(location) => dispatch(setPickupLocation(normalizeLocation(location)))}
             onDropoffChange={(location) => dispatch(setDropoffLocation(normalizeLocation(location)))}
             onRouteComputed={setRouteSummary}
@@ -223,7 +245,8 @@ const HomeMap: React.FC = () => {
         sx={{
           borderRadius: 5,
           p: 2.25,
-          mb: { xs: 2.5, sm: 0 },
+          pb: { xs: 3.5, sm: 2.25 },
+          mb: { xs: 4, sm: 0 },
           backgroundColor: 'rgba(255,255,255,0.96)',
           backdropFilter: 'blur(18px)',
           border: '1px solid rgba(148,163,184,0.14)',
@@ -232,62 +255,67 @@ const HomeMap: React.FC = () => {
         {locationNotice && <Alert severity="info" sx={{ mb: error ? 1.5 : 2, borderRadius: 2 }} onClose={() => setLocationNotice('')}>{locationNotice}</Alert>}
         {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setErrorMessage('')}>{error}</Alert>}
 
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
-          <Chip icon={<MyLocationRounded />} label={pickupLocation?.address || t('home.pickupHint', 'Chọn điểm đón')} size="small" color="success" variant="outlined" />
-          {routeMeta.map((item) => (
-            <Chip key={item.label} icon={item.icon} label={item.label} size="small" variant="outlined" />
-          ))}
-        </Stack>
+        {!bookingFlowOpen ? (
+          <>
+            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
+              <Chip icon={<MyLocationRounded />} label={pickupLocation?.address || t('home.pickupHint', 'Chọn điểm đón')} size="small" color="success" variant="outlined" />
+              {routeMeta.map((item) => (
+                <Chip key={item.label} icon={item.icon} label={item.label} size="small" variant="outlined" />
+              ))}
+            </Stack>
 
-        <Typography variant="h6" fontWeight={800} sx={{ mb: 0.5 }}>
-          {t('home.bookingHeadline', 'Đặt xe theo luồng 3 bước')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          {t('home.bookingBody', 'Chọn điểm đón, xem quãng đường và ETA, sau đó chọn loại xe cùng giá ước tính ngay trong bottom sheet.')}
-        </Typography>
+            <Typography variant="h6" fontWeight={800} sx={{ mb: 0.5 }}>
+              {t('home.bookingHeadline', 'Đặt xe theo luồng 3 bước')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {t('home.bookingBody', 'Chọn điểm đón, xem quãng đường và ETA, sau đó chọn loại xe cùng giá ước tính ngay trong bottom sheet.')}
+            </Typography>
 
-        <Stack direction="row" spacing={1.25} sx={{ mb: 2 }}>
-          <Paper variant="outlined" sx={{ flex: 1, p: 1.5, borderRadius: 3 }}>
-            <Typography variant="overline" color="text.secondary">{t('home.stepOne', 'Bước 1')}</Typography>
-            <Typography variant="subtitle2" fontWeight={800}>{t('home.stepOneBody', 'Chọn điểm đón và điểm đến')}</Typography>
-          </Paper>
-          <Paper variant="outlined" sx={{ flex: 1, p: 1.5, borderRadius: 3 }}>
-            <Typography variant="overline" color="text.secondary">{t('home.stepTwo', 'Bước 2')}</Typography>
-            <Typography variant="subtitle2" fontWeight={800}>{t('home.stepTwoBody', 'Xem loại xe và giá')}</Typography>
-          </Paper>
-          <Paper variant="outlined" sx={{ flex: 1, p: 1.5, borderRadius: 3 }}>
-            <Typography variant="overline" color="text.secondary">{t('home.stepThree', 'Bước 3')}</Typography>
-            <Typography variant="subtitle2" fontWeight={800}>{t('home.stepThreeBody', 'Tìm tài xế gần nhất')}</Typography>
-          </Paper>
-        </Stack>
+            <Stack direction="row" spacing={1.25} sx={{ mb: 2 }}>
+              <Paper variant="outlined" sx={{ flex: 1, p: 1.5, borderRadius: 3 }}>
+                <Typography variant="overline" color="text.secondary">{t('home.stepOne', 'Bước 1')}</Typography>
+                <Typography variant="subtitle2" fontWeight={800}>{t('home.stepOneBody', 'Chọn điểm đón và điểm đến')}</Typography>
+              </Paper>
+              <Paper variant="outlined" sx={{ flex: 1, p: 1.5, borderRadius: 3 }}>
+                <Typography variant="overline" color="text.secondary">{t('home.stepTwo', 'Bước 2')}</Typography>
+                <Typography variant="subtitle2" fontWeight={800}>{t('home.stepTwoBody', 'Xem loại xe và giá')}</Typography>
+              </Paper>
+              <Paper variant="outlined" sx={{ flex: 1, p: 1.5, borderRadius: 3 }}>
+                <Typography variant="overline" color="text.secondary">{t('home.stepThree', 'Bước 3')}</Typography>
+                <Typography variant="subtitle2" fontWeight={800}>{t('home.stepThreeBody', 'Tìm tài xế gần nhất')}</Typography>
+              </Paper>
+            </Stack>
 
-        <Button
-          fullWidth
-          variant="contained"
-          size="large"
-          onClick={handleOpenBooking}
-          disabled={!pickupLocation || !dropoffLocation}
-          data-testid="open-booking-flow"
-          sx={{
-            py: 1.65,
-            fontSize: '1rem',
-            fontWeight: 800,
-            borderRadius: 3.5,
-            textTransform: 'none',
-            boxShadow: !pickupLocation || !dropoffLocation ? 'none' : '0 10px 24px rgba(37,99,235,0.28)',
-          }}
-        >
-          {t('home.continueBooking', 'Tiếp tục đặt xe')}
-        </Button>
+            <Button
+              fullWidth
+              variant="contained"
+              size="large"
+              onClick={handleOpenBooking}
+              disabled={!pickupLocation || !dropoffLocation}
+              data-testid="open-booking-flow"
+              sx={{
+                py: 1.65,
+                fontSize: '1rem',
+                fontWeight: 800,
+                borderRadius: 3.5,
+                textTransform: 'none',
+                boxShadow: !pickupLocation || !dropoffLocation ? 'none' : '0 10px 24px rgba(37,99,235,0.28)',
+              }}
+            >
+              {t('home.continueBooking', 'Tiếp tục đặt xe')}
+            </Button>
+          </>
+        ) : (
+          <RideBookingFlow
+            open={bookingFlowOpen}
+            onClose={() => setBookingFlowOpen(false)}
+            pickup={pickupLocation!}
+            dropoff={dropoffLocation!}
+            onRideCreated={handleRideCreated}
+            presentation="inline"
+          />
+        )}
       </Paper>
-
-      <RideBookingFlow
-        open={bookingFlowOpen}
-        onClose={() => setBookingFlowOpen(false)}
-        pickup={pickupLocation!}
-        dropoff={dropoffLocation!}
-        onRideCreated={handleRideCreated}
-      />
     </Box>
   );
 };

@@ -65,7 +65,6 @@ axiosInstance.interceptors.response.use(
       return Promise.reject(error);
     }
     
-    console.error('API ERROR:', error.response?.data || error.message);
     const originalRequest = error.config;
 
     // Token expired

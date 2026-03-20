@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Box, Typography, Chip, Alert, Button, Stack } from '@mui/material';
+import { Box, Typography, Chip, Alert } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { adminApi } from '../api/admin.api';
 import { Driver } from '../types';
@@ -12,7 +12,6 @@ const Drivers: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const { t } = useTranslation();
 
@@ -51,34 +50,6 @@ const Drivers: React.FC = () => {
     }
 
     return { label: t('labels.pending'), color: 'default' as const };
-  };
-
-  const handleApprove = async (driverId: string) => {
-    setActionLoadingId(driverId);
-    setError('');
-    try {
-      await adminApi.approveDriver(driverId);
-      await fetchDrivers();
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || t('errors.approveDriver'));
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleReject = async (driverId: string) => {
-    const reason = window.prompt(t('labels.rejectionPrompt')) || undefined;
-
-    setActionLoadingId(driverId);
-    setError('');
-    try {
-      await adminApi.rejectDriver(driverId, reason);
-      await fetchDrivers();
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || t('errors.rejectDriver'));
-    } finally {
-      setActionLoadingId(null);
-    }
   };
 
   const columns: GridColDef<Driver>[] = [
@@ -131,40 +102,6 @@ const Drivers: React.FC = () => {
         />
       ),
     },
-    {
-      field: 'actions',
-      headerName: t('columns.actions'),
-      width: 220,
-      sortable: false,
-      filterable: false,
-      renderCell: (params) => {
-        const isPending = params.row.status === 'PENDING';
-        const disabled = actionLoadingId === params.row.id;
-
-        return (
-          <Stack direction="row" spacing={1}>
-            <Button
-              size="small"
-              variant="contained"
-              color="success"
-              disabled={!isPending || disabled}
-              onClick={() => handleApprove(params.row.id)}
-            >
-              {t('labels.approve')}
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              color="error"
-              disabled={!isPending || disabled}
-              onClick={() => handleReject(params.row.id)}
-            >
-              {t('labels.reject')}
-            </Button>
-          </Stack>
-        );
-      },
-    },
   ];
 
   return (
@@ -178,6 +115,10 @@ const Drivers: React.FC = () => {
           {error}
         </Alert>
       )}
+
+      <Alert severity="info" sx={{ mt: 2 }}>
+        Hồ sơ chờ duyệt đã được tách riêng sang mục {t('menu.approvals')} để đọc chi tiết trước khi xác nhận.
+      </Alert>
 
       <Box sx={{ mt: 2, height: 520 }}>
         <DataGrid

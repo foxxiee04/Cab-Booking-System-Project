@@ -1,5 +1,24 @@
 import { Request, Response, NextFunction } from 'express';
 
+const VEHICLE_YEAR_MIN = 1990;
+
+const isBlank = (value: unknown) => typeof value !== 'string' || value.trim().length === 0;
+
+const isFutureDate = (value: string) => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return false;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  parsed.setHours(0, 0, 0, 0);
+  return parsed > today;
+};
+
+const isValidVehiclePlate = (value: string) => /^\d{2}[A-Z]{1,2}-?\d{4,5}$/i.test(value.trim());
+const isValidLicenseNumber = (value: string) => /^[A-Z0-9]{8,16}$/i.test(value.trim());
+
 export const validateDriverRegistration = (req: Request, res: Response, next: NextFunction) => {
   const { vehicle, license } = req.body;
 
@@ -21,6 +40,56 @@ export const validateDriverRegistration = (req: Request, res: Response, next: Ne
     return res.status(400).json({
       success: false,
       error: { code: 'VALIDATION_ERROR', message: 'License number and expiry date required' },
+    });
+  }
+
+  if (isBlank(vehicle.brand) || String(vehicle.brand).trim().length < 2) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle brand must contain at least 2 characters' },
+    });
+  }
+
+  if (isBlank(vehicle.model) || String(vehicle.model).trim().length < 2) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle model must contain at least 2 characters' },
+    });
+  }
+
+  if (isBlank(vehicle.color) || String(vehicle.color).trim().length < 2) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle color must contain at least 2 characters' },
+    });
+  }
+
+  const currentYear = new Date().getFullYear();
+  if (!Number.isInteger(vehicle.year) || vehicle.year < VEHICLE_YEAR_MIN || vehicle.year > currentYear + 1) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle year is invalid' },
+    });
+  }
+
+  if (!isValidVehiclePlate(String(vehicle.plate))) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle plate format is invalid' },
+    });
+  }
+
+  if (!isValidLicenseNumber(String(license.number))) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'License number format is invalid' },
+    });
+  }
+
+  if (!isFutureDate(String(license.expiryDate))) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'License expiry date must be in the future' },
     });
   }
 
@@ -114,17 +183,52 @@ export const validateDriverProfileUpdate = (req: Request, res: Response, next: N
     });
   }
 
-  if (vehicleYear !== undefined && (!Number.isInteger(vehicleYear) || vehicleYear < 1980 || vehicleYear > 2100)) {
+  if (vehicleYear !== undefined && (!Number.isInteger(vehicleYear) || vehicleYear < VEHICLE_YEAR_MIN || vehicleYear > new Date().getFullYear() + 1)) {
     return res.status(400).json({
       success: false,
-      error: { code: 'VALIDATION_ERROR', message: 'Vehicle year must be a valid integer' },
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle year is invalid' },
     });
   }
 
-  if (licenseExpiryDate !== undefined && Number.isNaN(Date.parse(licenseExpiryDate))) {
+  if (vehicleMake !== undefined && (isBlank(vehicleMake) || vehicleMake.trim().length < 2)) {
     return res.status(400).json({
       success: false,
-      error: { code: 'VALIDATION_ERROR', message: 'License expiry date is invalid' },
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle make must contain at least 2 characters' },
+    });
+  }
+
+  if (vehicleModel !== undefined && (isBlank(vehicleModel) || vehicleModel.trim().length < 2)) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle model must contain at least 2 characters' },
+    });
+  }
+
+  if (vehicleColor !== undefined && (isBlank(vehicleColor) || vehicleColor.trim().length < 2)) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle color must contain at least 2 characters' },
+    });
+  }
+
+  if (licensePlate !== undefined && !isValidVehiclePlate(String(licensePlate))) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle plate format is invalid' },
+    });
+  }
+
+  if (licenseNumber !== undefined && !isValidLicenseNumber(String(licenseNumber))) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'License number format is invalid' },
+    });
+  }
+
+  if (licenseExpiryDate !== undefined && !isFutureDate(String(licenseExpiryDate))) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'License expiry date must be in the future' },
     });
   }
 

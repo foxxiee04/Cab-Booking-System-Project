@@ -7,6 +7,7 @@
     "dashboard": "Tổng quan",
     "rides": "Chuyến đi",
     "drivers": "Tài xế",
+    "approvals": "Duyệt hồ sơ",
     "customers": "Khách hàng",
     "payments": "Thanh toán",
     "pricing": "Định giá",
@@ -46,6 +47,7 @@
   },
   "tables": {
     "drivers": "Quản lý tài xế",
+    "driverApprovals": "Duyệt hồ sơ tài xế",
     "customers": "Quản lý khách hàng",
     "rides": "Quản lý chuyến đi",
     "payments": "Quản lý thanh toán",
@@ -114,6 +116,24 @@
     "loadLogs": "Không thể tải nhật ký",
     "approveDriver": "Không thể duyệt tài xế",
     "rejectDriver": "Không thể từ chối tài xế"
+  },
+  "approvals": {
+    "subtitle": "Đọc kỹ thông tin hồ sơ tài xế trước khi duyệt hoặc từ chối.",
+    "empty": "Hiện không có hồ sơ tài xế nào đang chờ duyệt.",
+    "driverInfo": "Thông tin tài xế",
+    "vehicleInfo": "Thông tin xe",
+    "licenseInfo": "Thông tin GPLX",
+    "approveConfirmTitle": "Xác nhận duyệt hồ sơ",
+    "approveConfirmBody": "Tài xế này sẽ được phép bật trạng thái trực tuyến và nhận cuốc ngay sau khi duyệt.",
+    "rejectConfirmTitle": "Xác nhận từ chối hồ sơ",
+    "rejectConfirmBody": "Bạn có chắc muốn từ chối hồ sơ này không? Có thể nhập lý do để tiện theo dõi.",
+    "confirm": "Xác nhận",
+    "cancel": "Hủy",
+    "createdAt": "Ngày gửi hồ sơ",
+    "vehicleType": "Loại xe",
+    "vehicleYear": "Năm sản xuất",
+    "licenseExpiry": "Ngày hết hạn GPLX",
+    "reviewSummary": "Đánh giá hiện tại"
   },
   "dashboardExtras": {
     "overviewBody": "Theo dõi tổng quan nền tảng, mật độ tài xế theo thời gian thực và các tín hiệu vận hành nóng.",

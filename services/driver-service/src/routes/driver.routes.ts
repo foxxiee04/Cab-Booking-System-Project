@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { DriverService } from '../services/driver.service';
 import { DriverController } from '../controllers/driver.controller';
+import { authorize } from '../middleware/auth.middleware';
 import {
   validateDriverRegistration,
   validateDriverProfileUpdate,
@@ -44,14 +45,14 @@ export const createDriverRouter = (driverService: DriverService): Router => {
   router.get('/nearby', validateNearbyQuery, controller.findNearbyDrivers);
 
   // Admin: Get all drivers
-  router.get('/', controller.getAllDrivers);
+  router.get('/', authorize('ADMIN'), controller.getAllDrivers);
 
   // Admin: Approve or reject driver
-  router.post('/:driverId/approve', controller.approveDriver);
-  router.post('/:driverId/reject', controller.rejectDriver);
+  router.post('/:driverId/approve', authorize('ADMIN'), controller.approveDriver);
+  router.post('/:driverId/reject', authorize('ADMIN'), controller.rejectDriver);
 
   // Admin: Verify driver
-  router.patch('/:driverId/verify', controller.verifyDriver);
+  router.patch('/:driverId/verify', authorize('ADMIN'), controller.verifyDriver);
 
   // Get driver profile by userId (for internal service call)
   router.get('/user/:userId', controller.getDriverByUserId);

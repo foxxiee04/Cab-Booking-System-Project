@@ -27,6 +27,7 @@ import {
   Logout,
   AccountCircle,
   AdminPanelSettings,
+  FactCheck,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector, useAppDispatch } from './store/hooks';
@@ -36,6 +37,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Rides from './pages/Rides';
 import Drivers from './pages/Drivers';
+import DriverApprovals from './pages/DriverApprovals';
 import Customers from './pages/Customers';
 import Payments from './pages/Payments';
 import Pricing from './pages/Pricing';
@@ -70,6 +72,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     { text: t('menu.dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
     { text: t('menu.rides'), icon: <DirectionsCar />, path: '/rides' },
     { text: t('menu.drivers'), icon: <DriveEta />, path: '/drivers' },
+    { text: t('menu.approvals'), icon: <FactCheck />, path: '/driver-approvals' },
     { text: t('menu.customers'), icon: <People />, path: '/customers' },
     { text: t('menu.payments'), icon: <AttachMoney />, path: '/payments' },
     { text: t('menu.pricing'), icon: <TrendingUp />, path: '/pricing' },
@@ -219,6 +222,16 @@ const App: React.FC = () => {
             <ProtectedRoute>
               <Layout>
                 <Drivers />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver-approvals"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <DriverApprovals />
               </Layout>
             </ProtectedRoute>
           }
