@@ -43,7 +43,7 @@ Trước khi bắt đầu, cần chắc chắn:
 | --- | --- | --- | --- |
 | Khách hàng | customer1@example.com | password123 | Tạo chuyến, hủy chuyến, kiểm tra lịch sử, hồ sơ |
 | Tài xế | driver1@example.com | password123 | Nhận chuyến, cập nhật trạng thái, kiểm tra hồ sơ tài xế |
-| Quản trị viên | admin@cabbooking.com | password123 | Kiểm tra rides, payments, drivers, dữ liệu tổng hợp |
+| Quản trị viên | admin@cabbooking.com |  | Kiểm tra rides, payments, drivers, dữ liệu tổng hợp |
 
 Ghi chú:
 

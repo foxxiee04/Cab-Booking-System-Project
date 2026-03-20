@@ -84,8 +84,9 @@ const ProfileSetup: React.FC = () => {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    // vehicleYear comes from a MUI Select so e.target.value is already a number.
     const nextValue = field === 'vehicleYear'
-      ? Number(e.target.value.replace(/\D/g, '').slice(0, 4) || 0)
+      ? Number(e.target.value)
       : e.target.value;
 
     setFormData({ ...formData, [field]: nextValue });
@@ -109,7 +110,8 @@ const ProfileSetup: React.FC = () => {
     const normalizedPlate = formData.licensePlate.trim().toUpperCase();
     const normalizedLicense = formData.licenseNumber.trim().toUpperCase();
     const plateRegex = /^\d{2}[A-Z]{1,2}-?\d{4,5}$/;
-    const licenseRegex = /^[A-Z0-9]{8,16}$/;
+    // Vietnamese GPLX is exactly 12 digits
+    const licenseRegex = /^\d{12}$/
 
     if (formData.vehicleMake.trim().length < 2) {
       nextErrors.vehicleMake = t('errors.vehicleMakeInvalid');
@@ -357,7 +359,8 @@ const ProfileSetup: React.FC = () => {
                     required
                     error={Boolean(fieldErrors.licenseNumber)}
                     helperText={fieldErrors.licenseNumber}
-                    placeholder="Số giấy phép lái xe"
+                    placeholder="123456789012"
+                    inputProps={{ maxLength: 12, inputMode: 'numeric' }}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">

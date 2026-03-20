@@ -98,6 +98,11 @@ const Profile: React.FC = () => {
       return;
     }
 
+    if (!/^\d{12}$/.test(formData.licenseNumber.trim())) {
+      setError(t('profile.licenseNumberInvalid', 'Số GPLX phải gồm đúng 12 chữ số.'));
+      return;
+    }
+
     setSaving(true);
     try {
       const response = await driverApi.updateProfile({
@@ -204,7 +209,7 @@ const Profile: React.FC = () => {
                       <TextField fullWidth label={t('profile.plate')} value={formData.licensePlate} onChange={handleChange('licensePlate')} />
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <TextField fullWidth label={t('profile.licenseNumber', 'Số GPLX')} value={formData.licenseNumber} onChange={handleChange('licenseNumber')} />
+                      <TextField fullWidth label={t('profile.licenseNumber', 'Số GPLX')} value={formData.licenseNumber} onChange={handleChange('licenseNumber')} inputProps={{ maxLength: 12, inputMode: 'numeric' }} />
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <TextField fullWidth label={t('profile.licenseExpiry', 'Ngày hết hạn GPLX')} type="date" value={formData.licenseExpiryDate} onChange={handleChange('licenseExpiryDate')} InputLabelProps={{ shrink: true }} />

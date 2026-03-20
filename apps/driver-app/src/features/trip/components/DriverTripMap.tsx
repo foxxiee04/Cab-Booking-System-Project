@@ -71,24 +71,39 @@ function createLeafletDriverIcon() {
   );
 }
 
-const LeafletViewportController: React.FC<{ points: google.maps.LatLngLiteral[] }> = ({ points }) => {
+const LeafletViewportController: React.FC<{
+  currentLocation?: Location | null;
+  pickupLocation?: Location | null;
+  dropoffLocation?: Location | null;
+}> = ({ currentLocation, pickupLocation, dropoffLocation }) => {
   const map = useMap();
+  const lat0 = currentLocation?.lat;
+  const lng0 = currentLocation?.lng;
+  const lat1 = pickupLocation?.lat;
+  const lng1 = pickupLocation?.lng;
+  const lat2 = dropoffLocation?.lat;
+  const lng2 = dropoffLocation?.lng;
 
   useEffect(() => {
+    const points: [number, number][] = [];
+    if (lat0 != null && lng0 != null) points.push([lat0, lng0]);
+    if (lat1 != null && lng1 != null) points.push([lat1, lng1]);
+    if (lat2 != null && lng2 != null) points.push([lat2, lng2]);
+
     if (!points.length) {
       return;
     }
 
     if (points.length === 1) {
-      map.setView([points[0].lat, points[0].lng], 15, { animate: true });
+      map.setView(points[0], 15, { animate: true });
       return;
     }
 
-    map.fitBounds(L.latLngBounds(points.map((point) => [point.lat, point.lng])), {
+    map.fitBounds(L.latLngBounds(points), {
       padding: [56, 56],
       animate: true,
     });
-  }, [map, points]);
+  }, [map, lat0, lng0, lat1, lng1, lat2, lng2]);
 
   return null;
 };
@@ -325,7 +340,7 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
         url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         maxZoom={20}
       />
-      <LeafletViewportController points={[currentLocation, pickupLocation, dropoffLocation].filter(Boolean) as google.maps.LatLngLiteral[]} />
+      <LeafletViewportController currentLocation={currentLocation} pickupLocation={pickupLocation} dropoffLocation={dropoffLocation} />
       {pickupLocation && <LeafletMarker position={[pickupLocation.lat, pickupLocation.lng]} icon={createLeafletPin('#16a34a')} />}
       {dropoffLocation && <LeafletMarker position={[dropoffLocation.lat, dropoffLocation.lng]} icon={createLeafletPin('#ef4444')} />}
       {currentLocation && <LeafletMarker position={[currentLocation.lat, currentLocation.lng]} icon={createLeafletDriverIcon()} />}

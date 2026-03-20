@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -26,6 +26,15 @@ import { getCurrentLocation, reverseGeocode } from '../utils/map.utils';
 import { driverApi } from '../api/driver.api';
 import { rideApi } from '../api/ride.api';
 import { BookingMap, BookingMapLocation, NearbyDriver, RouteSummary } from '../features/booking';
+
+// Module-level helper — never recreated between renders.
+const normalizeLocation = (location: BookingMapLocation | null) => {
+  if (!location) {
+    return null;
+  }
+
+  return { lat: location.lat, lng: location.lng, address: location.address };
+};
 
 const HomeMap: React.FC = () => {
   const navigate = useNavigate();
@@ -155,17 +164,29 @@ const HomeMap: React.FC = () => {
     ];
   }, [routeSummary]);
 
-  const normalizeLocation = (location: BookingMapLocation | null) => {
-    if (!location) {
-      return null;
-    }
+  // Memoize normalized locations by primitive values so BookingMap's route
+  // effect only re-fires when lat/lng/address actually changes.
+  const normalizedPickup = useMemo(
+    () => normalizeLocation(pickupLocation),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pickupLocation?.lat, pickupLocation?.lng, pickupLocation?.address],
+  );
 
-    return {
-      lat: location.lat,
-      lng: location.lng,
-      address: location.address,
-    };
-  };
+  const normalizedDropoff = useMemo(
+    () => normalizeLocation(dropoffLocation),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dropoffLocation?.lat, dropoffLocation?.lng, dropoffLocation?.address],
+  );
+
+  const handlePickupChange = useCallback(
+    (location: BookingMapLocation | null) => dispatch(setPickupLocation(normalizeLocation(location))),
+    [dispatch],
+  );
+
+  const handleDropoffChange = useCallback(
+    (location: BookingMapLocation | null) => dispatch(setDropoffLocation(normalizeLocation(location))),
+    [dispatch],
+  );
 
   return (
     <Box
@@ -224,12 +245,12 @@ const HomeMap: React.FC = () => {
           </Box>
         ) : (
           <BookingMap
-            pickup={normalizeLocation(pickupLocation)}
-            dropoff={normalizeLocation(dropoffLocation)}
+            pickup={normalizedPickup}
+            dropoff={normalizedDropoff}
             nearbyDrivers={nearbyDrivers}
             colorMode="light"
-            onPickupChange={(location) => dispatch(setPickupLocation(normalizeLocation(location)))}
-            onDropoffChange={(location) => dispatch(setDropoffLocation(normalizeLocation(location)))}
+            onPickupChange={handlePickupChange}
+            onDropoffChange={handleDropoffChange}
             onRouteComputed={setRouteSummary}
             onError={setErrorMessage}
             height="100%"

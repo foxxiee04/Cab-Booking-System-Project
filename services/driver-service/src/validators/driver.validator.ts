@@ -17,7 +17,8 @@ const isFutureDate = (value: string) => {
 };
 
 const isValidVehiclePlate = (value: string) => /^\d{2}[A-Z]{1,2}-?\d{4,5}$/i.test(value.trim());
-const isValidLicenseNumber = (value: string) => /^[A-Z0-9]{8,16}$/i.test(value.trim());
+// Vietnamese GPLX is exactly 12 digits
+const isValidLicenseNumber = (value: string) => /^\d{12}$/.test(value.trim());
 
 export const validateDriverRegistration = (req: Request, res: Response, next: NextFunction) => {
   const { vehicle, license } = req.body;

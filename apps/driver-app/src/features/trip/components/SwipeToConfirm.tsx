@@ -190,17 +190,6 @@ export const SwipeToConfirm: React.FC<SwipeToConfirmProps> = ({
           )}
         </Box>
       </Box>
-
-      <Button
-        fullWidth
-        variant="contained"
-        onClick={triggerConfirm}
-        disabled={disabled || loading || confirmed}
-        data-testid={actionButtonTestId}
-        sx={{ borderRadius: 999, py: 1.4, fontWeight: 800 }}
-      >
-        {loading || confirmed ? confirmLabel : actionLabel}
-      </Button>
     </Box>
   );
 };

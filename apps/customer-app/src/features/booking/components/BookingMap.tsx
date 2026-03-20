@@ -136,24 +136,33 @@ function createLeafletDriverIcon(color: string, heading = 0, emphasize = false) 
   );
 }
 
-const LeafletViewportController: React.FC<{ points: google.maps.LatLngLiteral[] }> = ({ points }) => {
+const LeafletViewportController: React.FC<{
+  pickup: google.maps.LatLngLiteral | null;
+  dropoff: google.maps.LatLngLiteral | null;
+}> = ({ pickup, dropoff }) => {
   const map = useMap();
+  // Use primitive values as deps so the effect only fires when coordinates
+  // actually change — prevents infinite animation loops from inline arrays.
+  const pickupLat = pickup?.lat;
+  const pickupLng = pickup?.lng;
+  const dropoffLat = dropoff?.lat;
+  const dropoffLng = dropoff?.lng;
 
   useEffect(() => {
-    if (!points.length) {
+    if (!pickupLat || !pickupLng) {
       return;
     }
 
-    if (points.length === 1) {
-      map.setView([points[0].lat, points[0].lng], Math.max(map.getZoom(), 15), { animate: true });
+    if (!dropoffLat || !dropoffLng) {
+      map.setView([pickupLat, pickupLng], Math.max(map.getZoom(), 15), { animate: true });
       return;
     }
 
     map.fitBounds(
-      L.latLngBounds(points.map((point) => [point.lat, point.lng])),
+      L.latLngBounds([[pickupLat, pickupLng], [dropoffLat, dropoffLng]]),
       { padding: [72, 72], animate: true }
     );
-  }, [map, points]);
+  }, [map, pickupLat, pickupLng, dropoffLat, dropoffLng]);
 
   return null;
 };
@@ -887,7 +896,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
         url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         maxZoom={20}
       />
-      <LeafletViewportController points={[pickup, dropoff].filter(Boolean) as google.maps.LatLngLiteral[]} />
+      <LeafletViewportController pickup={pickup ?? null} dropoff={dropoff ?? null} />
       {pickup && <LeafletMarker position={[pickup.lat, pickup.lng]} icon={createLeafletPin('A', '#16a34a')} />}
       {dropoff && <LeafletMarker position={[dropoff.lat, dropoff.lng]} icon={createLeafletPin('B', '#dc2626')} />}
       {routeSummary && (
