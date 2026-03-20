@@ -46,6 +46,20 @@ const resolveTab = (pathname: string) => {
   return match?.value || '/dashboard';
 };
 
+const getApprovalStatusTone = (status?: string) => {
+  switch (status) {
+    case 'APPROVED':
+      return { color: 'success' as const, labelKey: 'profile.approved', fallback: 'Da duoc duyet' };
+    case 'REJECTED':
+      return { color: 'error' as const, labelKey: 'profile.rejected', fallback: 'Bi tu choi' };
+    case 'SUSPENDED':
+      return { color: 'default' as const, labelKey: 'profile.suspended', fallback: 'Tam khoa' };
+    case 'PENDING':
+    default:
+      return { color: 'warning' as const, labelKey: 'profile.pendingApproval', fallback: 'Cho duyet ho so' };
+  }
+};
+
 const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -87,6 +101,7 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
   }, [dispatch, profile]);
 
   const effectiveOnline = isOnline || profile?.isOnline || false;
+  const approvalStatusTone = getApprovalStatusTone(profile?.status);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -134,6 +149,14 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
                 variant={currentRide || effectiveOnline ? 'filled' : 'outlined'}
                 label={currentRide ? t('shell.currentRide', 'Đang có cuốc xe') : effectiveOnline ? t('shell.online', 'Đang trực tuyến') : t('shell.offline', 'Đang ngoại tuyến')}
               />
+              {profile?.status && profile.status !== 'APPROVED' && (
+                <Chip
+                  size="small"
+                  color={approvalStatusTone.color}
+                  variant="outlined"
+                  label={t(approvalStatusTone.labelKey, approvalStatusTone.fallback)}
+                />
+              )}
             </Stack>
           </Box>
 

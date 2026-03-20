@@ -7,6 +7,7 @@ import {
   refreshTokenSchema,
   updateRoleSchema,
 } from '../validators/auth.validator';
+import { updateProfileSchema } from '../dto/auth.dto';
 import { logger } from '../utils/logger';
 
 export class AuthController {
@@ -142,10 +143,12 @@ export class AuthController {
             id: user.id,
             email: user.email,
             phone: user.phone,
+            phoneNumber: user.phone,
             role: user.role,
             status: user.status,
             firstName: user.firstName,
             lastName: user.lastName,
+            avatar: user.avatar,
           },
         },
       });
@@ -154,6 +157,44 @@ export class AuthController {
       res.status(500).json({
         success: false,
         error: { code: 'INTERNAL_ERROR', message: 'Failed to get user' },
+      });
+    }
+  };
+
+  updateMe = async (req: AuthRequest, res: Response) => {
+    try {
+      const { error, value } = updateProfileSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: error.details[0].message },
+        });
+      }
+
+      const user = await this.authService.updateProfile(req.user!.userId, value);
+
+      res.json({
+        success: true,
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            phone: user.phone,
+            phoneNumber: user.phone,
+            role: user.role,
+            status: user.status,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            avatar: user.avatar,
+          },
+        },
+      });
+    } catch (err) {
+      logger.error('Update profile error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to update profile';
+      res.status(400).json({
+        success: false,
+        error: { code: 'PROFILE_UPDATE_FAILED', message },
       });
     }
   };

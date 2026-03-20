@@ -40,10 +40,10 @@ interface DashboardTimelinePoint {
 }
 
 const regionOptions: Array<{ value: RegionFilter; label: string }> = [
-  { value: 'ALL', label: 'Toan thanh pho' },
-  { value: 'NORTH', label: 'Phia Bac' },
-  { value: 'CENTRAL', label: 'Trung tam' },
-  { value: 'SOUTH', label: 'Phia Nam' },
+  { value: 'ALL', label: 'Toàn thành phố' },
+  { value: 'NORTH', label: 'Phía Bắc' },
+  { value: 'CENTRAL', label: 'Trung tâm' },
+  { value: 'SOUTH', label: 'Phía Nam' },
 ];
 
 const StatCard: React.FC<{ title: string; value: string | number; caption: string; icon: React.ReactNode; tone: string }> = ({ title, value, caption, icon, tone }) => (
@@ -153,8 +153,8 @@ function createInitialRealtimeEvent(): AdminRealtimeEvent {
     id: 'dashboard-mounted',
     type: 'ride:created',
     timestamp: new Date().toISOString(),
-    title: 'Dashboard live',
-    detail: 'Dashboard da vao che do theo doi realtime va se cap nhat khi co bien dong he thong.',
+    title: 'Bảng điều khiển realtime',
+    detail: 'Bảng điều khiển đã vào chế độ theo dõi realtime và sẽ cập nhật khi hệ thống có biến động.',
     tone: 'info',
   };
 }
@@ -332,7 +332,7 @@ const Dashboard: React.FC = () => {
         ))}
       </LeafletMapContainer>
       <Alert severity="info" sx={{ position: 'absolute', top: 16, left: 16, right: 16, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.92)' }}>
-        Dang dung fallback OpenStreetMap do admin chua co Google Maps key hoac Google Maps khong tai duoc. Heat hotspot va vi tri driver van hoat dong binh thuong.
+        {t('dashboardExtras.fallbackMap')}
       </Alert>
     </Box>
   );
@@ -352,11 +352,11 @@ const Dashboard: React.FC = () => {
   return (
     <Box sx={{ p: 3, minHeight: '100%', background: 'radial-gradient(circle at top left, rgba(59,130,246,0.14), transparent 32%), linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)' }}>
       <Typography variant="h4" fontWeight={900} gutterBottom>{t('dashboard.title')}</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>Theo doi tong quan nen tang, mat do tai xe theo thoi gian thuc va cac tin hieu van hanh nong.</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>{t('dashboardExtras.overviewBody')}</Typography>
 
       <Grid container spacing={3} sx={{ mb: 1 }}>
         <Grid item xs={12} sm={6} md={3}><StatCard title={t('dashboard.totalRides')} value={formatNumber(stats.rides.total)} caption={`+${stats.rides.today} ${t('dashboard.today')}`} icon={<DirectionsCar sx={{ fontSize: 44 }} />} tone="#dbeafe" /></Grid>
-        <Grid item xs={12} sm={6} md={3}><StatCard title={t('dashboard.onlineDrivers')} value={stats.drivers.online} caption={`${stats.drivers.busy} ban, ${stats.drivers.offline} offline`} icon={<DriveEta sx={{ fontSize: 44 }} />} tone="#dcfce7" /></Grid>
+        <Grid item xs={12} sm={6} md={3}><StatCard title={t('dashboard.onlineDrivers')} value={stats.drivers.online} caption={`${stats.drivers.busy} ${t('dashboardExtras.busy')}, ${stats.drivers.offline} ${t('labels.offline').toLowerCase()}`} icon={<DriveEta sx={{ fontSize: 44 }} />} tone="#dcfce7" /></Grid>
         <Grid item xs={12} sm={6} md={3}><StatCard title={t('dashboard.totalCustomers')} value={formatNumber(stats.customers.total)} caption={`${stats.customers.active} ${t('dashboard.active')}`} icon={<People sx={{ fontSize: 44 }} />} tone="#ede9fe" /></Grid>
         <Grid item xs={12} sm={6} md={3}><StatCard title={t('dashboard.todayRevenue')} value={formatCurrency(stats.revenue.today)} caption={`${t('dashboard.month')}: ${formatCurrency(stats.revenue.month)}`} icon={<AttachMoney sx={{ fontSize: 44 }} />} tone="#fef3c7" /></Grid>
       </Grid>
@@ -368,25 +368,25 @@ const Dashboard: React.FC = () => {
               <Box sx={{ p: 3, pb: 2 }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2}>
                   <Box>
-                    <Typography variant="h6" fontWeight={800}>Realtime Driver Heatmap</Typography>
-                    <Typography variant="body2" color="text.secondary">Nhiet do mau va marker phan anh phan bo tai xe online hien tai trong khu vuc dang van hanh.</Typography>
+                    <Typography variant="h6" fontWeight={800}>{t('dashboardExtras.heatmapTitle')}</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('dashboardExtras.heatmapBody')}</Typography>
                   </Box>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                     <FormControl size="small" sx={{ minWidth: 170 }}>
-                      <InputLabel id="region-filter-label">Khu vuc</InputLabel>
+                      <InputLabel id="region-filter-label">{t('dashboardExtras.region')}</InputLabel>
                       <Select
                         labelId="region-filter-label"
                         value={selectedRegion}
-                        label="Khu vuc"
+                        label={t('dashboardExtras.region')}
                         onChange={(event) => setSelectedRegion(event.target.value as RegionFilter)}
                       >
                         {regionOptions.map((option) => (
-                          <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                          <MenuItem key={option.value} value={option.value}>{option.value === 'ALL' ? t('dashboardExtras.allCity') : option.value === 'NORTH' ? t('dashboardExtras.north') : option.value === 'CENTRAL' ? t('dashboardExtras.central') : t('dashboardExtras.south')}</MenuItem>
                         ))}
                       </Select>
                     </FormControl>
-                    <Chip icon={<MyLocation />} label={`${filteredDrivers.length} tai xe co toa do`} color="primary" variant="outlined" />
-                    <Chip icon={<Payments />} label={`${stats.payments.completed} giao dich thanh cong`} color="success" variant="outlined" />
+                    <Chip icon={<MyLocation />} label={`${filteredDrivers.length} ${t('labels.driverLocations')}`} color="primary" variant="outlined" />
+                    <Chip icon={<Payments />} label={`${stats.payments.completed} ${t('labels.completedPayments')}`} color="success" variant="outlined" />
                   </Stack>
                 </Stack>
               </Box>
@@ -399,10 +399,10 @@ const Dashboard: React.FC = () => {
 
               <Box sx={{ px: 3, py: 2, borderTop: '1px solid rgba(148,163,184,0.16)', background: 'linear-gradient(180deg, rgba(248,250,252,0.9), rgba(255,255,255,0.95))' }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.25} useFlexGap flexWrap="wrap">
-                  <Chip label="Lanh / it tai xe" size="small" sx={{ bgcolor: 'rgba(14,165,233,0.12)', color: '#0284c7' }} />
-                  <Chip label="On dinh" size="small" sx={{ bgcolor: 'rgba(59,130,246,0.12)', color: '#2563eb' }} />
-                  <Chip label="Nong / mat do cao" size="small" sx={{ bgcolor: 'rgba(220,38,38,0.12)', color: '#dc2626' }} />
-                  <Chip icon={<Explore />} label={hotspots[0] ? `Top hotspot: ${hotspots[0].label} (${hotspots[0].driverCount} tai xe)` : 'Chua co hotspot'} size="small" variant="outlined" />
+                  <Chip label={t('labels.coolZone')} size="small" sx={{ bgcolor: 'rgba(14,165,233,0.12)', color: '#0284c7' }} />
+                  <Chip label={t('labels.steadyZone')} size="small" sx={{ bgcolor: 'rgba(59,130,246,0.12)', color: '#2563eb' }} />
+                  <Chip label={t('labels.hotZone')} size="small" sx={{ bgcolor: 'rgba(220,38,38,0.12)', color: '#dc2626' }} />
+                  <Chip icon={<Explore />} label={hotspots[0] ? `${t('labels.topHotspot')}: ${hotspots[0].label} (${hotspots[0].driverCount} ${t('dashboardExtras.hotspotDrivers')})` : t('labels.noHotspot')} size="small" variant="outlined" />
                 </Stack>
               </Box>
             </CardContent>
@@ -413,41 +413,41 @@ const Dashboard: React.FC = () => {
           <Stack spacing={3}>
             <Card elevation={0} sx={{ borderRadius: 5, boxShadow: '0 18px 40px rgba(15,23,42,0.08)' }}>
               <CardContent>
-                <Typography variant="h6" fontWeight={800} sx={{ mb: 2 }}>Ride Status</Typography>
+                <Typography variant="h6" fontWeight={800} sx={{ mb: 2 }}>{t('dashboardExtras.rideStatusTitle')}</Typography>
                 <Stack spacing={1.25}>
-                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">Pending</Typography><Typography fontWeight={700}>{stats.rides.pending}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">Active</Typography><Typography fontWeight={700}>{stats.rides.active}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">Completed</Typography><Typography fontWeight={700}>{stats.rides.completed}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">Cancelled</Typography><Typography fontWeight={700}>{stats.rides.cancelled}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">{t('dashboard.pending')}</Typography><Typography fontWeight={700}>{stats.rides.pending}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">{t('dashboard.activeStatus')}</Typography><Typography fontWeight={700}>{stats.rides.active}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">{t('dashboard.completed')}</Typography><Typography fontWeight={700}>{stats.rides.completed}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">{t('dashboard.cancelled')}</Typography><Typography fontWeight={700}>{stats.rides.cancelled}</Typography></Stack>
                 </Stack>
               </CardContent>
             </Card>
 
             <Card elevation={0} sx={{ borderRadius: 5, boxShadow: '0 18px 40px rgba(15,23,42,0.08)' }}>
               <CardContent>
-                <Typography variant="h6" fontWeight={800} sx={{ mb: 2 }}>Payment Pulse</Typography>
+                <Typography variant="h6" fontWeight={800} sx={{ mb: 2 }}>{t('dashboardExtras.paymentPulseTitle')}</Typography>
                 <Stack spacing={1.25}>
-                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">Pending</Typography><Typography fontWeight={700}>{stats.payments.pending}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">Completed</Typography><Typography fontWeight={700}>{stats.payments.completed}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">Failed</Typography><Typography fontWeight={700}>{stats.payments.failed}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">{t('dashboard.pending')}</Typography><Typography fontWeight={700}>{stats.payments.pending}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">{t('dashboard.completed')}</Typography><Typography fontWeight={700}>{stats.payments.completed}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography color="text.secondary">{t('dashboard.failed')}</Typography><Typography fontWeight={700}>{stats.payments.failed}</Typography></Stack>
                 </Stack>
               </CardContent>
             </Card>
 
             <Card elevation={0} sx={{ borderRadius: 5, boxShadow: '0 18px 40px rgba(15,23,42,0.08)' }}>
               <CardContent>
-                <Typography variant="h6" fontWeight={800} sx={{ mb: 2 }}>Top Hotspots</Typography>
+                <Typography variant="h6" fontWeight={800} sx={{ mb: 2 }}>{t('dashboardExtras.hotspotsTitle')}</Typography>
                 <Stack spacing={1.5}>
                   {hotspots.map((hotspot, index) => (
                     <Stack key={hotspot.key} direction="row" justifyContent="space-between" alignItems="center">
                       <Box>
                         <Typography fontWeight={700}>{`#${index + 1} ${hotspot.label}`}</Typography>
-                        <Typography variant="body2" color="text.secondary">{`${hotspot.driverCount} tai xe • rating TB ${hotspot.avgRating.toFixed(1)}`}</Typography>
+                        <Typography variant="body2" color="text.secondary">{`${hotspot.driverCount} ${t('dashboardExtras.hotspotDrivers')} • ${t('dashboardExtras.hotspotRating')} ${hotspot.avgRating.toFixed(1)}`}</Typography>
                       </Box>
                       <Chip size="small" label={`${hotspot.driverCount}`} color={index === 0 ? 'error' : 'default'} />
                     </Stack>
                   ))}
-                  {!hotspots.length && <Typography variant="body2" color="text.secondary">Chua co cum tai xe du lieu hop le trong khu vuc nay.</Typography>}
+                  {!hotspots.length && <Typography variant="body2" color="text.secondary">{t('labels.hotspotFallback')}</Typography>}
                 </Stack>
               </CardContent>
             </Card>
@@ -458,19 +458,19 @@ const Dashboard: React.FC = () => {
           <Card elevation={0} sx={{ borderRadius: 5, boxShadow: '0 18px 40px rgba(15,23,42,0.08)' }}>
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                <Typography variant="h6" fontWeight={800}>Realtime Timeline</Typography>
-                <Chip icon={<Timeline />} label="6 gio gan nhat" variant="outlined" />
+                <Typography variant="h6" fontWeight={800}>{t('dashboardExtras.timelineTitle')}</Typography>
+                <Chip icon={<Timeline />} label={t('labels.timelineWindow')} variant="outlined" />
               </Stack>
               <Stack spacing={1.25}>
                 {timeline.map((point) => (
                   <Box key={point.time} sx={{ p: 1.5, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid rgba(148,163,184,0.14)' }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                       <Typography fontWeight={700}>{point.time}</Typography>
-                      <Typography variant="body2" color="text.secondary">{`${point.onlineDrivers} driver online`}</Typography>
+                      <Typography variant="body2" color="text.secondary">{`${point.onlineDrivers} ${t('labels.trackingDrivers')}`}</Typography>
                     </Stack>
                     <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
-                      <Typography variant="body2">{`Rides: ${point.rides}`}</Typography>
-                      <Typography variant="body2">{`Payments: ${point.completedPayments}`}</Typography>
+                      <Typography variant="body2">{`${t('labels.ridesCount')}: ${point.rides}`}</Typography>
+                      <Typography variant="body2">{`${t('labels.paymentsCount')}: ${point.completedPayments}`}</Typography>
                     </Stack>
                   </Box>
                 ))}
@@ -482,7 +482,7 @@ const Dashboard: React.FC = () => {
         <Grid item xs={12} lg={6}>
           <Card elevation={0} sx={{ borderRadius: 5, boxShadow: '0 18px 40px rgba(15,23,42,0.08)' }}>
             <CardContent>
-              <Typography variant="h6" fontWeight={800} sx={{ mb: 2 }}>Realtime Event Feed</Typography>
+              <Typography variant="h6" fontWeight={800} sx={{ mb: 2 }}>{t('dashboardExtras.eventFeedTitle')}</Typography>
               <Stack spacing={1.5}>
                 {realtimeEvents.map((event) => (
                   <Box key={event.id} sx={{ p: 1.5, borderRadius: 3, bgcolor: event.tone === 'success' ? 'rgba(22,163,74,0.08)' : event.tone === 'warning' ? 'rgba(245,158,11,0.12)' : 'rgba(59,130,246,0.08)' }}>

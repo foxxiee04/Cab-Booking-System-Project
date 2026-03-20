@@ -100,6 +100,7 @@ export interface Ride {
 export interface Driver {
   id: string;
   userId: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
   vehicleType: 'ECONOMY' | 'COMFORT' | 'PREMIUM';
   vehicleMake: string;
   vehicleModel: string;
@@ -107,6 +108,7 @@ export interface Driver {
   licensePlate: string;
   licenseNumber: string;
   rating: number;
+  reviewCount: number;
   totalRides: number;
   isOnline: boolean;
   isAvailable: boolean;

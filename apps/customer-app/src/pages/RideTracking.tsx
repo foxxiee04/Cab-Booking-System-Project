@@ -433,8 +433,7 @@ const RideTracking: React.FC = () => {
                   </Stack>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2.5 }}>
                     {!existingReview && (
-                      <Button variant="contained" onClick={handleSubmitReview} disabled={!rating || submittingReview || !currentRide.driverId} sx={{ borderRadius: 3, py: 1.3, fontWeight: 700 }}>
-                        data-testid="submit-review-button"
+                      <Button variant="contained" onClick={handleSubmitReview} disabled={!rating || submittingReview || !currentRide.driverId} data-testid="submit-review-button" sx={{ borderRadius: 3, py: 1.3, fontWeight: 700 }}>
                         {submittingReview ? 'Dang gui...' : 'Gui danh gia'}
                       </Button>
                     )}

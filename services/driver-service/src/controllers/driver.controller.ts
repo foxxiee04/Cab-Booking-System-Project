@@ -59,6 +59,32 @@ export class DriverController {
     }
   };
 
+  updateMe = async (req: AuthRequest, res: Response) => {
+    try {
+      const existingDriver = await this.driverService.getDriverByUserId(req.user!.userId);
+
+      if (!existingDriver) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            code: 'PROFILE_NOT_SETUP',
+            message: 'Please complete your driver profile setup first'
+          },
+        });
+      }
+
+      const driver = await this.driverService.updateDriverProfile(existingDriver.id, req.body);
+      res.json({ success: true, data: { driver } });
+    } catch (err) {
+      logger.error('Update driver profile error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to update driver profile';
+      res.status(400).json({
+        success: false,
+        error: { code: 'PROFILE_UPDATE_FAILED', message },
+      });
+    }
+  };
+
   goOnline = async (req: AuthRequest, res: Response) => {
     try {
       const driver = await this.driverService.goOnline(req.user!.userId);
@@ -255,8 +281,10 @@ export class DriverController {
 
   verifyDriver = async (req: Request, res: Response) => {
     try {
-      const { verified } = req.body;
-      const driver = await this.driverService.updateDriver(req.params.driverId, { verified });
+      const { action, reason } = req.body as { action?: 'APPROVE' | 'REJECT'; reason?: string };
+      const driver = action === 'REJECT'
+        ? await this.driverService.rejectDriver(req.params.driverId, reason)
+        : await this.driverService.approveDriver(req.params.driverId);
 
       if (!driver) {
         return res.status(404).json({
@@ -268,9 +296,39 @@ export class DriverController {
       res.json({ success: true, data: { driver } });
     } catch (err) {
       logger.error('Verify driver error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to verify driver';
       res.status(500).json({
         success: false,
-        error: { code: 'INTERNAL_ERROR', message: 'Failed to verify driver' },
+        error: { code: 'INTERNAL_ERROR', message },
+      });
+    }
+  };
+
+  approveDriver = async (req: Request, res: Response) => {
+    try {
+      const driver = await this.driverService.approveDriver(req.params.driverId);
+      res.json({ success: true, data: { driver } });
+    } catch (err) {
+      logger.error('Approve driver error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to approve driver';
+      res.status(400).json({
+        success: false,
+        error: { code: 'DRIVER_APPROVAL_FAILED', message },
+      });
+    }
+  };
+
+  rejectDriver = async (req: Request, res: Response) => {
+    try {
+      const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
+      const driver = await this.driverService.rejectDriver(req.params.driverId, reason);
+      res.json({ success: true, data: { driver } });
+    } catch (err) {
+      logger.error('Reject driver error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to reject driver';
+      res.status(400).json({
+        success: false,
+        error: { code: 'DRIVER_REJECTION_FAILED', message },
       });
     }
   };

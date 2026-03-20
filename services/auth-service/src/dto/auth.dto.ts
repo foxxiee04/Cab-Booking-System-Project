@@ -23,8 +23,8 @@ export const registerUserSchema = Joi.object<RegisterUserDto>({
     'string.max': 'Password must not exceed 128 characters',
     'any.required': 'Password is required',
   }),
-  phone: Joi.string().pattern(/^[0-9]{10,15}$/).required().messages({
-    'string.pattern.base': 'Phone number must be 10-15 digits',
+  phone: Joi.string().pattern(/^0\d{9}$/).required().messages({
+    'string.pattern.base': 'Phone number must be 10 digits and start with 0',
     'any.required': 'Phone number is required',
   }),
   role: Joi.string().valid('CUSTOMER', 'DRIVER').required().messages({
@@ -85,7 +85,9 @@ export const updateProfileSchema = Joi.object<UpdateProfileDto>({
     lastName: Joi.string().min(1).max(50).optional(),
     avatar: Joi.string().uri().optional(),
   }).optional(),
-  phone: Joi.string().pattern(/^[0-9]{10,15}$/).optional(),
+  phone: Joi.string().pattern(/^0\d{9}$/).optional().messages({
+    'string.pattern.base': 'Phone number must be 10 digits and start with 0',
+  }),
 });
 
 // Change Password DTO

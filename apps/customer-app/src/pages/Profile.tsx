@@ -9,11 +9,13 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  Grid,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
   Stack,
+  TextField,
   Typography,
 } from '@mui/material';
 import {
@@ -35,6 +37,15 @@ const Profile: React.FC = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    phoneNumber: '',
+    avatar: '',
+  });
 
   const refreshProfile = useCallback(async () => {
     setLoading(true);
@@ -55,6 +66,15 @@ const Profile: React.FC = () => {
     refreshProfile();
   }, [refreshProfile]);
 
+  useEffect(() => {
+    setFormData({
+      firstName: user?.firstName || '',
+      lastName: user?.lastName || '',
+      phoneNumber: user?.phoneNumber || '',
+      avatar: user?.avatar || '',
+    });
+  }, [user]);
+
   const fullName = useMemo(() => {
     if (!user) {
       return '';
@@ -63,9 +83,51 @@ const Profile: React.FC = () => {
     return `${user.firstName} ${user.lastName}`.trim();
   }, [user]);
 
+  const handleChange = (field: keyof typeof formData) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData((prev) => ({ ...prev, [field]: event.target.value }));
+  };
+
+  const handleSaveProfile = async () => {
+    setError('');
+    setSuccess('');
+
+    if (!formData.firstName.trim() || !formData.lastName.trim()) {
+      setError(t('profile.nameRequired', 'Vui lòng nhập đầy đủ họ và tên.'));
+      return;
+    }
+
+    if (formData.phoneNumber && !/^[0-9]{10,15}$/.test(formData.phoneNumber.trim())) {
+      setError(t('errors.phoneInvalid'));
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await authApi.updateMe({
+        profile: {
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          avatar: formData.avatar.trim() || undefined,
+        },
+        phone: formData.phoneNumber.trim() || undefined,
+      });
+
+      if (response.success) {
+        dispatch(updateUser(response.data.user));
+        setEditing(false);
+        setSuccess(t('profile.saveSuccess', 'Đã cập nhật hồ sơ thành công.'));
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || t('profile.saveFailed', 'Không thể cập nhật hồ sơ.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Box sx={{ height: '100%', overflow: 'auto', pb: 2 }}>
       <Stack spacing={2}>
+        {success && <Alert severity="success" onClose={() => setSuccess('')}>{success}</Alert>}
         {error && <Alert severity="error">{error}</Alert>}
 
         <Card sx={{ borderRadius: 5, overflow: 'hidden' }}>
@@ -99,9 +161,46 @@ const Profile: React.FC = () => {
                 <Typography variant="body2" color="text.secondary">
                   {t('profile.subtitle', 'Quản lý hồ sơ, phương thức thanh toán, địa điểm đã lưu và hỗ trợ tài khoản trong một nơi.')}
                 </Typography>
-                <Button variant="outlined" sx={{ mt: 2, borderRadius: 3 }} onClick={refreshProfile}>
-                  {t('profile.refresh')}
-                </Button>
+                <Stack direction="row" spacing={1.25} sx={{ mt: 2 }}>
+                  <Button variant="outlined" sx={{ borderRadius: 3 }} onClick={refreshProfile}>
+                    {t('profile.refresh')}
+                  </Button>
+                  <Button variant="contained" sx={{ borderRadius: 3 }} onClick={() => { setEditing((prev) => !prev); setSuccess(''); }}>
+                    {editing ? t('profile.closeEditor', 'Đóng chỉnh sửa') : t('profile.editProfile', 'Chỉnh sửa hồ sơ')}
+                  </Button>
+                </Stack>
+
+                {editing && (
+                  <Card variant="outlined" sx={{ mt: 2.5, borderRadius: 4 }}>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 2 }}>
+                        {t('profile.editSection', 'Thông tin cá nhân')}
+                      </Typography>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <TextField fullWidth label={t('register.firstName')} value={formData.firstName} onChange={handleChange('firstName')} />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField fullWidth label={t('register.lastName')} value={formData.lastName} onChange={handleChange('lastName')} />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField fullWidth label={t('profile.phone', 'Điện thoại')} value={formData.phoneNumber} onChange={handleChange('phoneNumber')} />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField fullWidth label={t('profile.avatarUrl', 'Ảnh đại diện URL')} value={formData.avatar} onChange={handleChange('avatar')} placeholder="https://..." />
+                        </Grid>
+                      </Grid>
+                      <Stack direction="row" spacing={1.25} sx={{ mt: 2.5 }}>
+                        <Button variant="contained" onClick={handleSaveProfile} disabled={saving}>
+                          {saving ? <CircularProgress size={20} /> : t('profile.saveProfile', 'Lưu thay đổi')}
+                        </Button>
+                        <Button variant="text" onClick={() => { setEditing(false); setFormData({ firstName: user?.firstName || '', lastName: user?.lastName || '', phoneNumber: user?.phoneNumber || '', avatar: user?.avatar || '' }); }} disabled={saving}>
+                          {t('profile.cancelEditing', 'Hủy')}
+                        </Button>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
               </>
             )}
           </CardContent>

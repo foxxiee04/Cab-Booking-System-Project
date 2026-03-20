@@ -28,6 +28,16 @@ export const adminApi = {
     return response.data;
   },
 
+  approveDriver: async (driverId: string): Promise<ApiResponse<{ driver: Driver }>> => {
+    const response = await axiosInstance.post(`/admin/drivers/${driverId}/approve`);
+    return response.data;
+  },
+
+  rejectDriver: async (driverId: string, reason?: string): Promise<ApiResponse<{ driver: Driver }>> => {
+    const response = await axiosInstance.post(`/admin/drivers/${driverId}/reject`, { reason });
+    return response.data;
+  },
+
   // Get all customers
   getCustomers: async (params?: {
     limit?: number;

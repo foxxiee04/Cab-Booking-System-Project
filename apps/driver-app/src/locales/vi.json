@@ -32,6 +32,7 @@
     "licensePlate": "Biển số",
     "licenseNumber": "Số GPLX",
     "licenseExpiry": "Ngày hết hạn GPLX",
+    "vehiclePhotoHint": "Hiện tại hệ thống chưa yêu cầu tải ảnh xe. Bạn chỉ cần khai báo đúng thông tin xe và GPLX.",
     "info": "Tất cả thông tin sẽ được xác minh trước khi nhận chuyến. Vui lòng nhập chính xác.",
     "submit": "Hoàn tất",
     "successMessage": "Hồ sơ đã được hoàn tất! Hồ sơ của bạn đang chờ admin phê duyệt. Bạn sẽ được thông báo khi được phê duyệt."
@@ -103,10 +104,30 @@
     "title": "Hồ sơ",
     "driverProfile": "Hồ sơ tài xế",
     "vehicle": "Xe",
+    "vehicleType": "Loại xe",
+    "make": "Hãng xe",
+    "model": "Dòng xe",
     "plate": "Biển số",
     "color": "Màu sắc",
+    "year": "Năm sản xuất",
+    "licenseNumber": "Số GPLX",
+    "licenseExpiry": "Ngày hết hạn GPLX",
     "rating": "Đánh giá",
-    "refresh": "Làm mới"
+    "refresh": "Làm mới",
+    "editProfile": "Chỉnh sửa hồ sơ",
+    "closeEditor": "Đóng chỉnh sửa",
+    "editSection": "Cập nhật thông tin xe",
+    "saveProfile": "Lưu thay đổi",
+    "cancelEditing": "Hủy",
+    "saveSuccess": "Đã cập nhật hồ sơ tài xế.",
+    "saveFailed": "Không thể cập nhật hồ sơ tài xế.",
+    "fillRequired": "Vui lòng nhập đầy đủ các trường hồ sơ xe.",
+    "pendingApproval": "Chờ duyệt hồ sơ",
+    "approved": "Đã được duyệt",
+    "rejected": "Bị từ chối",
+    "suspended": "Tạm khóa",
+    "noReviews": "Chưa có đánh giá",
+    "reviews": "đánh giá"
   },
   "vehicle": {
     "ECONOMY": "Phổ thông",
@@ -140,6 +161,7 @@
     "startRide": "Không thể bắt đầu chuyến",
     "completeRide": "Không thể hoàn tất chuyến",
     "cancelRide": "Không thể hủy chuyến",
+    "fillRequired": "Vui lòng nhập đầy đủ email và mật khẩu",
     "fullName": "Vui lòng nhập đầy đủ họ tên",
     "invalidEmail": "Vui lòng nhập email hợp lệ",
     "passwordMin": "Mật khẩu phải có ít nhất 8 ký tự",
@@ -147,7 +169,7 @@
     "passwordLower": "Mật khẩu phải có ít nhất 1 chữ thường",
     "passwordNumber": "Mật khẩu phải có ít nhất 1 chữ số",
     "passwordMismatch": "Mật khẩu không khớp",
-    "phoneInvalid": "Số điện thoại phải từ 10-15 chữ số",
+    "phoneInvalid": "Số điện thoại phải gồm đúng 10 chữ số và bắt đầu bằng số 0",
     "authRequired": "Chưa xác thực người dùng"
   }
 }

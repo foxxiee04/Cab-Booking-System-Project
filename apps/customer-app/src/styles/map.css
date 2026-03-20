@@ -31,3 +31,11 @@
 .leaflet-popup-tip {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
 }
+
+.MuiAutocomplete-popper {
+  z-index: 1800 !important;
+}
+
+.leaflet-container {
+  z-index: 0;
+}

@@ -199,14 +199,35 @@ export const getCurrentLocation = (): Promise<Location> => {
       return;
     }
 
+    const resolvePosition = (position: GeolocationPosition) => {
+      resolve({
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      });
+    };
+
+    const fallbackRequest = () => {
+      navigator.geolocation.getCurrentPosition(
+        resolvePosition,
+        (error) => {
+          reject(error);
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 15000,
+          maximumAge: 60000,
+        }
+      );
+    };
+
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
-      },
+      resolvePosition,
       (error) => {
+        if (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE) {
+          fallbackRequest();
+          return;
+        }
+
         reject(error);
       },
       {

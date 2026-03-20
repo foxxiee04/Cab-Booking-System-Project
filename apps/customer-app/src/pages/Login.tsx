@@ -30,13 +30,37 @@ const Login: React.FC = () => {
   const [loading, setLoadingState] = useState(false);
   const [error, setErrorMessage] = useState('');
 
+  const validateForm = (): string | null => {
+    if (!email.trim() || !password) {
+      return t('errors.fillRequired');
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return t('errors.invalidEmail');
+    }
+
+    if (password.length < 8) {
+      return t('errors.passwordMin');
+    }
+
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
+
+    const validationError = validateForm();
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
+
     setLoadingState(true);
 
     try {
-      const response = await authApi.login({ email, password });
+      const response = await authApi.login({ email: email.trim(), password });
       
       if (response.success) {
         dispatch(setCredentials(response.data));

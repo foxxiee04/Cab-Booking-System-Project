@@ -1,12 +1,11 @@
 import { io, Socket } from 'socket.io-client';
 import { store } from '../store';
-import { logout, updateTokens } from '../store/auth.slice';
+import { logout } from '../store/auth.slice';
 import { setCurrentRide, setDriver, updateRideStatus, updateDriverLocation } from '../store/ride.slice';
 import { showNotification } from '../store/ui.slice';
 import { refreshAuthSession } from '../api/axios.config';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 class SocketService {
   private socket: Socket | null = null;

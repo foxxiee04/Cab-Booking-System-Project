@@ -22,6 +22,9 @@ export const createAuthRouter = (authService: AuthService): Router => {
   // Get current user
   router.get('/me', authenticate, controller.getMe);
 
+  // Update current user profile
+  router.patch('/me', authenticate, controller.updateMe);
+
   // Verify token (internal endpoint for other services)
   router.post('/verify', controller.verifyToken);
 

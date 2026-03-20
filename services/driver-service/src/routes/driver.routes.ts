@@ -3,6 +3,7 @@ import { DriverService } from '../services/driver.service';
 import { DriverController } from '../controllers/driver.controller';
 import {
   validateDriverRegistration,
+  validateDriverProfileUpdate,
   validateLocation,
   validateAvailableRidesQuery,
   validateNearbyQuery,
@@ -17,6 +18,9 @@ export const createDriverRouter = (driverService: DriverService): Router => {
 
   // Get current driver profile
   router.get('/me', controller.getMe);
+
+  // Update current driver profile
+  router.put('/me', validateDriverProfileUpdate, controller.updateMe);
 
   // Go online
   router.post('/me/online', controller.goOnline);
@@ -41,6 +45,10 @@ export const createDriverRouter = (driverService: DriverService): Router => {
 
   // Admin: Get all drivers
   router.get('/', controller.getAllDrivers);
+
+  // Admin: Approve or reject driver
+  router.post('/:driverId/approve', controller.approveDriver);
+  router.post('/:driverId/reject', controller.rejectDriver);
 
   // Admin: Verify driver
   router.patch('/:driverId/verify', controller.verifyDriver);

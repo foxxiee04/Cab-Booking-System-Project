@@ -245,6 +245,24 @@ export class DriverService {
     });
   }
 
+  async updateDriverProfile(driverId: string, data: any): Promise<any> {
+    const updateData: Record<string, any> = {};
+
+    if (data.vehicleType !== undefined) updateData.vehicleType = data.vehicleType;
+    if (data.vehicleMake !== undefined) updateData.vehicleBrand = data.vehicleMake;
+    if (data.vehicleModel !== undefined) updateData.vehicleModel = data.vehicleModel;
+    if (data.vehicleColor !== undefined) updateData.vehicleColor = data.vehicleColor;
+    if (data.vehicleYear !== undefined) updateData.vehicleYear = data.vehicleYear;
+    if (data.licensePlate !== undefined) updateData.vehiclePlate = data.licensePlate;
+    if (data.licenseNumber !== undefined) updateData.licenseNumber = data.licenseNumber;
+    if (data.licenseExpiryDate !== undefined) updateData.licenseExpiryDate = new Date(data.licenseExpiryDate);
+
+    return prisma.driver.update({
+      where: { id: driverId },
+      data: updateData,
+    });
+  }
+
   async getDrivers(filters?: {
     status?: DriverStatus;
     availabilityStatus?: AvailabilityStatus;

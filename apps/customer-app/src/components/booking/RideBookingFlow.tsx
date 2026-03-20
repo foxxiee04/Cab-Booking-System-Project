@@ -122,31 +122,47 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
     setError('');
 
     try {
-      const estimates: Record<string, PriceEstimate> = {};
-
-      for (const vehicle of vehicleOptions) {
-        const response = await pricingApi.estimateFare({
-          pickup,
-          dropoff,
+      const responses = await Promise.allSettled(
+        vehicleOptions.map(async (vehicle) => ({
           vehicleType: vehicle.type,
-        });
+          response: await pricingApi.estimateFare({
+            pickup,
+            dropoff,
+            vehicleType: vehicle.type,
+          }),
+        }))
+      );
 
-        estimates[vehicle.type] = {
+      const estimates: Record<string, PriceEstimate> = {};
+      responses.forEach((result) => {
+        if (result.status !== 'fulfilled') {
+          return;
+        }
+
+        const { vehicleType, response } = result.value;
+        estimates[vehicleType] = {
           fare: response.data.fare,
           distance: response.data.distance,
           duration: response.data.duration,
           surgeMultiplier: response.data.surgeMultiplier || 1.0,
         };
+      });
+
+      if (!Object.keys(estimates).length) {
+        throw new Error('Không thể tải bảng giá lúc này. Vui lòng thử lại sau ít phút.');
       }
 
       setPriceEstimates(estimates);
+      if (!estimates[selectedVehicle]) {
+        setSelectedVehicle(Object.keys(estimates)[0] as 'ECONOMY' | 'COMFORT' | 'PREMIUM');
+      }
       setActiveStep(0); // Start at vehicle selection step
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to load price estimates');
+      setError(err.response?.data?.error?.message || err.message || 'Không thể tải giá cước dự kiến');
     } finally {
       setLoading(false);
     }
-  }, [dropoff, pickup]);
+  }, [dropoff, pickup, selectedVehicle]);
 
   useEffect(() => {
     if (open && pickup && dropoff) {
@@ -201,13 +217,18 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                     <Card
                       variant={selectedVehicle === vehicle.type ? 'elevation' : 'outlined'}
                       sx={{
-                        cursor: 'pointer',
+                        cursor: estimate ? 'pointer' : 'not-allowed',
+                        opacity: estimate ? 1 : 0.68,
                         border: selectedVehicle === vehicle.type ? 2 : 1,
                         borderColor: selectedVehicle === vehicle.type ? 'primary.main' : 'divider',
                         borderRadius: 4,
                         boxShadow: selectedVehicle === vehicle.type ? '0 10px 28px rgba(37,99,235,0.18)' : undefined,
                       }}
-                      onClick={() => setSelectedVehicle(vehicle.type)}
+                      onClick={() => {
+                        if (estimate) {
+                          setSelectedVehicle(vehicle.type);
+                        }
+                      }}
                     >
                       <CardContent>
                         <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -241,7 +262,9 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                                 )}
                               </>
                             ) : (
-                              <CircularProgress size={24} />
+                              <Typography variant="body2" color="text.secondary">
+                                Tạm thời chưa có giá
+                              </Typography>
                             )}
                           </Box>
                         </Box>

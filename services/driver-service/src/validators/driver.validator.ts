@@ -83,3 +83,50 @@ export const validateNearbyQuery = (req: Request, res: Response, next: NextFunct
 
   next();
 };
+
+export const validateDriverProfileUpdate = (req: Request, res: Response, next: NextFunction) => {
+  const {
+    vehicleType,
+    vehicleMake,
+    vehicleModel,
+    vehicleColor,
+    vehicleYear,
+    licensePlate,
+    licenseNumber,
+    licenseExpiryDate,
+  } = req.body;
+
+  const hasUpdatableField = [
+    vehicleType,
+    vehicleMake,
+    vehicleModel,
+    vehicleColor,
+    vehicleYear,
+    licensePlate,
+    licenseNumber,
+    licenseExpiryDate,
+  ].some((value) => value !== undefined);
+
+  if (!hasUpdatableField) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'At least one profile field must be provided' },
+    });
+  }
+
+  if (vehicleYear !== undefined && (!Number.isInteger(vehicleYear) || vehicleYear < 1980 || vehicleYear > 2100)) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle year must be a valid integer' },
+    });
+  }
+
+  if (licenseExpiryDate !== undefined && Number.isNaN(Date.parse(licenseExpiryDate))) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'License expiry date is invalid' },
+    });
+  }
+
+  next();
+};

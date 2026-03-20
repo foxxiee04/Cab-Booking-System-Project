@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Typography, Chip, Alert } from '@mui/material';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Box, Typography, Chip, Alert, Button, Stack } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { adminApi } from '../api/admin.api';
 import { Driver } from '../types';
@@ -12,29 +12,74 @@ const Drivers: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const { t } = useTranslation();
 
-  useEffect(() => {
-    const fetchDrivers = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const response = await adminApi.getDrivers({
-          limit: PAGE_SIZE,
-          offset: page * PAGE_SIZE,
-        });
-        setRows(response.data?.drivers || []);
-        setTotal(response.data?.total || 0);
-      } catch (err: any) {
-        setError(err.response?.data?.error?.message || t('errors.loadDrivers'));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDrivers();
+  const fetchDrivers = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await adminApi.getDrivers({
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+      });
+      setRows(response.data?.drivers || []);
+      setTotal(response.data?.total || 0);
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || t('errors.loadDrivers'));
+    } finally {
+      setLoading(false);
+    }
   }, [page, t]);
+
+  useEffect(() => {
+    void fetchDrivers();
+  }, [fetchDrivers]);
+
+  const getApprovalMeta = (status: Driver['status']) => {
+    if (status === 'APPROVED') {
+      return { label: t('labels.approved'), color: 'success' as const };
+    }
+
+    if (status === 'REJECTED') {
+      return { label: t('labels.rejected'), color: 'error' as const };
+    }
+
+    if (status === 'SUSPENDED') {
+      return { label: t('labels.suspended'), color: 'warning' as const };
+    }
+
+    return { label: t('labels.pending'), color: 'default' as const };
+  };
+
+  const handleApprove = async (driverId: string) => {
+    setActionLoadingId(driverId);
+    setError('');
+    try {
+      await adminApi.approveDriver(driverId);
+      await fetchDrivers();
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || t('errors.approveDriver'));
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleReject = async (driverId: string) => {
+    const reason = window.prompt(t('labels.rejectionPrompt')) || undefined;
+
+    setActionLoadingId(driverId);
+    setError('');
+    try {
+      await adminApi.rejectDriver(driverId, reason);
+      await fetchDrivers();
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || t('errors.rejectDriver'));
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
   const columns: GridColDef<Driver>[] = [
     { field: 'id', headerName: t('columns.driverId'), flex: 1, minWidth: 200 },
@@ -55,10 +100,23 @@ const Drivers: React.FC = () => {
     },
     { field: 'vehicleType', headerName: t('columns.vehicle'), width: 120 },
     {
+      field: 'status',
+      headerName: t('columns.approval'),
+      width: 140,
+      renderCell: (params) => {
+        const meta = getApprovalMeta(params.row.status);
+        return <Chip label={meta.label} size="small" color={meta.color} />;
+      },
+    },
+    {
       field: 'rating',
       headerName: t('columns.rating'),
-      width: 100,
-      valueFormatter: (params) => params.value?.toFixed(1),
+      width: 140,
+      renderCell: (params) => (
+        <Typography variant="body2">
+          {params.row.reviewCount > 0 ? `${params.row.rating.toFixed(1)} / 5` : t('labels.noReviews')}
+        </Typography>
+      ),
     },
     { field: 'totalRides', headerName: t('columns.rides'), width: 100 },
     {
@@ -72,6 +130,40 @@ const Drivers: React.FC = () => {
           color={params.value ? 'success' : 'default'}
         />
       ),
+    },
+    {
+      field: 'actions',
+      headerName: t('columns.actions'),
+      width: 220,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => {
+        const isPending = params.row.status === 'PENDING';
+        const disabled = actionLoadingId === params.row.id;
+
+        return (
+          <Stack direction="row" spacing={1}>
+            <Button
+              size="small"
+              variant="contained"
+              color="success"
+              disabled={!isPending || disabled}
+              onClick={() => handleApprove(params.row.id)}
+            >
+              {t('labels.approve')}
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              color="error"
+              disabled={!isPending || disabled}
+              onClick={() => handleReject(params.row.id)}
+            >
+              {t('labels.reject')}
+            </Button>
+          </Stack>
+        );
+      },
     },
   ];
 

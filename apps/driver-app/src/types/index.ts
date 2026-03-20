@@ -28,9 +28,13 @@ export interface Driver {
   vehicleMake: string;
   vehicleModel: string;
   vehicleColor: string;
+  vehicleYear?: number;
   licensePlate: string;
   licenseNumber: string;
+  licenseExpiryDate?: string;
+  status?: DriverApprovalStatus;
   rating: number;
+  reviewCount?: number;
   totalRides: number;
   isOnline: boolean;
   isAvailable: boolean;
@@ -38,6 +42,8 @@ export interface Driver {
   createdAt: string;
   updatedAt: string;
 }
+
+export type DriverApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
 
 export type VehicleType = 'ECONOMY' | 'COMFORT' | 'PREMIUM' | 'CAR' | 'SUV' | 'MOTORCYCLE';
 

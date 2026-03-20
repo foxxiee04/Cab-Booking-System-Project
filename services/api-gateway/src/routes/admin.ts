@@ -79,6 +79,42 @@ async function callHttpService<T = any>(
   return body;
 }
 
+async function callHttpServiceWithBody<T = any>(
+  service: keyof typeof config.services,
+  req: Request,
+  path: string,
+  method: 'POST' | 'PATCH',
+  body?: Record<string, unknown>,
+): Promise<T> {
+  const url = new URL(path, config.services[service]);
+  const response = await fetch(url.toString(), {
+    method,
+    headers: {
+      ...getAuthHeaders(req),
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const text = await response.text();
+  let payload: T;
+
+  try {
+    payload = (text ? JSON.parse(text) : {}) as T;
+  } catch {
+    payload = text as T;
+  }
+
+  if (!response.ok) {
+    const error = new Error(`HTTP service ${service} responded with status ${response.status}`) as Error & { statusCode?: number; body?: unknown };
+    error.statusCode = response.status;
+    error.body = payload;
+    throw error;
+  }
+
+  return payload;
+}
+
 router.get('/rides', async (req: Request, res: Response) => {
   try {
     const { limit, page } = getPaging(req);
@@ -135,14 +171,16 @@ router.get('/drivers', async (req: Request, res: Response) => {
     const drivers = rawDrivers.map((driver: any) => ({
       id: driver.id,
       userId: driver.userId,
+      status: driver.status,
       vehicleType: driver.vehicleType,
       vehicleMake: driver.vehicleBrand,
       vehicleModel: driver.vehicleModel,
       vehicleColor: driver.vehicleColor,
       licensePlate: driver.vehiclePlate,
       licenseNumber: driver.licenseNumber,
-      rating: driver.ratingAverage ?? driver.rating ?? 0,
-      totalRides: driver.ratingCount ?? driver.totalRides ?? 0,
+      reviewCount: driver.ratingCount ?? driver.reviewCount ?? 0,
+      rating: (driver.ratingCount ?? driver.reviewCount ?? 0) > 0 ? (driver.ratingAverage ?? driver.rating ?? 0) : 0,
+      totalRides: driver.totalRides ?? 0,
       isOnline: ['ONLINE', 'BUSY'].includes(driver.availabilityStatus),
       isAvailable: driver.availabilityStatus === 'ONLINE',
       currentLocation:
@@ -161,6 +199,32 @@ router.get('/drivers', async (req: Request, res: Response) => {
     res.status(error.statusCode || error.response?.status || 500).json({
       success: false,
       error: { code: 'ADMIN_DRIVERS_FAILED', message: 'Failed to load drivers' },
+    });
+  }
+});
+
+router.post('/drivers/:driverId/approve', async (req: Request, res: Response) => {
+  try {
+    const response = await callHttpServiceWithBody<any>('driver', req, `/api/drivers/${req.params.driverId}/approve`, 'POST');
+    res.json({ success: true, data: unwrapPayload<any>(response) });
+  } catch (error: any) {
+    res.status(error.statusCode || error.response?.status || 500).json({
+      success: false,
+      error: { code: 'ADMIN_DRIVER_APPROVE_FAILED', message: 'Không thể duyệt tài xế' },
+    });
+  }
+});
+
+router.post('/drivers/:driverId/reject', async (req: Request, res: Response) => {
+  try {
+    const response = await callHttpServiceWithBody<any>('driver', req, `/api/drivers/${req.params.driverId}/reject`, 'POST', {
+      reason: req.body?.reason,
+    });
+    res.json({ success: true, data: unwrapPayload<any>(response) });
+  } catch (error: any) {
+    res.status(error.statusCode || error.response?.status || 500).json({
+      success: false,
+      error: { code: 'ADMIN_DRIVER_REJECT_FAILED', message: 'Không thể từ chối tài xế' },
     });
   }
 });

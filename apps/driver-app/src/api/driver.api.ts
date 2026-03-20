@@ -8,9 +8,13 @@ const normalizeDriver = (driver: any): Driver => ({
   vehicleMake: driver.vehicleMake || driver.vehicleBrand || '',
   vehicleModel: driver.vehicleModel || '',
   vehicleColor: driver.vehicleColor || '',
+  vehicleYear: driver.vehicleYear || undefined,
   licensePlate: driver.licensePlate || driver.vehiclePlate || '',
   licenseNumber: driver.licenseNumber || '',
+  licenseExpiryDate: driver.licenseExpiryDate || undefined,
+  status: driver.status,
   rating: driver.rating ?? driver.ratingAverage ?? 0,
+  reviewCount: driver.reviewCount ?? driver.ratingCount ?? 0,
   totalRides: driver.totalRides ?? driver.ratingCount ?? 0,
   isOnline: driver.isOnline ?? ['ONLINE', 'BUSY'].includes(driver.availabilityStatus),
   isAvailable: driver.isAvailable ?? driver.availabilityStatus === 'ONLINE',
@@ -79,12 +83,23 @@ export const driverApi = {
 
   // Update driver profile
   updateProfile: async (data: Partial<Driver>): Promise<ApiResponse<{ driver: Driver }>> => {
-    const response = await axiosInstance.put('/drivers/me', data);
-    const payload = response.data?.data || response.data;
+    const requestPayload = {
+      vehicleType: data.vehicleType,
+      vehicleMake: data.vehicleMake,
+      vehicleModel: data.vehicleModel,
+      vehicleColor: data.vehicleColor,
+      vehicleYear: data.vehicleYear,
+      licensePlate: data.licensePlate,
+      licenseNumber: data.licenseNumber,
+      licenseExpiryDate: data.licenseExpiryDate,
+    };
+
+    const response = await axiosInstance.put('/drivers/me', requestPayload);
+    const responsePayload = response.data?.data || response.data;
     return {
       ...response.data,
       data: {
-        driver: normalizeDriver(payload.driver || payload),
+        driver: normalizeDriver(responsePayload.driver || responsePayload),
       },
     };
   },

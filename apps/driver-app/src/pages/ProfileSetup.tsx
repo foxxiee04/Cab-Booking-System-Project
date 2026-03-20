@@ -241,6 +241,12 @@ const ProfileSetup: React.FC = () => {
                 </Typography>
               </Alert>
 
+              <Alert severity="success" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  {t('profileSetup.vehiclePhotoHint')}
+                </Typography>
+              </Alert>
+
               <Button
                 fullWidth
                 type="submit"

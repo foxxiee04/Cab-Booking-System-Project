@@ -36,7 +36,11 @@ const Register: React.FC = () => {
   const [success, setSuccess] = useState('');
 
   const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [field]: e.target.value });
+    const nextValue = field === 'phoneNumber'
+      ? e.target.value.replace(/\D/g, '').slice(0, 10)
+      : e.target.value;
+
+    setFormData({ ...formData, [field]: nextValue });
   };
 
   const validateForm = (): string | null => {
@@ -75,7 +79,7 @@ const Register: React.FC = () => {
       return t('errors.passwordMismatch');
     }
 
-    const phoneRegex = /^[0-9]{10,15}$/;
+    const phoneRegex = /^0\d{9}$/;
     if (!phoneRegex.test(formData.phoneNumber)) {
       return t('errors.phoneInvalid');
     }

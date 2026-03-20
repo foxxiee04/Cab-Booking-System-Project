@@ -353,7 +353,7 @@ const Dashboard: React.FC = () => {
                   onChange={handleToggleOnline}
                   disabled={loading}
                   color="success"
-                  inputProps={{ 'data-testid': 'driver-online-toggle' }}
+                  inputProps={{ 'data-testid': 'driver-online-toggle' } as any}
                 />
               }
               label=""

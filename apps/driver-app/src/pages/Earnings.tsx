@@ -36,7 +36,7 @@ const Earnings: React.FC = () => {
     };
 
     fetchEarnings();
-  }, [dispatch]);
+  }, [dispatch, t]);
 
   return (
     <Container sx={{ py: 4 }}>

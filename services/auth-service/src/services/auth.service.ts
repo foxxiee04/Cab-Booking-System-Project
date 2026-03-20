@@ -42,6 +42,15 @@ interface UserResponse {
   updatedAt: Date;
 }
 
+interface UpdateProfileInput {
+  profile?: {
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+  };
+  phone?: string;
+}
+
 export class AuthService {
   private eventPublisher: EventPublisher;
 
@@ -227,6 +236,45 @@ export class AuthService {
         newRole: role,
       });
     }
+
+    return this.toUserResponse(user);
+  }
+
+  async updateProfile(userId: string, input: UpdateProfileInput): Promise<UserResponse> {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        phone:
+          typeof input.phone === 'string'
+            ? input.phone.trim() !== ''
+              ? input.phone.trim()
+              : null
+            : undefined,
+        firstName:
+          typeof input.profile?.firstName === 'string'
+            ? input.profile.firstName.trim() !== ''
+              ? input.profile.firstName.trim()
+              : null
+            : undefined,
+        lastName:
+          typeof input.profile?.lastName === 'string'
+            ? input.profile.lastName.trim() !== ''
+              ? input.profile.lastName.trim()
+              : null
+            : undefined,
+        avatar:
+          typeof input.profile?.avatar === 'string'
+            ? input.profile.avatar.trim() !== ''
+              ? input.profile.avatar.trim()
+              : null
+            : undefined,
+      },
+    });
+
+    await this.eventPublisher.publish('user.profile_updated', {
+      userId: user.id,
+      role: user.role,
+    });
 
     return this.toUserResponse(user);
   }

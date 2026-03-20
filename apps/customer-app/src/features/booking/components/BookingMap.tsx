@@ -34,7 +34,7 @@ import {
   interpolatePosition,
 } from '../utils/mapAnimation';
 import { BookingMapLocation, DriverLocationUpdate, NearbyDriver, RouteSummary } from '../types';
-import { geocodeAddress, getRoute } from '../../../utils/map.utils';
+import { geocodeAddress, getCurrentLocation, getRoute } from '../../../utils/map.utils';
 import '../../../styles/map.css';
 
 const libraries: ('places' | 'geometry')[] = [];
@@ -366,6 +366,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
   const animationFrameRef = useRef<number | null>(null);
   const predictionRequestRef = useRef(0);
   const predictionDebounceRef = useRef<Partial<Record<SearchField, number>>>({});
+  const routeRequestRef = useRef(0);
   const mapRef = useRef<google.maps.Map | null>(null);
   const animatedDriverRef = useRef<google.maps.LatLngLiteral | null>(null);
   const driverHeadingRef = useRef(0);
@@ -375,6 +376,8 @@ export const BookingMap: React.FC<BookingMapProps> = ({
   const [pickupOptions, setPickupOptions] = useState<PlacePredictionOption[]>([]);
   const [dropoffOptions, setDropoffOptions] = useState<PlacePredictionOption[]>([]);
   const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [predictionLoading, setPredictionLoading] = useState<Record<SearchField, boolean>>({ pickup: false, dropoff: false });
   const [animatedDriverPosition, setAnimatedDriverPosition] = useState<google.maps.LatLngLiteral | null>(null);
   const [driverHeading, setDriverHeading] = useState(0);
   const searchContextLabel = useMemo(() => getSearchContextLabel(pickup?.address, dropoff?.address), [dropoff?.address, pickup?.address]);
@@ -397,8 +400,11 @@ export const BookingMap: React.FC<BookingMapProps> = ({
       } else {
         setDropoffOptions([]);
       }
+      setPredictionLoading((prev) => ({ ...prev, [field]: false }));
       return;
     }
+
+    setPredictionLoading((prev) => ({ ...prev, [field]: true }));
 
     try {
       const results = await geocodeAddress(query, { contextLabel: searchContextLabel });
@@ -448,6 +454,10 @@ export const BookingMap: React.FC<BookingMapProps> = ({
         } else {
           setDropoffOptions([]);
         }
+    } finally {
+      if (predictionRequestRef.current === requestId) {
+        setPredictionLoading((prev) => ({ ...prev, [field]: false }));
+      }
     }
   }, [searchContextLabel]);
 
@@ -552,17 +562,21 @@ export const BookingMap: React.FC<BookingMapProps> = ({
 
   useEffect(() => {
     let cancelled = false;
+    const requestId = ++routeRequestRef.current;
 
     if (!pickup || !dropoff) {
       setRouteSummary(null);
+      setRouteLoading(false);
       onRouteComputed?.(null);
       return;
     }
 
+    setRouteLoading(true);
+
     void (async () => {
       try {
         const route = await getRoute(pickup, dropoff);
-        if (cancelled || !route) {
+        if (cancelled || !route || routeRequestRef.current !== requestId) {
           return;
         }
 
@@ -578,9 +592,13 @@ export const BookingMap: React.FC<BookingMapProps> = ({
         onRouteComputed?.(summary);
         fitMapToLocations([pickup, dropoff]);
       } catch {
-        if (!cancelled) {
+        if (!cancelled && routeRequestRef.current === requestId) {
           setRouteSummary(null);
           onRouteComputed?.(null);
+        }
+      } finally {
+        if (!cancelled && routeRequestRef.current === requestId) {
+          setRouteLoading(false);
         }
       }
     })();
@@ -644,16 +662,19 @@ export const BookingMap: React.FC<BookingMapProps> = ({
   }, [driverLocation]);
 
   useEffect(() => {
+    const pickupDebounce = predictionDebounceRef.current.pickup;
+    const dropoffDebounce = predictionDebounceRef.current.dropoff;
+
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
 
-      if (predictionDebounceRef.current.pickup) {
-        window.clearTimeout(predictionDebounceRef.current.pickup);
+      if (pickupDebounce) {
+        window.clearTimeout(pickupDebounce);
       }
-      if (predictionDebounceRef.current.dropoff) {
-        window.clearTimeout(predictionDebounceRef.current.dropoff);
+      if (dropoffDebounce) {
+        window.clearTimeout(dropoffDebounce);
       }
     };
   }, []);
@@ -669,32 +690,23 @@ export const BookingMap: React.FC<BookingMapProps> = ({
   }, [animatedDriverPosition, mode, pickup]);
 
   const handleLocateMe = useCallback(() => {
-    if (!navigator.geolocation) {
-      onError?.('Trình duyệt không hỗ trợ định vị GPS.');
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
+    void (async () => {
+      try {
+        const currentLocation = await getCurrentLocation();
         const location = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
+          ...currentLocation,
           address: 'Vị trí hiện tại',
         };
+
         mapRef.current?.panTo(location);
         mapRef.current?.setZoom(16);
-
-        if (!pickup) {
-          commitLocation('pickup', location);
-          setPickupInput(location.address || 'Vị trí hiện tại');
-        }
-      },
-      () => {
-        onError?.('Không lấy được vị trí hiện tại của bạn.');
-      },
-      { enableHighAccuracy: true, timeout: 12000 },
-    );
-  }, [commitLocation, onError, pickup]);
+        commitLocation('pickup', location);
+        setPickupInput(location.address || 'Vị trí hiện tại');
+      } catch {
+        onError?.('Không lấy được vị trí hiện tại của bạn. Hãy kiểm tra GPS hoặc nhập địa chỉ thủ công.');
+      }
+    })();
+  }, [commitLocation, onError]);
 
   const searchPanel = (
     <Paper
@@ -702,20 +714,27 @@ export const BookingMap: React.FC<BookingMapProps> = ({
       sx={{
         p: 2,
         borderRadius: 4,
-        backgroundColor: themeMode === 'dark' ? 'rgba(17, 24, 39, 0.9)' : 'rgba(255, 255, 255, 0.94)',
-        backdropFilter: 'blur(12px)',
+        position: 'relative',
+        zIndex: 3,
+        backgroundColor: themeMode === 'dark' ? 'rgba(17, 24, 39, 0.96)' : 'rgba(255, 255, 255, 0.98)',
+        backdropFilter: 'blur(16px)',
         border: '1px solid rgba(148, 163, 184, 0.2)',
+        boxShadow: '0 18px 40px rgba(15, 23, 42, 0.14)',
       }}
     >
       <Stack spacing={1.5}>
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
           <Chip size="small" label={`Gợi ý quanh ${searchContextLabel}`} variant="outlined" />
           <Chip size="small" label="Tìm được bến xe, ga, sân bay, địa chỉ cụ thể" sx={{ bgcolor: 'rgba(37,99,235,0.08)', color: '#1d4ed8' }} />
+          {routeLoading && <Chip size="small" label="Đang tính lộ trình" color="warning" variant="outlined" />}
         </Stack>
         <Autocomplete
           freeSolo
           clearOnBlur={false}
           options={pickupOptions}
+          loading={predictionLoading.pickup}
+          loadingText="Đang tìm địa điểm..."
+          noOptionsText={pickupInput.trim().length < 2 ? 'Nhập ít nhất 2 ký tự' : 'Không có gợi ý phù hợp'}
           filterOptions={(options) => options}
           getOptionLabel={getPredictionLabel}
           inputValue={pickupInput}
@@ -758,6 +777,9 @@ export const BookingMap: React.FC<BookingMapProps> = ({
           freeSolo
           clearOnBlur={false}
           options={dropoffOptions}
+          loading={predictionLoading.dropoff}
+          loadingText="Đang tìm địa điểm..."
+          noOptionsText={dropoffInput.trim().length < 2 ? 'Nhập ít nhất 2 ký tự' : 'Không có gợi ý phù hợp'}
           filterOptions={(options) => options}
           getOptionLabel={getPredictionLabel}
           inputValue={dropoffInput}
@@ -799,7 +821,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
     </Paper>
   );
 
-  const summaryPanel = (
+  const summaryPanel = mode === 'tracking' ? (
     <Paper
       elevation={10}
       sx={{
@@ -850,7 +872,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
         </List>
       )}
     </Paper>
-  );
+  ) : null;
 
   const leafletMap = (
     <LeafletMapContainer
@@ -928,15 +950,17 @@ export const BookingMap: React.FC<BookingMapProps> = ({
           />
         ) : leafletMap}
 
-        <Box
-          sx={{
-            position: 'absolute',
-            inset: 0,
-            pointerEvents: 'none',
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 26%, rgba(15,23,42,0.04) 100%)',
-            zIndex: 1,
-          }}
-        />
+        {mode === 'tracking' && (
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 26%, rgba(15,23,42,0.04) 100%)',
+              zIndex: 1,
+            }}
+          />
+        )}
 
         {!renderSearchPanelAsSection && (
           <Box sx={{ position: 'absolute', top: 16, left: 16, right: 16, zIndex: 2 }}>
@@ -944,7 +968,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
           </Box>
         )}
 
-        <Box sx={{ position: 'absolute', right: 16, bottom: 144, zIndex: 2 }}>
+        <Box sx={{ position: 'absolute', right: 16, bottom: mode === 'tracking' ? 144 : 16, zIndex: 2 }}>
           <IconButton
             onClick={handleLocateMe}
             sx={{

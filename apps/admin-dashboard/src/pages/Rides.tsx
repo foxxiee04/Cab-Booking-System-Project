@@ -45,7 +45,7 @@ const Rides: React.FC = () => {
       width: 130,
       renderCell: (params) => (
         <Chip
-          label={params.value}
+          label={t(`rideStatus.${params.value}`)}
           size="small"
           color={getRideStatusColor(params.value)}
         />

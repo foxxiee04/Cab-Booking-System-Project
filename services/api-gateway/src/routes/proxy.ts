@@ -39,7 +39,8 @@ const shouldForwardOverHttp = (
     return false;
   }
 
-  return /^\/api\/drivers\/me\/(online|offline|location|available-rides)$/.test(normalizedPath)
+  return /^\/api\/drivers\/me$/.test(normalizedPath)
+    || /^\/api\/drivers\/me\/(online|offline|location|available-rides)$/.test(normalizedPath)
     || /^\/api\/drivers\/me\/rides\/[^/]+\/accept$/.test(normalizedPath);
 };
 

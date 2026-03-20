@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Button, CircularProgress, Typography } from '@mui/material';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import EastRoundedIcon from '@mui/icons-material/EastRounded';
@@ -33,10 +33,7 @@ export const SwipeToConfirm: React.FC<SwipeToConfirmProps> = ({
   const [offset, setOffset] = useState(0);
   const [confirmed, setConfirmed] = useState(false);
 
-  const maxOffset = useMemo(() => {
-    const width = trackRef.current?.clientWidth || 0;
-    return Math.max(0, width - THUMB_SIZE - PADDING * 2);
-  }, [trackRef.current?.clientWidth]);
+  const maxOffset = Math.max(0, (trackRef.current?.clientWidth || 0) - THUMB_SIZE - PADDING * 2);
 
   useEffect(() => {
     if (!loading) {
@@ -57,7 +54,7 @@ export const SwipeToConfirm: React.FC<SwipeToConfirmProps> = ({
     return () => window.clearTimeout(timer);
   }, [confirmed, loading]);
 
-  const triggerConfirm = () => {
+  const triggerConfirm = useCallback(() => {
     if (disabled || loading || confirmed) {
       return;
     }
@@ -65,7 +62,7 @@ export const SwipeToConfirm: React.FC<SwipeToConfirmProps> = ({
     setOffset(maxOffset);
     setConfirmed(true);
     onConfirm();
-  };
+  }, [confirmed, disabled, loading, maxOffset, onConfirm]);
 
   useEffect(() => {
     const handleMove = (event: MouseEvent | TouchEvent) => {
@@ -105,7 +102,7 @@ export const SwipeToConfirm: React.FC<SwipeToConfirmProps> = ({
       window.removeEventListener('touchmove', handleMove);
       window.removeEventListener('touchend', handleEnd);
     };
-  }, [confirmed, disabled, loading, maxOffset, offset, onConfirm]);
+  }, [confirmed, disabled, loading, maxOffset, offset, triggerConfirm]);
 
   const startDrag = (clientX: number) => {
     if (disabled || loading || confirmed) {
