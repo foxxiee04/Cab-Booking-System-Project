@@ -14,8 +14,7 @@ const POSTGRES_HOST = process.env.POSTGRES_HOST || 'localhost';
 const POSTGRES_PORT = process.env.POSTGRES_PORT || '5433';
 const POSTGRES_USER = process.env.POSTGRES_USER || 'postgres';
 const POSTGRES_PASSWORD = process.env.POSTGRES_PASSWORD || 'postgres';
-const PASSWORD_HASH =
-  '$2a$10$bfRFBfVOiG/.RrxxAeQXIeltcib08rS0Lg2YUGvEh8rUD.8V2y7fi'; // password123
+// No password hash needed — auth is now phone+OTP based
 
 function pgUrl(db: string) {
   return `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${db}`;
@@ -42,22 +41,19 @@ function createServicePrismaClient(serviceName: string, dbName: string) {
 const CUSTOMERS = [
   {
     email: 'customer1@example.com',
-    phone: '+84901234561',
-    password: PASSWORD_HASH,
+    phone: '0901234561',
     firstName: 'Nguyen',
     lastName: 'Van A',
   },
   {
     email: 'customer2@example.com',
-    phone: '+84901234562',
-    password: PASSWORD_HASH,
+    phone: '0901234562',
     firstName: 'Tran',
     lastName: 'Thi B',
   },
   {
     email: 'customer3@example.com',
-    phone: '+84901234563',
-    password: PASSWORD_HASH,
+    phone: '0901234563',
     firstName: 'Le',
     lastName: 'Van C',
   },
@@ -66,8 +62,7 @@ const CUSTOMERS = [
 const DRIVERS = [
   {
     email: 'driver1@example.com',
-    phone: '+84911234561',
-    password: PASSWORD_HASH,
+    phone: '0911234561',
     firstName: 'Pham',
     lastName: 'Van D',
     vehicle: {
@@ -85,8 +80,7 @@ const DRIVERS = [
   },
   {
     email: 'driver2@example.com',
-    phone: '+84911234562',
-    password: PASSWORD_HASH,
+    phone: '0911234562',
     firstName: 'Vo',
     lastName: 'Thi E',
     vehicle: {
@@ -104,8 +98,7 @@ const DRIVERS = [
   },
   {
     email: 'driver3@example.com',
-    phone: '+84911234563',
-    password: PASSWORD_HASH,
+    phone: '0911234563',
     firstName: 'Hoang',
     lastName: 'Van F',
     vehicle: {
@@ -125,8 +118,7 @@ const DRIVERS = [
 
 const ADMIN = {
   email: 'admin@cabbooking.com',
-  phone: '+84900000001',
-  password: PASSWORD_HASH,
+  phone: '0900000001',
   firstName: 'System',
   lastName: 'Admin',
 };
@@ -182,30 +174,28 @@ async function seedAuthDB() {
   try {
     // Seed admin
     const admin = await prisma.user.upsert({
-      where: { email: ADMIN.email },
+      where: { phone: ADMIN.phone },
       update: {},
       create: {
         email: ADMIN.email,
         phone: ADMIN.phone,
-        passwordHash: ADMIN.password,
         role: 'ADMIN',
         status: 'ACTIVE',
         firstName: ADMIN.firstName,
         lastName: ADMIN.lastName,
       },
     });
-    console.log(`    Admin: ${admin.email} (${admin.id})`);
+    console.log(`    Admin: ${admin.phone} (${admin.id})`);
 
     // Seed customers
     const customerIds: string[] = [];
     for (const c of CUSTOMERS) {
       const user = await prisma.user.upsert({
-        where: { email: c.email },
+        where: { phone: c.phone },
         update: {},
         create: {
           email: c.email,
           phone: c.phone,
-          passwordHash: c.password,
           role: 'CUSTOMER',
           status: 'ACTIVE',
           firstName: c.firstName,
@@ -213,19 +203,18 @@ async function seedAuthDB() {
         },
       });
       customerIds.push(user.id);
-      console.log(`    Customer: ${user.email} (${user.id})`);
+      console.log(`    Customer: ${user.phone} (${user.id})`);
     }
 
     // Seed driver users
     const driverUserIds: string[] = [];
     for (const d of DRIVERS) {
       const user = await prisma.user.upsert({
-        where: { email: d.email },
+        where: { phone: d.phone },
         update: {},
         create: {
           email: d.email,
           phone: d.phone,
-          passwordHash: d.password,
           role: 'DRIVER',
           status: 'ACTIVE',
           firstName: d.firstName,
@@ -233,7 +222,7 @@ async function seedAuthDB() {
         },
       });
       driverUserIds.push(user.id);
-      console.log(`    Driver user: ${user.email} (${user.id})`);
+      console.log(`    Driver user: ${user.phone} (${user.id})`);
     }
 
     await prisma.$disconnect();

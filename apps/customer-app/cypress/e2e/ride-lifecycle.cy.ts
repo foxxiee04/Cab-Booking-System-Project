@@ -2,17 +2,22 @@ const CUSTOMER_ORIGIN = 'http://localhost:4000';
 const DRIVER_ORIGIN = 'http://localhost:4001';
 const ADMIN_ORIGIN = 'http://localhost:4002';
 
-const PASSWORD = Cypress.env('SMOKE_PASSWORD') || 'password123';
-const CUSTOMER_EMAIL = Cypress.env('SMOKE_CUSTOMER_EMAIL') || 'customer1@example.com';
-const DRIVER_EMAIL = Cypress.env('SMOKE_DRIVER_EMAIL') || 'driver1@example.com';
-const ADMIN_EMAIL = Cypress.env('SMOKE_ADMIN_EMAIL') || 'admin@cabbooking.com';
+const CUSTOMER_PHONE = Cypress.env('SMOKE_CUSTOMER_PHONE') || '0901234561';
+const DRIVER_PHONE   = Cypress.env('SMOKE_DRIVER_PHONE')   || '0911234561';
+const ADMIN_PHONE    = Cypress.env('SMOKE_ADMIN_PHONE')    || '0900000001';
 
 const PICKUP_QUERY = Cypress.env('SMOKE_PICKUP_QUERY') || 'Ben Thanh';
 const DROPOFF_QUERY = Cypress.env('SMOKE_DROPOFF_QUERY') || 'Tan Son Nhat Airport';
 const REVIEW_COMMENT =
-  Cypress.env('SMOKE_REVIEW_COMMENT') || 'Browser smoke flow da hoan tat on dinh.';
+  Cypress.env('SMOOTH_REVIEW_COMMENT') || 'Browser smoke flow da hoan tat on dinh.';
 
-const resetAndLogin = (email: string, landingPath: string) => {
+/**
+ * Login helper using phone + OTP.
+ * Intercepts the send-otp response to get devOtp (works in NODE_ENV=development).
+ */
+const loginWithOtp = (phone: string, landingPath: string) => {
+  cy.intercept('POST', '**/auth/send-otp').as('sendOtpCapture');
+
   cy.visit('/login', {
     onBeforeLoad(win) {
       win.localStorage.clear();
@@ -20,9 +25,41 @@ const resetAndLogin = (email: string, landingPath: string) => {
     },
   });
 
-  cy.get('input[type="email"]').clear().type(email);
-  cy.get('input[type="password"]').clear().type(PASSWORD, { log: false });
+  // Step 1 – enter phone and request OTP
+  cy.get('input').first().clear().type(phone);
   cy.get('button[type="submit"]').click();
+
+  // Step 2 – capture devOtp from API response and submit
+  cy.wait('@sendOtpCapture', { timeout: 20000 }).then((interception) => {
+    const devOtp = interception.response?.body?.data?.devOtp as string;
+    expect(devOtp, 'devOtp must be present (NODE_ENV must not be production)').to.be.a('string');
+    cy.get('input').first().clear().type(devOtp);
+    cy.get('button[type="submit"]').click();
+  });
+
+  cy.location('pathname', { timeout: 30000 }).should('eq', landingPath);
+};
+
+/** Login helper for use inside cy.origin() blocks (uses cy.intercept within origin). */
+const originLoginWithOtp = (phone: string, landingPath: string) => {
+  cy.intercept('POST', '**/auth/send-otp').as('sendOtpCapture');
+
+  cy.visit('/login', {
+    onBeforeLoad(win) {
+      win.localStorage.clear();
+      win.sessionStorage.clear();
+    },
+  });
+
+  cy.get('input').first().clear().type(phone);
+  cy.get('button[type="submit"]').click();
+
+  cy.wait('@sendOtpCapture', { timeout: 20000 }).then((interception) => {
+    const devOtp = interception.response?.body?.data?.devOtp as string;
+    cy.get('input').first().clear().type(devOtp);
+    cy.get('button[type="submit"]').click();
+  });
+
   cy.location('pathname', { timeout: 30000 }).should('eq', landingPath);
 };
 
@@ -65,43 +102,51 @@ const captureLeadingNumber = (selector: string) => {
 
 describe('Browser smoke ride lifecycle', () => {
   it('completes one ride across customer, driver, and admin via UI only', () => {
-    resetAndLogin(CUSTOMER_EMAIL, '/home');
+    loginWithOtp(CUSTOMER_PHONE, '/home');
 
     cy.visit('/activity');
     captureLeadingNumber('.MuiCard-root:first-of-type').as('customerCompletedBefore');
 
     cy.origin(
       DRIVER_ORIGIN,
-      { args: { email: DRIVER_EMAIL, password: PASSWORD } },
-      ({ email, password }) => {
+      { args: { phone: DRIVER_PHONE } },
+      ({ phone }) => {
+        cy.intercept('POST', '**/auth/send-otp').as('sendOtpDriver');
         cy.visit('/login', {
           onBeforeLoad(win) {
             win.localStorage.clear();
             win.sessionStorage.clear();
           },
         });
-
-        cy.get('input[type="email"]').clear().type(email);
-        cy.get('input[type="password"]').clear().type(password, { log: false });
+        cy.get('input').first().clear().type(phone);
         cy.get('button[type="submit"]').click();
+        cy.wait('@sendOtpDriver', { timeout: 20000 }).then((interception) => {
+          const devOtp = interception.response?.body?.data?.devOtp as string;
+          cy.get('input').first().clear().type(devOtp);
+          cy.get('button[type="submit"]').click();
+        });
         cy.location('pathname', { timeout: 30000 }).should('eq', '/dashboard');
       }
     );
 
     cy.origin(
       ADMIN_ORIGIN,
-      { args: { email: ADMIN_EMAIL, password: PASSWORD } },
-      ({ email, password }) => {
+      { args: { phone: ADMIN_PHONE } },
+      ({ phone }) => {
+        cy.intercept('POST', '**/auth/send-otp').as('sendOtpAdmin');
         cy.visit('/login', {
           onBeforeLoad(win) {
             win.localStorage.clear();
             win.sessionStorage.clear();
           },
         });
-
-        cy.get('input[type="email"]').clear().type(email);
-        cy.get('input[type="password"]').clear().type(password, { log: false });
+        cy.get('input').first().clear().type(phone);
         cy.get('button[type="submit"]').click();
+        cy.wait('@sendOtpAdmin', { timeout: 20000 }).then((interception) => {
+          const devOtp = interception.response?.body?.data?.devOtp as string;
+          cy.get('input').first().clear().type(devOtp);
+          cy.get('button[type="submit"]').click();
+        });
         cy.location('pathname', { timeout: 30000 }).should('eq', '/dashboard');
       }
     );

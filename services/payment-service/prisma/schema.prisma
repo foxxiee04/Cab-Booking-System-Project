@@ -22,6 +22,7 @@ enum PaymentMethod {
   CARD
   WALLET
   MOMO
+  VNPAY
   VISA
 }
 
@@ -29,6 +30,7 @@ enum PaymentProvider {
   STRIPE
   MOCK
   MOMO
+  VNPAY
   VISA
   ZALOPAY
 }

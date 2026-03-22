@@ -6,6 +6,7 @@ import { logger } from '../utils/logger';
 export interface JwtPayload {
   userId?: string;
   sub?: string;
+  phone?: string;
   email?: string;
   role?: string;
 }
@@ -17,12 +18,15 @@ export interface AuthenticatedRequest extends Request {
 // Paths that don't require authentication
 const PUBLIC_PATHS = [
   '/api/auth/register',
-  '/api/auth/login',
+  '/api/auth/login',         // kept for backward compat
+  '/api/auth/send-otp',      // new: request OTP
+  '/api/auth/verify-otp',    // new: verify OTP + get JWT
   '/api/auth/refresh',
+  '/api/payments/vnpay/return', // VNPay redirect return (browser redirect)
   '/api/map',
   '/health',
-  '/api/ai/ride/estimate', // Public estimate endpoint
-  '/api/geo', // Geocoding endpoints are public
+  '/api/ai/ride/estimate',
+  '/api/geo',
 ];
 
 // Check if path is public
@@ -52,6 +56,7 @@ export const authMiddleware = (
   try {
     const decoded = jwt.verify(token, config.jwtSecret) as JwtPayload;
     const userId = decoded.userId || decoded.sub;
+    const phone = decoded.phone;
     const email = decoded.email;
     const role = decoded.role;
 
@@ -60,10 +65,11 @@ export const authMiddleware = (
       return;
     }
 
-    req.user = { userId, email: email || '', role };
+    req.user = { userId, email: email || '', phone: phone || '', role };
     
-    // Add user info to headers for downstream services
+    // Propagate user identity to downstream services via headers
     req.headers['x-user-id'] = userId;
+    if (phone) req.headers['x-user-phone'] = phone;
     if (email) req.headers['x-user-email'] = email;
     req.headers['x-user-role'] = role;
     

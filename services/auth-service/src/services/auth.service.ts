@@ -1,4 +1,3 @@
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import type { SignOptions } from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
@@ -6,19 +5,25 @@ import { UserRole, UserStatus } from '../generated/prisma-client';
 import { config } from '../config';
 import { prisma } from '../config/db';
 import { EventPublisher } from '../events/publisher';
+import { OtpService } from './otp.service';
+import { SmsService } from './sms.service';
+import { auditLog } from '../utils/audit';
 
 interface RegisterInput {
-  email: string;
-  password: string;
-  phone?: string;
+  phone: string;
   role?: UserRole;
   firstName?: string;
   lastName?: string;
 }
 
-interface LoginInput {
-  email: string;
-  password: string;
+interface SendOtpInput {
+  phone: string;
+  ipAddress?: string;
+}
+
+interface VerifyOtpInput {
+  phone: string;
+  otp: string;
   deviceInfo?: string;
   ipAddress?: string;
 }
@@ -31,8 +36,8 @@ interface TokenPair {
 
 interface UserResponse {
   id: string;
-  email: string;
-  phone: string | null;
+  phone: string;
+  email: string | null;
   role: UserRole;
   status: UserStatus;
   firstName: string | null;
@@ -48,89 +53,148 @@ interface UpdateProfileInput {
     lastName?: string;
     avatar?: string;
   };
-  phone?: string;
+  email?: string;
 }
 
 export class AuthService {
   private eventPublisher: EventPublisher;
+  private otpService: OtpService;
+  private smsService: SmsService;
 
-  constructor(eventPublisher: EventPublisher) {
+  constructor(eventPublisher: EventPublisher, otpService: OtpService) {
     this.eventPublisher = eventPublisher;
+    this.otpService = otpService;
+    this.smsService = new SmsService();
   }
 
-  async register(input: RegisterInput): Promise<{ user: UserResponse; tokens: TokenPair }> {
-    // Check if user exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: input.email.toLowerCase() },
-    });
-
-    if (existingUser) {
-      throw new Error('Email already registered');
+  /**
+   * Step 1 of Registration: create user account (INACTIVE) then send OTP.
+   * After OTP verification the account is activated.
+   */
+  async register(input: RegisterInput): Promise<void> {
+    // Prevent duplicate phone registrations
+    const existing = await prisma.user.findUnique({ where: { phone: input.phone } });
+    if (existing) {
+      throw new Error('Số điện thoại này đã được đăng ký.');
     }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(12);
-    const passwordHash = await bcrypt.hash(input.password, salt);
-
-    // Create user (set phone to undefined if empty to avoid unique constraint issues with NULL)
-    const user = await prisma.user.create({
+    await prisma.user.create({
       data: {
-        email: input.email.toLowerCase(),
-        phone: input.phone && input.phone.trim() !== '' ? input.phone : undefined,
-        passwordHash,
+        phone: input.phone,
         role: input.role || UserRole.CUSTOMER,
-        status: UserStatus.ACTIVE,
+        status: UserStatus.INACTIVE, // activated after OTP verification
         firstName: input.firstName,
         lastName: input.lastName,
       },
     });
 
-    // Generate tokens
-    const tokens = await this.generateTokenPair(user.id);
-
-    // Publish event
-    await this.eventPublisher.publish('user.registered', {
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    const userResponse = this.toUserResponse(user);
-    return { user: userResponse, tokens };
+    await auditLog({ action: 'REGISTER', phone: input.phone, success: true });
   }
 
-  async login(input: LoginInput): Promise<{ user: UserResponse; tokens: TokenPair }> {
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email: input.email.toLowerCase() },
-    });
+  /**
+   * Send OTP to a phone number.
+   * Works for both login (existing user) and registration (newly created user).
+   */
+  async sendOtp(input: SendOtpInput): Promise<{ resendDelay: number; devOtp?: string }> {
+    const ip = input.ipAddress || 'unknown';
 
+    // Rate limit check
+    const rateLimitError = await this.otpService.checkRateLimit(input.phone, ip);
+    if (rateLimitError) {
+      await auditLog({
+        action: 'RATE_LIMIT_HIT',
+        phone: input.phone,
+        ipAddress: ip,
+        success: false,
+        metadata: { reason: rateLimitError },
+      });
+      throw new Error(rateLimitError);
+    }
+
+    // Resend cooldown check
+    const resendDelay = await this.otpService.getResendDelay(input.phone);
+    if (resendDelay > 0) {
+      throw new Error(`Vui lòng đợi ${resendDelay} giây trước khi yêu cầu OTP mới.`);
+    }
+
+    const otp = this.otpService.generateOtp();
+    await this.otpService.storeOtp(input.phone, otp);
+    await this.smsService.sendOtp(input.phone, otp);
+
+    await auditLog({ action: 'OTP_REQUESTED', phone: input.phone, ipAddress: ip, success: true });
+
+    // Return the delay for the NEXT resend attempt
+    const nextDelay = await this.otpService.getResendDelay(input.phone);
+    const result: { resendDelay: number; devOtp?: string } = { resendDelay: nextDelay };
+    // Expose OTP in non-production for integration testing (never enabled in production)
+    if (process.env.NODE_ENV !== 'production') {
+      result.devOtp = otp;
+    }
+    return result;
+  }
+
+  /**
+   * Step 2 (Login): Verify OTP and issue JWT tokens.
+   * Also activates INACTIVE accounts (newly registered users).
+   */
+  async verifyOtpAndLogin(
+    input: VerifyOtpInput,
+  ): Promise<{ user: UserResponse; tokens: TokenPair }> {
+    const ip = input.ipAddress || 'unknown';
+
+    const result = await this.otpService.verifyOtp(input.phone, input.otp);
+
+    if (!result.success) {
+      await auditLog({
+        action: 'OTP_FAILED',
+        phone: input.phone,
+        ipAddress: ip,
+        success: false,
+        metadata: { reason: result.error },
+      });
+      throw new Error(result.error);
+    }
+
+    // Find user (must exist)
+    const user = await prisma.user.findUnique({ where: { phone: input.phone } });
     if (!user) {
-      throw new Error('Invalid credentials');
+      throw new Error('Tài khoản không tồn tại. Vui lòng đăng ký trước.');
     }
 
-    // Check status
-    if (user.status !== UserStatus.ACTIVE) {
-      throw new Error('Account is not active');
+    if (user.status === UserStatus.SUSPENDED) {
+      throw new Error('Tài khoản đã bị khóa. Vui lòng liên hệ hỗ trợ.');
     }
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(input.password, user.passwordHash);
-    if (!isValidPassword) {
-      throw new Error('Invalid credentials');
-    }
+    // Activate INACTIVE account (newly registered via /register)
+    const activeUser =
+      user.status === UserStatus.INACTIVE
+        ? await prisma.user.update({
+            where: { id: user.id },
+            data: { status: UserStatus.ACTIVE },
+          })
+        : user;
 
-    // Generate tokens
-    const tokens = await this.generateTokenPair(user.id, input.deviceInfo, input.ipAddress);
+    // Clear resend cooldown after successful verification
+    await this.otpService.clearResendCooldown(input.phone);
 
-    // Publish event
+    const tokens = await this.generateTokenPair(activeUser.id, input.deviceInfo, ip);
+
+    await auditLog({
+      action: 'LOGIN_SUCCESS',
+      userId: activeUser.id,
+      phone: activeUser.phone,
+      ipAddress: ip,
+      success: true,
+    });
+    await auditLog({ action: 'OTP_VERIFIED', phone: activeUser.phone, success: true });
+
     await this.eventPublisher.publish('user.logged_in', {
-      userId: user.id,
-      email: user.email,
+      userId: activeUser.id,
+      phone: activeUser.phone,
+      role: activeUser.role,
     });
 
-    const userResponse = this.toUserResponse(user);
-    return { user: userResponse, tokens };
+    return { user: this.toUserResponse(activeUser), tokens };
   }
 
   async refreshToken(refreshTokenValue: string): Promise<TokenPair> {
@@ -244,10 +308,11 @@ export class AuthService {
     const user = await prisma.user.update({
       where: { id: userId },
       data: {
-        phone:
-          typeof input.phone === 'string'
-            ? input.phone.trim() !== ''
-              ? input.phone.trim()
+        // Email is now optional profile info
+        email:
+          typeof input.email === 'string'
+            ? input.email.trim() !== ''
+              ? input.email.trim().toLowerCase()
               : null
             : undefined,
         firstName:
@@ -276,6 +341,8 @@ export class AuthService {
       role: user.role,
     });
 
+    await auditLog({ action: 'PROFILE_UPDATED', userId: user.id, phone: user.phone });
+
     return this.toUserResponse(user);
   }
 
@@ -289,46 +356,34 @@ export class AuthService {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new Error('User not found');
 
-    // Access token (short-lived)
+    // Access token — phone replaces email as identity claim
     const accessToken = jwt.sign(
       {
         sub: user.id,
         role: user.role,
-        email: user.email,
+        phone: user.phone,
       },
       config.jwt.secret,
       { expiresIn: config.jwt.expiresIn as SignOptions['expiresIn'] }
     );
 
-    // Calculate refresh token expiry
     const refreshExpiresIn = this.parseExpiry(config.jwt.refreshExpiresIn);
     const expiresAt = new Date(Date.now() + refreshExpiresIn);
 
-    // Refresh token
     const refreshToken = jwt.sign(
-      {
-        sub: user.id,
-        tokenId,
-      },
+      { sub: user.id, tokenId },
       config.jwt.refreshSecret,
       { expiresIn: config.jwt.refreshExpiresIn as SignOptions['expiresIn'] }
     );
 
-    // Store refresh token
     await prisma.refreshToken.create({
-      data: {
-        tokenId,
-        userId: user.id,
-        expiresAt,
-        deviceInfo,
-        ipAddress,
-      },
+      data: { tokenId, userId: user.id, expiresAt, deviceInfo, ipAddress },
     });
 
     return {
       accessToken,
       refreshToken,
-      expiresIn: this.parseExpiry(config.jwt.expiresIn) / 1000, // seconds
+      expiresIn: this.parseExpiry(config.jwt.expiresIn) / 1000,
     };
   }
 
@@ -351,8 +406,8 @@ export class AuthService {
   private toUserResponse(user: any): UserResponse {
     return {
       id: user.id,
-      email: user.email,
       phone: user.phone,
+      email: user.email,
       role: user.role,
       status: user.status,
       firstName: user.firstName,

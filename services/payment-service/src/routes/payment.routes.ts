@@ -12,34 +12,43 @@ export const createPaymentRoutes = (paymentService: PaymentService) => {
   const router = Router();
   const controller = new PaymentController(paymentService);
 
-  // Create card payment intent (modern flow with client secret)
+  // ─── General ──────────────────────────────────────────────────────────────
+  // Create payment intent (for Stripe card flow)
   router.post('/intents', authMiddleware, validateCreatePaymentIntent, controller.createPaymentIntent);
 
-  // Webhook endpoints for provider callbacks and local smoke tests.
-  router.post('/webhook/mock', validateWebhook, controller.handleWebhook);
-  router.post('/webhooks/mock', validateWebhook, controller.handleWebhook);
+  // Available payment methods
+  router.get('/methods', authMiddleware, controller.getPaymentMethods);
+
+  // ─── MoMo ─────────────────────────────────────────────────────────────────
+  // POST /api/payments/momo/create - create MoMo payment, returns payUrl
+  router.post('/momo/create', authMiddleware, controller.createMomoPayment);
+
+  // POST /api/payments/momo/webhook - MoMo IPN callback (no auth required)
+  router.post('/momo/webhook', controller.handleMomoWebhookPost);
+
+  // Legacy webhook path (kept for backward compatibility)
   router.post('/webhooks/momo', controller.handleMomoWebhook);
 
-  // Get payment by ride ID
+  // ─── VNPay ────────────────────────────────────────────────────────────────
+  // POST /api/payments/vnpay/create - create VNPay payment URL
+  router.post('/vnpay/create', authMiddleware, controller.createVnpayPayment);
+
+  // GET /api/payments/vnpay/return - VNPay redirect return (no auth—browser redirect)
+  router.get('/vnpay/return', controller.handleVnpayReturn);
+
+  // ─── Mock / Testing ───────────────────────────────────────────────────────
+  router.post('/webhook/mock', validateWebhook, controller.handleWebhook);
+  router.post('/webhooks/mock', validateWebhook, controller.handleWebhook);
+
+  // ─── Queries ──────────────────────────────────────────────────────────────
   router.get('/ride/:rideId', authMiddleware, controller.getPaymentByRideId);
-
-  // Get customer payment history
   router.get('/customer/history', authMiddleware, controller.getCustomerPaymentHistory);
-
-  // Get driver earnings
   router.get('/driver/earnings', authMiddleware, controller.getDriverEarnings);
 
-  // Admin: Get all payments
+  // ─── Admin ────────────────────────────────────────────────────────────────
   router.get('/admin', authMiddleware, controller.getAllPayments);
-
-  // Admin: Payment stats
   router.get('/admin/stats', authMiddleware, controller.getAdminStats);
-
-  // Refund payment (admin only)
   router.post('/ride/:rideId/refund', authMiddleware, validateRefund, controller.refundPayment);
-
-  // Get available payment methods
-  router.get('/methods', authMiddleware, controller.getPaymentMethods);
 
   return router;
 };

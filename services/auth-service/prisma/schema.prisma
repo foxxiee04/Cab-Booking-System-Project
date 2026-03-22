@@ -1,4 +1,5 @@
 // Auth Service - PostgreSQL Database Schema
+// Authentication via Phone Number + OTP (passwordless)
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -23,24 +24,22 @@ enum UserStatus {
 
 model User {
   id           String        @id @default(uuid())
-  email        String        @unique @db.VarChar(255)
-  phone        String?       @unique @db.VarChar(20)
-  passwordHash String        @map("password_hash") @db.VarChar(255)
+  // Phone is the PRIMARY login identifier - required and unique
+  phone        String        @unique @db.VarChar(20)
+  // Email is OPTIONAL - used only for profile/notifications, NOT for login
+  email        String?       @unique @db.VarChar(255)
   role         UserRole      @default(CUSTOMER)
   status       UserStatus    @default(ACTIVE)
-  
-  // Profile embedded as JSON
   firstName    String?       @map("first_name") @db.VarChar(100)
   lastName     String?       @map("last_name") @db.VarChar(100)
   avatar       String?       @db.VarChar(500)
-  
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
-  
   refreshTokens RefreshToken[]
-  
-  @@index([email])
+  auditLogs     AuditLog[]
+
   @@index([phone])
+  @@index([email])
   @@index([role, status])
   @@map("users")
 }
@@ -54,11 +53,41 @@ model RefreshToken {
   deviceInfo String?   @map("device_info") @db.VarChar(500)
   ipAddress  String?   @map("ip_address") @db.VarChar(45)
   createdAt  DateTime  @default(now()) @map("created_at")
-  
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@index([tokenId])
   @@index([userId])
   @@index([expiresAt])
   @@map("refresh_tokens")
+}
+
+// OTP audit trail (primary OTP state is stored in Redis for performance)
+model OtpRecord {
+  id        String   @id @default(uuid())
+  phone     String   @db.VarChar(20)
+  otpHash   String   @map("otp_hash") @db.VarChar(64)
+  expiresAt DateTime @map("expires_at")
+  attempts  Int      @default(0)
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([phone, createdAt])
+  @@map("otp_records")
+}
+
+// Security audit log for all auth events
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  action    String   @db.VarChar(100)
+  phone     String?  @db.VarChar(20)
+  ipAddress String?  @map("ip_address") @db.VarChar(45)
+  success   Boolean  @default(true)
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([phone, createdAt])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
 }

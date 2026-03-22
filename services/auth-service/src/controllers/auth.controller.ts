@@ -1,9 +1,10 @@
-import { Request, Response } from 'express';
+﻿import { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service';
 import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 import {
   registerSchema,
-  loginSchema,
+  sendOtpSchema,
+  verifyOtpSchema,
   refreshTokenSchema,
   updateRoleSchema,
 } from '../validators/auth.validator';
@@ -13,6 +14,10 @@ import { logger } from '../utils/logger';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  /**
+   * POST /api/auth/register
+   * Create a new user account (INACTIVE). Client must then call /send-otp to activate.
+   */
   register = async (req: Request, res: Response) => {
     try {
       const { error, value } = registerSchema.validate(req.body);
@@ -23,24 +28,15 @@ export class AuthController {
         });
       }
 
-      const { user, tokens } = await this.authService.register(value);
+      await this.authService.register(value);
 
       res.status(201).json({
         success: true,
-        data: {
-          user: {
-            id: user.id,
-            email: user.email,
-            role: user.role,
-            firstName: user.firstName,
-            lastName: user.lastName,
-          },
-          tokens,
-        },
+        data: { message: 'Đăng ký thành công. Vui lòng xác minh số điện thoại qua OTP.' },
       });
     } catch (err) {
       logger.error('Register error:', err);
-      const message = err instanceof Error ? err.message : 'Registration failed';
+      const message = err instanceof Error ? err.message : 'Đăng ký thất bại';
       res.status(400).json({
         success: false,
         error: { code: 'REGISTRATION_FAILED', message },
@@ -48,9 +44,13 @@ export class AuthController {
     }
   };
 
-  login = async (req: Request, res: Response) => {
+  /**
+   * POST /api/auth/send-otp
+   * Send a one-time password to the given phone number (for login or registration).
+   */
+  sendOtp = async (req: Request, res: Response) => {
     try {
-      const { error, value } = loginSchema.validate(req.body);
+      const { error, value } = sendOtpSchema.validate(req.body);
       if (error) {
         return res.status(400).json({
           success: false,
@@ -58,8 +58,47 @@ export class AuthController {
         });
       }
 
-      const { user, tokens } = await this.authService.login({
-        ...value,
+      const result = await this.authService.sendOtp({
+        phone: value.phone,
+        ipAddress: req.ip,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          message: 'OTP đã được gửi đến số điện thoại của bạn.',
+          resendDelay: result.resendDelay,
+          ...(result.devOtp && { devOtp: result.devOtp }),
+        },
+      });
+    } catch (err) {
+      logger.error('Send OTP error:', err);
+      const message = err instanceof Error ? err.message : 'Không thể gửi OTP';
+      const status = message.includes('Quá nhiều') ? 429 : 400;
+      res.status(status).json({
+        success: false,
+        error: { code: 'OTP_SEND_FAILED', message },
+      });
+    }
+  };
+
+  /**
+   * POST /api/auth/verify-otp
+   * Verify OTP and issue JWT tokens. Activates INACTIVE accounts.
+   */
+  verifyOtp = async (req: Request, res: Response) => {
+    try {
+      const { error, value } = verifyOtpSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: error.details[0].message },
+        });
+      }
+
+      const { user, tokens } = await this.authService.verifyOtpAndLogin({
+        phone: value.phone,
+        otp: value.otp,
         deviceInfo: req.headers['user-agent'],
         ipAddress: req.ip,
       });
@@ -69,20 +108,23 @@ export class AuthController {
         data: {
           user: {
             id: user.id,
+            phone: user.phone,
             email: user.email,
             role: user.role,
+            status: user.status,
             firstName: user.firstName,
             lastName: user.lastName,
+            avatar: user.avatar,
           },
           tokens,
         },
       });
     } catch (err) {
-      logger.error('Login error:', err);
-      const message = err instanceof Error ? err.message : 'Login failed';
+      logger.error('Verify OTP error:', err);
+      const message = err instanceof Error ? err.message : 'Xác minh OTP thất bại';
       res.status(401).json({
         success: false,
-        error: { code: 'LOGIN_FAILED', message },
+        error: { code: 'OTP_VERIFY_FAILED', message },
       });
     }
   };
@@ -116,7 +158,7 @@ export class AuthController {
   logout = async (req: AuthRequest, res: Response) => {
     try {
       await this.authService.logout(req.user!.userId);
-      res.json({ success: true, data: { message: 'Logged out successfully' } });
+      res.json({ success: true, data: { message: 'Đăng xuất thành công' } });
     } catch (err) {
       logger.error('Logout error:', err);
       res.status(500).json({
@@ -141,9 +183,9 @@ export class AuthController {
         data: {
           user: {
             id: user.id,
-            email: user.email,
             phone: user.phone,
             phoneNumber: user.phone,
+            email: user.email,
             role: user.role,
             status: user.status,
             firstName: user.firstName,
@@ -178,9 +220,9 @@ export class AuthController {
         data: {
           user: {
             id: user.id,
-            email: user.email,
             phone: user.phone,
             phoneNumber: user.phone,
+            email: user.email,
             role: user.role,
             status: user.status,
             firstName: user.firstName,

@@ -62,4 +62,14 @@ export const config = {
     key2: process.env.ZALOPAY_KEY2 || '',
     endpoint: process.env.ZALOPAY_ENDPOINT || 'https://sb-openapi.zalopay.vn',
   },
+
+  // VNPay Configuration
+  vnpay: {
+    enabled: process.env.VNPAY_ENABLED === 'true',
+    tmnCode: process.env.VNPAY_TMN_CODE || '',
+    hashSecret: process.env.VNPAY_HASH_SECRET || '',
+    url: process.env.VNPAY_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html',
+    returnUrl: process.env.VNPAY_RETURN_URL || 'http://localhost:3000/payments/vnpay/return',
+    apiUrl: process.env.VNPAY_API_URL || 'https://sandbox.vnpayment.vn/merchant_webapi/api/transaction',
+  },
 };

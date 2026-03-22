@@ -4,6 +4,7 @@ import { checkDatabaseReadiness, prisma } from './config/db';
 import { logger } from './utils/logger';
 import { EventPublisher } from './events/publisher';
 import { AuthService } from './services/auth.service';
+import { OtpService } from './services/otp.service';
 import { createHealthServiceRegistration, createHttpBridgeServiceRegistration, shutdownGrpcServer, startGrpcServer } from '../../../shared/dist';
 
 export async function start() {
@@ -15,14 +16,25 @@ export async function start() {
     process.exit(1);
   }
 
+  // Initialize OTP service (Redis)
+  const otpService = new OtpService();
+  try {
+    await otpService.connect();
+  } catch (error) {
+    logger.error('Redis connection error:', error);
+    // Non-fatal in development; OTP will log to console
+    logger.warn('OTP Redis unavailable — OTPs will be logged to console only');
+  }
+
   // Initialize event publisher
   const eventPublisher = new EventPublisher();
   await eventPublisher.connect();
 
-  const authService = new AuthService(eventPublisher);
+  const authService = new AuthService(eventPublisher, otpService);
   const getReadiness = async () => ({
     postgres: await checkDatabaseReadiness(),
     rabbitmq: eventPublisher.isConnected(),
+    redis: otpService.isConnected(),
   });
   const app = createApp({
     authService,
@@ -45,6 +57,7 @@ export async function start() {
   process.on('SIGTERM', async () => {
     logger.info('SIGTERM received, shutting down...');
     await shutdownGrpcServer(grpcServer);
+    await otpService.disconnect();
     await eventPublisher.close();
     await prisma.$disconnect();
     server.close();

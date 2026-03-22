@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Container,
@@ -11,69 +11,84 @@ import {
   Alert,
   CircularProgress,
   InputAdornment,
-  IconButton,
+  Divider,
 } from '@mui/material';
-import {
-  DriveEta,
-  Email,
-  Lock,
-  Visibility,
-  VisibilityOff,
-} from '@mui/icons-material';
+import { DriveEta, Phone, Lock } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch } from '../store/hooks';
 import { setCredentials } from '../store/auth.slice';
 import { authApi } from '../api/auth.api';
+
+type Step = 'phone' | 'otp';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [step, setStep] = useState<Step>('phone');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [resendDelay, setResendDelay] = useState(0);
 
-  const validateForm = (): string | null => {
-    if (!email.trim() || !password) {
-      return t('errors.fillRequired');
-    }
+  useEffect(() => {
+    if (resendDelay <= 0) return;
+    const timer = setTimeout(() => setResendDelay((d) => d - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendDelay]);
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      return t('errors.invalidEmail');
-    }
-
-    if (password.length < 8) {
-      return t('errors.passwordMin');
-    }
-
-    return null;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    const validationError = validateForm();
-    if (validationError) {
-      setError(validationError);
+    if (!/^0\d{9}$/.test(phone)) {
+      setError('Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0');
       return;
     }
-
     setLoading(true);
-
     try {
-      const response = await authApi.login({ email: email.trim(), password });
-      
+      const res = await authApi.sendOtp({ phone });
+      setResendDelay(res.data.resendDelay || 30);
+      setStep('otp');
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || 'Không thể gửi OTP. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (otp.length !== 6) {
+      setError('Vui lòng nhập đủ 6 chữ số OTP');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await authApi.verifyOtp({ phone, otp });
       if (response.success) {
         dispatch(setCredentials(response.data));
         navigate('/dashboard');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || t('errors.loginFailed'));
+      setError(err.response?.data?.error?.message || 'OTP không hợp lệ hoặc đã hết hạn.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendDelay > 0) return;
+    setError('');
+    setLoading(true);
+    try {
+      const res = await authApi.sendOtp({ phone });
+      setResendDelay(res.data.resendDelay || 60);
+      setOtp('');
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || 'Không thể gửi lại OTP.');
     } finally {
       setLoading(false);
     }
@@ -91,91 +106,97 @@ const Login: React.FC = () => {
       <Container maxWidth="sm">
         <Card elevation={10} sx={{ borderRadius: 3 }}>
           <CardContent sx={{ p: 4 }}>
-            {/* Header */}
             <Box sx={{ textAlign: 'center', mb: 4 }}>
               <DriveEta sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
               <Typography variant="h4" fontWeight="bold" gutterBottom>
-                {t('login.title')}
+                {step === 'phone' ? 'Đăng nhập Tài Xế' : `OTP gửi đến ${phone}`}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {t('login.subtitle')}
+                {step === 'phone' ? 'Đăng nhập bằng số điện thoại' : 'Nhập mã 6 chữ số để tiếp tục'}
               </Typography>
             </Box>
 
-            {/* Error message */}
-            {error && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {error}
-              </Alert>
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+            {step === 'phone' && (
+              <form onSubmit={handleSendOtp}>
+                <TextField
+                  fullWidth
+                  label="Số điện thoại"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  placeholder="0912345678"
+                  required
+                  autoFocus
+                  inputMode="numeric"
+                  sx={{ mb: 3 }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Phone />
+                      </InputAdornment>
+                    ),
+                  }}
+                  helperText="10 chữ số, bắt đầu bằng 0"
+                />
+
+                <Button fullWidth type="submit" variant="contained" size="large" disabled={loading} sx={{ py: 1.5, mb: 2 }}>
+                  {loading ? <CircularProgress size={24} /> : 'Gửi mã OTP'}
+                </Button>
+
+                <Box sx={{ textAlign: 'center', mt: 1 }}>
+                  <Typography variant="body2">
+                    Chưa có tài khoản?{' '}
+                    <Link to="/register" style={{ color: '#1976D2', textDecoration: 'none' }}>
+                      Đăng ký ngay
+                    </Link>
+                  </Typography>
+                </Box>
+              </form>
             )}
 
-            {/* Login form */}
-            <form onSubmit={handleSubmit}>
-              <TextField
-                fullWidth
-                label={t('login.email')}
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                sx={{ mb: 2 }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Email />
-                    </InputAdornment>
-                  ),
-                }}
-              />
+            {step === 'otp' && (
+              <form onSubmit={handleVerifyOtp}>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Mã OTP đã được gửi đến <strong>{phone}</strong>. Hiệu lực 5 phút.
+                </Alert>
 
-              <TextField
-                fullWidth
-                label={t('login.password')}
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                sx={{ mb: 3 }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Lock />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowPassword(!showPassword)}
-                        edge="end"
-                      >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-              />
+                <TextField
+                  fullWidth
+                  label="Mã OTP (6 chữ số)"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="______"
+                  required
+                  autoFocus
+                  inputMode="numeric"
+                  sx={{ mb: 3 }}
+                  inputProps={{ style: { letterSpacing: '0.3em', fontSize: '1.3rem', textAlign: 'center' } }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Lock />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
 
-              <Button
-                fullWidth
-                type="submit"
-                variant="contained"
-                size="large"
-                disabled={loading}
-                sx={{ py: 1.5, mb: 2 }}
-              >
-                {loading ? <CircularProgress size={24} /> : t('login.signIn')}
-              </Button>
-            </form>
+                <Button fullWidth type="submit" variant="contained" size="large" disabled={loading} sx={{ py: 1.5, mb: 2 }}>
+                  {loading ? <CircularProgress size={24} /> : 'Xác minh OTP'}
+                </Button>
 
-            {/* Register link */}
-            <Box sx={{ textAlign: 'center', mt: 3 }}>
-              <Typography variant="body2">
-                {t('login.noAccount')}{' '}
-                <Link to="/register" style={{ color: '#1976D2', textDecoration: 'none' }}>
-                  {t('login.signUp')}
-                </Link>
-              </Typography>
-            </Box>
+                <Divider sx={{ mb: 2 }} />
+
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Button variant="text" size="small" onClick={() => { setStep('phone'); setOtp(''); setError(''); }}>
+                    ← Đổi số điện thoại
+                  </Button>
+                  <Button variant="text" size="small" onClick={handleResendOtp} disabled={resendDelay > 0 || loading}>
+                    {resendDelay > 0 ? `Gửi lại (${resendDelay}s)` : 'Gửi lại OTP'}
+                  </Button>
+                </Box>
+              </form>
+            )}
           </CardContent>
         </Card>
       </Container>

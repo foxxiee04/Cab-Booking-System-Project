@@ -1,60 +1,50 @@
 import Joi from 'joi';
 
-// Register User DTO
+// Register DTO — phone is the primary identifier (no password)
 export interface RegisterUserDto {
-  email: string;
-  password: string;
   phone: string;
   role: 'CUSTOMER' | 'DRIVER';
-  profile: {
-    firstName: string;
-    lastName: string;
-    avatar?: string;
-  };
+  firstName?: string;
+  lastName?: string;
 }
 
 export const registerUserSchema = Joi.object<RegisterUserDto>({
-  email: Joi.string().email().required().messages({
-    'string.email': 'Please provide a valid email address',
-    'any.required': 'Email is required',
-  }),
-  password: Joi.string().min(8).max(128).required().messages({
-    'string.min': 'Password must be at least 8 characters',
-    'string.max': 'Password must not exceed 128 characters',
-    'any.required': 'Password is required',
-  }),
   phone: Joi.string().pattern(/^0\d{9}$/).required().messages({
-    'string.pattern.base': 'Phone number must be 10 digits and start with 0',
-    'any.required': 'Phone number is required',
+    'string.pattern.base': 'Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0',
+    'any.required': 'Số điện thoại là bắt buộc',
   }),
   role: Joi.string().valid('CUSTOMER', 'DRIVER').required().messages({
-    'any.only': 'Role must be either CUSTOMER or DRIVER',
-    'any.required': 'Role is required',
+    'any.only': 'Role phải là CUSTOMER hoặc DRIVER',
+    'any.required': 'Role là bắt buộc',
   }),
-  profile: Joi.object({
-    firstName: Joi.string().min(1).max(50).required().messages({
-      'any.required': 'First name is required',
-    }),
-    lastName: Joi.string().min(1).max(50).required().messages({
-      'any.required': 'Last name is required',
-    }),
-    avatar: Joi.string().uri().optional(),
-  }).required(),
+  firstName: Joi.string().min(1).max(50).optional(),
+  lastName: Joi.string().min(1).max(50).optional(),
 });
 
-// Login DTO
-export interface LoginDto {
-  email: string;
-  password: string;
+// OTP Request DTO
+export interface SendOtpDto {
+  phone: string;
 }
 
-export const loginSchema = Joi.object<LoginDto>({
-  email: Joi.string().email().required().messages({
-    'string.email': 'Please provide a valid email address',
-    'any.required': 'Email is required',
+export const sendOtpSchema = Joi.object<SendOtpDto>({
+  phone: Joi.string().pattern(/^0\d{9}$/).required().messages({
+    'string.pattern.base': 'Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0',
+    'any.required': 'Số điện thoại là bắt buộc',
   }),
-  password: Joi.string().required().messages({
-    'any.required': 'Password is required',
+});
+
+// OTP Verify DTO
+export interface VerifyOtpDto {
+  phone: string;
+  otp: string;
+}
+
+export const verifyOtpSchema = Joi.object<VerifyOtpDto>({
+  phone: Joi.string().pattern(/^0\d{9}$/).required(),
+  otp: Joi.string().length(6).pattern(/^\d{6}$/).required().messages({
+    'string.length': 'OTP phải gồm 6 chữ số',
+    'string.pattern.base': 'OTP chỉ gồm các chữ số',
+    'any.required': 'OTP là bắt buộc',
   }),
 });
 
@@ -65,18 +55,18 @@ export interface RefreshTokenDto {
 
 export const refreshTokenSchema = Joi.object<RefreshTokenDto>({
   refreshToken: Joi.string().required().messages({
-    'any.required': 'Refresh token is required',
+    'any.required': 'Refresh token là bắt buộc',
   }),
 });
 
-// Update Profile DTO
+// Update Profile DTO — email is now an optional profile field, not auth
 export interface UpdateProfileDto {
   profile?: {
     firstName?: string;
     lastName?: string;
     avatar?: string;
   };
-  phone?: string;
+  email?: string;
 }
 
 export const updateProfileSchema = Joi.object<UpdateProfileDto>({
@@ -85,20 +75,9 @@ export const updateProfileSchema = Joi.object<UpdateProfileDto>({
     lastName: Joi.string().min(1).max(50).optional(),
     avatar: Joi.string().uri().optional(),
   }).optional(),
-  phone: Joi.string().pattern(/^0\d{9}$/).optional().messages({
-    'string.pattern.base': 'Phone number must be 10 digits and start with 0',
+  email: Joi.string().email().optional().messages({
+    'string.email': 'Email không hợp lệ',
   }),
-});
-
-// Change Password DTO
-export interface ChangePasswordDto {
-  currentPassword: string;
-  newPassword: string;
-}
-
-export const changePasswordSchema = Joi.object<ChangePasswordDto>({
-  currentPassword: Joi.string().required(),
-  newPassword: Joi.string().min(8).max(128).required(),
 });
 
 // Auth Response DTOs
@@ -110,15 +89,13 @@ export interface TokensDto {
 
 export interface UserResponseDto {
   id: string;
-  email: string;
   phone: string;
+  email: string | null;
   role: string;
   status: string;
-  profile: {
-    firstName: string;
-    lastName: string;
-    avatar?: string;
-  };
+  firstName: string | null;
+  lastName: string | null;
+  avatar: string | null;
   createdAt: Date;
 }
 
