@@ -7,6 +7,7 @@ import MobileAppShell from './components/layout/MobileAppShell';
 
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
 import HomeMap from './pages/HomeMap';
 import RideTracking from './pages/RideTracking';
 import RideHistory from './pages/RideHistory';
@@ -57,6 +58,14 @@ function App() {
           element={
             <PublicRoute>
               <Register />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/forgot-password"
+          element={
+            <PublicRoute>
+              <ForgotPassword />
             </PublicRoute>
           }
         />

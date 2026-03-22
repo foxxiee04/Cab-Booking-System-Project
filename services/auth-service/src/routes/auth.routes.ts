@@ -7,14 +7,28 @@ export const createAuthRouter = (authService: AuthService): Router => {
   const router = Router();
   const controller = new AuthController(authService);
 
-  // Register new account (INACTIVE until OTP verified)
+  // Register new account (creates INACTIVE user + auto-sends OTP)
   router.post('/register', controller.register);
 
-  // Send OTP to phone (login or post-registration activation)
+  // New registration flow: phone -> OTP -> profile completion
+  router.post('/register-phone/start', controller.registerPhoneStart);
+  router.post('/register-phone/verify', controller.registerPhoneVerify);
+  router.post('/register-phone/complete', controller.registerPhoneComplete);
+
+  // Login with phone + password
+  router.post('/login', controller.login);
+
+  // Resend OTP (for registration phone verification)
   router.post('/send-otp', controller.sendOtp);
 
-  // Verify OTP and issue JWT
+  // Verify OTP and activate account (returns JWT)
   router.post('/verify-otp', controller.verifyOtp);
+
+  // Forgot password: send OTP to phone
+  router.post('/forgot-password', controller.forgotPassword);
+
+  // Reset password: verify OTP and set new password
+  router.post('/reset-password', controller.resetPassword);
 
   // Refresh access token using refresh token
   router.post('/refresh', controller.refreshToken);

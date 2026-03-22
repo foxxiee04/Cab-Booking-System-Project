@@ -2,44 +2,322 @@
 
 ## 1. Mục đích tài liệu
 
-Tài liệu này dùng để kiểm thử thủ công toàn bộ các màn hình chính của hệ thống đặt xe, không chỉ các luồng ride lifecycle mà còn cả các điểm người dùng đã phản ánh gần đây về đăng ký, đăng nhập, hồ sơ, duyệt tài xế, GPS và bản đồ.
+Tài liệu này dùng để kiểm thử thủ công toàn bộ các màn hình chính của hệ thống đặt xe, bao gồm luồng **đăng ký / đăng nhập / xác thực OTP / quên mật khẩu**, ride lifecycle, hồ sơ, GPS/map, và quản trị.
 
-Tài liệu này có 2 nhóm mục tiêu:
+Hai mục tiêu chính:
 
 - Kiểm tra các luồng nghiệp vụ chính đang chạy được hay không.
 - Kiểm tra các vấn đề UX hoặc thiếu tính năng đã quan sát thấy trên Customer App, Driver App, Admin Dashboard và Map UX.
 
-## 2. Phạm vi kiểm tra
+---
 
-Các hạng mục cần kiểm tra trong đợt này gồm:
+## 2. Tài khoản seed (sau khi reset-database)
 
-- Đăng ký và đăng nhập của khách hàng.
-- Đăng ký, hoàn tất hồ sơ và đăng nhập của tài xế.
-- Tính nhất quán dữ liệu hồ sơ sau khi đăng ký.
-- Khả năng đặt chuyến, nhận chuyến, hủy chuyến, hoàn tất chuyến.
-- Trạng thái chờ duyệt hồ sơ tài xế.
-- Tính đúng đắn của điểm GPS hiện tại, ô nhập điểm đón và điểm đến, trải nghiệm bản đồ.
-- Tính nhất quán dữ liệu và ngôn ngữ hiển thị ở trang quản trị.
-- Ba kịch bản ride lifecycle chính đã có từ trước.
+| Vai trò   | Số điện thoại | Mật khẩu   |
+|-----------|---------------|------------|
+| Admin     | 0900000001    | password123 |
+| Customer 1 | 0901234561   | password123 |
+| Customer 2 | 0901234562   | password123 |
+| Customer 3 | 0901234563   | password123 |
+| Driver 1  | 0911234561    | password123 |
+| Driver 2  | 0911234562    | password123 |
+| Driver 3  | 0911234563    | password123 |
 
-## 3. Điều kiện cần trước khi test
+> Tất cả tài khoản seed có trạng thái `ACTIVE` và đã được xác minh OTP.
 
-Trước khi bắt đầu, cần chắc chắn:
+---
 
-- Backend đã chạy ổn định.
-- Frontend của cả 3 vai trò đã truy cập được.
-- Dữ liệu mẫu đã được seed.
-- Không còn chuyến đang dang dở từ lần test trước.
+## 3. Thông tin về OTP trong môi trường dev/test
 
-### 3.1. Địa chỉ các ứng dụng
+Hệ thống có **hai chế độ OTP**:
 
-- Customer App: http://localhost:4000
-- Driver App: http://localhost:4001
-- Admin Dashboard: http://localhost:4002
+### 3.1. OTP thật (Twilio SMS)
+- Bật khi: `TWILIO_ENABLED=true` trong `env/auth.env`
+- Chỉ gửi SMS thật nếu số điện thoại khớp với `PERSONAL_SMS_PHONE`
+- Số điện thoại khác → mock (xem log)
+
+### 3.2. OTP mock (dev/test)
+- Khi `NODE_ENV != production`, API trả về `devOtp` trong response body
+- Ví dụ response của `POST /api/auth/register`:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "message": "Đăng ký thành công...",
+      "resendDelay": 30,
+      "devOtp": "483921"
+    }
+  }
+  ```
+- `devOtp` cũng xuất hiện trong log container: `docker logs cab-auth-service`
+
+### 3.3. Xem OTP trong log Docker
+```bash
+docker logs cab-auth-service --tail 50 -f
+```
+Tìm dòng: `[SMS MOCK] OTP for 09xxxxxxxx: 123456`
+
+---
+
+## 4. Luồng kiểm thử: Đăng ký khách hàng (Customer App)
+
+**URL**: `http://localhost:3006` (hoặc port của customer-app)
+
+### TC-REG-01: Đăng ký mới thành công
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Mở `/register` | Hiển thị form: Họ, Tên, SĐT, Mật khẩu, Xác nhận mật khẩu |
+| 2 | Nhập họ tên (VD: Nguyễn / Văn X), SĐT hợp lệ (VD: `0901999001`), mật khẩu ≥ 6 ký tự | Các trường hợp lệ |
+| 3 | Bấm **Đăng ký & Gửi OTP** | Chuyển sang màn hình nhập OTP; thông báo "Tài khoản đã được tạo!" |
+| 4 | Lấy OTP từ `devOtp` hoặc log Docker (mock) / SMS thật | Có mã 6 chữ số |
+| 5 | Nhập OTP đúng, bấm **Xác minh & Đăng nhập** | Đăng nhập thành công, chuyển về `/home` |
+
+### TC-REG-02: Nhập số điện thoại sai định dạng
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Nhập SĐT `12345` hoặc `090123456` (9 chữ số) | Lỗi: "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0" |
+
+### TC-REG-03: Mật khẩu không khớp
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Nhập mật khẩu `123456` và xác nhận `654321` | Lỗi: "Mật khẩu xác nhận không khớp" |
+
+### TC-REG-04: Số điện thoại đã đăng ký
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Đăng ký lại SĐT `0901234561` (đã seed) | Lỗi: "Số điện thoại này đã được đăng ký." |
+
+### TC-REG-05: OTP sai
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Nhập OTP sai (VD: `000000`) | Lỗi: "OTP không hợp lệ. Còn N lần thử." |
+
+### TC-REG-06: Gửi lại OTP (Resend)
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Sau khi nhập sai nhiều lần hoặc OTP hết hạn | Nút "Gửi lại OTP" hoạt động |
+| 2 | Bấm "Gửi lại OTP" khi đang trong cooldown | Nút hiển thị đếm ngược `Gửi lại (30s)` và bị disable |
+| 3 | Chờ hết cooldown, bấm gửi lại | OTP mới được gửi, nhập thành công |
+
+---
+
+## 5. Luồng kiểm thử: Đăng nhập khách hàng
+
+### TC-LOGIN-01: Đăng nhập thành công
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Mở `/login` | Hiển thị SĐT + Mật khẩu + link "Quên mật khẩu?" |
+| 2 | Nhập `0901234561` / `password123` | Đăng nhập thành công, chuyển về `/home` |
+
+### TC-LOGIN-02: Sai mật khẩu
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Nhập đúng SĐT, sai mật khẩu | Lỗi: "Số điện thoại hoặc mật khẩu không đúng." |
+
+### TC-LOGIN-03: Tài khoản chưa xác minh
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Tạo tài khoản mới, chưa nhập OTP (tài khoản INACTIVE), thử đăng nhập | Lỗi: "Tài khoản chưa được xác minh. Vui lòng hoàn tất đăng ký." |
+
+---
+
+## 6. Luồng kiểm thử: Quên mật khẩu (Forgot Password)
+
+### TC-FORGOT-01: Đặt lại mật khẩu thành công
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Trang đăng nhập → bấm **Quên mật khẩu?** | Chuyển sang `/forgot-password` |
+| 2 | Nhập SĐT hợp lệ đã đăng ký (VD: `0901234561`) | Bước nhập OTP + mật khẩu mới |
+| 3 | Lấy OTP từ `devOtp` / log Docker | Có mã 6 chữ số |
+| 4 | Nhập OTP đúng, mật khẩu mới `newpass123`, xác nhận `newpass123` | Thành công, hiện thông báo; nút "Đăng nhập ngay" |
+| 5 | Bấm "Đăng nhập ngay" → login với `newpass123` | Đăng nhập thành công |
+| 6 | Thử login bằng mật khẩu cũ `password123` | Lỗi: "Số điện thoại hoặc mật khẩu không đúng." |
+
+### TC-FORGOT-02: SĐT không tồn tại
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Nhập SĐT chưa đăng ký | Thông báo lỗi trả về (không tiết lộ tài khoản có tồn tại hay không) |
+
+### TC-FORGOT-03: Gửi lại OTP khi reset mật khẩu
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Đang ở bước nhập OTP forgot password | Nút "Gửi lại OTP" hiện và đếm ngược |
+| 2 | Bấm gửi lại sau khi hết cooldown | OTP mới được gửi (khác OTP đăng ký — namespace riêng) |
+
+### TC-FORGOT-04: OTP đăng ký và OTP reset không lẫn nhau
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Đồng thời có một OTP đăng ký đang chờ và gửi một OTP reset cho cùng SĐT | Hai OTP hoàn toàn độc lập; dùng OTP đăng ký cho endpoint `/reset-password` → lỗi |
+
+---
+
+## 7. Luồng kiểm thử: Đăng ký tài xế (Driver App)
+
+**URL**: `http://localhost:3007` (hoặc port của driver-app)
+
+### TC-DREG-01: Đăng ký tài xế thành công
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Mở `/register` | Hiển thị form: Họ, Tên, SĐT, **Mật khẩu**, **Xác nhận mật khẩu** |
+| 2 | Điền đầy đủ thông tin hợp lệ | Các trường đều hợp lệ |
+| 3 | Bấm **Đăng ký & Gửi OTP** | Chuyển bước OTP |
+| 4 | Nhập OTP đúng | Đăng nhập thành công, chuyển về `/profile-setup` |
+
+### TC-DREG-02: Thiếu mật khẩu
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Để trống trường mật khẩu | Lỗi client-side: "Mật khẩu phải có ít nhất 6 ký tự" |
+
+### TC-DREG-03: Đăng nhập tài xế sau khi đăng ký
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Logout, vào `/login` | Form SĐT + mật khẩu + link "Quên mật khẩu?" |
+| 2 | Đăng nhập bằng SĐT + mật khẩu đã đăng ký | Thành công |
+
+---
+
+## 8. Luồng kiểm thử: Quên mật khẩu tài xế
+
+Tương tự mục 6, áp dụng cho Driver App tại URL driver-app.
+
+---
+
+## 9. Kiểm tra rate limit OTP
+
+| Bước | Thao tác | Kết quả mong đợi |
+|------|----------|------------------|
+| 1 | Gửi OTP 3 lần liên tiếp cho cùng 1 SĐT trong 10 phút | Lần 4 → lỗi 429: "Quá nhiều yêu cầu OTP cho số điện thoại này. Thử lại sau Xs." |
+
+---
+
+## 10. Phạm vi kiểm tra
+
+| Hạng mục | Phạm vi |
+|----------|---------|
+| Đăng ký + OTP xác minh SĐT | Customer App + Driver App |
+| Đăng nhập SĐT + mật khẩu | Customer App + Driver App |
+| Quên mật khẩu qua OTP | Customer App + Driver App |
+| Resend OTP (đăng ký + reset) | Cả hai |
+| Rate limit OTP (3 lần/10 phút/SĐT) | Backend test qua cURL |
+| OTP namespace (register ≠ reset) | Backend test qua cURL |
+| Ride lifecycle | Xem phần 11 |
+
+---
+
+## 11. Luồng ride lifecycle (từ phiên bản trước)
+
+### 11.1 Đặt chuyến và hoàn tất
+
+| Bước | Thao tác |
+|------|----------|
+| 1 | Đăng nhập customer → vào HomeMap → nhập điểm đón/đến → bấm **Đặt xe** |
+| 2 | Đăng nhập driver (khác tab/máy) → thấy yêu cầu → bấm **Chấp nhận** |
+| 3 | Driver bấm **Đã đến đón** → **Bắt đầu chuyến** → **Hoàn tất** |
+| 4 | Customer thấy trạng thái cập nhật realtime |
+
+---
+
+## 12. Kiểm tra nhanh bằng cURL
+
+### 12.1. Đăng ký
+```bash
+curl -s -X POST http://localhost:3000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"0901999111","password":"test123","role":"CUSTOMER","firstName":"Test","lastName":"User"}' | jq .
+```
+
+### 12.2. Xác minh OTP (lấy devOtp từ response trên)
+```bash
+curl -s -X POST http://localhost:3000/api/auth/verify-otp \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"0901999111","otp":"XXXXXX"}' | jq .
+```
+
+### 12.3. Đăng nhập
+```bash
+curl -s -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"0901234561","password":"password123"}' | jq .
+```
+
+### 12.4. Quên mật khẩu — gửi OTP reset
+```bash
+curl -s -X POST http://localhost:3000/api/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"0901234561"}' | jq .
+```
+
+### 12.5. Đặt lại mật khẩu
+```bash
+curl -s -X POST http://localhost:3000/api/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"0901234561","otp":"XXXXXX","newPassword":"newpass123"}' | jq .
+```
+
+### 12.6. Resend OTP (trong cooldown) — phải trả 30s delay
+```bash
+curl -s -X POST http://localhost:3000/api/auth/send-otp \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"0901999111"}' | jq .
+```
+
+---
+
+## 13. Checklist nhanh
+
+- [ ] Customer đăng ký → nhận OTP mock → xác minh → đăng nhập được
+- [ ] Driver đăng ký (có trường mật khẩu) → OTP → profile-setup
+- [ ] Đăng nhập customer/driver bằng SĐT + mật khẩu
+- [ ] Link **Quên mật khẩu?** xuất hiện trên cả 2 trang Login
+- [ ] Forgot password 3 bước: SĐT → OTP → mật khẩu mới → đăng nhập lại
+- [ ] Resend OTP hoạt động với đếm ngược (0→30→60s)
+- [ ] OTP đăng ký và OTP reset không lẫn lộn
+- [ ] Rate limit kích hoạt sau 3 lần gửi OTP / 10 phút
+- [ ] Các tài khoản seed đăng nhập được bằng `password123`
+
+---
+
+## 14. Địa chỉ ứng dụng (local dev)
+
+| App | URL chạy test giao diện |
+|---|---|
+| Customer App | http://localhost:4000 |
+| Driver App | http://localhost:4001 |
+| Admin Dashboard | http://localhost:4002 |
+| API Gateway | http://localhost:3000 |
+
+> Khởi động static server đúng bộ port yêu cầu:
+> ```bat
+> npx serve -s apps/customer-app/build -l 4000
+> npx serve -s apps/driver-app/build -l 4001
+> npx serve -s apps/admin-dashboard/build -l 4002
+> ```
+> Hoặc dev mode:
+> ```bat
+> npm --workspace=apps/customer-app start
+> npm --workspace=apps/driver-app start
+> npm --workspace=apps/admin-dashboard start
+> ```
 
 ### 3.2. Tài khoản seed dùng để test nhanh
 
-Tất cả tài khoản dùng xác thực bằng **số điện thoại + OTP**, không còn email/mật khẩu.
+Đăng nhập sử dụng **số điện thoại + mật khẩu**; OTP dùng cho bước xác thực số điện thoại khi đăng ký mới và quên mật khẩu.
 
 | Vai trò | Số điện thoại | Mục đích |
 | --- | --- | --- |

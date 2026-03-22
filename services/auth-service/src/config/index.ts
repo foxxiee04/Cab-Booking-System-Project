@@ -43,6 +43,11 @@ export const config = {
     authToken: process.env.TWILIO_AUTH_TOKEN || '',
     fromPhone: process.env.TWILIO_FROM_PHONE || '',
   },
+
+  // Personal SMS phone: only this number receives real SMS; all others are mocked
+  sms: {
+    personalPhone: process.env.PERSONAL_SMS_PHONE || '',
+  },
   
   rabbitmq: {
     url: process.env.RABBITMQ_URL || 'amqp://localhost:5672',

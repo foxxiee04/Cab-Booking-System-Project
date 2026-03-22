@@ -1,5 +1,5 @@
 // Auth Service - PostgreSQL Database Schema
-// Authentication via Phone Number + OTP (passwordless)
+// Authentication: Register with phone+OTP verification, Login with phone+password
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -23,18 +23,20 @@ enum UserStatus {
 }
 
 model User {
-  id           String        @id @default(uuid())
-  // Phone is the PRIMARY login identifier - required and unique
-  phone        String        @unique @db.VarChar(20)
-  // Email is OPTIONAL - used only for profile/notifications, NOT for login
-  email        String?       @unique @db.VarChar(255)
-  role         UserRole      @default(CUSTOMER)
-  status       UserStatus    @default(ACTIVE)
-  firstName    String?       @map("first_name") @db.VarChar(100)
-  lastName     String?       @map("last_name") @db.VarChar(100)
-  avatar       String?       @db.VarChar(500)
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
+  id            String        @id @default(uuid())
+  // Phone is the PRIMARY login identifier
+  phone         String        @unique @db.VarChar(20)
+  // Email is OPTIONAL - for profile/notifications only
+  email         String?       @unique @db.VarChar(255)
+  // Password hash (bcryptjs) - required after registration OTP verification
+  passwordHash  String?       @map("password_hash") @db.VarChar(255)
+  role          UserRole      @default(CUSTOMER)
+  status        UserStatus    @default(ACTIVE)
+  firstName     String?       @map("first_name") @db.VarChar(100)
+  lastName      String?       @map("last_name") @db.VarChar(100)
+  avatar        String?       @db.VarChar(500)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
 

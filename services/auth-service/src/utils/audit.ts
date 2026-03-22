@@ -10,6 +10,7 @@ export type AuditAction =
   | 'OTP_VERIFIED'
   | 'OTP_FAILED'
   | 'LOGIN_SUCCESS'
+  | 'LOGIN_FAILED'
   | 'LOGOUT'
   | 'REGISTER'
   | 'TOKEN_REFRESHED'

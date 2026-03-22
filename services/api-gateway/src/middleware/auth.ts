@@ -18,9 +18,16 @@ export interface AuthenticatedRequest extends Request {
 // Paths that don't require authentication
 const PUBLIC_PATHS = [
   '/api/auth/register',
+  '/api/auth/check-phone',
+  '/api/auth/verify-phone-otp',
+  '/api/auth/register-phone/start',
+  '/api/auth/register-phone/verify',
+  '/api/auth/register-phone/complete',
   '/api/auth/login',         // kept for backward compat
-  '/api/auth/send-otp',      // new: request OTP
-  '/api/auth/verify-otp',    // new: verify OTP + get JWT
+  '/api/auth/send-otp',      // request OTP (registration resend)
+  '/api/auth/verify-otp',    // verify OTP + get JWT
+  '/api/auth/forgot-password', // send OTP for password reset
+  '/api/auth/reset-password',  // verify OTP and set new password
   '/api/auth/refresh',
   '/api/payments/vnpay/return', // VNPay redirect return (browser redirect)
   '/api/map',

@@ -96,11 +96,6 @@ const Profile: React.FC = () => {
       return;
     }
 
-    if (formData.phoneNumber && !/^[0-9]{10,15}$/.test(formData.phoneNumber.trim())) {
-      setError(t('errors.phoneInvalid'));
-      return;
-    }
-
     setSaving(true);
     try {
       const response = await authApi.updateMe({
@@ -109,7 +104,6 @@ const Profile: React.FC = () => {
           lastName: formData.lastName.trim(),
           avatar: formData.avatar.trim() || undefined,
         },
-        phone: formData.phoneNumber.trim() || undefined,
       });
 
       if (response.success) {

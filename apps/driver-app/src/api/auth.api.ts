@@ -3,18 +3,51 @@ import { ApiResponse, AuthResponse } from '../types';
 
 export interface RegisterRequest {
   phone: string;
+  password: string;
   role: 'DRIVER';
   firstName?: string;
   lastName?: string;
+}
+
+export interface LoginRequest {
+  phone: string;
+  password: string;
 }
 
 export interface SendOtpRequest {
   phone: string;
 }
 
+export interface RegisterPhoneStartRequest {
+  phone: string;
+}
+
+export interface RegisterPhoneVerifyRequest {
+  phone: string;
+  otp: string;
+}
+
+export interface RegisterPhoneCompleteRequest {
+  phone: string;
+  password: string;
+  role: 'DRIVER';
+  firstName?: string;
+  lastName?: string;
+}
+
 export interface VerifyOtpRequest {
   phone: string;
   otp: string;
+}
+
+export interface ForgotPasswordRequest {
+  phone: string;
+}
+
+export interface ResetPasswordRequest {
+  phone: string;
+  otp: string;
+  newPassword: string;
 }
 
 const normalizeUser = (user: any) => ({
@@ -23,14 +56,42 @@ const normalizeUser = (user: any) => ({
 });
 
 export const authApi = {
-  register: async (data: RegisterRequest): Promise<ApiResponse<{ userId: string }>> => {
+  login: async (data: LoginRequest): Promise<ApiResponse<AuthResponse>> => {
+    const response = await axiosInstance.post('/auth/login', data);
+    const result = response.data;
+    if (result.success && result.data?.user) {
+      result.data.user = normalizeUser(result.data.user);
+    }
+    return result;
+  },
+
+  register: async (data: RegisterRequest): Promise<ApiResponse<{ message: string; resendDelay: number; devOtp?: string }>> => {
     const response = await axiosInstance.post('/auth/register', data);
     return response.data;
   },
 
-  sendOtp: async (data: SendOtpRequest): Promise<ApiResponse<{ resendDelay: number }>> => {
+  sendOtp: async (data: SendOtpRequest): Promise<ApiResponse<{ message: string; resendDelay: number; devOtp?: string }>> => {
     const response = await axiosInstance.post('/auth/send-otp', data);
     return response.data;
+  },
+
+  registerPhoneStart: async (data: RegisterPhoneStartRequest): Promise<ApiResponse<{ message: string; resendDelay: number; devOtp?: string }>> => {
+    const response = await axiosInstance.post('/auth/register-phone/start', data);
+    return response.data;
+  },
+
+  registerPhoneVerify: async (data: RegisterPhoneVerifyRequest): Promise<ApiResponse<{ message: string }>> => {
+    const response = await axiosInstance.post('/auth/register-phone/verify', data);
+    return response.data;
+  },
+
+  registerPhoneComplete: async (data: RegisterPhoneCompleteRequest): Promise<ApiResponse<AuthResponse>> => {
+    const response = await axiosInstance.post('/auth/register-phone/complete', data);
+    const result = response.data;
+    if (result.success && result.data?.user) {
+      result.data.user = normalizeUser(result.data.user);
+    }
+    return result;
   },
 
   verifyOtp: async (data: VerifyOtpRequest): Promise<ApiResponse<AuthResponse>> => {
@@ -59,6 +120,18 @@ export const authApi = {
 
   refreshToken: async (refreshToken: string): Promise<ApiResponse<{ tokens: any }>> => {
     const response = await axiosInstance.post('/auth/refresh', { refreshToken });
+    return response.data;
+  },
+
+  /** Forgot password: send OTP to phone */
+  forgotPassword: async (data: ForgotPasswordRequest): Promise<ApiResponse<{ message: string; resendDelay: number; devOtp?: string }>> => {
+    const response = await axiosInstance.post('/auth/forgot-password', data);
+    return response.data;
+  },
+
+  /** Reset password: verify OTP and set new password */
+  resetPassword: async (data: ResetPasswordRequest): Promise<ApiResponse<{ message: string }>> => {
+    const response = await axiosInstance.post('/auth/reset-password', data);
     return response.data;
   },
 };

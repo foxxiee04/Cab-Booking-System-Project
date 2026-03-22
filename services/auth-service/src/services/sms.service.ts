@@ -1,5 +1,7 @@
 /**
- * SMS Service - Send OTP via Twilio (or log in development)
+ * SMS Service
+ * Sends real OTP via Twilio ONLY to the configured PERSONAL_SMS_PHONE.
+ * All other numbers are mocked (OTP is logged, not sent).
  */
 import twilio from 'twilio';
 import { config } from '../config';
@@ -15,8 +17,9 @@ export class SmsService {
   }
 
   /**
-   * Send OTP via SMS.
-   * In development (TWILIO_ENABLED=false), logs the OTP instead of sending.
+   * Send OTP SMS.
+   * Real SMS is sent only when phone === PERSONAL_SMS_PHONE and Twilio is configured.
+   * All other numbers get a mock (logged OTP).
    */
   async sendOtp(phone: string, otp: string): Promise<void> {
     const ttlMinutes = Math.floor(config.otp.ttlSeconds / 60);
@@ -25,21 +28,23 @@ export class SmsService {
       `Hiệu lực trong ${ttlMinutes} phút. ` +
       `Không chia sẻ mã này với bất kỳ ai.`;
 
-    if (config.twilio.enabled && this.client) {
+    const isPersonalPhone = config.sms.personalPhone && phone === config.sms.personalPhone;
+
+    if (isPersonalPhone && this.client) {
       try {
         await this.client.messages.create({
           body: message,
           from: config.twilio.fromPhone,
           to: this.toE164(phone),
         });
-        logger.info('OTP SMS sent', { phone: this.maskPhone(phone) });
+        logger.info('OTP SMS sent (personal phone)', { phone: this.maskPhone(phone) });
       } catch (err) {
         logger.error('Twilio SMS send failed:', { phone: this.maskPhone(phone), err });
         throw new Error('Không thể gửi SMS. Vui lòng thử lại.');
       }
     } else {
-      // Development: log OTP clearly
-      logger.info(`[DEV] OTP for ${this.maskPhone(phone)}: ${otp}`);
+      // Mock for all non-personal numbers
+      logger.info(`[MOCK SMS] OTP for ${this.maskPhone(phone)}: ${otp}`);
     }
   }
 

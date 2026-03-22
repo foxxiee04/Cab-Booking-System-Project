@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import type { SignOptions } from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { UserRole, UserStatus } from '../generated/prisma-client';
 import { config } from '../config';
@@ -11,9 +12,17 @@ import { auditLog } from '../utils/audit';
 
 interface RegisterInput {
   phone: string;
+  password: string;
   role?: UserRole;
   firstName?: string;
   lastName?: string;
+}
+
+interface LoginInput {
+  phone: string;
+  password: string;
+  deviceInfo?: string;
+  ipAddress?: string;
 }
 
 interface SendOtpInput {
@@ -68,19 +77,22 @@ export class AuthService {
   }
 
   /**
-   * Step 1 of Registration: create user account (INACTIVE) then send OTP.
+   * Step 1 of Registration: create user account (INACTIVE), hash password, then auto-send OTP.
    * After OTP verification the account is activated.
    */
-  async register(input: RegisterInput): Promise<void> {
+  async register(input: RegisterInput): Promise<{ resendDelay: number; devOtp?: string }> {
     // Prevent duplicate phone registrations
     const existing = await prisma.user.findUnique({ where: { phone: input.phone } });
     if (existing) {
       throw new Error('Số điện thoại này đã được đăng ký.');
     }
 
+    const passwordHash = await bcrypt.hash(input.password, 10);
+
     await prisma.user.create({
       data: {
         phone: input.phone,
+        passwordHash,
         role: input.role || UserRole.CUSTOMER,
         status: UserStatus.INACTIVE, // activated after OTP verification
         firstName: input.firstName,
@@ -89,13 +101,140 @@ export class AuthService {
     });
 
     await auditLog({ action: 'REGISTER', phone: input.phone, success: true });
+
+    // Auto-send OTP for phone verification
+    return this.sendOtp({ phone: input.phone });
+  }
+
+  /**
+   * New registration flow - Step 1: request OTP by phone first.
+   */
+  async startPhoneRegistration(phone: string, ipAddress?: string): Promise<{ resendDelay: number; devOtp?: string }> {
+    const existing = await prisma.user.findUnique({ where: { phone } });
+    if (existing) {
+      throw new Error('Số điện thoại này đã được đăng ký.');
+    }
+
+    return this.sendOtp({ phone, ipAddress }, 'register');
+  }
+
+  /**
+   * New registration flow - Step 2: verify OTP and mark phone verified for completion.
+   */
+  async verifyPhoneForRegistration(phone: string, otp: string, ipAddress?: string): Promise<void> {
+    const ip = ipAddress || 'unknown';
+    const existing = await prisma.user.findUnique({ where: { phone } });
+    if (existing) {
+      throw new Error('Số điện thoại này đã được đăng ký.');
+    }
+
+    const result = await this.otpService.verifyOtp(phone, otp, 'register');
+    if (!result.success) {
+      await auditLog({
+        action: 'OTP_FAILED',
+        phone,
+        ipAddress: ip,
+        success: false,
+        metadata: { reason: result.error },
+      });
+      throw new Error(result.error);
+    }
+
+    await this.otpService.markPhoneVerifiedForRegistration(phone);
+    await this.otpService.clearResendCooldown(phone, 'register');
+    await auditLog({ action: 'OTP_VERIFIED', phone, ipAddress: ip, success: true });
+  }
+
+  /**
+   * New registration flow - Step 3: complete profile after phone has been verified.
+   */
+  async completeRegistration(
+    input: RegisterInput & { deviceInfo?: string; ipAddress?: string },
+  ): Promise<{ user: UserResponse; tokens: TokenPair }> {
+    const ip = input.ipAddress || 'unknown';
+
+    const isVerified = await this.otpService.isPhoneVerifiedForRegistration(input.phone);
+    if (!isVerified) {
+      throw new Error('Số điện thoại chưa được xác thực. Vui lòng xác minh OTP trước.');
+    }
+
+    const existing = await prisma.user.findUnique({ where: { phone: input.phone } });
+    if (existing) {
+      await this.otpService.clearPhoneVerifiedForRegistration(input.phone);
+      throw new Error('Số điện thoại này đã được đăng ký.');
+    }
+
+    const passwordHash = await bcrypt.hash(input.password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        phone: input.phone,
+        passwordHash,
+        role: input.role || UserRole.CUSTOMER,
+        status: UserStatus.ACTIVE,
+        firstName: input.firstName,
+        lastName: input.lastName,
+      },
+    });
+
+    await this.otpService.clearPhoneVerifiedForRegistration(input.phone);
+
+    const tokens = await this.generateTokenPair(user.id, input.deviceInfo, ip);
+
+    await auditLog({ action: 'REGISTER', phone: input.phone, userId: user.id, ipAddress: ip, success: true });
+    await auditLog({ action: 'LOGIN_SUCCESS', phone: input.phone, userId: user.id, ipAddress: ip, success: true });
+    await this.eventPublisher.publish('user.logged_in', {
+      userId: user.id,
+      phone: user.phone,
+      role: user.role,
+    });
+
+    return { user: this.toUserResponse(user), tokens };
+  }
+
+  /**
+   * Login with phone + password. Returns JWT token pair.
+   */
+  async login(input: LoginInput): Promise<{ user: UserResponse; tokens: TokenPair }> {
+    const ip = input.ipAddress || 'unknown';
+
+    const user = await prisma.user.findUnique({ where: { phone: input.phone } });
+    if (!user) {
+      await auditLog({ action: 'LOGIN_FAILED', phone: input.phone, ipAddress: ip, success: false, metadata: { reason: 'user_not_found' } });
+      throw new Error('Số điện thoại hoặc mật khẩu không đúng.');
+    }
+    if (user.status === UserStatus.INACTIVE) {
+      throw new Error('Tài khoản chưa được xác minh. Vui lòng hoàn tất đăng ký.');
+    }
+    if (user.status === UserStatus.SUSPENDED) {
+      throw new Error('Tài khoản đã bị khóa. Vui lòng liên hệ hỗ trợ.');
+    }
+    if (!user.passwordHash) {
+      throw new Error('Tài khoản này không có mật khẩu. Vui lòng liên hệ hỗ trợ.');
+    }
+
+    const passwordMatch = await bcrypt.compare(input.password, user.passwordHash);
+    if (!passwordMatch) {
+      await auditLog({ action: 'LOGIN_FAILED', phone: input.phone, ipAddress: ip, success: false, metadata: { reason: 'wrong_password' } });
+      throw new Error('Số điện thoại hoặc mật khẩu không đúng.');
+    }
+
+    const tokens = await this.generateTokenPair(user.id, input.deviceInfo, ip);
+    await auditLog({ action: 'LOGIN_SUCCESS', userId: user.id, phone: user.phone, ipAddress: ip, success: true });
+    await this.eventPublisher.publish('user.logged_in', { userId: user.id, phone: user.phone, role: user.role });
+
+    return { user: this.toUserResponse(user), tokens };
   }
 
   /**
    * Send OTP to a phone number.
-   * Works for both login (existing user) and registration (newly created user).
+   * purpose='register' for phone verification during sign-up.
+   * purpose='reset' for forgot-password flow.
    */
-  async sendOtp(input: SendOtpInput): Promise<{ resendDelay: number; devOtp?: string }> {
+  async sendOtp(
+    input: SendOtpInput,
+    purpose: 'register' | 'reset' = 'register',
+  ): Promise<{ resendDelay: number; devOtp?: string }> {
     const ip = input.ipAddress || 'unknown';
 
     // Rate limit check
@@ -112,19 +251,19 @@ export class AuthService {
     }
 
     // Resend cooldown check
-    const resendDelay = await this.otpService.getResendDelay(input.phone);
+    const resendDelay = await this.otpService.getResendDelay(input.phone, purpose);
     if (resendDelay > 0) {
       throw new Error(`Vui lòng đợi ${resendDelay} giây trước khi yêu cầu OTP mới.`);
     }
 
     const otp = this.otpService.generateOtp();
-    await this.otpService.storeOtp(input.phone, otp);
+    await this.otpService.storeOtp(input.phone, otp, purpose);
     await this.smsService.sendOtp(input.phone, otp);
 
     await auditLog({ action: 'OTP_REQUESTED', phone: input.phone, ipAddress: ip, success: true });
 
     // Return the delay for the NEXT resend attempt
-    const nextDelay = await this.otpService.getResendDelay(input.phone);
+    const nextDelay = await this.otpService.getResendDelay(input.phone, purpose);
     const result: { resendDelay: number; devOtp?: string } = { resendDelay: nextDelay };
     // Expose OTP in non-production for integration testing (never enabled in production)
     if (process.env.NODE_ENV !== 'production') {
@@ -142,7 +281,7 @@ export class AuthService {
   ): Promise<{ user: UserResponse; tokens: TokenPair }> {
     const ip = input.ipAddress || 'unknown';
 
-    const result = await this.otpService.verifyOtp(input.phone, input.otp);
+    const result = await this.otpService.verifyOtp(input.phone, input.otp, 'register');
 
     if (!result.success) {
       await auditLog({
@@ -174,8 +313,8 @@ export class AuthService {
           })
         : user;
 
-    // Clear resend cooldown after successful verification
-    await this.otpService.clearResendCooldown(input.phone);
+    // Clear resend cooldown after successful registration verification
+    await this.otpService.clearResendCooldown(input.phone, 'register');
 
     const tokens = await this.generateTokenPair(activeUser.id, input.deviceInfo, ip);
 
@@ -252,6 +391,80 @@ export class AuthService {
         data: { revokedAt: new Date() },
       });
     }
+  }
+
+  /**
+   * Forgot Password Step 1: Send OTP to phone (user must exist and be ACTIVE).
+   */
+  async forgotPassword(
+    phone: string,
+    ipAddress?: string,
+  ): Promise<{ resendDelay: number; devOtp?: string }> {
+    const user = await prisma.user.findUnique({ where: { phone } });
+    if (!user) {
+      // Do not reveal whether the phone is registered
+      throw new Error('Nếu số điện thoại này đã đăng ký, bạn sẽ nhận được OTP.');
+    }
+    if (user.status === UserStatus.SUSPENDED) {
+      throw new Error('Tài khoản đã bị khóa. Vui lòng liên hệ hỗ trợ.');
+    }
+    if (user.status === UserStatus.INACTIVE) {
+      throw new Error('Tài khoản chưa được xác minh. Vui lòng hoàn tất đăng ký trước.');
+    }
+    return this.sendOtp({ phone, ipAddress }, 'reset');
+  }
+
+  /**
+   * Forgot Password Step 2: Verify OTP and set new password.
+   */
+  async resetPassword(
+    phone: string,
+    otp: string,
+    newPassword: string,
+    ipAddress?: string,
+  ): Promise<void> {
+    const ip = ipAddress || 'unknown';
+
+    const result = await this.otpService.verifyOtp(phone, otp, 'reset');
+    if (!result.success) {
+      await auditLog({
+        action: 'OTP_FAILED',
+        phone,
+        ipAddress: ip,
+        success: false,
+        metadata: { reason: result.error, purpose: 'reset' },
+      });
+      throw new Error(result.error);
+    }
+
+    const user = await prisma.user.findUnique({ where: { phone } });
+    if (!user) throw new Error('Tài khoản không tồn tại.');
+    if (user.status === UserStatus.SUSPENDED) {
+      throw new Error('Tài khoản đã bị khóa. Vui lòng liên hệ hỗ trợ.');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash },
+    });
+
+    // Revoke all existing sessions after password reset
+    await prisma.refreshToken.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    await this.otpService.clearResendCooldown(phone, 'reset');
+    await auditLog({ action: 'OTP_VERIFIED', phone, ipAddress: ip, success: true });
+    await auditLog({
+      action: 'PROFILE_UPDATED',
+      userId: user.id,
+      phone,
+      ipAddress: ip,
+      success: true,
+      metadata: { action: 'password_reset' },
+    });
   }
 
   async verifyAccessToken(token: string): Promise<{ userId: string; role: string }> {

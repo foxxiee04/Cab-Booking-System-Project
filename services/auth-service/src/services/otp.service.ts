@@ -58,10 +58,11 @@ export class OtpService {
   }
 
   // Redis key builders
-  private otpKey(phone: string)         { return `otp:data:${phone}`; }
+  private otpKey(phone: string, purpose: string = 'register') { return `otp:data:${purpose}:${phone}`; }
   private phoneLimitKey(phone: string)  { return `otp:rate:phone:${phone}`; }
   private ipLimitKey(ip: string)        { return `otp:rate:ip:${ip}`; }
-  private resendKey(phone: string)      { return `otp:resend:${phone}`; }
+  private resendKey(phone: string, purpose: string = 'register') { return `otp:resend:${purpose}:${phone}`; }
+  private verifiedPhoneKey(phone: string) { return `otp:verified:register:${phone}`; }
 
   /**
    * Check both per-phone and per-IP rate limits.
@@ -97,8 +98,8 @@ export class OtpService {
    * Get the remaining resend cooldown in seconds.
    * Returns 0 when the user can send now.
    */
-  async getResendDelay(phone: string): Promise<number> {
-    const raw = await this.redis.get(this.resendKey(phone));
+  async getResendDelay(phone: string, purpose: string = 'register'): Promise<number> {
+    const raw = await this.redis.get(this.resendKey(phone, purpose));
     if (!raw) return 0;
 
     const data = JSON.parse(raw) as { count: number; lastAt: number };
@@ -114,12 +115,12 @@ export class OtpService {
    * Store a new OTP (hashed) in Redis with TTL.
    * Overwrites any existing OTP for the phone.
    */
-  async storeOtp(phone: string, otp: string): Promise<void> {
+  async storeOtp(phone: string, otp: string, purpose: string = 'register'): Promise<void> {
     const hash = this.hashOtp(otp);
 
     // Determine send count from resend tracker
     let sendCount = 1;
-    const resendRaw = await this.redis.get(this.resendKey(phone));
+    const resendRaw = await this.redis.get(this.resendKey(phone, purpose));
     if (resendRaw) {
       const existing = JSON.parse(resendRaw) as { count: number; lastAt: number };
       sendCount = existing.count + 1;
@@ -134,14 +135,14 @@ export class OtpService {
     };
 
     await this.redis.setEx(
-      this.otpKey(phone),
+      this.otpKey(phone, purpose),
       config.otp.ttlSeconds,
       JSON.stringify(otpData),
     );
 
     // Update resend cooldown tracker (TTL: 1 hour)
     await this.redis.setEx(
-      this.resendKey(phone),
+      this.resendKey(phone, purpose),
       3600,
       JSON.stringify({ count: sendCount, lastAt: Date.now() }),
     );
@@ -151,8 +152,8 @@ export class OtpService {
    * Verify an OTP submission.
    * Increments attempts on failure. Deletes OTP on success to prevent reuse.
    */
-  async verifyOtp(phone: string, otp: string): Promise<{ success: boolean; error?: string }> {
-    const raw = await this.redis.get(this.otpKey(phone));
+  async verifyOtp(phone: string, otp: string, purpose: string = 'register'): Promise<{ success: boolean; error?: string }> {
+    const raw = await this.redis.get(this.otpKey(phone, purpose));
 
     if (!raw) {
       return { success: false, error: 'OTP đã hết hạn hoặc không tồn tại. Vui lòng yêu cầu OTP mới.' };
@@ -162,13 +163,13 @@ export class OtpService {
 
     // Double-check expiry (Redis TTL may have a brief lag)
     if (Date.now() > data.expiresAt) {
-      await this.redis.del(this.otpKey(phone));
+      await this.redis.del(this.otpKey(phone, purpose));
       return { success: false, error: 'OTP đã hết hạn. Vui lòng yêu cầu OTP mới.' };
     }
 
     // Check max attempts
     if (data.attempts >= config.otp.maxAttempts) {
-      await this.redis.del(this.otpKey(phone));
+      await this.redis.del(this.otpKey(phone, purpose));
       return { success: false, error: 'Quá nhiều lần nhập sai. Vui lòng yêu cầu OTP mới.' };
     }
 
@@ -184,17 +185,30 @@ export class OtpService {
       const remaining = config.otp.maxAttempts - data.attempts;
       // Recalculate remaining TTL to avoid extending expiry
       const remainingTtl = Math.max(1, Math.floor((data.expiresAt - Date.now()) / 1000));
-      await this.redis.setEx(this.otpKey(phone), remainingTtl, JSON.stringify(data));
+      await this.redis.setEx(this.otpKey(phone, purpose), remainingTtl, JSON.stringify(data));
       return { success: false, error: `OTP không hợp lệ. Còn ${remaining} lần thử.` };
     }
 
     // OTP valid — delete immediately to prevent reuse
-    await this.redis.del(this.otpKey(phone));
+    await this.redis.del(this.otpKey(phone, purpose));
     return { success: true };
   }
 
   /** Clear resend cooldown after successful verification */
-  async clearResendCooldown(phone: string): Promise<void> {
-    await this.redis.del(this.resendKey(phone));
+  async clearResendCooldown(phone: string, purpose: string = 'register'): Promise<void> {
+    await this.redis.del(this.resendKey(phone, purpose));
+  }
+
+  async markPhoneVerifiedForRegistration(phone: string, ttlSeconds = 15 * 60): Promise<void> {
+    await this.redis.setEx(this.verifiedPhoneKey(phone), ttlSeconds, '1');
+  }
+
+  async isPhoneVerifiedForRegistration(phone: string): Promise<boolean> {
+    const value = await this.redis.get(this.verifiedPhoneKey(phone));
+    return value === '1';
+  }
+
+  async clearPhoneVerifiedForRegistration(phone: string): Promise<void> {
+    await this.redis.del(this.verifiedPhoneKey(phone));
   }
 }

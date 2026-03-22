@@ -3,10 +3,16 @@ import { AuthService } from '../services/auth.service';
 import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 import {
   registerSchema,
+  loginSchema,
   sendOtpSchema,
   verifyOtpSchema,
   refreshTokenSchema,
   updateRoleSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  registerPhoneStartSchema,
+  registerPhoneVerifySchema,
+  registerCompleteSchema,
 } from '../validators/auth.validator';
 import { updateProfileSchema } from '../dto/auth.dto';
 import { logger } from '../utils/logger';
@@ -15,8 +21,123 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   /**
+   * POST /api/auth/register-phone/start
+   * Step 1: send OTP to phone before collecting profile info.
+   */
+  registerPhoneStart = async (req: Request, res: Response) => {
+    try {
+      const { error, value } = registerPhoneStartSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: error.details[0].message },
+        });
+      }
+
+      const result = await this.authService.startPhoneRegistration(value.phone, req.ip);
+
+      res.json({
+        success: true,
+        data: {
+          message: 'OTP xác thực đăng ký đã được gửi đến số điện thoại của bạn.',
+          resendDelay: result.resendDelay,
+          ...(result.devOtp && { devOtp: result.devOtp }),
+        },
+      });
+    } catch (err) {
+      logger.error('Register phone start error:', err);
+      const message = err instanceof Error ? err.message : 'Không thể gửi OTP xác thực đăng ký';
+      const status = message.includes('Quá nhiều') ? 429 : 400;
+      res.status(status).json({
+        success: false,
+        error: { code: 'REGISTER_PHONE_START_FAILED', message },
+      });
+    }
+  };
+
+  /**
+   * POST /api/auth/register-phone/verify
+   * Step 2: verify OTP for registration phone.
+   */
+  registerPhoneVerify = async (req: Request, res: Response) => {
+    try {
+      const { error, value } = registerPhoneVerifySchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: error.details[0].message },
+        });
+      }
+
+      await this.authService.verifyPhoneForRegistration(value.phone, value.otp, req.ip);
+
+      res.json({
+        success: true,
+        data: { message: 'Xác thực số điện thoại thành công. Vui lòng tiếp tục điền thông tin đăng ký.' },
+      });
+    } catch (err) {
+      logger.error('Register phone verify error:', err);
+      const message = err instanceof Error ? err.message : 'Xác thực OTP đăng ký thất bại';
+      res.status(401).json({
+        success: false,
+        error: { code: 'REGISTER_PHONE_VERIFY_FAILED', message },
+      });
+    }
+  };
+
+  /**
+   * POST /api/auth/register-phone/complete
+   * Step 3: create account after phone verified.
+   */
+  registerPhoneComplete = async (req: Request, res: Response) => {
+    try {
+      const { error, value } = registerCompleteSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: error.details[0].message },
+        });
+      }
+
+      const { user, tokens } = await this.authService.completeRegistration({
+        phone: value.phone,
+        password: value.password,
+        role: value.role,
+        firstName: value.firstName,
+        lastName: value.lastName,
+        deviceInfo: req.headers['user-agent'],
+        ipAddress: req.ip,
+      });
+
+      res.status(201).json({
+        success: true,
+        data: {
+          user: {
+            id: user.id,
+            phone: user.phone,
+            email: user.email,
+            role: user.role,
+            status: user.status,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            avatar: user.avatar,
+          },
+          tokens,
+        },
+      });
+    } catch (err) {
+      logger.error('Register phone complete error:', err);
+      const message = err instanceof Error ? err.message : 'Hoàn tất đăng ký thất bại';
+      res.status(400).json({
+        success: false,
+        error: { code: 'REGISTER_PHONE_COMPLETE_FAILED', message },
+      });
+    }
+  };
+
+  /**
    * POST /api/auth/register
-   * Create a new user account (INACTIVE). Client must then call /send-otp to activate.
+   * Create a new user account (INACTIVE) and auto-send OTP for phone verification.
    */
   register = async (req: Request, res: Response) => {
     try {
@@ -28,11 +149,15 @@ export class AuthController {
         });
       }
 
-      await this.authService.register(value);
+      const result = await this.authService.register(value);
 
       res.status(201).json({
         success: true,
-        data: { message: 'Đăng ký thành công. Vui lòng xác minh số điện thoại qua OTP.' },
+        data: {
+          message: 'Đăng ký thành công. Vui lòng nhập OTP để xác minh số điện thoại.',
+          resendDelay: result.resendDelay,
+          ...(result.devOtp && { devOtp: result.devOtp }),
+        },
       });
     } catch (err) {
       logger.error('Register error:', err);
@@ -45,8 +170,55 @@ export class AuthController {
   };
 
   /**
+   * POST /api/auth/login
+   * Login with phone number and password.
+   */
+  login = async (req: Request, res: Response) => {
+    try {
+      const { error, value } = loginSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: error.details[0].message },
+        });
+      }
+
+      const { user, tokens } = await this.authService.login({
+        phone: value.phone,
+        password: value.password,
+        deviceInfo: req.headers['user-agent'],
+        ipAddress: req.ip,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          user: {
+            id: user.id,
+            phone: user.phone,
+            email: user.email,
+            role: user.role,
+            status: user.status,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            avatar: user.avatar,
+          },
+          tokens,
+        },
+      });
+    } catch (err) {
+      logger.error('Login error:', err);
+      const message = err instanceof Error ? err.message : 'Đăng nhập thất bại';
+      res.status(401).json({
+        success: false,
+        error: { code: 'LOGIN_FAILED', message },
+      });
+    }
+  };
+
+  /**
    * POST /api/auth/send-otp
-   * Send a one-time password to the given phone number (for login or registration).
+   * Resend OTP to the given phone number (for phone verification during registration).
    */
   sendOtp = async (req: Request, res: Response) => {
     try {
@@ -303,6 +475,71 @@ export class AuthController {
       res.status(500).json({
         success: false,
         error: { code: 'INTERNAL_ERROR', message: 'Failed to update role' },
+      });
+    }
+  };
+
+  /**
+   * POST /api/auth/forgot-password
+   * Send OTP to phone for password reset flow.
+   */
+  forgotPassword = async (req: Request, res: Response) => {
+    try {
+      const { error, value } = forgotPasswordSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: error.details[0].message },
+        });
+      }
+
+      const result = await this.authService.forgotPassword(value.phone, req.ip);
+
+      res.json({
+        success: true,
+        data: {
+          message: 'OTP đặt lại mật khẩu đã được gửi đến số điện thoại của bạn.',
+          resendDelay: result.resendDelay,
+          ...(result.devOtp && { devOtp: result.devOtp }),
+        },
+      });
+    } catch (err) {
+      logger.error('Forgot password error:', err);
+      const message = err instanceof Error ? err.message : 'Không thể gửi OTP';
+      const status = message.includes('Quá nhiều') ? 429 : 400;
+      res.status(status).json({
+        success: false,
+        error: { code: 'FORGOT_PASSWORD_FAILED', message },
+      });
+    }
+  };
+
+  /**
+   * POST /api/auth/reset-password
+   * Verify OTP and set new password.
+   */
+  resetPassword = async (req: Request, res: Response) => {
+    try {
+      const { error, value } = resetPasswordSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: error.details[0].message },
+        });
+      }
+
+      await this.authService.resetPassword(value.phone, value.otp, value.newPassword, req.ip);
+
+      res.json({
+        success: true,
+        data: { message: 'Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập lại.' },
+      });
+    } catch (err) {
+      logger.error('Reset password error:', err);
+      const message = err instanceof Error ? err.message : 'Đặt lại mật khẩu thất bại';
+      res.status(400).json({
+        success: false,
+        error: { code: 'RESET_PASSWORD_FAILED', message },
       });
     }
   };

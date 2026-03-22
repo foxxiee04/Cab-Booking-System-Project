@@ -1,23 +1,14 @@
 import axiosInstance from './axios.config';
 import { ApiResponse, AuthResponse } from '../types';
 
-export interface SendOtpRequest {
+export interface LoginRequest {
   phone: string;
-}
-
-export interface VerifyOtpRequest {
-  phone: string;
-  otp: string;
+  password: string;
 }
 
 export const authApi = {
-  sendOtp: async (data: SendOtpRequest): Promise<ApiResponse<{ resendDelay: number }>> => {
-    const response = await axiosInstance.post('/auth/send-otp', data);
-    return response.data;
-  },
-
-  verifyOtp: async (data: VerifyOtpRequest): Promise<ApiResponse<AuthResponse>> => {
-    const response = await axiosInstance.post('/auth/verify-otp', data);
+  login: async (data: LoginRequest): Promise<ApiResponse<AuthResponse>> => {
+    const response = await axiosInstance.post('/auth/login', data);
     return response.data;
   },
 
@@ -36,3 +27,4 @@ export const authApi = {
     return response.data;
   },
 };
+

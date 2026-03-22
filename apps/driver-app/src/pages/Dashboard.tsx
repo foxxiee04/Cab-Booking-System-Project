@@ -18,6 +18,9 @@ import {
   DriveEtaRounded,
   MyLocationRounded,
   RouteRounded,
+  AccessTimeRounded,
+  LocationOnRounded,
+  FlagRounded,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
@@ -32,9 +35,10 @@ import RideRequestModal from '../components/ride-request/RideRequestModal';
 import { driverApi } from '../api/driver.api';
 import { rideApi } from '../api/ride.api';
 import { driverSocketService } from '../socket/driver.socket';
-import { watchPosition, clearWatch } from '../utils/map.utils';
+import { watchPosition, clearWatch, formatDistance, formatDuration } from '../utils/map.utils';
 import { formatCurrency } from '../utils/format.utils';
 import DriverTripMap from '../features/trip/components/DriverTripMap';
+import { Ride } from '../types';
 
 const getOptimisticCompletedRidesKey = (userId?: string) => `driver:completedRidesCount:${userId || 'anonymous'}`;
 
@@ -56,6 +60,8 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [watchId, setWatchId] = useState<number | null>(null);
   const [completedRidesCount, setCompletedRidesCount] = useState(0);
+  const [availableRides, setAvailableRides] = useState<Ride[]>([]);
+  const [fetchingAvailableRides, setFetchingAvailableRides] = useState(false);
 
   const dismissPendingRide = (rideId: string) => {
     const holdUntil = Date.now() + 30_000;
@@ -156,7 +162,8 @@ const Dashboard: React.FC = () => {
 
   // Fallback polling for available rides when realtime delivery is delayed.
   useEffect(() => {
-    if (!isOnline || pendingRide || currentRide) {
+    if (!isOnline || currentRide) {
+      setAvailableRides([]);
       return;
     }
 
@@ -169,6 +176,7 @@ const Dashboard: React.FC = () => {
 
     const pollAvailableRides = async () => {
       try {
+        setFetchingAvailableRides(true);
         const now = Date.now();
         ignoredRideIdsRef.current.forEach((expiresAt, ignoredRideId) => {
           if (expiresAt <= now) {
@@ -182,14 +190,23 @@ const Dashboard: React.FC = () => {
           radius: 8,
         });
 
-        const nextRide = response.data?.rides?.find(
+        const rides = (response.data?.rides || []).filter(
           (ride) => !ignoredRideIdsRef.current.has(ride.id)
         );
-        if (!cancelled && nextRide) {
-          dispatch(setPendingRide({ ride: nextRide, timeoutSeconds: 20 }));
+
+        if (!cancelled) {
+          setAvailableRides(rides);
+        }
+
+        if (!cancelled && !pendingRide && rides.length > 0) {
+          dispatch(setPendingRide({ ride: rides[0], timeoutSeconds: 20 }));
         }
       } catch (pollError) {
         console.error('Failed to poll available rides:', pollError);
+      } finally {
+        if (!cancelled) {
+          setFetchingAvailableRides(false);
+        }
       }
     };
 
@@ -243,6 +260,21 @@ const Dashboard: React.FC = () => {
     } catch (error: any) {
       setError(error.response?.data?.error?.message || t('dashboard.acceptRideFailed'));
       dispatch(clearPendingRide());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAcceptSpecificRide = async (rideId: string) => {
+    setLoading(true);
+    ignoredRideIdsRef.current.delete(rideId);
+    try {
+      const response = await rideApi.acceptRide(rideId);
+      dispatch(setCurrentRide(response.data.ride));
+      dispatch(clearPendingRide());
+      navigate('/active-ride');
+    } catch (acceptError: any) {
+      setError(acceptError.response?.data?.error?.message || t('dashboard.acceptRideFailed'));
     } finally {
       setLoading(false);
     }
@@ -383,6 +415,74 @@ const Dashboard: React.FC = () => {
             />
           </Grid>
         </Grid>
+
+        <Box sx={{ mt: 2.5 }}>
+          <Typography variant="h6" fontWeight={800} sx={{ mb: 0.5 }}>
+            Danh sách cuốc đang chờ nhận
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Tài xế có thể chọn cuốc phù hợp theo điểm đón, điểm đến, tiền, khoảng cách và thời gian.
+          </Typography>
+
+          {!isOnline && (
+            <Alert severity="info" sx={{ borderRadius: 2 }}>
+              Bật trạng thái trực tuyến để xem các cuốc xe đang chờ nhận.
+            </Alert>
+          )}
+
+          {isOnline && !fetchingAvailableRides && availableRides.length === 0 && (
+            <Alert severity="info" sx={{ borderRadius: 2 }}>
+              Hiện chưa có cuốc xe phù hợp trong bán kính tìm kiếm.
+            </Alert>
+          )}
+
+          {isOnline && availableRides.length > 0 && (
+            <Stack spacing={1.2}>
+              {availableRides.slice(0, 8).map((ride) => {
+                const displayDuration = ride.duration || ride.estimatedDuration || 0;
+                const displayDistance = ride.distance || 0;
+
+                return (
+                  <Paper key={ride.id} variant="outlined" sx={{ p: 1.5, borderRadius: 3 }}>
+                    <Stack spacing={1}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <LocationOnRounded color="success" fontSize="small" />
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>Điểm đón:</Typography>
+                        <Typography variant="body2" sx={{ flex: 1 }} noWrap>
+                          {ride.pickupLocation?.address || 'Đã có vị trí điểm đón'}
+                        </Typography>
+                      </Stack>
+
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <FlagRounded color="error" fontSize="small" />
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>Điểm đến:</Typography>
+                        <Typography variant="body2" sx={{ flex: 1 }} noWrap>
+                          {ride.dropoffLocation?.address || 'Đã có vị trí điểm đến'}
+                        </Typography>
+                      </Stack>
+
+                      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
+                        <Chip size="small" icon={<AttachMoneyRounded />} label={`Tiền: ${ride.fare ? formatCurrency(ride.fare) : 'N/A'}`} />
+                        <Chip size="small" icon={<RouteRounded />} label={`Khoảng cách: ${displayDistance > 0 ? formatDistance(displayDistance) : 'N/A'}`} />
+                        <Chip size="small" icon={<AccessTimeRounded />} label={`Di chuyển: ${displayDuration > 0 ? formatDuration(displayDuration) : 'N/A'}`} />
+                      </Stack>
+
+                      <Button
+                        variant="contained"
+                        size="medium"
+                        onClick={() => handleAcceptSpecificRide(ride.id)}
+                        disabled={loading}
+                        sx={{ alignSelf: 'flex-end', borderRadius: 999, px: 2.5, fontWeight: 700 }}
+                      >
+                        Nhận cuốc này
+                      </Button>
+                    </Stack>
+                  </Paper>
+                );
+              })}
+            </Stack>
+          )}
+        </Box>
 
         {pendingRide && (
           <Button

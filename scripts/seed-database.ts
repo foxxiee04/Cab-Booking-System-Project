@@ -8,13 +8,16 @@
  */
 
 import path from 'node:path';
+import bcrypt from 'bcryptjs';
 
 // Use direct connection URLs for local development
 const POSTGRES_HOST = process.env.POSTGRES_HOST || 'localhost';
 const POSTGRES_PORT = process.env.POSTGRES_PORT || '5433';
 const POSTGRES_USER = process.env.POSTGRES_USER || 'postgres';
 const POSTGRES_PASSWORD = process.env.POSTGRES_PASSWORD || 'postgres';
-// No password hash needed — auth is now phone+OTP based
+
+// Default password for all seed users: password123
+const SEED_PASSWORD_HASH = bcrypt.hashSync('password123', 10);
 
 function pgUrl(db: string) {
   return `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${db}`;
@@ -175,7 +178,7 @@ async function seedAuthDB() {
     // Seed admin
     const admin = await prisma.user.upsert({
       where: { phone: ADMIN.phone },
-      update: {},
+      update: { passwordHash: SEED_PASSWORD_HASH, status: 'ACTIVE' },
       create: {
         email: ADMIN.email,
         phone: ADMIN.phone,
@@ -183,6 +186,7 @@ async function seedAuthDB() {
         status: 'ACTIVE',
         firstName: ADMIN.firstName,
         lastName: ADMIN.lastName,
+        passwordHash: SEED_PASSWORD_HASH,
       },
     });
     console.log(`    Admin: ${admin.phone} (${admin.id})`);
@@ -192,7 +196,7 @@ async function seedAuthDB() {
     for (const c of CUSTOMERS) {
       const user = await prisma.user.upsert({
         where: { phone: c.phone },
-        update: {},
+        update: { passwordHash: SEED_PASSWORD_HASH, status: 'ACTIVE' },
         create: {
           email: c.email,
           phone: c.phone,
@@ -200,6 +204,7 @@ async function seedAuthDB() {
           status: 'ACTIVE',
           firstName: c.firstName,
           lastName: c.lastName,
+          passwordHash: SEED_PASSWORD_HASH,
         },
       });
       customerIds.push(user.id);
@@ -211,7 +216,7 @@ async function seedAuthDB() {
     for (const d of DRIVERS) {
       const user = await prisma.user.upsert({
         where: { phone: d.phone },
-        update: {},
+        update: { passwordHash: SEED_PASSWORD_HASH, status: 'ACTIVE' },
         create: {
           email: d.email,
           phone: d.phone,
@@ -219,6 +224,7 @@ async function seedAuthDB() {
           status: 'ACTIVE',
           firstName: d.firstName,
           lastName: d.lastName,
+          passwordHash: SEED_PASSWORD_HASH,
         },
       });
       driverUserIds.push(user.id);
