@@ -97,7 +97,7 @@ export const authApi = {
   },
 
   /** Step 1 of registration: create account (auto-sends OTP) */
-  register: async (data: RegisterRequest): Promise<{ success: boolean; data: { message: string; resendDelay: number; devOtp?: string } }> => {
+  register: async (data: RegisterRequest): Promise<{ success: boolean; data: { message: string; resendDelay: number } }> => {
     const response = await axiosInstance.post('/auth/register', data);
     return response.data;
   },
@@ -109,7 +109,7 @@ export const authApi = {
   },
 
   /** New registration flow step 1: send OTP to phone before entering profile */
-  registerPhoneStart: async (data: RegisterPhoneStartRequest): Promise<{ success: boolean; data: { message: string; resendDelay: number; devOtp?: string } }> => {
+  registerPhoneStart: async (data: RegisterPhoneStartRequest): Promise<{ success: boolean; data: { message: string; resendDelay: number } }> => {
     const response = await axiosInstance.post('/auth/register-phone/start', data);
     return response.data;
   },
@@ -170,7 +170,7 @@ export const authApi = {
   },
 
   /** Forgot password: send OTP to phone */
-  forgotPassword: async (data: ForgotPasswordRequest): Promise<{ success: boolean; data: { message: string; resendDelay: number; devOtp?: string } }> => {
+  forgotPassword: async (data: ForgotPasswordRequest): Promise<{ success: boolean; data: { message: string; resendDelay: number } }> => {
     const response = await axiosInstance.post('/auth/forgot-password', data);
     return response.data;
   },

@@ -2,13 +2,21 @@ import axiosInstance from './axios.config';
 import { ApiResponse, AuthResponse } from '../types';
 
 export interface LoginRequest {
-  phone: string;
+  identifier: string;
   password: string;
 }
 
 export const authApi = {
   login: async (data: LoginRequest): Promise<ApiResponse<AuthResponse>> => {
     const response = await axiosInstance.post('/auth/login', data);
+    return response.data;
+  },
+
+  updateMe: async (data: {
+    profile?: { firstName?: string; lastName?: string; avatar?: string };
+    email?: string;
+  }): Promise<ApiResponse<{ user: any }>> => {
+    const response = await axiosInstance.patch('/auth/me', data);
     return response.data;
   },
 

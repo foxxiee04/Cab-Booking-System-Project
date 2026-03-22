@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Typography, Chip, Alert } from '@mui/material';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Box, Typography, Chip, Alert, TextField, MenuItem, InputAdornment } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { SearchRounded } from '@mui/icons-material';
 import { adminApi } from '../api/admin.api';
 import { Ride } from '../types';
 import { formatCurrency, formatDate, getRideStatusColor } from '../utils/format.utils';
@@ -14,6 +15,8 @@ const Rides: React.FC = () => {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [keyword, setKeyword] = useState('');
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -22,6 +25,7 @@ const Rides: React.FC = () => {
       setError('');
       try {
         const response = await adminApi.getRides({
+          status: statusFilter === 'ALL' ? undefined : statusFilter,
           limit: PAGE_SIZE,
           offset: page * PAGE_SIZE,
         });
@@ -35,7 +39,25 @@ const Rides: React.FC = () => {
     };
 
     fetchRides();
-  }, [page, t]);
+  }, [page, statusFilter, t]);
+
+  const filteredRows = useMemo(() => {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    if (!normalizedKeyword) {
+      return rows;
+    }
+
+    return rows.filter((ride) => {
+      const customerName = `${ride.customer?.firstName || ''} ${ride.customer?.lastName || ''}`.trim();
+      const driverName = `${ride.driver?.firstName || ''} ${ride.driver?.lastName || ''}`.trim();
+
+      return [ride.id, customerName, driverName, ride.customerId, ride.driverId]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedKeyword);
+    });
+  }, [keyword, rows]);
 
   const columns: GridColDef<Ride>[] = [
     { field: 'id', headerName: t('columns.rideId'), flex: 1, minWidth: 220 },
@@ -88,6 +110,40 @@ const Rides: React.FC = () => {
         {t('tables.rides')}
       </Typography>
 
+      <Box sx={{ mt: 2, display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: '1fr 180px' } }}>
+        <TextField
+          size="small"
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+          placeholder="Tìm theo mã chuyến/khách/tài xế"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchRounded fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
+        <TextField
+          select
+          size="small"
+          label="Trạng thái"
+          value={statusFilter}
+          onChange={(event) => {
+            setPage(0);
+            setStatusFilter(event.target.value);
+          }}
+        >
+          <MenuItem value="ALL">Tất cả</MenuItem>
+          <MenuItem value="PENDING">Đang chờ</MenuItem>
+          <MenuItem value="ASSIGNED">Đã gán</MenuItem>
+          <MenuItem value="ACCEPTED">Đã nhận</MenuItem>
+          <MenuItem value="IN_PROGRESS">Đang chạy</MenuItem>
+          <MenuItem value="COMPLETED">Hoàn tất</MenuItem>
+          <MenuItem value="CANCELLED">Đã hủy</MenuItem>
+        </TextField>
+      </Box>
+
       {error && (
         <Alert severity="error" sx={{ mt: 2 }}>
           {error}
@@ -96,9 +152,9 @@ const Rides: React.FC = () => {
 
       <Box sx={{ mt: 2, height: 520 }}>
         <DataGrid
-          rows={rows}
+          rows={filteredRows}
           columns={columns}
-          rowCount={total}
+          rowCount={statusFilter === 'ALL' && !keyword.trim() ? total : filteredRows.length}
           loading={loading}
           paginationMode="server"
           pageSizeOptions={[PAGE_SIZE]}

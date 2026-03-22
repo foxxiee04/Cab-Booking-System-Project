@@ -49,7 +49,7 @@ const ForgotPassword: React.FC = () => {
     try {
       const res = await authApi.forgotPassword({ phone });
       setResendDelay(res.data.resendDelay || 30);
-      setInfo('OTP đặt lại mật khẩu đã được gửi đến số điện thoại của bạn.');
+      setInfo(res.data.message || 'OTP đã gửi tới +84****xxx');
       setStep('otp');
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể gửi OTP. Vui lòng thử lại.');
@@ -66,8 +66,16 @@ const ForgotPassword: React.FC = () => {
       setError('Vui lòng nhập đủ 6 chữ số OTP');
       return;
     }
-    if (newPassword.length < 6) {
-      setError('Mật khẩu mới phải có ít nhất 6 ký tự');
+    if (newPassword.length < 8) {
+      setError('Mật khẩu mới phải có ít nhất 8 ký tự');
+      return;
+    }
+    if (!/[A-Z]/.test(newPassword)) {
+      setError('Mật khẩu phải chứa ít nhất 1 chữ hoa (A-Z)');
+      return;
+    }
+    if (!/[^A-Za-z0-9]/.test(newPassword)) {
+      setError('Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt (!@#$%...)');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -79,7 +87,12 @@ const ForgotPassword: React.FC = () => {
       await authApi.resetPassword({ phone, otp, newPassword });
       setStep('done');
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Đặt lại mật khẩu thất bại.');
+      const msg = err.response?.data?.error?.message || 'Đặt lại mật khẩu thất bại.';
+      setError(msg);
+      setOtp('');
+      if (msg.includes('Quá nhiều') || msg.includes('hết hạn')) {
+        setResendDelay(0);
+      }
     } finally {
       setLoading(false);
     }
@@ -93,7 +106,7 @@ const ForgotPassword: React.FC = () => {
       const res = await authApi.forgotPassword({ phone });
       setResendDelay(res.data.resendDelay || 60);
       setOtp('');
-      setInfo('OTP mới đã được gửi.');
+      setInfo(res.data.message || 'OTP đã gửi tới +84****xxx');
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể gửi lại OTP.');
     } finally {
@@ -131,7 +144,7 @@ const ForgotPassword: React.FC = () => {
               )}
               {step === 'otp' && (
                 <Typography variant="body2" color="text.secondary">
-                  OTP đã gửi đến <strong>{phone}</strong>. Hiệu lực 5 phút.
+                  Nhập OTP để xác nhận và đặt lại mật khẩu mới.
                 </Typography>
               )}
             </Box>
@@ -207,7 +220,7 @@ const ForgotPassword: React.FC = () => {
                       </InputAdornment>
                     ),
                   }}
-                  helperText="Ít nhất 6 ký tự"
+                  helperText="Ít nhất 8 ký tự, 1 chữ hoa, 1 ký tự đặc biệt"
                 />
                 <TextField
                   fullWidth

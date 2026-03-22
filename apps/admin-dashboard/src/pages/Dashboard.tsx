@@ -163,7 +163,7 @@ function createInitialRealtimeEvent(): AdminRealtimeEvent {
     type: 'ride:created',
     timestamp: new Date().toISOString(),
     title: 'Bảng điều khiển realtime',
-    detail: 'Bảng điều khiển đã vào chế độ theo dõi realtime và sẽ cập nhật khi hệ thống có biến động.',
+    detail: '',
     tone: 'info',
   };
 }

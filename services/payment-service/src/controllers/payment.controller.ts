@@ -294,22 +294,27 @@ export class PaymentController {
         });
       }
 
-      if (!config.vnpay.enabled) {
-        return res.status(503).json({
-          success: false,
-          error: { code: 'GATEWAY_DISABLED', message: 'VNPay chưa được kích hoạt' },
-        });
-      }
-
-      // Create pending payment record first
       const intent = await this.paymentService.createPaymentIntent({
         rideId,
         customerId: req.user!.userId,
         amount,
         currency: 'VND',
         paymentMethod: 'VNPAY',
+        returnUrl,
+        ipAddress: req.ip || '127.0.0.1',
         idempotencyKey: req.header('Idempotency-Key'),
       });
+
+      if (!config.vnpay.enabled) {
+        return res.status(201).json({
+          success: true,
+          data: {
+            paymentId: intent.paymentId,
+            paymentIntentId: intent.paymentIntentId,
+            status: intent.status,
+          },
+        });
+      }
 
       // Build VNPay redirect URL (orderId must be unique, use rideId)
       const { paymentUrl, txnRef } = vnpayGateway.createPaymentUrl({
@@ -342,8 +347,39 @@ export class PaymentController {
   handleVnpayReturn = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const query = req.query as Record<string, string>;
-      const result = vnpayGateway.verifyReturn(query);
       const rideId = query.rideId || this.extractRideIdFromOrderInfo(query.vnp_OrderInfo);
+
+      if (query.mock === '1') {
+        if (!rideId) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'VALIDATION_ERROR', message: 'Không xác định được rideId từ mock callback VNPay' },
+          });
+        }
+
+        const paid = query.paid === 'true';
+        await this.paymentService.applyGatewayReturnByRideId({
+          rideId,
+          paid,
+          transactionId: query.transactionId || query.vnp_TransactionNo || `VNPAY_MOCK_${Date.now()}`,
+          failureReason: paid ? undefined : (query.message || 'Mock VNPay payment failed'),
+          gatewayMetadata: query,
+        });
+
+        return res.json({
+          success: true,
+          data: {
+            rideId,
+            txnRef: query.vnp_TxnRef || '',
+            transactionId: query.transactionId || query.vnp_TransactionNo || '',
+            amount: Number(query.vnp_Amount || 0) / 100,
+            responseCode: paid ? '00' : '99',
+            paid,
+          },
+        });
+      }
+
+      const result = vnpayGateway.verifyReturn(query);
 
       if (!rideId) {
         return res.status(400).json({

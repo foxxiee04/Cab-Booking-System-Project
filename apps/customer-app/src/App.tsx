@@ -11,6 +11,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import HomeMap from './pages/HomeMap';
 import RideTracking from './pages/RideTracking';
 import PaymentCallback from './pages/PaymentCallback';
+import PaymentMockGateway from './pages/PaymentMockGateway';
 import RideHistory from './pages/RideHistory';
 import Profile from './pages/Profile';
 import Activity from './pages/Activity';
@@ -99,6 +100,7 @@ function App() {
         />
 
         <Route path="/payment/callback" element={<PaymentCallback />} />
+        <Route path="/payment/mock-gateway" element={<PaymentMockGateway />} />
 
         <Route path="*" element={<Navigate to={isAuthenticated ? '/home' : '/login'} replace />} />
       </Routes>

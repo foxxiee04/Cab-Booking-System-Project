@@ -116,10 +116,6 @@ const Drivers: React.FC = () => {
         </Alert>
       )}
 
-      <Alert severity="info" sx={{ mt: 2 }}>
-        Hồ sơ chờ duyệt đã được tách riêng sang mục {t('menu.approvals')} để đọc chi tiết trước khi xác nhận.
-      </Alert>
-
       <Box sx={{ mt: 2, height: 520 }}>
         <DataGrid
           rows={rows}

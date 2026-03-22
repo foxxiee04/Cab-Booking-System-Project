@@ -36,19 +36,6 @@ export const config = {
     resendDelays: [0, 30, 60], // seconds: 1st send immediately, 2nd after 30s, 3rd+ after 60s
   },
 
-  // Twilio SMS
-  twilio: {
-    enabled: process.env.TWILIO_ENABLED === 'true',
-    accountSid: process.env.TWILIO_ACCOUNT_SID || '',
-    authToken: process.env.TWILIO_AUTH_TOKEN || '',
-    fromPhone: process.env.TWILIO_FROM_PHONE || '',
-  },
-
-  // Personal SMS phone: only this number receives real SMS; all others are mocked
-  sms: {
-    personalPhone: process.env.PERSONAL_SMS_PHONE || '',
-  },
-  
   rabbitmq: {
     url: process.env.RABBITMQ_URL || 'amqp://localhost:5672',
   },

@@ -12,7 +12,7 @@ import {
   CircularProgress,
   InputAdornment,
 } from '@mui/material';
-import { AdminPanelSettings, Phone, Lock } from '@mui/icons-material';
+import { AdminPanelSettings, PersonOutline, Lock } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch } from '../store/hooks';
 import { setCredentials } from '../store/auth.slice';
@@ -23,7 +23,7 @@ const Login: React.FC = () => {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
 
-  const [phone, setPhone] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -31,14 +31,14 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!/^0\d{9}$/.test(phone)) {
-      setError('Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0');
+    if (!identifier.trim()) {
+      setError('Vui lòng nhập tài khoản admin');
       return;
     }
     if (!password) { setError('Vui lòng nhập mật khẩu'); return; }
     setLoading(true);
     try {
-      const response = await authApi.login({ phone, password });
+      const response = await authApi.login({ identifier: identifier.trim(), password });
       if (response.success) {
         if (response.data.user.role !== 'ADMIN') {
           setError('Tài khoản này không có quyền truy cập trang quản trị.');
@@ -48,7 +48,7 @@ const Login: React.FC = () => {
         navigate('/dashboard');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Số điện thoại hoặc mật khẩu không đúng.');
+      setError(err.response?.data?.error?.message || 'Tài khoản hoặc mật khẩu không đúng.');
     } finally {
       setLoading(false);
     }
@@ -72,7 +72,7 @@ const Login: React.FC = () => {
                 Quản trị viên
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Đăng nhập bằng số điện thoại và mật khẩu quản trị
+                Đăng nhập bằng tài khoản admin và mật khẩu
               </Typography>
             </Box>
 
@@ -81,18 +81,18 @@ const Login: React.FC = () => {
             <form onSubmit={handleSubmit}>
               <TextField
                 fullWidth
-                label="Số điện thoại"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                placeholder="0912345678"
+                label="Tài khoản admin"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="admin hoặc admin@cabbooking.com"
                 required
                 autoFocus
-                inputMode="numeric"
+                autoComplete="username"
                 sx={{ mb: 2 }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <Phone />
+                      <PersonOutline />
                     </InputAdornment>
                   ),
                 }}
@@ -104,6 +104,7 @@ const Login: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                autoComplete="current-password"
                 sx={{ mb: 3 }}
                 InputProps={{
                   startAdornment: (

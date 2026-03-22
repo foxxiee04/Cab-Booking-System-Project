@@ -283,7 +283,7 @@ const HomeMap: React.FC = () => {
             </Stack>
 
             <Typography variant="h6" fontWeight={800} sx={{ mb: 0.5 }}>
-              {t('home.bookingHeadline', 'Đặt xe theo luồng 3 bước')}
+              {t('home.bookingHeadline', 'Đặt xe nhanh và rõ ràng')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               {t('home.bookingBody', 'Chọn điểm đón, xem quãng đường và ETA, sau đó chọn loại xe cùng giá ước tính ngay trong bottom sheet.')}
@@ -291,15 +291,15 @@ const HomeMap: React.FC = () => {
 
             <Stack direction="row" spacing={1.25} sx={{ mb: 2 }}>
               <Paper variant="outlined" sx={{ flex: 1, p: 1.5, borderRadius: 3 }}>
-                <Typography variant="overline" color="text.secondary">{t('home.stepOne', 'Bước 1')}</Typography>
+                <Typography variant="overline" color="text.secondary">{t('home.stepOne', 'Lộ trình')}</Typography>
                 <Typography variant="subtitle2" fontWeight={800}>{t('home.stepOneBody', 'Chọn điểm đón và điểm đến')}</Typography>
               </Paper>
               <Paper variant="outlined" sx={{ flex: 1, p: 1.5, borderRadius: 3 }}>
-                <Typography variant="overline" color="text.secondary">{t('home.stepTwo', 'Bước 2')}</Typography>
+                <Typography variant="overline" color="text.secondary">{t('home.stepTwo', 'Phương tiện')}</Typography>
                 <Typography variant="subtitle2" fontWeight={800}>{t('home.stepTwoBody', 'Xem loại xe và giá')}</Typography>
               </Paper>
               <Paper variant="outlined" sx={{ flex: 1, p: 1.5, borderRadius: 3 }}>
-                <Typography variant="overline" color="text.secondary">{t('home.stepThree', 'Bước 3')}</Typography>
+                <Typography variant="overline" color="text.secondary">{t('home.stepThree', 'Kết nối')}</Typography>
                 <Typography variant="subtitle2" fontWeight={800}>{t('home.stepThreeBody', 'Tìm tài xế gần nhất')}</Typography>
               </Paper>
             </Stack>

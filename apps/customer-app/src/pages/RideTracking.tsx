@@ -322,9 +322,10 @@ const RideTracking: React.FC = () => {
           left: 0,
           right: 0,
           zIndex: 1100,
-          background: 'linear-gradient(180deg, rgba(15,23,42,0.72) 0%, rgba(15,23,42,0) 100%)',
+          background: 'transparent',
           p: 1,
           pt: 2,
+          pointerEvents: 'none',
         }}
       >
         <IconButton
@@ -334,7 +335,7 @@ const RideTracking: React.FC = () => {
               navigate('/home');
             }
           }}
-          sx={{ bgcolor: 'white', boxShadow: 3, '&:hover': { bgcolor: 'grey.100' } }}
+          sx={{ bgcolor: 'white', boxShadow: 2, '&:hover': { bgcolor: 'grey.100' }, pointerEvents: 'auto' }}
         >
           <ArrowBack />
         </IconButton>

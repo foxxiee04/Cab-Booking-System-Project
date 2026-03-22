@@ -275,7 +275,15 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
         const redirectUrl = paymentResponse.data.paymentUrl || paymentResponse.data.payUrl;
 
         if (!redirectUrl) {
-          throw new Error('Không lấy được đường dẫn thanh toán từ gateway.');
+          const mockParams = new URLSearchParams({
+            provider: selectedPayment,
+            rideId,
+            amount: String(amount),
+          });
+
+          onClose();
+          window.location.assign(`${window.location.origin}/payment/mock-gateway?${mockParams.toString()}`);
+          return;
         }
 
         onClose();

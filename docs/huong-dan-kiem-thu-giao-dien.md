@@ -24,21 +24,41 @@ Trọng tâm là các luồng nghiệp vụ chính: đăng ký/OTP, đăng nhậ
 
 ## 3) Tài khoản seed sau khi reset database
 
-| Vai trò | Số điện thoại | Mật khẩu |
-|---|---|---|
-| Admin | 0900000001 | password123 |
-| Customer 1 | 0901234561 | password123 |
-| Customer 2 | 0901234562 | password123 |
-| Driver 1 | 0911234561 | password123 |
-| Driver 2 | 0911234562 | password123 |
+| Vai trò | Số điện thoại | Email | Mật khẩu |
+|---|---|---|---|
+| Admin | 0900000001 | admin@cabbooking.com | Password@1 |
+| Customer 1 | 0901234561 | customer1@example.com | Password@1 |
+| Customer 2 | 0901234562 | customer2@example.com | Password@1 |
+| Customer 3 | 0901234563 | customer3@example.com | Password@1 |
+| Customer 4 | 0901234564 | customer4@example.com | Password@1 |
+| Customer 5 | 0901234565 | customer5@example.com | Password@1 |
+| Customer 6 | 0901234566 | customer6@example.com | Password@1 |
+| Customer 7 | 0901234567 | customer7@example.com | Password@1 |
+| Customer 8 | 0901234568 | customer8@example.com | Password@1 |
+| Customer 9 | 0901234569 | customer9@example.com | Password@1 |
+| Customer 10 | 0901234570 | customer10@example.com | Password@1 |
+| Driver 1 | 0911234561 | driver1@example.com | Password@1 |
+| Driver 2 | 0911234562 | driver2@example.com | Password@1 |
+| Driver 3 | 0911234563 | driver3@example.com | Password@1 |
+| Driver 4 | 0911234564 | driver4@example.com | Password@1 |
+| Driver 5 | 0911234565 | driver5@example.com | Password@1 |
+| Driver 6 | 0911234566 | driver6@example.com | Password@1 |
+| Driver 7 | 0911234567 | driver7@example.com | Password@1 |
+| Driver 8 | 0911234568 | driver8@example.com | Password@1 |
+| Driver 9 | 0911234569 | driver9@example.com | Password@1 |
+| Driver 10 | 0911234570 | driver10@example.com | Password@1 |
+
+> **Lưu ý mật khẩu:** `Password@1` — chữ P hoa, ký tự đặc biệt @, dài 9 ký tự. Đáp ứng chính sách mới: ≥8 ký tự, ≥1 chữ hoa (A-Z), ≥1 ký tự đặc biệt.
 
 ---
 
 ## 4) OTP trong môi trường dev/test
 
-### 4.1 OTP mock (mặc định khi dev)
-- API trả về `devOtp` trong response khi gọi các endpoint OTP.
-- Log auth-service có dòng dạng: `[SMS MOCK] OTP for 09xxxxxxxx: 123456`.
+### 4.1 Chính sách OTP hiện tại
+- API không trả về `devOtp` trong mọi môi trường.
+- UI không hiển thị OTP trong mọi màn hình customer/driver/admin.
+- Response chỉ trả về message đã mask, ví dụ: `OTP đã gửi tới +84****470`.
+- OTP vẫn được xử lý đầy đủ backend: hash + Redis TTL 5 phút + giới hạn số lần nhập sai + rate limit.
 
 ### 4.2 OTP thật qua Twilio (personal phone)
 
@@ -48,7 +68,7 @@ Checklist cấu hình đúng:
    - `TWILIO_ACCOUNT_SID=...`
    - `TWILIO_AUTH_TOKEN=...`
    - `TWILIO_FROM_PHONE=+1...` (hoặc số Twilio hợp lệ)
-   - `PERSONAL_SMS_PHONE=0xxxxxxxxx` (số bạn muốn nhận thật)
+   - `REAL_SMS_PHONE=0328861460` (chỉ số này mới nhận SMS thật)
 2. Auth service phải đọc env file từ compose (đã cấu hình).
 3. Restart auth service sau khi sửa env:
    - `docker compose up -d --build auth-service`
@@ -56,8 +76,25 @@ Checklist cấu hình đúng:
    - `docker logs cab-auth-service --tail 100 -f`
 
 Lưu ý:
-- Chỉ số khớp `PERSONAL_SMS_PHONE` mới gửi SMS thật.
-- Số khác sẽ rơi về mock OTP (đúng theo thiết kế dev/test).
+- Chỉ số khớp `REAL_SMS_PHONE` mới gửi SMS thật qua Twilio.
+- Các số khác vẫn đi qua luồng OTP nhưng không gửi SMS ra ngoài.
+- UI không hiển thị OTP trong bất kỳ trường hợp nào; response chỉ trả về dạng mask như `OTP đã gửi tới +84****470`.
+- Nếu `TWILIO_ENABLED=false` hoặc thiếu `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_PHONE` thì số thật cũng không nhận được SMS.
+
+---
+
+## 4b) Chính sách mật khẩu
+
+Mật khẩu bắt buộc đáp ứng **đồng thời** 3 điều kiện:
+
+| Điều kiện | Chi tiết |
+|---|---|
+| Độ dài tối thiểu | ≥ 8 ký tự |
+| Chữ hoa | Ít nhất 1 ký tự A-Z |
+| Ký tự đặc biệt | Ít nhất 1 ký tự ngoài chữ/số (vd: `!@#$%^&*`) |
+
+Ví dụ hợp lệ: `Password@1`, `Test#2024`, `Admin!99`
+Ví dụ không hợp lệ: `password1` (thiếu hoa + đặc biệt), `Password` (thiếu đặc biệt + số), `pass@1` (quá ngắn)
 
 ---
 
@@ -76,14 +113,30 @@ Lưu ý:
 | Bước | Thao tác | Kết quả mong đợi |
 |---|---|---|
 | 1 | SĐT sai định dạng | Báo lỗi đúng định dạng SĐT |
-| 2 | Mật khẩu và xác nhận không khớp | Báo lỗi không khớp |
-| 3 | SĐT đã tồn tại | Báo lỗi trùng tài khoản |
+| 2 | Mật khẩu không có chữ hoa | Báo lỗi "Mật khẩu phải chứa ít nhất 1 chữ hoa" |
+| 3 | Mật khẩu không có ký tự đặc biệt | Báo lỗi "Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt" |
+| 4 | Mật khẩu và xác nhận không khớp | Báo lỗi không khớp |
+| 5 | SĐT đã tồn tại | Báo lỗi trùng tài khoản |
+
+### TC-REG-04: OTP nhập sai
+| Bước | Thao tác | Kết quả mong đợi |
+|---|---|---|
+| 1 | Nhập OTP sai | Hiển thị thông báo lỗi, ô OTP xóa trắng để nhập lại — **không reload, không chuyển trang** |
+| 2 | Nhập sai nhiều lần (quá 5 lần) | Thông báo "Quá nhiều lần nhập sai", nút Gửi lại OTP enable ngay lập tức |
+| 3 | OTP hết hạn (sau 5 phút) | Thông báo "OTP đã hết hạn", nút Gửi lại OTP enable ngay lập tức |
 
 ### TC-REG-03: Resend OTP
 | Bước | Thao tác | Kết quả mong đợi |
 |---|---|---|
 | 1 | Bấm gửi lại OTP trong thời gian cooldown | Nút disable + đếm ngược |
 | 2 | Hết cooldown và resend | OTP mới được tạo |
+
+### TC-REG-05: Lấy OTP trong môi trường dev (không có Twilio thật)
+| Bước | Thao tác | Kết quả mong đợi |
+|---|---|---|
+| 1 | Gửi OTP đăng ký cho SĐT bất kỳ | Response trả về mask SĐT, không lộ OTP |
+| 2 | Lấy OTP qua API dev | `GET http://localhost:3001/api/auth/dev/otp/{phone}?purpose=register` → trả về JSON `{"otp":"..."}` |
+| 3 | Điền OTP vào form | Tiếp tục luồng bình thường |
 
 ---
 
@@ -99,8 +152,10 @@ Lưu ý:
 | Bước | Thao tác | Kết quả mong đợi |
 |---|---|---|
 | 1 | Bấm Quên mật khẩu | Điều hướng đúng |
-| 2 | Nhập SĐT hợp lệ + OTP đúng + mật khẩu mới | Reset thành công |
-| 3 | Login bằng mật khẩu mới | Thành công |
+| 2 | Nhập SĐT hợp lệ → Gửi OTP | OTP được gửi, cooldown bắt đầu |
+| 3 | Nhập OTP sai | Thông báo lỗi, ô OTP xóa trắng, **không reload** |
+| 4 | Nhập OTP đúng + mật khẩu mới đủ điều kiện (≥8, hoa, đặc biệt) | Reset thành công |
+| 5 | Login bằng mật khẩu mới | Thành công |
 
 ---
 
@@ -200,9 +255,79 @@ docker logs cab-auth-service --tail 50 -f
 docker compose up -d --build auth-service
 ```
 
-### 12.3 Chạy static app đúng port
+### 12.3 Kiểm tra biến OTP runtime trong container auth-service
+```bash
+docker exec cab-auth-service printenv | findstr /I "TWILIO_ENABLED REAL_SMS_PHONE TWILIO_ACCOUNT_SID TWILIO_FROM_PHONE"
+```
+
+### 12.4 Chạy static app đúng port
 ```bash
 npx serve -s apps/customer-app/build -l 4000
 npx serve -s apps/driver-app/build -l 4001
 npx serve -s apps/admin-dashboard/build -l 4002
 ```
+
+---
+
+## 13) Lệnh Postman/CLI để test OTP
+
+Base URL: `http://localhost:3000/api/auth`
+
+### 13.1 Gửi OTP đăng ký theo số điện thoại
+```bash
+curl -X POST "http://localhost:3000/api/auth/register-phone/start" \
+   -H "Content-Type: application/json" \
+   -d "{\"phone\":\"0328861460\"}"
+```
+
+### 13.2 Xác minh OTP đăng ký
+```bash
+curl -X POST "http://localhost:3000/api/auth/register-phone/verify" \
+   -H "Content-Type: application/json" \
+   -d "{\"phone\":\"0328861460\",\"otp\":\"123456\"}"
+```
+
+### 13.3 Hoàn tất đăng ký sau khi verify OTP
+```bash
+curl -X POST "http://localhost:3000/api/auth/register-phone/complete" \
+   -H "Content-Type: application/json" \
+   -d "{\"phone\":\"0328861460\",\"password\":\"Password@1\",\"firstName\":\"Test\",\"lastName\":\"User\",\"email\":\"test.user@example.com\"}"
+```
+
+### 13.4 Gửi OTP quên mật khẩu
+```bash
+curl -X POST "http://localhost:3000/api/auth/forgot-password" \
+   -H "Content-Type: application/json" \
+   -d "{\"phone\":\"0901234561\"}"
+```
+
+### 13.5 Đặt lại mật khẩu bằng OTP
+```bash
+curl -X POST "http://localhost:3000/api/auth/reset-password" \
+   -H "Content-Type: application/json" \
+   -d "{\"phone\":\"0901234561\",\"otp\":\"123456\",\"newPassword\":\"NewPass@1\"}"
+```
+
+### 13.6 Resend OTP cho luồng đăng ký
+```bash
+curl -X POST "http://localhost:3000/api/auth/send-otp" \
+   -H "Content-Type: application/json" \
+   -d "{\"phone\":\"0328861460\",\"purpose\":\"register\"}"
+```
+
+Ghi chú kiểm thử:
+- Trong Postman, tạo Collection với biến `baseUrl = http://localhost:3000/api/auth` để tái sử dụng.
+- Với số khác `REAL_SMS_PHONE`, response vẫn trả thành công dạng mask nhưng không gửi SMS thật.
+- Với số đúng `REAL_SMS_PHONE`, chỉ nhận SMS thật khi Twilio bật đầy đủ credentials.
+
+---
+
+## 14) Kết quả chạy test browser gần nhất
+
+- Driver app đã chạy ổn định lại trên `http://localhost:4001`.
+- Case OTP UI customer register: hiển thị `OTP đã gửi tới +84****569`, không lộ OTP.
+- Case OTP UI driver register: hiển thị `OTP đã gửi tới +84****678`, không lộ OTP.
+- Case lifecycle chuyến đi: Driver `0911234562` hoàn tất chuyến đang chạy, Customer `0901234561` tự cập nhật sang trạng thái `Chuyến đi đã hoàn thành` và hiện hóa đơn + đánh giá.
+- Case callback thanh toán mock:
+   - MoMo callback `paid=true` hiển thị `Thanh toán thành công`.
+   - VNPay callback `paid=false` hiển thị `Thanh toán chưa thành công hoặc đã bị hủy`.

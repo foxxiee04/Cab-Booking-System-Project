@@ -709,10 +709,16 @@ export class PaymentService {
   }
 
   async getPaymentByRideId(rideId: string) {
-    return this.prisma.payment.findUnique({
+    const payment = await this.prisma.payment.findUnique({
       where: { rideId },
-      include: { fare: true },
     });
+
+    if (!payment) {
+      return null;
+    }
+
+    const fare = await this.prisma.fare.findUnique({ where: { rideId: payment.rideId } });
+    return { ...payment, fare };
   }
 
   async getCustomerPayments(customerId: string, page = 1, limit = 20) {
@@ -720,14 +726,22 @@ export class PaymentService {
     const [payments, total] = await Promise.all([
       this.prisma.payment.findMany({
         where: { customerId },
-        include: { fare: true },
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.payment.count({ where: { customerId } }),
     ]);
-    return { payments, total };
+
+    const fares = await this.prisma.fare.findMany({
+      where: { rideId: { in: payments.map((payment) => payment.rideId) } },
+    });
+    const fareByRideId = new Map(fares.map((fare) => [fare.rideId, fare]));
+
+    return {
+      payments: payments.map((payment) => ({ ...payment, fare: fareByRideId.get(payment.rideId) || null })),
+      total,
+    };
   }
 
   async getDriverEarnings(driverId: string, page = 1, limit = 20) {
@@ -735,7 +749,6 @@ export class PaymentService {
     const [payments, total, totalEarnings] = await Promise.all([
       this.prisma.payment.findMany({
         where: { driverId, status: PaymentStatus.COMPLETED },
-        include: { fare: true },
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
@@ -746,8 +759,14 @@ export class PaymentService {
         _sum: { amount: true },
       }),
     ]);
+
+    const fares = await this.prisma.fare.findMany({
+      where: { rideId: { in: payments.map((payment) => payment.rideId) } },
+    });
+    const fareByRideId = new Map(fares.map((fare) => [fare.rideId, fare]));
+
     return { 
-      payments, 
+      payments: payments.map((payment) => ({ ...payment, fare: fareByRideId.get(payment.rideId) || null })),
       total, 
       totalEarnings: totalEarnings._sum.amount || 0 
     };

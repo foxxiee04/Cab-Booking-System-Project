@@ -41,8 +41,11 @@ axiosInstance.interceptors.response.use(
     console.error('API ERROR:', error.response?.data || error.message);
     const originalRequest = error.config;
 
-    // If 401 and not already retried
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // If 401 and not already retried — but skip pre-auth OTP paths
+    const isPreAuthPath = /\/auth\/(register|send-otp|verify-otp|forgot-password|reset-password|register-phone)/.test(
+      originalRequest.url || ''
+    );
+    if (error.response?.status === 401 && !originalRequest._retry && !isPreAuthPath) {
       originalRequest._retry = true;
 
       try {

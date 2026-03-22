@@ -42,6 +42,7 @@ import Customers from './pages/Customers';
 import Payments from './pages/Payments';
 import Pricing from './pages/Pricing';
 import Logs from './pages/Logs';
+import Profile from './pages/Profile';
 
 const DRAWER_WIDTH = 260;
 
@@ -70,6 +71,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const menuItems = [
     { text: t('menu.dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
+    { text: t('menu.profile'), icon: <AccountCircle />, path: '/profile' },
     { text: t('menu.rides'), icon: <DirectionsCar />, path: '/rides' },
     { text: t('menu.drivers'), icon: <DriveEta />, path: '/drivers' },
     { text: t('menu.approvals'), icon: <FactCheck />, path: '/driver-approvals' },
@@ -107,7 +109,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           >
             <MenuItem disabled>
               <AccountCircle sx={{ mr: 1 }} />
-              {user?.email}
+              {`${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || 'Admin'}
+            </MenuItem>
+            <MenuItem onClick={() => { setAnchorEl(null); navigate('/profile'); }}>
+              <AccountCircle sx={{ mr: 1 }} />
+              {t('menu.profile')}
             </MenuItem>
             <Divider />
             <MenuItem onClick={handleLogout}>
@@ -196,6 +202,16 @@ const App: React.FC = () => {
           }
         />
 
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Profile />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/dashboard"
           element={

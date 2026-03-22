@@ -65,17 +65,17 @@ export const authApi = {
     return result;
   },
 
-  register: async (data: RegisterRequest): Promise<ApiResponse<{ message: string; resendDelay: number; devOtp?: string }>> => {
+  register: async (data: RegisterRequest): Promise<ApiResponse<{ message: string; resendDelay: number }>> => {
     const response = await axiosInstance.post('/auth/register', data);
     return response.data;
   },
 
-  sendOtp: async (data: SendOtpRequest): Promise<ApiResponse<{ message: string; resendDelay: number; devOtp?: string }>> => {
+  sendOtp: async (data: SendOtpRequest): Promise<ApiResponse<{ message: string; resendDelay: number }>> => {
     const response = await axiosInstance.post('/auth/send-otp', data);
     return response.data;
   },
 
-  registerPhoneStart: async (data: RegisterPhoneStartRequest): Promise<ApiResponse<{ message: string; resendDelay: number; devOtp?: string }>> => {
+  registerPhoneStart: async (data: RegisterPhoneStartRequest): Promise<ApiResponse<{ message: string; resendDelay: number }>> => {
     const response = await axiosInstance.post('/auth/register-phone/start', data);
     return response.data;
   },
@@ -124,7 +124,7 @@ export const authApi = {
   },
 
   /** Forgot password: send OTP to phone */
-  forgotPassword: async (data: ForgotPasswordRequest): Promise<ApiResponse<{ message: string; resendDelay: number; devOtp?: string }>> => {
+  forgotPassword: async (data: ForgotPasswordRequest): Promise<ApiResponse<{ message: string; resendDelay: number }>> => {
     const response = await axiosInstance.post('/auth/forgot-password', data);
     return response.data;
   },

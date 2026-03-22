@@ -68,10 +68,16 @@ axiosInstance.interceptors.response.use(
     const originalRequest = error.config;
 
     // Token expired
+    // Exclude pre-auth paths (OTP register/verify, forgot-password, reset-password)
+    // — these legitimately return 401/422 and should NOT trigger token refresh
+    const isPreAuthPath = /\/auth\/(register|send-otp|verify-otp|forgot-password|reset-password|register-phone)/.test(
+      originalRequest.url || ''
+    );
     if (
       error.response?.status === 401
       && !originalRequest._retry
       && !originalRequest.url?.includes('/auth/refresh')
+      && !isPreAuthPath
     ) {
       originalRequest._retry = true;
 

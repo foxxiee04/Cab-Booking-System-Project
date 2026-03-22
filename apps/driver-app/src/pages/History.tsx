@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Container,
   Box,
@@ -9,7 +9,11 @@ import {
   Button,
   CircularProgress,
   Alert,
+  InputAdornment,
+  MenuItem,
+  TextField,
 } from '@mui/material';
+import { SearchRounded } from '@mui/icons-material';
 import { driverApi } from '../api/driver.api';
 import { Ride } from '../types';
 import {
@@ -31,6 +35,8 @@ const History: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -55,11 +61,63 @@ const History: React.FC = () => {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const filteredRides = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+
+    return rides.filter((ride) => {
+      const statusMatched = statusFilter === 'ALL' || ride.status === statusFilter;
+      if (!statusMatched) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const rideText = [ride.id, ride.pickupLocation?.address, ride.dropoffLocation?.address]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return rideText.includes(normalizedSearch);
+    });
+  }, [rides, searchQuery, statusFilter]);
+
   return (
     <Container sx={{ py: 4 }}>
       <Typography variant="h4" fontWeight="bold">
         {t('history.title')}
       </Typography>
+
+      <Box sx={{ mt: 2, display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', sm: '1fr 180px' } }}>
+        <TextField
+          size="small"
+          placeholder="Tìm theo mã chuyến hoặc địa chỉ"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchRounded fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
+        <TextField
+          select
+          size="small"
+          label="Trạng thái"
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+        >
+          <MenuItem value="ALL">Tất cả</MenuItem>
+          <MenuItem value="PENDING">Đang chờ</MenuItem>
+          <MenuItem value="ACCEPTED">Đã nhận</MenuItem>
+          <MenuItem value="IN_PROGRESS">Đang chạy</MenuItem>
+          <MenuItem value="COMPLETED">Hoàn tất</MenuItem>
+          <MenuItem value="CANCELLED">Đã hủy</MenuItem>
+        </TextField>
+      </Box>
 
       {error && (
         <Alert severity="error" sx={{ mt: 2 }}>
@@ -73,14 +131,14 @@ const History: React.FC = () => {
         </Box>
       )}
 
-      {!loading && rides.length === 0 && (
+      {!loading && filteredRides.length === 0 && (
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
           {t('history.noRides')}
         </Typography>
       )}
 
       <Box sx={{ mt: 2, display: 'grid', gap: 2 }}>
-        {rides.map((ride) => (
+        {filteredRides.map((ride) => (
           <Card key={ride.id} variant="outlined">
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

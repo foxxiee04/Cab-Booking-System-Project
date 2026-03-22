@@ -1,9 +1,12 @@
 // User & Auth Types
 export interface User {
   id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
+  email: string | null;
+  phone?: string;
+  status?: string;
+  avatar?: string | null;
+  firstName: string | null;
+  lastName: string | null;
   role: 'ADMIN';
   createdAt: string;
   updatedAt: string;

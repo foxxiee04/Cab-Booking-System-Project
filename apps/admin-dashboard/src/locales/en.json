@@ -5,6 +5,7 @@
   },
   "menu": {
     "dashboard": "Dashboard",
+    "profile": "Profile",
     "rides": "Rides",
     "drivers": "Drivers",
     "approvals": "Approvals",

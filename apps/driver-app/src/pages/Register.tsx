@@ -61,7 +61,7 @@ const Register: React.FC = () => {
     try {
       const res = await authApi.registerPhoneStart({ phone: normalizedPhone });
       setResendDelay(res.data?.resendDelay || 30);
-      setSuccess('');
+      setSuccess(res.data?.message || 'OTP đã gửi tới +84****xxx');
       setStep('otp');
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể gửi OTP xác thực.');
@@ -84,7 +84,12 @@ const Register: React.FC = () => {
       setSuccess('Số điện thoại đã được xác thực. Vui lòng điền thông tin tài khoản tài xế.');
       setStep('profile');
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'OTP không hợp lệ hoặc đã hết hạn.');
+      const msg = err.response?.data?.error?.message || 'OTP không hợp lệ hoặc đã hết hạn.';
+      setError(msg);
+      setOtp(''); // xóa để nhập lại
+      if (msg.includes('Quá nhiều') || msg.includes('hết hạn')) {
+        setResendDelay(0);
+      }
     } finally {
       setLoading(false);
     }
@@ -98,8 +103,16 @@ const Register: React.FC = () => {
       setError('Vui lòng nhập họ và tên');
       return;
     }
-    if (formData.password.length < 6) {
-      setError('Mật khẩu phải có ít nhất 6 ký tự');
+    if (formData.password.length < 8) {
+      setError('Mật khẩu phải có ít nhất 8 ký tự');
+      return;
+    }
+    if (!/[A-Z]/.test(formData.password)) {
+      setError('Mật khẩu phải chứa ít nhất 1 chữ hoa (A-Z)');
+      return;
+    }
+    if (!/[^A-Za-z0-9]/.test(formData.password)) {
+      setError('Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt (!@#$%...)');
       return;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -136,7 +149,7 @@ const Register: React.FC = () => {
       const res = await authApi.registerPhoneStart({ phone });
       setResendDelay(res.data?.resendDelay || 60);
       setOtp('');
-      setSuccess('');
+      setSuccess(res.data?.message || 'OTP đã gửi tới +84****xxx');
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể gửi lại OTP.');
     } finally {
@@ -165,9 +178,9 @@ const Register: React.FC = () => {
                 {step === 'profile' && 'Thông tin tài xế'}
               </Typography>
               <Typography variant="h6" color="text.secondary" mt={1}>
-                {step === 'phone' && 'Bước 1: Nhập số điện thoại để nhận OTP'}
-                {step === 'otp' && `Bước 2: Xác minh OTP gửi đến ${phone}`}
-                {step === 'profile' && 'Bước 3: Hoàn tất hồ sơ tài khoản'}
+                {step === 'phone' && 'Nhập số điện thoại để nhận OTP'}
+                {step === 'otp' && 'Xác minh OTP để tiếp tục đăng ký'}
+                {step === 'profile' && 'Hoàn tất hồ sơ tài khoản'}
               </Typography>
             </Box>
 
@@ -213,7 +226,7 @@ const Register: React.FC = () => {
             {step === 'otp' && (
               <form onSubmit={handleVerifyPhoneOtp}>
                 <Alert severity="info" sx={{ mb: 2 }}>
-                  Mã OTP đã được gửi đến <strong>{phone}</strong>. Mã có hiệu lực trong 5 phút.
+                  {success || 'OTP đã gửi tới +84****xxx'}
                 </Alert>
 
                 <TextField
@@ -297,7 +310,7 @@ const Register: React.FC = () => {
                           </InputAdornment>
                         ),
                       }}
-                      helperText="Ít nhất 6 ký tự"
+                      helperText="Ít nhất 8 ký tự, 1 chữ hoa, 1 ký tự đặc biệt"
                     />
                   </Grid>
 

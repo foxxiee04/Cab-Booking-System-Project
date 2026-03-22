@@ -39,9 +39,8 @@ export class AuthController {
       res.json({
         success: true,
         data: {
-          message: 'OTP xác thực đăng ký đã được gửi đến số điện thoại của bạn.',
+          message: `OTP đã gửi tới ${result.maskedPhone}`,
           resendDelay: result.resendDelay,
-          ...(result.devOtp && { devOtp: result.devOtp }),
         },
       });
     } catch (err) {
@@ -78,7 +77,8 @@ export class AuthController {
     } catch (err) {
       logger.error('Register phone verify error:', err);
       const message = err instanceof Error ? err.message : 'Xác thực OTP đăng ký thất bại';
-      res.status(401).json({
+      // 422 Unprocessable Entity — wrong/expired OTP is a domain error, not an auth failure
+      res.status(422).json({
         success: false,
         error: { code: 'REGISTER_PHONE_VERIFY_FAILED', message },
       });
@@ -154,9 +154,8 @@ export class AuthController {
       res.status(201).json({
         success: true,
         data: {
-          message: 'Đăng ký thành công. Vui lòng nhập OTP để xác minh số điện thoại.',
+          message: `OTP đã gửi tới ${result.maskedPhone}`,
           resendDelay: result.resendDelay,
-          ...(result.devOtp && { devOtp: result.devOtp }),
         },
       });
     } catch (err) {
@@ -171,7 +170,7 @@ export class AuthController {
 
   /**
    * POST /api/auth/login
-   * Login with phone number and password.
+   * Login with identifier (admin account), email, or phone number plus password.
    */
   login = async (req: Request, res: Response) => {
     try {
@@ -184,6 +183,8 @@ export class AuthController {
       }
 
       const { user, tokens } = await this.authService.login({
+        identifier: value.identifier,
+        email: value.email,
         phone: value.phone,
         password: value.password,
         deviceInfo: req.headers['user-agent'],
@@ -238,9 +239,8 @@ export class AuthController {
       res.json({
         success: true,
         data: {
-          message: 'OTP đã được gửi đến số điện thoại của bạn.',
+          message: `OTP đã gửi tới ${result.maskedPhone}`,
           resendDelay: result.resendDelay,
-          ...(result.devOtp && { devOtp: result.devOtp }),
         },
       });
     } catch (err) {
@@ -294,7 +294,7 @@ export class AuthController {
     } catch (err) {
       logger.error('Verify OTP error:', err);
       const message = err instanceof Error ? err.message : 'Xác minh OTP thất bại';
-      res.status(401).json({
+      res.status(422).json({
         success: false,
         error: { code: 'OTP_VERIFY_FAILED', message },
       });
@@ -480,6 +480,30 @@ export class AuthController {
   };
 
   /**
+   * GET /api/auth/dev/otp/:phone?purpose=register
+   * [NON-PRODUCTION ONLY] Retrieve the current plaintext OTP for a phone.
+   * Blocked in production (NODE_ENV=production).
+   */
+  devGetOtp = async (req: Request, res: Response) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Not available in production' },
+      });
+    }
+    const phone = req.params.phone;
+    const purpose = (req.query.purpose as string) || 'register';
+    const otp = await this.authService.getDevOtp(phone, purpose);
+    if (!otp) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'No active OTP found for this phone / purpose' },
+      });
+    }
+    return res.json({ success: true, data: { phone, purpose, otp } });
+  };
+
+  /**
    * POST /api/auth/forgot-password
    * Send OTP to phone for password reset flow.
    */
@@ -498,9 +522,8 @@ export class AuthController {
       res.json({
         success: true,
         data: {
-          message: 'OTP đặt lại mật khẩu đã được gửi đến số điện thoại của bạn.',
+          message: `OTP đã gửi tới ${result.maskedPhone}`,
           resendDelay: result.resendDelay,
-          ...(result.devOtp && { devOtp: result.devOtp }),
         },
       });
     } catch (err) {

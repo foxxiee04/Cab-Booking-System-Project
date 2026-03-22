@@ -15,7 +15,7 @@ export const createAuthRouter = (authService: AuthService): Router => {
   router.post('/register-phone/verify', controller.registerPhoneVerify);
   router.post('/register-phone/complete', controller.registerPhoneComplete);
 
-  // Login with phone + password
+  // Login with identifier/email/phone + password
   router.post('/login', controller.login);
 
   // Resend OTP (for registration phone verification)
@@ -32,6 +32,11 @@ export const createAuthRouter = (authService: AuthService): Router => {
 
   // Refresh access token using refresh token
   router.post('/refresh', controller.refreshToken);
+
+  // [NON-PRODUCTION] Retrieve current plaintext OTP for a phone — used for testing
+  if (process.env.NODE_ENV !== 'production') {
+    router.get('/dev/otp/:phone', controller.devGetOtp);
+  }
 
   // Logout (revoke all refresh tokens)
   router.post('/logout', authenticate, controller.logout);
