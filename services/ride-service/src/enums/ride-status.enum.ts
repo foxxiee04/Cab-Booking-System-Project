@@ -20,6 +20,8 @@ export enum PaymentMethod {
   CASH = 'CASH',
   CARD = 'CARD',
   WALLET = 'WALLET',
+  MOMO = 'MOMO',
+  VNPAY = 'VNPAY',
 }
 
 export enum UserRole {

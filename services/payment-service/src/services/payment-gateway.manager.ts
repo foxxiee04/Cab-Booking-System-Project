@@ -1,11 +1,13 @@
 import { stripeGateway } from './stripe.gateway';
 import { momoGateway } from './momo.gateway';
 import { zaloPayGateway } from './zalopay.gateway';
+import { vnpayGateway } from './vnpay.gateway';
 import { logger } from '../utils/logger';
 
 export enum PaymentGatewayType {
   STRIPE = 'STRIPE',
   MOMO = 'MOMO',
+  VNPAY = 'VNPAY',
   ZALOPAY = 'ZALOPAY',
   MOCK = 'MOCK',
 }
@@ -37,9 +39,10 @@ class PaymentGatewayManager {
     customerId?: string;
     returnUrl?: string;
     notifyUrl?: string;
+    ipAddress?: string;
     metadata?: Record<string, any>;
   }): Promise<UnifiedPaymentResult> {
-    const { provider, orderId, amount, currency, description, customerId, returnUrl, notifyUrl, metadata } = params;
+    const { provider, orderId, amount, currency, description, customerId, returnUrl, notifyUrl, ipAddress, metadata } = params;
 
     try {
       switch (provider) {
@@ -87,6 +90,29 @@ class PaymentGatewayManager {
               requestId: momoResult.requestId,
               deeplink: momoResult.deeplink,
               qrCodeUrl: momoResult.qrCodeUrl,
+            },
+          };
+
+        case PaymentGatewayType.VNPAY:
+          if (!vnpayGateway.isEnabled()) {
+            throw new Error('VNPay gateway not enabled');
+          }
+
+          const vnpayResult = vnpayGateway.createPaymentUrl({
+            amount: Math.round(amount),
+            orderId: orderId.replace(/-/g, '').slice(0, 8),
+            orderInfo: description,
+            ipAddress: ipAddress || '127.0.0.1',
+            returnUrl: returnUrl || 'http://localhost:3000/api/payments/vnpay/return',
+          });
+
+          return {
+            success: true,
+            paymentUrl: vnpayResult.paymentUrl,
+            orderId,
+            provider: PaymentGatewayType.VNPAY,
+            metadata: {
+              txnRef: vnpayResult.txnRef,
             },
           };
 

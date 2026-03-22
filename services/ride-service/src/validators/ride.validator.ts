@@ -10,7 +10,7 @@ export interface CreateRideBody {
   pickup: LocationInput;
   dropoff: LocationInput;
   vehicleType?: 'ECONOMY' | 'COMFORT' | 'PREMIUM';
-  paymentMethod?: 'CASH' | 'CARD' | 'WALLET';
+  paymentMethod?: 'CASH' | 'CARD' | 'WALLET' | 'MOMO' | 'VNPAY';
 }
 
 export interface CancelRideBody {

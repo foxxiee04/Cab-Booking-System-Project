@@ -10,6 +10,7 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import HomeMap from './pages/HomeMap';
 import RideTracking from './pages/RideTracking';
+import PaymentCallback from './pages/PaymentCallback';
 import RideHistory from './pages/RideHistory';
 import Profile from './pages/Profile';
 import Activity from './pages/Activity';
@@ -96,6 +97,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/payment/callback" element={<PaymentCallback />} />
 
         <Route path="*" element={<Navigate to={isAuthenticated ? '/home' : '/login'} replace />} />
       </Routes>

@@ -194,7 +194,7 @@ export class PaymentController {
    */
   createMomoPayment = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const { rideId, amount } = req.body;
+      const { rideId, amount, returnUrl } = req.body;
 
       if (!rideId || !amount) {
         return res.status(400).json({
@@ -210,6 +210,7 @@ export class PaymentController {
         amount,
         currency: 'VND',
         paymentMethod: 'MOMO',
+        returnUrl,
         idempotencyKey: req.header('Idempotency-Key'),
       });
 
@@ -232,6 +233,47 @@ export class PaymentController {
     } catch (error) {
       logger.error('MoMo webhook error:', error);
       res.status(200).json({ resultCode: 1, message: 'Failed' });
+    }
+  };
+
+  /**
+   * GET /api/payments/momo/return
+   * Handle browser redirect from MoMo sandbox and apply payment status.
+   */
+  handleMomoReturn = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const query = req.query as Record<string, string>;
+      const rideId = query.rideId || query.orderId || query.order_id;
+      const resultCode = Number(query.resultCode ?? query.result_code ?? -1);
+      const success = resultCode === 0;
+
+      if (!rideId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Thiếu rideId/orderId từ callback MoMo' },
+        });
+      }
+
+      await this.paymentService.applyGatewayReturnByRideId({
+        rideId,
+        paid: success,
+        transactionId: query.transId || query.requestId,
+        failureReason: success ? undefined : (query.message || `MoMo code: ${resultCode}`),
+        gatewayMetadata: query,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          rideId,
+          paid: success,
+          transactionId: query.transId,
+          resultCode,
+          message: query.message,
+        },
+      });
+    } catch (error) {
+      next(error);
     }
   };
 
@@ -301,6 +343,14 @@ export class PaymentController {
     try {
       const query = req.query as Record<string, string>;
       const result = vnpayGateway.verifyReturn(query);
+      const rideId = query.rideId || this.extractRideIdFromOrderInfo(query.vnp_OrderInfo);
+
+      if (!rideId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Không xác định được rideId từ callback VNPay' },
+        });
+      }
 
       if (!result.valid) {
         logger.warn('VNPay return: invalid signature', { txnRef: result.txnRef });
@@ -310,12 +360,12 @@ export class PaymentController {
         });
       }
 
-      // Update payment record via mock webhook handler (reuse logic)
-      await this.paymentService.handleMockWebhook({
-        paymentIntentId: result.txnRef,
-        status: result.success ? 'SUCCESS' : 'FAILED',
+      await this.paymentService.applyGatewayReturnByRideId({
+        rideId,
+        paid: result.success,
         transactionId: result.transactionId,
         failureReason: result.success ? undefined : `VNPay code: ${result.responseCode}`,
+        gatewayMetadata: query,
       });
 
       logger.info('VNPay return processed', {
@@ -327,6 +377,7 @@ export class PaymentController {
       res.json({
         success: true,
         data: {
+          rideId,
           txnRef: result.txnRef,
           transactionId: result.transactionId,
           amount: result.amount,
@@ -338,4 +389,13 @@ export class PaymentController {
       next(error);
     }
   };
+
+  private extractRideIdFromOrderInfo(orderInfo?: string): string {
+    if (!orderInfo) {
+      return '';
+    }
+
+    const uuidMatch = orderInfo.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+    return uuidMatch?.[0] || '';
+  }
 }

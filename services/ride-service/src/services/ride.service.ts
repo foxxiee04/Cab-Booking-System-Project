@@ -20,7 +20,7 @@ interface CreateRideInput {
     lng: number;
   };
   vehicleType?: 'ECONOMY' | 'COMFORT' | 'PREMIUM';
-  paymentMethod?: 'CASH' | 'CARD' | 'WALLET';
+  paymentMethod?: 'CASH' | 'CARD' | 'WALLET' | 'MOMO' | 'VNPAY';
 }
 
 interface Location {

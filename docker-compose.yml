@@ -133,6 +133,8 @@ services:
       dockerfile: ./services/auth-service/Dockerfile
     image: cab-auth-service:latest
     container_name: cab-auth-service
+    env_file:
+      - ./env/auth.env
     ports:
       - "3001:3001"
       - "50051:50051"
@@ -154,7 +156,6 @@ services:
       - OTP_RATE_PHONE_WINDOW=600
       - OTP_RATE_MAX_PER_IP=10
       - OTP_RATE_IP_WINDOW=60
-      - TWILIO_ENABLED=false
     depends_on:
       postgres:
         condition: service_healthy
@@ -248,6 +249,8 @@ services:
       dockerfile: ./services/payment-service/Dockerfile
     image: cab-payment-service:latest
     container_name: cab-payment-service
+    env_file:
+      - ./env/payment.env
     ports:
       - "3004:3004"
       - "50056:50056"

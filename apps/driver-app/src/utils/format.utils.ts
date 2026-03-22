@@ -47,6 +47,8 @@ export const getPaymentMethodLabel = (method: PaymentMethod): string => {
     CASH: i18n.t('payment.CASH'),
     CARD: i18n.t('payment.CARD'),
     WALLET: i18n.t('payment.WALLET'),
+    MOMO: 'MoMo',
+    VNPAY: 'VNPay QR/Ngân hàng',
   };
   return labels[method] || method;
 };

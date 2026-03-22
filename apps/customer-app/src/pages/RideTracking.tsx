@@ -3,12 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
   Avatar,
+  CircularProgress,
   Box,
   Button,
   Card,
   CardContent,
   Chip,
-  CircularProgress,
   Divider,
   IconButton,
   Rating,
@@ -17,7 +17,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { ArrowBack, Cancel, Chat, PaymentRounded, Phone, StarRate } from '@mui/icons-material';
+import { ArrowBack, AutorenewRounded, Cancel, Chat, PaymentRounded, Phone, StarRate } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { BookingMap, useSocket } from '../features/booking';
 import { paymentApi } from '../api/payment.api';
@@ -81,9 +81,13 @@ const STATUS_META: Record<string, { label: string; description: string; color: s
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
   PENDING: 'Đang chờ',
+  PROCESSING: 'Đang xử lý',
+  REQUIRES_ACTION: 'Chờ thanh toán',
   COMPLETED: 'Đã thanh toán',
   FAILED: 'Thất bại',
 };
+
+const SEARCHING_DRIVER_STATUSES = new Set(['PENDING', 'CREATED', 'FINDING_DRIVER']);
 
 const formatDistanceKm = (distance: number | null | undefined) => {
   if (!distance || Number.isNaN(distance)) {
@@ -363,6 +367,43 @@ const RideTracking: React.FC = () => {
             </Box>
             <Chip label={statusMeta.label} size="small" sx={{ bgcolor: `${statusMeta.color}18`, color: statusMeta.color, fontWeight: 700 }} />
           </Stack>
+
+          {SEARCHING_DRIVER_STATUSES.has(status) && (
+            <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#fff7ed', border: '1px solid rgba(245, 158, 11, 0.24)' }}>
+              <CardContent>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: '50%',
+                      display: 'grid',
+                      placeItems: 'center',
+                      bgcolor: 'rgba(245, 158, 11, 0.14)',
+                    }}
+                  >
+                    <AutorenewRounded
+                      sx={{
+                        color: '#d97706',
+                        animation: 'driver-search-spin 1.1s linear infinite',
+                        '@keyframes driver-search-spin': {
+                          '0%': { transform: 'rotate(0deg)' },
+                          '100%': { transform: 'rotate(360deg)' },
+                        },
+                      }}
+                    />
+                  </Box>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="subtitle1" fontWeight={800}>Đang xoay và tìm tài xế phù hợp</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Hệ thống đang quét tài xế ở gần điểm đón, ưu tiên khoảng cách gần, ETA ngắn và loại xe khớp yêu cầu của bạn.
+                    </Typography>
+                  </Box>
+                  <CircularProgress size={26} thickness={5} />
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
 
           {driver && status !== 'CANCELLED' && status !== 'NO_DRIVER_AVAILABLE' && (
             <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#f8fafc' }}>

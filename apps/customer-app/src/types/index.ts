@@ -24,7 +24,7 @@ export interface Location {
 }
 
 export type VehicleType = 'ECONOMY' | 'COMFORT' | 'PREMIUM';
-export type PaymentMethod = 'CASH' | 'CARD' | 'WALLET';
+export type PaymentMethod = 'CASH' | 'CARD' | 'WALLET' | 'MOMO' | 'VNPAY';
 
 export type RideStatus = 
   | 'PENDING' 
@@ -90,7 +90,7 @@ export interface Payment {
   rideId: string;
   amount: number;
   method: PaymentMethod;
-  status: 'PENDING' | 'COMPLETED' | 'FAILED';
+  status: 'PENDING' | 'PROCESSING' | 'REQUIRES_ACTION' | 'COMPLETED' | 'FAILED';
   transactionId?: string;
   createdAt: string;
 }

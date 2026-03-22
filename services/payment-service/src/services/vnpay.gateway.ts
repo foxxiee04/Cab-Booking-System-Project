@@ -48,6 +48,10 @@ export interface VNPayCreateResult {
 }
 
 export class VNPayGateway {
+  isEnabled(): boolean {
+    return Boolean(config.vnpay.enabled && config.vnpay.tmnCode && config.vnpay.hashSecret);
+  }
+
   /**
    * Build a VNPay redirect URL with secure hash.
    * The client should redirect the user to this URL.
@@ -121,7 +125,14 @@ export class VNPayGateway {
     txnRef: string;
     amount: number; // VND
   } {
-    const { vnp_SecureHash, vnp_SecureHashType, ...rest } = query;
+    const normalized = Object.entries(query).reduce<Record<string, string>>((acc, [key, value]) => {
+      if (key.startsWith('vnp_')) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+
+    const { vnp_SecureHash, vnp_SecureHashType, ...rest } = normalized;
 
     // Rebuild sign data from all params except secure hash fields
     const paramsCopy = { ...rest };

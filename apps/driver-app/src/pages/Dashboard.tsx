@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Avatar,
@@ -30,8 +30,7 @@ import {
   setCurrentLocation,
   setEarnings,
 } from '../store/driver.slice';
-import { clearPendingRide, setCurrentRide, setPendingRide } from '../store/ride.slice';
-import RideRequestModal from '../components/ride-request/RideRequestModal';
+import { clearPendingRide, setCurrentRide } from '../store/ride.slice';
 import { driverApi } from '../api/driver.api';
 import { rideApi } from '../api/ride.api';
 import { driverSocketService } from '../socket/driver.socket';
@@ -41,6 +40,28 @@ import DriverTripMap from '../features/trip/components/DriverTripMap';
 import { Ride } from '../types';
 
 const getOptimisticCompletedRidesKey = (userId?: string) => `driver:completedRidesCount:${userId || 'anonymous'}`;
+
+const hasSameRideList = (left: Ride[], right: Ride[]) => {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((ride, index) => {
+    const other = right[index];
+    if (!other) {
+      return false;
+    }
+
+    return (
+      ride.id === other.id
+      && ride.status === other.status
+      && ride.driverId === other.driverId
+      && (ride.fare || 0) === (other.fare || 0)
+      && (ride.distance || 0) === (other.distance || 0)
+      && (ride.duration || ride.estimatedDuration || 0) === (other.duration || other.estimatedDuration || 0)
+    );
+  });
+};
 
 const Dashboard: React.FC = () => {
   const ignoredRideIdsRef = useRef<Map<string, number>>(new Map());
@@ -52,7 +73,7 @@ const Dashboard: React.FC = () => {
   const { profile, isOnline, currentLocation, earnings } = useAppSelector(
     (state) => state.driver
   );
-  const { pendingRide, currentRide, timeoutSeconds } = useAppSelector(
+  const { pendingRide, currentRide } = useAppSelector(
     (state) => state.ride
   );
 
@@ -61,13 +82,31 @@ const Dashboard: React.FC = () => {
   const [watchId, setWatchId] = useState<number | null>(null);
   const [completedRidesCount, setCompletedRidesCount] = useState(0);
   const [availableRides, setAvailableRides] = useState<Ride[]>([]);
-  const [fetchingAvailableRides, setFetchingAvailableRides] = useState(false);
+  const [isListLoading, setIsListLoading] = useState(false);
+  const hasInitialPollRef = useRef(false);
 
   const dismissPendingRide = (rideId: string) => {
     const holdUntil = Date.now() + 30_000;
     ignoredRideIdsRef.current.set(rideId, holdUntil);
     dispatch(clearPendingRide());
   };
+
+  const browsingLocation = currentLocation || profile?.currentLocation || null;
+  const ridesToDisplay = useMemo(() => {
+    const merged = new Map<string, Ride>();
+
+    if (pendingRide && !ignoredRideIdsRef.current.has(pendingRide.id)) {
+      merged.set(pendingRide.id, pendingRide);
+    }
+
+    availableRides.forEach((ride) => {
+      if (!ignoredRideIdsRef.current.has(ride.id)) {
+        merged.set(ride.id, ride);
+      }
+    });
+
+    return Array.from(merged.values()).slice(0, 8);
+  }, [availableRides, pendingRide]);
 
   // Fetch driver profile
   useEffect(() => {
@@ -164,11 +203,12 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (!isOnline || currentRide) {
       setAvailableRides([]);
+      setIsListLoading(false);
+      hasInitialPollRef.current = false;
       return;
     }
 
-    const location = currentLocation || profile?.currentLocation;
-    if (!location) {
+    if (!browsingLocation) {
       return;
     }
 
@@ -176,7 +216,10 @@ const Dashboard: React.FC = () => {
 
     const pollAvailableRides = async () => {
       try {
-        setFetchingAvailableRides(true);
+        if (!hasInitialPollRef.current) {
+          setIsListLoading(true);
+        }
+
         const now = Date.now();
         ignoredRideIdsRef.current.forEach((expiresAt, ignoredRideId) => {
           if (expiresAt <= now) {
@@ -185,8 +228,8 @@ const Dashboard: React.FC = () => {
         });
 
         const response = await rideApi.getAvailableRides({
-          lat: location.lat,
-          lng: location.lng,
+          lat: browsingLocation.lat,
+          lng: browsingLocation.lng,
           radius: 8,
         });
 
@@ -195,17 +238,14 @@ const Dashboard: React.FC = () => {
         );
 
         if (!cancelled) {
-          setAvailableRides(rides);
-        }
-
-        if (!cancelled && !pendingRide && rides.length > 0) {
-          dispatch(setPendingRide({ ride: rides[0], timeoutSeconds: 20 }));
+          setAvailableRides((previousRides) => (hasSameRideList(previousRides, rides) ? previousRides : rides));
+          hasInitialPollRef.current = true;
         }
       } catch (pollError) {
         console.error('Failed to poll available rides:', pollError);
       } finally {
-        if (!cancelled) {
-          setFetchingAvailableRides(false);
+        if (!cancelled && !hasInitialPollRef.current) {
+          setIsListLoading(false);
         }
       }
     };
@@ -217,7 +257,7 @@ const Dashboard: React.FC = () => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [currentLocation, currentRide, dispatch, isOnline, pendingRide, profile?.currentLocation]);
+  }, [browsingLocation, currentRide, isOnline]);
 
   // Handle go online/offline
   const handleToggleOnline = async () => {
@@ -246,25 +286,6 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Handle accept ride
-  const handleAcceptRide = async () => {
-    if (!pendingRide) return;
-
-    setLoading(true);
-    ignoredRideIdsRef.current.delete(pendingRide.id);
-    try {
-      const response = await rideApi.acceptRide(pendingRide.id);
-      dispatch(setCurrentRide(response.data.ride));
-      dispatch(clearPendingRide());
-      navigate('/active-ride');
-    } catch (error: any) {
-      setError(error.response?.data?.error?.message || t('dashboard.acceptRideFailed'));
-      dispatch(clearPendingRide());
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleAcceptSpecificRide = async (rideId: string) => {
     setLoading(true);
     ignoredRideIdsRef.current.delete(rideId);
@@ -278,32 +299,6 @@ const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Handle reject ride
-  const handleRejectRide = async () => {
-    if (!pendingRide) return;
-
-    if (!pendingRide.driverId || pendingRide.status === 'PENDING') {
-      dismissPendingRide(pendingRide.id);
-      return;
-    }
-
-    try {
-      await rideApi.rejectRide(pendingRide.id);
-      dispatch(clearPendingRide());
-    } catch (error) {
-      console.error('Failed to reject ride:', error);
-      dispatch(clearPendingRide());
-    }
-  };
-
-  const handlePendingRideTimeout = () => {
-    if (!pendingRide) {
-      return;
-    }
-
-    dismissPendingRide(pendingRide.id);
   };
 
   // Handle logout
@@ -387,7 +382,7 @@ const Dashboard: React.FC = () => {
         </Grid>
 
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
-          {currentLocation && <Chip icon={<MyLocationRounded />} label={`${currentLocation.lat.toFixed(5)}, ${currentLocation.lng.toFixed(5)}`} size="small" variant="outlined" />}
+          {browsingLocation && <Chip icon={<MyLocationRounded />} label={`${browsingLocation.lat.toFixed(5)}, ${browsingLocation.lng.toFixed(5)}`} size="small" variant="outlined" />}
           <Chip icon={<AttachMoneyRounded />} label={t('dashboard.ridesCompleted', { count: completedRidesCount })} size="small" variant="outlined" />
         </Stack>
 
@@ -421,7 +416,7 @@ const Dashboard: React.FC = () => {
             Danh sách cuốc đang chờ nhận
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Tài xế có thể chọn cuốc phù hợp theo điểm đón, điểm đến, tiền, khoảng cách và thời gian.
+            Danh sách được làm mới liên tục mỗi 8 giây theo vị trí gần nhất của tài xế. Bạn có thể chọn cuốc phù hợp theo điểm đón, điểm đến, tiền, khoảng cách và thời gian di chuyển ước tính.
           </Typography>
 
           {!isOnline && (
@@ -430,21 +425,35 @@ const Dashboard: React.FC = () => {
             </Alert>
           )}
 
-          {isOnline && !fetchingAvailableRides && availableRides.length === 0 && (
+          {isOnline && !browsingLocation && (
+            <Alert severity="warning" sx={{ borderRadius: 2, mb: 1.5 }}>
+              Chưa lấy được GPS hiện tại. Hệ thống sẽ dùng vị trí gần nhất đã lưu khi có dữ liệu để lọc cuốc xe quanh bạn.
+            </Alert>
+          )}
+
+          {isOnline && !isListLoading && ridesToDisplay.length === 0 && (
             <Alert severity="info" sx={{ borderRadius: 2 }}>
               Hiện chưa có cuốc xe phù hợp trong bán kính tìm kiếm.
             </Alert>
           )}
 
-          {isOnline && availableRides.length > 0 && (
+          {isOnline && ridesToDisplay.length > 0 && (
             <Stack spacing={1.2}>
-              {availableRides.slice(0, 8).map((ride) => {
+              {ridesToDisplay.map((ride) => {
                 const displayDuration = ride.duration || ride.estimatedDuration || 0;
                 const displayDistance = ride.distance || 0;
+                const isFreshOffer = pendingRide?.id === ride.id;
 
                 return (
-                  <Paper key={ride.id} variant="outlined" sx={{ p: 1.5, borderRadius: 3 }}>
+                  <Paper key={ride.id} variant="outlined" sx={{ p: 1.5, borderRadius: 3, borderColor: isFreshOffer ? 'success.main' : undefined, boxShadow: isFreshOffer ? '0 10px 28px rgba(22,163,74,0.12)' : undefined }}>
                     <Stack spacing={1}>
+                      <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
+                        <Typography variant="subtitle2" fontWeight={800}>
+                          Mã cuốc {ride.id.slice(0, 8).toUpperCase()}
+                        </Typography>
+                        {isFreshOffer && <Chip size="small" color="success" label="Cuốc mới" />}
+                      </Stack>
+
                       <Stack direction="row" spacing={1} alignItems="center">
                         <LocationOnRounded color="success" fontSize="small" />
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>Điểm đón:</Typography>
@@ -467,15 +476,28 @@ const Dashboard: React.FC = () => {
                         <Chip size="small" icon={<AccessTimeRounded />} label={`Di chuyển: ${displayDuration > 0 ? formatDuration(displayDuration) : 'N/A'}`} />
                       </Stack>
 
-                      <Button
-                        variant="contained"
-                        size="medium"
-                        onClick={() => handleAcceptSpecificRide(ride.id)}
-                        disabled={loading}
-                        sx={{ alignSelf: 'flex-end', borderRadius: 999, px: 2.5, fontWeight: 700 }}
-                      >
-                        Nhận cuốc này
-                      </Button>
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        {isFreshOffer && (
+                          <Button
+                            variant="text"
+                            size="medium"
+                            onClick={() => dismissPendingRide(ride.id)}
+                            disabled={loading}
+                            sx={{ borderRadius: 999, px: 2.5, fontWeight: 700 }}
+                          >
+                            Bỏ qua
+                          </Button>
+                        )}
+                        <Button
+                          variant="contained"
+                          size="medium"
+                          onClick={() => handleAcceptSpecificRide(ride.id)}
+                          disabled={loading}
+                          sx={{ alignSelf: 'flex-end', borderRadius: 999, px: 2.5, fontWeight: 700 }}
+                        >
+                          Nhận cuốc này
+                        </Button>
+                      </Stack>
                     </Stack>
                   </Paper>
                 );
@@ -483,32 +505,7 @@ const Dashboard: React.FC = () => {
             </Stack>
           )}
         </Box>
-
-        {pendingRide && (
-          <Button
-            fullWidth
-            variant="contained"
-            sx={{ mt: 2, py: 1.5, borderRadius: 3.5, fontWeight: 800 }}
-            onClick={handleAcceptRide}
-            disabled={loading}
-          >
-            {t('dashboard.acceptRideNow', 'Nhận cuốc xe ngay')}
-          </Button>
-        )}
       </Paper>
-
-      {/* Ride Request Modal */}
-      {pendingRide && (
-        <RideRequestModal
-          ride={pendingRide}
-          timeoutSeconds={timeoutSeconds}
-          open={!!pendingRide}
-          onAccept={handleAcceptRide}
-          onReject={handleRejectRide}
-          onTimeout={handlePendingRideTimeout}
-          loading={loading}
-        />
-      )}
     </Box>
   );
 };

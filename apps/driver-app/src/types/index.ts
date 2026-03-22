@@ -102,14 +102,40 @@ export interface Ride {
   };
 }
 
-export type PaymentMethod = 'CASH' | 'CARD' | 'WALLET';
+export type PaymentMethod = 'CASH' | 'CARD' | 'WALLET' | 'MOMO' | 'VNPAY';
 
 // Earnings Types
+export interface EarningsDailyPoint {
+  label: string;
+  gross: number;
+  commission: number;
+  net: number;
+  rides: number;
+}
+
+export interface EarningsTripBreakdown {
+  rideId: string;
+  completedAt: string;
+  pickupAddress: string;
+  dropoffAddress: string;
+  gross: number;
+  commission: number;
+  net: number;
+  paymentMethod?: PaymentMethod;
+  vehicleType?: VehicleType;
+}
+
 export interface Earnings {
   today: number;
   week: number;
   month: number;
   totalRides: number;
+  grossTotal: number;
+  commissionTotal: number;
+  netTotal: number;
+  commissionRate: number;
+  daily: EarningsDailyPoint[];
+  recentTrips: EarningsTripBreakdown[];
 }
 
 // Socket Event Types

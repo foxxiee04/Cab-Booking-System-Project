@@ -191,9 +191,12 @@ export class PaymentService {
     amount: number;
     currency: string;
     paymentMethod: string;
+    returnUrl?: string;
+    notifyUrl?: string;
+    ipAddress?: string;
     idempotencyKey?: string;
   }) {
-    const { rideId, customerId, amount, currency, paymentMethod, idempotencyKey } = input;
+    const { rideId, customerId, amount, currency, paymentMethod, returnUrl, notifyUrl, ipAddress, idempotencyKey } = input;
     const normalizedMethod = this.mapPaymentMethod(paymentMethod);
     const providerType = this.resolveGatewayType(normalizedMethod);
     const provider = this.mapPaymentProviderFromGateway(providerType);
@@ -248,6 +251,9 @@ export class PaymentService {
       currency,
       description: `Payment for ride ${rideId}`,
       customerId,
+      returnUrl,
+      notifyUrl,
+      ipAddress,
       metadata: {
         rideId,
         customerId,
@@ -292,6 +298,22 @@ export class PaymentService {
       provider: payment.provider,
       status: payment.status,
     };
+  }
+
+  async applyGatewayReturnByRideId(input: {
+    rideId: string;
+    paid: boolean;
+    transactionId?: string;
+    failureReason?: string;
+    gatewayMetadata?: Record<string, any>;
+  }): Promise<void> {
+    await this.synchronizePaymentByRideId({
+      rideId: input.rideId,
+      nextStatus: input.paid ? PaymentStatus.COMPLETED : PaymentStatus.FAILED,
+      transactionId: input.transactionId,
+      failureReason: input.failureReason,
+      gatewayMetadata: input.gatewayMetadata,
+    });
   }
 
   async processRideCompleted(payload: RideCompletedPayload): Promise<void> {
@@ -935,6 +957,8 @@ export class PaymentService {
         return PaymentMethod.CASH;
       case 'MOMO':
         return PaymentMethod.MOMO;
+      case 'VNPAY':
+        return PaymentMethod.VNPAY;
       case 'VISA':
       case 'CARD':
         return PaymentMethod.VISA;
@@ -954,6 +978,8 @@ export class PaymentService {
     switch (methodUpper) {
       case 'MOMO':
         return PaymentProvider.MOMO;
+      case 'VNPAY':
+        return PaymentProvider.VNPAY;
       case 'VISA':
       case 'CARD':
         return PaymentProvider.VISA;
@@ -966,6 +992,8 @@ export class PaymentService {
     switch (method) {
       case PaymentMethod.MOMO:
         return config.momo.enabled ? PaymentGatewayType.MOMO : PaymentGatewayType.MOCK;
+      case PaymentMethod.VNPAY:
+        return config.vnpay.enabled ? PaymentGatewayType.VNPAY : PaymentGatewayType.MOCK;
       case PaymentMethod.WALLET:
         if (config.momo.enabled) {
           return PaymentGatewayType.MOMO;
@@ -989,6 +1017,8 @@ export class PaymentService {
         return PaymentProvider.STRIPE;
       case PaymentGatewayType.MOMO:
         return PaymentProvider.MOMO;
+      case PaymentGatewayType.VNPAY:
+        return PaymentProvider.VNPAY;
       case PaymentGatewayType.ZALOPAY:
         return PaymentProvider.ZALOPAY;
       case PaymentGatewayType.MOCK:

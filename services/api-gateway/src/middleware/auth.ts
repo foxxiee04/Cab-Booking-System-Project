@@ -29,6 +29,7 @@ const PUBLIC_PATHS = [
   '/api/auth/forgot-password', // send OTP for password reset
   '/api/auth/reset-password',  // verify OTP and set new password
   '/api/auth/refresh',
+  '/api/payments/momo/return',  // MoMo redirect return (browser redirect)
   '/api/payments/vnpay/return', // VNPay redirect return (browser redirect)
   '/api/map',
   '/health',

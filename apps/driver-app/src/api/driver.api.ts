@@ -1,6 +1,9 @@
 import axiosInstance from './axios.config';
 import { ApiResponse, Driver, DriverRegistration, Location, Earnings } from '../types';
 
+const DRIVER_COMMISSION_RATE = 0.2;
+const EARNINGS_DAYS = 7;
+
 const normalizeDriver = (driver: any): Driver => {
   const reviewCount = driver.reviewCount ?? driver.ratingCount ?? 0;
 
@@ -143,31 +146,93 @@ export const driverApi = {
 
   // Get earnings - Using alternative endpoint since /drivers/me/earnings doesn't exist
   getEarnings: async (): Promise<ApiResponse<{ earnings: Earnings }>> => {
-    // Backend doesn't have dedicated earnings endpoint yet
-    // Calculate from completed rides via driver history
     try {
       const ridesResponse = await axiosInstance.get('/rides/driver/history', { 
         params: { status: 'COMPLETED', limit: 1000 } 
       });
       
-      const completedRides = ridesResponse.data.data?.rides || [];
-      const totalEarnings = completedRides.reduce((sum: number, ride: any) => sum + (ride.fare || 0), 0);
-      const todayEarnings = completedRides
-        .filter((r: any) => {
-          const rideDate = new Date(r.completedAt || r.updatedAt);
-          const today = new Date();
-          return rideDate.toDateString() === today.toDateString();
-        })
-        .reduce((sum: number, ride: any) => sum + (ride.fare || 0), 0);
+      const completedRides = [...(ridesResponse.data.data?.rides || [])].sort((left: any, right: any) => {
+        const leftTime = new Date(left.completedAt || left.updatedAt || left.createdAt || 0).getTime();
+        const rightTime = new Date(right.completedAt || right.updatedAt || right.createdAt || 0).getTime();
+        return rightTime - leftTime;
+      });
+
+      const now = new Date();
+      const startOfToday = new Date(now);
+      startOfToday.setHours(0, 0, 0, 0);
+
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - 6);
+      startOfWeek.setHours(0, 0, 0, 0);
+
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const toNet = (amount: number) => Math.round(amount * (1 - DRIVER_COMMISSION_RATE));
+      const toCommission = (amount: number) => Math.round(amount * DRIVER_COMMISSION_RATE);
+
+      const grossTotal = completedRides.reduce((sum: number, ride: any) => sum + (ride.fare || 0), 0);
+      const commissionTotal = completedRides.reduce((sum: number, ride: any) => sum + toCommission(ride.fare || 0), 0);
+      const netTotal = grossTotal - commissionTotal;
+
+      const filterByDate = (boundary: Date) => completedRides.filter((ride: any) => new Date(ride.completedAt || ride.updatedAt || ride.createdAt) >= boundary);
+      const todayRides = filterByDate(startOfToday);
+      const weekRides = filterByDate(startOfWeek);
+      const monthRides = filterByDate(startOfMonth);
+
+      const buildDayLabel = (date: Date) => `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+      const daily = Array.from({ length: EARNINGS_DAYS }, (_, index) => {
+        const date = new Date(startOfWeek);
+        date.setDate(startOfWeek.getDate() + index);
+
+        const dayRides = completedRides.filter((ride: any) => {
+          const rideDate = new Date(ride.completedAt || ride.updatedAt || ride.createdAt);
+          return rideDate.toDateString() === date.toDateString();
+        });
+
+        const gross = dayRides.reduce((sum: number, ride: any) => sum + (ride.fare || 0), 0);
+        const commission = dayRides.reduce((sum: number, ride: any) => sum + toCommission(ride.fare || 0), 0);
+
+        return {
+          label: buildDayLabel(date),
+          gross,
+          commission,
+          net: gross - commission,
+          rides: dayRides.length,
+        };
+      });
+
+      const recentTrips = completedRides.slice(0, 8).map((ride: any) => {
+        const gross = ride.fare || 0;
+        const commission = toCommission(gross);
+
+        return {
+          rideId: ride.id,
+          completedAt: ride.completedAt || ride.updatedAt || ride.createdAt,
+          pickupAddress: ride.pickupLocation?.address || ride.pickupAddress || 'Điểm đón',
+          dropoffAddress: ride.dropoffLocation?.address || ride.dropoffAddress || 'Điểm đến',
+          gross,
+          commission,
+          net: gross - commission,
+          paymentMethod: ride.paymentMethod,
+          vehicleType: ride.vehicleType,
+        };
+      });
       
       return {
         success: true,
         data: {
           earnings: {
-            today: todayEarnings,
-            week: totalEarnings, // Simplified: treat all as weekly
-            month: totalEarnings,
+            today: todayRides.reduce((sum: number, ride: any) => sum + toNet(ride.fare || 0), 0),
+            week: weekRides.reduce((sum: number, ride: any) => sum + toNet(ride.fare || 0), 0),
+            month: monthRides.reduce((sum: number, ride: any) => sum + toNet(ride.fare || 0), 0),
             totalRides: completedRides.length,
+            grossTotal,
+            commissionTotal,
+            netTotal,
+            commissionRate: DRIVER_COMMISSION_RATE,
+            daily,
+            recentTrips,
           }
         }
       };
@@ -180,6 +245,12 @@ export const driverApi = {
             week: 0,
             month: 0,
             totalRides: 0,
+            grossTotal: 0,
+            commissionTotal: 0,
+            netTotal: 0,
+            commissionRate: DRIVER_COMMISSION_RATE,
+            daily: [],
+            recentTrips: [],
           }
         }
       };

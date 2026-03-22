@@ -39,7 +39,7 @@ export const createRideSchema = Joi.object<CreateRideDto>({
     'any.required': 'Dropoff location is required',
   }),
   vehicleType: Joi.string().valid('STANDARD', 'PREMIUM', 'XL').optional().default('STANDARD'),
-  paymentMethod: Joi.string().valid('CASH', 'CARD', 'WALLET').optional().default('CASH'),
+  paymentMethod: Joi.string().valid('CASH', 'CARD', 'WALLET', 'MOMO', 'VNPAY').optional().default('CASH'),
 });
 
 // Update Ride Status DTO

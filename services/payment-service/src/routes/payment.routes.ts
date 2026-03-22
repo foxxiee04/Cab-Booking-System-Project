@@ -26,6 +26,9 @@ export const createPaymentRoutes = (paymentService: PaymentService) => {
   // POST /api/payments/momo/webhook - MoMo IPN callback (no auth required)
   router.post('/momo/webhook', controller.handleMomoWebhookPost);
 
+  // GET /api/payments/momo/return - MoMo browser redirect return (no auth)
+  router.get('/momo/return', controller.handleMomoReturn);
+
   // Legacy webhook path (kept for backward compatibility)
   router.post('/webhooks/momo', controller.handleMomoWebhook);
 

@@ -61,7 +61,7 @@ const Register: React.FC = () => {
     try {
       const res = await authApi.registerPhoneStart({ phone: normalizedPhone });
       setResendDelay(res.data?.resendDelay || 30);
-      setSuccess('OTP xác thực đã được gửi. Vui lòng nhập OTP để tiếp tục đăng ký.');
+      setSuccess('');
       setStep('otp');
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể gửi OTP xác thực.');
@@ -136,6 +136,7 @@ const Register: React.FC = () => {
       const res = await authApi.registerPhoneStart({ phone });
       setResendDelay(res.data?.resendDelay || 60);
       setOtp('');
+      setSuccess('');
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể gửi lại OTP.');
     } finally {
@@ -171,7 +172,7 @@ const Register: React.FC = () => {
             </Box>
 
             {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-            {success && <Alert severity="success" sx={{ mb: 3 }}>{success}</Alert>}
+            {success && step !== 'otp' && <Alert severity="success" sx={{ mb: 3 }}>{success}</Alert>}
 
             {step === 'phone' && (
               <form onSubmit={handleStartWithPhone}>

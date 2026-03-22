@@ -28,6 +28,7 @@ import {
 } from '@mui/material';
 import {
   AccountBalanceWallet,
+  AccountBalance,
   AirportShuttle,
   CreditCard,
   DirectionsCar,
@@ -39,6 +40,7 @@ import { formatCurrency } from '../../utils/format.utils';
 import { formatDistance } from '../../utils/map.utils';
 import { pricingApi } from '../../api/pricing.api';
 import { rideApi } from '../../api/ride.api';
+import { paymentApi } from '../../api/payment.api';
 import { Location } from '../../types';
 
 interface RideBookingFlowProps {
@@ -94,9 +96,10 @@ const vehicleOptions: VehicleOption[] = [
 ];
 
 const paymentOptions = [
-  { method: 'CASH', label: 'Tiền mặt', icon: <MoneyOff /> },
-  { method: 'CARD', label: 'Thẻ', icon: <CreditCard /> },
-  { method: 'WALLET', label: 'Ví điện tử', icon: <AccountBalanceWallet /> },
+  { method: 'CASH', label: 'Tiền mặt', icon: <MoneyOff />, helper: 'Thanh toán trực tiếp khi kết thúc chuyến đi.' },
+  { method: 'MOMO', label: 'Ví MoMo', icon: <AccountBalanceWallet />, helper: 'Phù hợp cho thanh toán ví điện tử và luồng sandbox.' },
+  { method: 'VNPAY', label: 'VNPay QR / Ngân hàng', icon: <AccountBalance />, helper: 'Hỗ trợ quét QR hoặc điều hướng sang cổng thanh toán ngân hàng.' },
+  { method: 'CARD', label: 'Thẻ quốc tế', icon: <CreditCard />, helper: 'Dự phòng cho luồng thẻ qua gateway.' },
 ];
 
 const VEHICLE_FETCH_ORDER: Array<'ECONOMY' | 'COMFORT' | 'PREMIUM'> = ['ECONOMY', 'COMFORT', 'PREMIUM'];
@@ -131,7 +134,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [activeStep, setActiveStep] = useState(0);
   const [selectedVehicle, setSelectedVehicle] = useState<'ECONOMY' | 'COMFORT' | 'PREMIUM'>('ECONOMY');
-  const [selectedPayment, setSelectedPayment] = useState<'CASH' | 'CARD' | 'WALLET'>('CASH');
+  const [selectedPayment, setSelectedPayment] = useState<'CASH' | 'CARD' | 'WALLET' | 'MOMO' | 'VNPAY'>('CASH');
   const [priceEstimates, setPriceEstimates] = useState<Record<string, PriceEstimate>>({});
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -258,7 +261,29 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
         paymentMethod: selectedPayment,
       });
 
-      onRideCreated(response.data.ride.id);
+      const rideId = response.data.ride.id;
+
+      if (selectedPayment === 'MOMO' || selectedPayment === 'VNPAY') {
+        const amount = selectedEstimate?.fare || 0;
+        const callbackBase = `${window.location.origin}/payment/callback`;
+        const returnUrl = `${callbackBase}?provider=${selectedPayment}&rideId=${rideId}`;
+
+        const paymentResponse = selectedPayment === 'MOMO'
+          ? await paymentApi.createMomoPayment({ rideId, amount, returnUrl })
+          : await paymentApi.createVnpayPayment({ rideId, amount, returnUrl });
+
+        const redirectUrl = paymentResponse.data.paymentUrl || paymentResponse.data.payUrl;
+
+        if (!redirectUrl) {
+          throw new Error('Không lấy được đường dẫn thanh toán từ gateway.');
+        }
+
+        onClose();
+        window.location.assign(redirectUrl);
+        return;
+      }
+
+      onRideCreated(rideId);
       onClose();
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể tạo chuyến xe');
@@ -356,6 +381,9 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
             <Typography variant="h6" gutterBottom>
               Phương thức thanh toán
             </Typography>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Với MoMo và VNPay, hệ thống lưu đúng phương thức đã chọn. Khi gateway thật chưa cấu hình, môi trường dev sẽ chạy theo chế độ sandbox/mock để vẫn kiểm thử được luồng nghiệp vụ.
+            </Alert>
             <FormControl component="fieldset" fullWidth>
               <RadioGroup
                 value={selectedPayment}
@@ -375,7 +403,12 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                         label={
                           <Box display="flex" alignItems="center" gap={2}>
                             {option.icon}
-                            <Typography>{option.label}</Typography>
+                            <Box>
+                              <Typography>{option.label}</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {option.helper}
+                              </Typography>
+                            </Box>
                           </Box>
                         }
                       />
@@ -429,7 +462,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
               </CardContent>
             </Card>
             <Alert severity="info" sx={{ mt: 2 }}>
-              Hệ thống sẽ chuyển sang bước tìm tài xế gần nhất ngay sau khi bạn xác nhận chuyến.
+              Hệ thống sẽ chuyển sang bước tìm tài xế gần nhất ngay sau khi bạn xác nhận chuyến. Phương thức thanh toán đã chọn sẽ được giữ xuyên suốt đến hóa đơn cuối chuyến.
             </Alert>
           </Box>
         );

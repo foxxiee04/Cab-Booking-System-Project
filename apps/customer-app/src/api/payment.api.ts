@@ -1,5 +1,8 @@
+import axios from 'axios';
 import axiosInstance from './axios.config';
 import { Payment } from '../types';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 export interface PaymentResponse {
   success: boolean;
@@ -8,7 +11,79 @@ export interface PaymentResponse {
   };
 }
 
+export interface GatewayCreateResponse {
+  success: boolean;
+  data: {
+    paymentUrl?: string;
+    payUrl?: string;
+    paymentId?: string;
+    paymentIntentId?: string;
+    status?: string;
+  };
+}
+
+export interface GatewayReturnResponse {
+  success: boolean;
+  data: {
+    rideId?: string;
+    paid?: boolean;
+    responseCode?: string;
+    resultCode?: number;
+    transactionId?: string;
+    message?: string;
+  };
+}
+
 export const paymentApi = {
+  createMomoPayment: async (params: {
+    rideId: string;
+    amount: number;
+    returnUrl?: string;
+  }): Promise<GatewayCreateResponse> => {
+    const response = await axiosInstance.post('/payments/momo/create', params);
+    const payload = response.data?.data || {};
+    return {
+      success: Boolean(response.data?.success),
+      data: {
+        paymentUrl: payload.paymentUrl,
+        payUrl: payload.payUrl,
+        paymentId: payload.paymentId,
+        paymentIntentId: payload.paymentIntentId,
+        status: payload.status,
+      },
+    };
+  },
+
+  createVnpayPayment: async (params: {
+    rideId: string;
+    amount: number;
+    returnUrl?: string;
+    bankCode?: string;
+  }): Promise<GatewayCreateResponse> => {
+    const response = await axiosInstance.post('/payments/vnpay/create', params);
+    const payload = response.data?.data || {};
+    return {
+      success: Boolean(response.data?.success),
+      data: {
+        paymentUrl: payload.paymentUrl,
+        payUrl: payload.payUrl,
+        paymentId: payload.paymentId,
+        paymentIntentId: payload.paymentIntentId,
+        status: payload.status,
+      },
+    };
+  },
+
+  confirmMomoReturn: async (searchParams: URLSearchParams): Promise<GatewayReturnResponse> => {
+    const response = await axios.get(`${API_BASE_URL}/payments/momo/return?${searchParams.toString()}`);
+    return response.data;
+  },
+
+  confirmVnpayReturn: async (searchParams: URLSearchParams): Promise<GatewayReturnResponse> => {
+    const response = await axios.get(`${API_BASE_URL}/payments/vnpay/return?${searchParams.toString()}`);
+    return response.data;
+  },
+
   getPaymentByRide: async (rideId: string): Promise<PaymentResponse> => {
     const response = await axiosInstance.get(`/payments/ride/${rideId}`);
     const payload = response.data?.data || response.data;
