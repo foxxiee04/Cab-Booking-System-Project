@@ -78,7 +78,7 @@ const Login: React.FC = () => {
             <form onSubmit={handleSubmit}>
               <TextField
                 fullWidth
-                label="Tài khoản admin"
+                label="Tài khoản"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 required

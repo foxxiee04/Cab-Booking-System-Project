@@ -16,7 +16,6 @@ import {
 } from '@mui/material';
 import {
   AccessTimeRounded,
-  DirectionsCarFilledRounded,
   MyLocationRounded,
   NearMeRounded,
   PlaceRounded,
@@ -733,8 +732,6 @@ export const BookingMap: React.FC<BookingMapProps> = ({
     >
       <Stack spacing={1.5}>
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-          <Chip size="small" label={`Gợi ý quanh ${searchContextLabel}`} variant="outlined" />
-          <Chip size="small" label="Tìm được bến xe, ga, sân bay, địa chỉ cụ thể" sx={{ bgcolor: 'rgba(37,99,235,0.08)', color: '#1d4ed8' }} />
           {routeLoading && <Chip size="small" label="Đang tính lộ trình" color="warning" variant="outlined" />}
         </Stack>
         <Autocomplete
@@ -758,7 +755,6 @@ export const BookingMap: React.FC<BookingMapProps> = ({
             <TextField
               {...params}
               label="Điểm đón"
-              placeholder="Nhập vị trí đón"
               size="small"
               fullWidth
               inputProps={{
@@ -803,7 +799,6 @@ export const BookingMap: React.FC<BookingMapProps> = ({
             <TextField
               {...params}
               label="Điểm đến"
-              placeholder="Bạn muốn đi đâu?"
               size="small"
               fullWidth
               inputProps={{
@@ -845,13 +840,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
         zIndex: 2,
       }}
     >
-      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
-        <Chip
-          icon={<DirectionsCarFilledRounded />}
-          label={`${nearbyDrivers.length} tài xế gần bạn`}
-          color="primary"
-          variant="filled"
-        />
+      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 0 }}>
         {routeSummary && (
           <Chip icon={<RouteRounded />} label={routeSummary.distanceText} variant="outlined" />
         )}
@@ -860,26 +849,6 @@ export const BookingMap: React.FC<BookingMapProps> = ({
         )}
       </Stack>
 
-      <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.5 }}>
-        {mode === 'tracking' ? 'Theo dõi tài xế theo thời gian thực' : 'Đặt xe trên bản đồ thời gian thực'}
-      </Typography>
-
-      <Typography variant="body2" color="text.secondary">
-        {routeSummary
-          ? `Tuyến đường đã sẵn sàng. ETA dự kiến ${routeSummary.durationText}, quãng đường ${routeSummary.distanceText}.`
-          : 'Chọn điểm đón và điểm đến để tính ETA, hiển thị tuyến đường và xem tài xế lân cận.'}
-      </Typography>
-
-      {animatedDriverPosition && (
-        <List disablePadding sx={{ mt: 1.5 }}>
-          <ListItem disableGutters>
-            <ListItemText
-              primary="Vị trí tài xế đang được nội suy mượt"
-              secondary={`${animatedDriverPosition.lat.toFixed(5)}, ${animatedDriverPosition.lng.toFixed(5)}`}
-            />
-          </ListItem>
-        </List>
-      )}
     </Paper>
   ) : null;
 
@@ -958,24 +927,6 @@ export const BookingMap: React.FC<BookingMapProps> = ({
             fallback={leafletMap}
           />
         ) : leafletMap}
-
-        {mode === 'tracking' && (
-          <Box
-            sx={{
-              position: 'absolute',
-              inset: 0,
-              pointerEvents: 'none',
-              background: 'linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 26%, rgba(15,23,42,0.04) 100%)',
-              zIndex: 1,
-            }}
-          />
-        )}
-
-        {!renderSearchPanelAsSection && (
-          <Box sx={{ position: 'absolute', top: 16, left: 16, right: 16, zIndex: 2 }}>
-            {searchPanel}
-          </Box>
-        )}
 
         <Box sx={{ position: 'absolute', right: 16, bottom: mode === 'tracking' ? 144 : 16, zIndex: 2 }}>
           <IconButton

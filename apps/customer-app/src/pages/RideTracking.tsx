@@ -396,9 +396,6 @@ const RideTracking: React.FC = () => {
                   </Box>
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="subtitle1" fontWeight={800}>Đang tìm tài xế phù hợp</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Hệ thống đang quét tài xế ở gần điểm đón, ưu tiên khoảng cách gần, ETA ngắn và loại xe khớp yêu cầu của bạn.
-                    </Typography>
                   </Box>
                   <CircularProgress size={26} thickness={5} />
                 </Stack>
@@ -474,7 +471,6 @@ const RideTracking: React.FC = () => {
               <Card sx={{ borderRadius: 4 }}>
                 <CardContent>
                   <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>{existingReview ? 'Đánh giá của bạn' : 'Đánh giá tài xế'}</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Phản hồi của bạn giúp cải thiện chất lượng phục vụ và xếp hạng tài xế.</Typography>
                   <Stack alignItems="flex-start" spacing={1.5}>
                     <Rating value={rating} size="large" onChange={(_, nextValue) => { if (!existingReview) { setRating(nextValue); } }} readOnly={Boolean(existingReview)} />
                     <TextField fullWidth multiline minRows={4} label="Nhận xét" value={comment} onChange={(event) => { if (!existingReview) { setComment(event.target.value); } }} inputProps={{ 'data-testid': 'review-comment-input' }} InputProps={{ readOnly: Boolean(existingReview) }} />

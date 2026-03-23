@@ -175,12 +175,12 @@ const Register: React.FC = () => {
             <Box sx={{ textAlign: 'center', mb: 3 }}>
               <DirectionsCar sx={{ fontSize: 50, color: 'primary.main' }} />
               <Typography variant="h4" fontWeight="bold" color="primary" mt={1}>
-                {step === 'phone' && 'Đăng ký tài khoản'}
+                {step === 'phone' && 'Đăng ký'}
                 {step === 'otp' && 'Xác minh số điện thoại'}
                 {step === 'profile' && 'Hoàn tất hồ sơ'}
               </Typography>
               <Typography variant="body2" color="text.secondary" mt={1}>
-                {step === 'phone' && 'Nhập số điện thoại để bắt đầu đăng ký'}
+                {step === 'phone'}
                 {step === 'otp' && 'Nhập mã OTP để xác thực số điện thoại'}
                 {step === 'profile' && 'Điền thông tin tài khoản của bạn'}
               </Typography>
@@ -196,7 +196,6 @@ const Register: React.FC = () => {
                   label="Số điện thoại"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  placeholder="0912345678"
                   required
                   autoFocus
                   inputMode="numeric"
@@ -208,7 +207,6 @@ const Register: React.FC = () => {
                       </InputAdornment>
                     ),
                   }}
-                  helperText="10 chữ số, bắt đầu bằng 0"
                 />
 
                 <Button fullWidth type="submit" variant="contained" size="large" disabled={loading} sx={{ mt: 3, mb: 2, py: 1.5 }}>
