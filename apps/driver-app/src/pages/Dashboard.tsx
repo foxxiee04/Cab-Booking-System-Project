@@ -415,9 +415,6 @@ const Dashboard: React.FC = () => {
           <Typography variant="h6" fontWeight={800} sx={{ mb: 0.5 }}>
             Danh sách cuốc đang chờ nhận
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Danh sách được làm mới liên tục mỗi 8 giây theo vị trí gần nhất của tài xế. Bạn có thể chọn cuốc phù hợp theo điểm đón, điểm đến, tiền, khoảng cách và thời gian di chuyển ước tính.
-          </Typography>
 
           {!isOnline && (
             <Alert severity="info" sx={{ borderRadius: 2 }}>

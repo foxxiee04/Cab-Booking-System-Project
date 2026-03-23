@@ -395,7 +395,7 @@ const RideTracking: React.FC = () => {
                     />
                   </Box>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="subtitle1" fontWeight={800}>Đang xoay và tìm tài xế phù hợp</Typography>
+                    <Typography variant="subtitle1" fontWeight={800}>Đang tìm tài xế phù hợp</Typography>
                     <Typography variant="body2" color="text.secondary">
                       Hệ thống đang quét tài xế ở gần điểm đón, ưu tiên khoảng cách gần, ETA ngắn và loại xe khớp yêu cầu của bạn.
                     </Typography>

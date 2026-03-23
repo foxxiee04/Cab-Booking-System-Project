@@ -71,9 +71,6 @@ const Login: React.FC = () => {
               <Typography variant="h4" fontWeight="bold" gutterBottom>
                 Quản trị viên
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Đăng nhập bằng tài khoản admin và mật khẩu
-              </Typography>
             </Box>
 
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -84,7 +81,6 @@ const Login: React.FC = () => {
                 label="Tài khoản admin"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="admin hoặc admin@cabbooking.com"
                 required
                 autoFocus
                 autoComplete="username"

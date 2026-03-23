@@ -68,10 +68,7 @@ const Login: React.FC = () => {
             <Box sx={{ textAlign: 'center', mb: 4 }}>
               <DriveEta sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
               <Typography variant="h4" fontWeight="bold" gutterBottom>
-                Đăng nhập Tài Xế
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Đăng nhập bằng số điện thoại và mật khẩu
+                Đăng nhập
               </Typography>
             </Box>
 
@@ -83,7 +80,6 @@ const Login: React.FC = () => {
                 label="Số điện thoại"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                placeholder="0912345678"
                 required
                 autoFocus
                 inputMode="numeric"
@@ -95,7 +91,6 @@ const Login: React.FC = () => {
                     </InputAdornment>
                   ),
                 }}
-                helperText="10 chữ số, bắt đầu bằng 0"
               />
 
               <TextField

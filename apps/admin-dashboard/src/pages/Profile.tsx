@@ -141,16 +141,8 @@ const Profile: React.FC = () => {
                   <TextField
                     fullWidth
                     disabled
-                    label="Số điện thoại (tham chiếu)"
+                    label="Số điện thoại"
                     value={user?.phone || 'N/A'}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Ảnh đại diện (URL)"
-                    value={avatar}
-                    onChange={(event) => setAvatar(event.target.value)}
                   />
                 </Grid>
               </Grid>

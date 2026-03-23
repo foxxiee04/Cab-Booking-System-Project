@@ -76,9 +76,6 @@ const Login: React.FC = () => {
               <Typography variant="h4" fontWeight="bold" color="primary" mt={1}>
                 {t('app.title')}
               </Typography>
-              <Typography variant="body2" color="text.secondary" mt={1}>
-                Đăng nhập bằng số điện thoại và mật khẩu
-              </Typography>
             </Box>
 
             {error && (
@@ -93,7 +90,6 @@ const Login: React.FC = () => {
                 label="Số điện thoại"
                 value={phone}
                 onChange={handlePhoneChange}
-                placeholder="0912345678"
                 required
                 autoFocus
                 inputMode="numeric"
@@ -105,7 +101,6 @@ const Login: React.FC = () => {
                     </InputAdornment>
                   ),
                 }}
-                helperText="Nhập số điện thoại 10 chữ số (VD: 0912345678)"
               />
 
               <TextField
