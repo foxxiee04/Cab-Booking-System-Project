@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
   Avatar,
@@ -30,7 +30,7 @@ import { formatCurrency, formatDate, getPaymentMethodLabel, getVehicleTypeLabel 
 
 const STATUS_META: Record<string, { label: string; description: string; color: string; allowCancel: boolean }> = {
   PENDING: {
-    label: 'Đang tìm tài xế',
+    label: 'Đang tìm tài xế phù hợp',
     description: 'Hệ thống đang ghép tài xế gần nhất cho chuyến đi của bạn.',
     color: '#f59e0b',
     allowCancel: true,
@@ -108,6 +108,7 @@ const formatDuration = (duration: number | null | undefined) => {
 
 const RideTracking: React.FC = () => {
   const { rideId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -124,6 +125,12 @@ const RideTracking: React.FC = () => {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [rating, setRating] = useState<number | null>(5);
   const [comment, setComment] = useState('');
+  const [retryMethod, setRetryMethod] = useState<'CASH' | 'MOMO' | 'VNPAY'>('CASH');
+  const [retryingPayment, setRetryingPayment] = useState(false);
+
+  const retryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const retryPaymentRequired = retryParams.get('retryPayment') === '1';
+  const failedProvider = (retryParams.get('failedProvider') || '').toUpperCase();
 
   const hydrateRide = useCallback(async () => {
     if (!rideId) {
@@ -283,8 +290,42 @@ const RideTracking: React.FC = () => {
     }
   }, [comment, currentRide, driver, rating]);
 
+  const handleRetryPayment = useCallback(async () => {
+    if (!rideId) {
+      return;
+    }
+
+    if (retryMethod === 'CASH') {
+      navigate(`/ride/${rideId}`, { replace: true });
+      return;
+    }
+
+    const amount = Math.round(payment?.amount || currentRide?.fare || 0);
+    const returnUrl = `${window.location.origin}/payment/callback?provider=${retryMethod}&rideId=${rideId}`;
+
+    setRetryingPayment(true);
+    setError('');
+    try {
+      const paymentResponse = retryMethod === 'MOMO'
+        ? await paymentApi.createMomoPayment({ rideId, amount, returnUrl })
+        : await paymentApi.createVnpayPayment({ rideId, amount, returnUrl });
+
+      const gatewayUrl = paymentResponse.data?.payUrl || paymentResponse.data?.paymentUrl;
+      if (!gatewayUrl) {
+        throw new Error('Không tạo được link thanh toán mới');
+      }
+
+      window.location.assign(gatewayUrl);
+    } catch (err: any) {
+      setError(err?.response?.data?.error?.message || err?.message || 'Không thể tạo lại giao dịch thanh toán.');
+    } finally {
+      setRetryingPayment(false);
+    }
+  }, [currentRide?.fare, navigate, payment?.amount, retryMethod, rideId]);
+
   const status = currentRide?.status || 'PENDING';
   const statusMeta = STATUS_META[status] || STATUS_META.PENDING;
+  const isSearchingDriver = SEARCHING_DRIVER_STATUSES.has(status);
 
   const effectiveDriverLocation = useMemo(() => {
     if (driverLocation) {
@@ -361,47 +402,43 @@ const RideTracking: React.FC = () => {
       <Card sx={{ borderRadius: '24px 24px 0 0', boxShadow: '0 -20px 45px rgba(15,23,42,0.14)', overflow: 'auto', minHeight: currentRide?.status === 'COMPLETED' ? '56vh' : '34vh' }}>
         <CardContent sx={{ p: 3 }}>
           <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2.5 }}>
-            <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: statusMeta.color }} />
+            {isSearchingDriver ? (
+              <Box
+                sx={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: '50%',
+                  display: 'grid',
+                  placeItems: 'center',
+                  bgcolor: 'rgba(245, 158, 11, 0.14)',
+                }}
+              >
+                <AutorenewRounded
+                  sx={{
+                    color: '#d97706',
+                    animation: 'driver-search-spin 1.1s linear infinite',
+                    '@keyframes driver-search-spin': {
+                      '0%': { transform: 'rotate(0deg)' },
+                      '100%': { transform: 'rotate(360deg)' },
+                    },
+                  }}
+                />
+              </Box>
+            ) : (
+              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: statusMeta.color }} />
+            )}
             <Box sx={{ flex: 1 }}>
               <Typography variant="h6" fontWeight={800}>{statusMeta.label}</Typography>
               <Typography variant="body2" color="text.secondary">{statusMeta.description}</Typography>
             </Box>
-            <Chip label={statusMeta.label} size="small" sx={{ bgcolor: `${statusMeta.color}18`, color: statusMeta.color, fontWeight: 700 }} />
+            {isSearchingDriver ? (
+              <CircularProgress size={24} thickness={5} sx={{ color: '#d97706' }} />
+            ) : (
+              <Chip label={statusMeta.label} size="small" sx={{ bgcolor: `${statusMeta.color}18`, color: statusMeta.color, fontWeight: 700 }} />
+            )}
           </Stack>
 
-          {SEARCHING_DRIVER_STATUSES.has(status) && (
-            <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#fff7ed', border: '1px solid rgba(245, 158, 11, 0.24)' }}>
-              <CardContent>
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Box
-                    sx={{
-                      width: 52,
-                      height: 52,
-                      borderRadius: '50%',
-                      display: 'grid',
-                      placeItems: 'center',
-                      bgcolor: 'rgba(245, 158, 11, 0.14)',
-                    }}
-                  >
-                    <AutorenewRounded
-                      sx={{
-                        color: '#d97706',
-                        animation: 'driver-search-spin 1.1s linear infinite',
-                        '@keyframes driver-search-spin': {
-                          '0%': { transform: 'rotate(0deg)' },
-                          '100%': { transform: 'rotate(360deg)' },
-                        },
-                      }}
-                    />
-                  </Box>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="subtitle1" fontWeight={800}>Đang tìm tài xế phù hợp</Typography>
-                  </Box>
-                  <CircularProgress size={26} thickness={5} />
-                </Stack>
-              </CardContent>
-            </Card>
-          )}
+
 
           {driver && status !== 'CANCELLED' && status !== 'NO_DRIVER_AVAILABLE' && (
             <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#f8fafc' }}>
@@ -432,7 +469,7 @@ const RideTracking: React.FC = () => {
                 <Stack spacing={1.2}>
                   <Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="body2" color="text.secondary">Điểm đón</Typography><Typography variant="body2" fontWeight={600} textAlign="right">{currentRide.pickup?.address || '-'}</Typography></Stack>
                   <Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="body2" color="text.secondary">Điểm đến</Typography><Typography variant="body2" fontWeight={600} textAlign="right">{currentRide.dropoff?.address || '-'}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Loại xe</Typography><Typography variant="body2" fontWeight={600}>{getVehicleTypeLabel(currentRide.vehicleType || 'ECONOMY')}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Loại xe</Typography><Typography variant="body2" fontWeight={600}>{getVehicleTypeLabel(currentRide.vehicleType || 'CAR_4')}</Typography></Stack>
                   <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thanh toán</Typography><Typography variant="body2" fontWeight={600}>{getPaymentMethodLabel(currentRide.paymentMethod || 'CASH')}</Typography></Stack>
                   <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Quãng đường</Typography><Typography variant="body2" fontWeight={600}>{formatDistanceKm(currentRide.distance)}</Typography></Stack>
                   <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thời lượng</Typography><Typography variant="body2" fontWeight={600}>{formatDuration(currentRide.duration)}</Typography></Stack>
@@ -450,6 +487,41 @@ const RideTracking: React.FC = () => {
 
           {status === 'COMPLETED' && currentRide && (
             <>
+              {retryPaymentRequired && (
+                <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#fff7ed', border: '1px solid rgba(245,158,11,0.24)' }}>
+                  <CardContent>
+                    <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1 }}>
+                      Thanh toán online thất bại. Vui lòng chọn phương thức khác.
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Cổng thất bại: {failedProvider || 'UNKNOWN'}
+                    </Typography>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ mb: 2 }}>
+                      {(['CASH', 'MOMO', 'VNPAY'] as const).map((method) => (
+                        <Button
+                          key={method}
+                          variant={retryMethod === method ? 'contained' : 'outlined'}
+                          onClick={() => setRetryMethod(method)}
+                          disabled={method === failedProvider}
+                          sx={{ borderRadius: 3 }}
+                        >
+                          {method === 'CASH' ? 'Tiền mặt' : method}
+                        </Button>
+                      ))}
+                    </Stack>
+                    <Button
+                      variant="contained"
+                      color="warning"
+                      onClick={handleRetryPayment}
+                      disabled={retryingPayment || retryMethod === failedProvider}
+                      sx={{ borderRadius: 3, fontWeight: 700 }}
+                    >
+                      {retryingPayment ? 'Đang xử lý...' : retryMethod === 'CASH' ? 'Xác nhận đổi sang tiền mặt' : 'Thanh toán lại'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
               <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#eff6ff' }}>
                 <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>

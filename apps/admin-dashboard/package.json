@@ -4,7 +4,7 @@
   "description": "Admin Dashboard for Cab Booking System",
   "private": true,
   "scripts": {
-    "start": "react-scripts start",
+    "start": "node --no-warnings ./node_modules/react-scripts/bin/react-scripts.js start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"

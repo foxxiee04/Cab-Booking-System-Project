@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 
 const VEHICLE_YEAR_MIN = 1990;
+const SUPPORTED_VEHICLE_TYPES = new Set(['MOTORBIKE', 'SCOOTER', 'CAR_4', 'CAR_7']);
 
 const isBlank = (value: unknown) => typeof value !== 'string' || value.trim().length === 0;
 
@@ -34,6 +35,13 @@ export const validateDriverRegistration = (req: Request, res: Response, next: Ne
     return res.status(400).json({
       success: false,
       error: { code: 'VALIDATION_ERROR', message: 'Vehicle type and plate required' },
+    });
+  }
+
+  if (!SUPPORTED_VEHICLE_TYPES.has(String(vehicle.type))) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle type is invalid' },
     });
   }
 

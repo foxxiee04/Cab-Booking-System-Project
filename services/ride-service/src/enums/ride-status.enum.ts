@@ -11,9 +11,10 @@ export enum RideStatus {
 }
 
 export enum VehicleType {
-  ECONOMY = 'ECONOMY',
-  COMFORT = 'COMFORT',
-  PREMIUM = 'PREMIUM',
+  MOTORBIKE = 'MOTORBIKE',
+  SCOOTER = 'SCOOTER',
+  CAR_4 = 'CAR_4',
+  CAR_7 = 'CAR_7',
 }
 
 export enum PaymentMethod {

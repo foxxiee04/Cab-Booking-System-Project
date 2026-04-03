@@ -1,11 +1,11 @@
 type JsonValue = Record<string, any>;
 
 const BASE_URL = (process.env.SMOKE_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
-const DEFAULT_PASSWORD = process.env.SMOKE_PASSWORD || 'password123';
+const DEFAULT_PASSWORD = process.env.SMOKE_PASSWORD || 'Password@1';
 
 const accounts = {
   admin: process.env.SMOKE_ADMIN_EMAIL || 'admin@cabbooking.com',
-  customer: process.env.SMOKE_CUSTOMER_EMAIL || 'customer1@example.com',
+  customer: process.env.SMOKE_CUSTOMER_EMAIL || 'customer5@example.com',
   driver: process.env.SMOKE_DRIVER_EMAIL || 'driver1@example.com',
 };
 
@@ -151,7 +151,7 @@ async function createRide(token: string): Promise<RideRecord> {
         lat: 10.7721,
         lng: 106.7002,
       },
-      vehicleType: 'ECONOMY',
+      vehicleType: 'CAR_4',
       paymentMethod: 'CASH',
     }),
   }, token);

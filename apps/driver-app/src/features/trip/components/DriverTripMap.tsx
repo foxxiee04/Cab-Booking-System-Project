@@ -11,21 +11,28 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { GoogleMap, MarkerF, PolylineF, useJsApiLoader } from '@react-google-maps/api';
 import { MapContainer as LeafletMapContainer, Marker as LeafletMarker, Polyline as LeafletPolyline, TileLayer as LeafletTileLayer, useMap } from 'react-leaflet';
-import { Location } from '../../../types';
+import { Location, NearbyDriver } from '../../../types';
 import { getRoute } from '../../../utils/map.utils';
 import '../../../styles/map.css';
 
 const libraries: ('geometry' | 'places')[] = ['geometry', 'places'];
 const defaultCenter = { lat: 10.7769, lng: 106.7009 };
 
+const MAJOR_CITY_POINTS = [
+  { id: 'benthanh', name: 'Cho Ben Thanh', lat: 10.7726, lng: 106.6980 },
+  { id: 'tsn', name: 'San bay Tan Son Nhat', lat: 10.8185, lng: 106.6588 },
+  { id: 'landmark81', name: 'Landmark 81', lat: 10.7949, lng: 106.7219 },
+  { id: 'thuduc', name: 'TP Thu Duc', lat: 10.8495, lng: 106.7718 },
+];
+
 const darkMapStyles: google.maps.MapTypeStyle[] = [
-  { elementType: 'geometry', stylers: [{ color: '#111827' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#d1d5db' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#111827' }] },
-  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#2563eb' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
+  { elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#cbd5e1' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#1f2937' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#334155' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#5a7fb8' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
 ];
 
 interface RouteSummary {
@@ -65,7 +72,7 @@ function createLeafletPin(color: string) {
 function createLeafletDriverIcon() {
   return getLeafletIcon(
     'driver-current-location',
-    '<div style="width:30px;height:30px;border-radius:999px;background:#2563eb;border:3px solid #ffffff;box-shadow:0 10px 24px rgba(37,99,235,0.28);display:flex;align-items:center;justify-content:center;"><span style="font-size:14px;line-height:1;">🚕</span></div>',
+    '<div style="width:30px;height:30px;border-radius:999px;background:#5a7fb8;border:3px solid #ffffff;box-shadow:0 10px 24px rgba(90,127,184,0.28);display:flex;align-items:center;justify-content:center;"><span style="font-size:14px;line-height:1;">🚕</span></div>',
     [30, 30],
     [15, 15],
   );
@@ -75,7 +82,8 @@ const LeafletViewportController: React.FC<{
   currentLocation?: Location | null;
   pickupLocation?: Location | null;
   dropoffLocation?: Location | null;
-}> = ({ currentLocation, pickupLocation, dropoffLocation }) => {
+  nearbyDrivers: NearbyDriver[];
+}> = ({ currentLocation, pickupLocation, dropoffLocation, nearbyDrivers }) => {
   const map = useMap();
   const lat0 = currentLocation?.lat;
   const lng0 = currentLocation?.lng;
@@ -89,6 +97,9 @@ const LeafletViewportController: React.FC<{
     if (lat0 != null && lng0 != null) points.push([lat0, lng0]);
     if (lat1 != null && lng1 != null) points.push([lat1, lng1]);
     if (lat2 != null && lng2 != null) points.push([lat2, lng2]);
+    nearbyDrivers.slice(0, 120).forEach((driver) => {
+      points.push([driver.lat, driver.lng]);
+    });
 
     if (!points.length) {
       return;
@@ -103,7 +114,7 @@ const LeafletViewportController: React.FC<{
       padding: [56, 56],
       animate: true,
     });
-  }, [map, lat0, lng0, lat1, lng1, lat2, lng2]);
+  }, [map, nearbyDrivers, lat0, lng0, lat1, lng1, lat2, lng2]);
 
   return null;
 };
@@ -113,6 +124,7 @@ export interface DriverTripMapProps {
   currentLocation?: Location | null;
   pickupLocation?: Location | null;
   dropoffLocation?: Location | null;
+  nearbyDrivers?: NearbyDriver[];
   mode?: 'request' | 'pickup' | 'trip';
   height?: number | string;
   colorMode?: 'light' | 'dark' | 'system';
@@ -121,10 +133,6 @@ export interface DriverTripMapProps {
 function resolveColorMode(colorMode: DriverTripMapProps['colorMode']): 'light' | 'dark' {
   if (colorMode === 'light' || colorMode === 'dark') {
     return colorMode;
-  }
-
-  if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    return 'dark';
   }
 
   return 'light';
@@ -163,6 +171,7 @@ interface GoogleDriverTripMapCanvasProps {
   currentLocation?: Location | null;
   pickupLocation?: Location | null;
   dropoffLocation?: Location | null;
+  nearbyDrivers: NearbyDriver[];
   routeSummary: RouteSummary | null;
   mapRef: React.MutableRefObject<google.maps.Map | null>;
   onMapLoad: (points: google.maps.LatLngLiteral[]) => void;
@@ -177,6 +186,7 @@ const GoogleDriverTripMapCanvas: React.FC<GoogleDriverTripMapCanvasProps> = ({
   currentLocation,
   pickupLocation,
   dropoffLocation,
+  nearbyDrivers,
   routeSummary,
   mapRef,
   onMapLoad,
@@ -203,7 +213,14 @@ const GoogleDriverTripMapCanvas: React.FC<GoogleDriverTripMapCanvasProps> = ({
       zoom={14}
       onLoad={(map) => {
         mapRef.current = map;
-        onMapLoad([currentLocation, pickupLocation, dropoffLocation].filter(Boolean) as google.maps.LatLngLiteral[]);
+        onMapLoad(
+          [
+            currentLocation,
+            pickupLocation,
+            dropoffLocation,
+            ...nearbyDrivers.map((driver) => ({ lat: driver.lat, lng: driver.lng })),
+          ].filter(Boolean) as google.maps.LatLngLiteral[]
+        );
       }}
       onUnmount={() => {
         mapRef.current = null;
@@ -219,14 +236,30 @@ const GoogleDriverTripMapCanvas: React.FC<GoogleDriverTripMapCanvasProps> = ({
       }}
     >
       {pickupLocation && (
-        <MarkerF position={pickupLocation} icon={getMarkerIcon('#16a34a')} title="Điểm đón" />
+          <MarkerF position={pickupLocation} icon={getMarkerIcon('#5ca38a')} title="Điểm đón" />
       )}
       {dropoffLocation && (
-        <MarkerF position={dropoffLocation} icon={getMarkerIcon('#ef4444')} title="Điểm đến" />
+          <MarkerF position={dropoffLocation} icon={getMarkerIcon('#c48686')} title="Điểm đến" />
       )}
       {currentLocation && (
-        <MarkerF position={currentLocation} icon={getCarSymbol(0, '#2563eb')} title="Vị trí của bạn" />
+          <MarkerF position={currentLocation} icon={getCarSymbol(0, '#5a7fb8')} title="Vị trí của bạn" />
       )}
+      {nearbyDrivers.map((driver) => (
+        <MarkerF
+          key={driver.id}
+          position={{ lat: driver.lat, lng: driver.lng }}
+          icon={getCarSymbol(driver.heading || 0, '#94a3b8', 0.7)}
+          title="Tài xế gần bạn"
+        />
+      ))}
+      {MAJOR_CITY_POINTS.map((point) => (
+        <MarkerF
+          key={point.id}
+          position={{ lat: point.lat, lng: point.lng }}
+          icon={getMarkerIcon('#7c3aed')}
+          title={point.name}
+        />
+      ))}
       {routeSummary && (
         <>
           <PolylineF
@@ -241,7 +274,7 @@ const GoogleDriverTripMapCanvas: React.FC<GoogleDriverTripMapCanvasProps> = ({
           <PolylineF
             path={routeSummary.polylinePath}
             options={{
-              strokeColor: mode === 'trip' ? '#16a34a' : '#2563eb',
+              strokeColor: mode === 'trip' ? '#5ca38a' : '#5a7fb8',
               strokeOpacity: 0.98,
               strokeWeight: 6,
               zIndex: 11,
@@ -258,9 +291,10 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
   currentLocation,
   pickupLocation,
   dropoffLocation,
+  nearbyDrivers = [],
   mode = 'request',
-  height = 280,
-  colorMode = 'system',
+  height = 340,
+  colorMode = 'light',
 }) => {
   const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -310,7 +344,12 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
 
   useEffect(() => {
     const map = mapRef.current;
-    const points = [currentLocation, pickupLocation, dropoffLocation].filter(Boolean) as google.maps.LatLngLiteral[];
+    const points = [
+      currentLocation,
+      pickupLocation,
+      dropoffLocation,
+      ...nearbyDrivers.map((driver) => ({ lat: driver.lat, lng: driver.lng })),
+    ].filter(Boolean) as google.maps.LatLngLiteral[];
 
     if (!map || points.length === 0 || !window.google) {
       return;
@@ -325,7 +364,17 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
     const bounds = new google.maps.LatLngBounds();
     points.forEach((point) => bounds.extend(point));
     map.fitBounds(bounds, 56);
-  }, [currentLocation, dropoffLocation, pickupLocation, routeSummary]);
+  }, [currentLocation, dropoffLocation, nearbyDrivers, pickupLocation, routeSummary]);
+
+  const leafletTileUrl =
+    themeMode === 'dark'
+      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+  const leafletAttribution =
+    themeMode === 'dark'
+      ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+      : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
   const leafletMap = (
     <LeafletMapContainer
@@ -336,14 +385,28 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
       scrollWheelZoom
     >
       <LeafletTileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+        attribution={leafletAttribution}
+        url={leafletTileUrl}
         maxZoom={20}
       />
-      <LeafletViewportController currentLocation={currentLocation} pickupLocation={pickupLocation} dropoffLocation={dropoffLocation} />
-      {pickupLocation && <LeafletMarker position={[pickupLocation.lat, pickupLocation.lng]} icon={createLeafletPin('#16a34a')} />}
-      {dropoffLocation && <LeafletMarker position={[dropoffLocation.lat, dropoffLocation.lng]} icon={createLeafletPin('#ef4444')} />}
+      <LeafletViewportController currentLocation={currentLocation} pickupLocation={pickupLocation} dropoffLocation={dropoffLocation} nearbyDrivers={nearbyDrivers} />
+      {pickupLocation && <LeafletMarker position={[pickupLocation.lat, pickupLocation.lng]} icon={createLeafletPin('#5ca38a')} />}
+      {dropoffLocation && <LeafletMarker position={[dropoffLocation.lat, dropoffLocation.lng]} icon={createLeafletPin('#c48686')} />}
       {currentLocation && <LeafletMarker position={[currentLocation.lat, currentLocation.lng]} icon={createLeafletDriverIcon()} />}
+      {nearbyDrivers.map((driver) => (
+        <LeafletMarker
+          key={driver.id}
+          position={[driver.lat, driver.lng]}
+          icon={createLeafletPin('#94a3b8')}
+        />
+      ))}
+      {MAJOR_CITY_POINTS.map((point) => (
+        <LeafletMarker
+          key={point.id}
+          position={[point.lat, point.lng]}
+          icon={createLeafletPin('#7c3aed')}
+        />
+      ))}
       {routeSummary && (
         <>
           <LeafletPolyline
@@ -357,7 +420,7 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
           <LeafletPolyline
             positions={routeSummary.polylinePath.map((point) => [point.lat, point.lng])}
             pathOptions={{
-              color: mode === 'trip' ? '#16a34a' : '#2563eb',
+              color: mode === 'trip' ? '#5ca38a' : '#5a7fb8',
               opacity: 0.98,
               weight: 6,
             }}
@@ -368,7 +431,7 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
   );
 
   return (
-    <Box sx={{ position: 'relative', width: '100%', height, borderRadius: 5, overflow: 'hidden', bgcolor: '#dbeafe', border: '1px solid rgba(148,163,184,0.12)' }}>
+    <Box sx={{ position: 'relative', width: '100%', height, borderRadius: 5, overflow: 'hidden', bgcolor: '#e9eff6', border: '1px solid rgba(148,163,184,0.18)', boxShadow: '0 14px 36px rgba(15,23,42,0.10)' }}>
       {hasGoogleMapsApiKey ? (
         <GoogleDriverTripMapCanvas
           googleMapsApiKey={googleMapsApiKey}
@@ -378,6 +441,7 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
           currentLocation={currentLocation}
           pickupLocation={pickupLocation}
           dropoffLocation={dropoffLocation}
+          nearbyDrivers={nearbyDrivers}
           routeSummary={routeSummary}
           mapRef={mapRef}
           onMapLoad={(points) => {
@@ -405,7 +469,7 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
           position: 'absolute',
           inset: 0,
           pointerEvents: 'none',
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 34%, rgba(15,23,42,0.05) 100%)',
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 36%, rgba(148,163,184,0.08) 100%)',
         }}
       />
 
@@ -425,9 +489,9 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
         }}
       >
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-          <Chip size="small" label="Điểm đón" sx={{ bgcolor: 'rgba(22,163,74,0.12)', color: '#15803d' }} />
-          <Chip size="small" label="Tuyến đường" sx={{ bgcolor: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }} />
-          <Chip size="small" label="Điểm đến" sx={{ bgcolor: 'rgba(239,68,68,0.12)', color: '#b91c1c' }} />
+          <Chip size="small" label="Điểm đón" sx={{ bgcolor: 'rgba(92,163,138,0.14)', color: '#3f7f6a' }} />
+          <Chip size="small" label="Tuyến đường" sx={{ bgcolor: 'rgba(90,127,184,0.14)', color: '#4f6ea1' }} />
+          <Chip size="small" label="Điểm đến" sx={{ bgcolor: 'rgba(196,134,134,0.14)', color: '#9b6363' }} />
         </Stack>
       </Paper>
 
@@ -450,14 +514,14 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
           {routeSummary && <Chip icon={<AccessTimeRounded />} label={routeSummary.durationText} size="small" variant="outlined" />}
         </Stack>
         <Stack direction="row" spacing={1.5}>
-          <PlaceRounded sx={{ color: '#16a34a', mt: 0.2 }} fontSize="small" />
+          <PlaceRounded sx={{ color: '#5ca38a', mt: 0.2 }} fontSize="small" />
           <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
             {pickupLocation?.address || 'Điểm đón'}
           </Typography>
         </Stack>
         {dropoffLocation && (
           <Stack direction="row" spacing={1.5} sx={{ mt: 0.75 }}>
-            <FlagRounded sx={{ color: '#ef4444', mt: 0.2 }} fontSize="small" />
+            <FlagRounded sx={{ color: '#c48686', mt: 0.2 }} fontSize="small" />
             <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
               {dropoffLocation.address || 'Điểm đến'}
             </Typography>

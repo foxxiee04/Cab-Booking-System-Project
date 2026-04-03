@@ -12,8 +12,7 @@ import {
   CircularProgress,
   InputAdornment,
 } from '@mui/material';
-import { AdminPanelSettings, PersonOutline, Lock } from '@mui/icons-material';
-import { useTranslation } from 'react-i18next';
+import { AdminPanelSettings, Email, Lock } from '@mui/icons-material';
 import { useAppDispatch } from '../store/hooks';
 import { setCredentials } from '../store/auth.slice';
 import { authApi } from '../api/auth.api';
@@ -21,7 +20,6 @@ import { authApi } from '../api/auth.api';
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { t } = useTranslation();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -32,7 +30,11 @@ const Login: React.FC = () => {
     e.preventDefault();
     setError('');
     if (!identifier.trim()) {
-      setError('Vui lòng nhập tài khoản admin');
+      setError('Vui lòng nhập email');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier.trim())) {
+      setError('Email không hợp lệ');
       return;
     }
     if (!password) { setError('Vui lòng nhập mật khẩu'); return; }
@@ -78,17 +80,18 @@ const Login: React.FC = () => {
             <form onSubmit={handleSubmit}>
               <TextField
                 fullWidth
-                label="Tài khoản"
+                label="Email"
+                type="email"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 required
                 autoFocus
-                autoComplete="username"
+                autoComplete="email"
                 sx={{ mb: 2 }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <PersonOutline />
+                      <Email />
                     </InputAdornment>
                   ),
                 }}

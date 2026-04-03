@@ -234,6 +234,53 @@ describe('NotificationService', () => {
     });
   });
 
+  describe('sendInAppNotification', () => {
+    it('should create and send an in-app notification using the user id as recipient', async () => {
+      const createdNotification = {
+        _id: 'notif-in-app',
+        userId: 'user-1',
+        type: NotificationType.IN_APP,
+        recipient: 'user-1',
+        message: 'Ride completed',
+      };
+
+      const persistedNotification = {
+        _id: 'notif-in-app',
+        type: NotificationType.IN_APP,
+        recipient: 'user-1',
+        message: 'Ride completed',
+        status: NotificationStatus.PENDING,
+        retryCount: 0,
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      mockCreate.mockResolvedValue(createdNotification);
+      mockFindById.mockResolvedValue(persistedNotification);
+
+      await notificationService.sendInAppNotification({
+        userId: 'user-1',
+        subject: 'Ride completed',
+        message: 'Ride ride-123 completed successfully.',
+        metadata: { event: 'ride.completed', rideId: 'ride-123' },
+        priority: NotificationPriority.HIGH,
+      });
+
+      expect(mockCreate).toHaveBeenCalledWith({
+        userId: 'user-1',
+        type: NotificationType.IN_APP,
+        recipient: 'user-1',
+        subject: 'Ride completed',
+        message: 'Ride ride-123 completed successfully.',
+        metadata: { event: 'ride.completed', rideId: 'ride-123' },
+        priority: NotificationPriority.HIGH,
+        status: NotificationStatus.PENDING,
+        retryCount: 0,
+      });
+      expect(mockFindById).toHaveBeenCalledWith('notif-in-app');
+      expect(persistedNotification.save).toHaveBeenCalled();
+    });
+  });
+
   describe('getUserNotifications', () => {
     it('should return user notifications sorted by createdAt desc', async () => {
       const notifications = [

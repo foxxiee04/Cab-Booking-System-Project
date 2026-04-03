@@ -2,16 +2,15 @@ const CUSTOMER_ORIGIN = 'http://localhost:4000';
 const DRIVER_ORIGIN = 'http://localhost:4001';
 const ADMIN_ORIGIN = 'http://localhost:4002';
 
-const CUSTOMER_PHONE = Cypress.env('SMOKE_CUSTOMER_PHONE') || '0901234561';
+const CUSTOMER_PHONE = Cypress.env('SMOKE_CUSTOMER_PHONE') || '0901234565';
 const DRIVER_PHONE   = Cypress.env('SMOKE_DRIVER_PHONE')   || '0911234561';
 const ADMIN_PHONE    = Cypress.env('SMOKE_ADMIN_PHONE')    || '0900000001';
 
 const PICKUP_QUERY = Cypress.env('SMOKE_PICKUP_QUERY') || 'Ben Thanh';
 const DROPOFF_QUERY = Cypress.env('SMOKE_DROPOFF_QUERY') || 'Tan Son Nhat Airport';
+const SEED_PASSWORD = Cypress.env('SMOKE_PASSWORD') || 'Password@1';
 
-const loginWithOtp = (phone: string, landingPath: string) => {
-  cy.intercept('POST', '**/auth/send-otp').as('sendOtpCapture');
-
+const loginWithPassword = (phone: string, landingPath: string) => {
   cy.visit('/login', {
     onBeforeLoad(win) {
       win.localStorage.clear();
@@ -20,14 +19,8 @@ const loginWithOtp = (phone: string, landingPath: string) => {
   });
 
   cy.get('input').first().clear().type(phone);
+  cy.get('input[type="password"]').clear().type(SEED_PASSWORD);
   cy.get('button[type="submit"]').click();
-
-  cy.wait('@sendOtpCapture', { timeout: 20000 }).then((interception) => {
-    const devOtp = interception.response?.body?.data?.devOtp as string;
-    expect(devOtp, 'devOtp must be present (NODE_ENV must not be production)').to.be.a('string');
-    cy.get('input').first().clear().type(devOtp);
-    cy.get('button[type="submit"]').click();
-  });
 
   cy.location('pathname', { timeout: 30000 }).should('eq', landingPath);
 };
@@ -43,32 +36,28 @@ const chooseAutocompleteLocation = (selector: string, query: string) => {
   cy.get(selector, { timeout: 30000 }).click({ force: true });
   cy.get(selector, { timeout: 30000 }).clear({ force: true });
   cy.get(selector, { timeout: 30000 }).type(query, {
-    delay: 40,
+    delay: 50,
     force: true,
   });
-  cy.wait(1200);
-  cy.get(selector, { timeout: 30000 }).type('{downarrow}{enter}', { force: true });
+  // Wait for autocomplete dropdown to appear, then click the first option
+  cy.get('[role="option"]', { timeout: 15000 }).first().click({ force: true });
 };
 
 const loginAdmin = () => {
   cy.origin(
     ADMIN_ORIGIN,
-    { args: { phone: ADMIN_PHONE } },
-    ({ phone }) => {
-      cy.intercept('POST', '**/auth/send-otp').as('sendOtpAdmin');
-      cy.visit('/login', {
-        onBeforeLoad(win) {
-          win.localStorage.clear();
-          win.sessionStorage.clear();
-        },
+    { args: { phone: ADMIN_PHONE, password: SEED_PASSWORD } },
+    ({ phone, password }) => {
+      cy.request({
+        method: 'POST',
+        url: 'http://localhost:3000/api/auth/login',
+        body: { identifier: phone, password },
+      }).then(({ body }) => {
+        window.localStorage.setItem('accessToken', body.data.tokens.accessToken);
+        window.localStorage.setItem('refreshToken', body.data.tokens.refreshToken);
+        window.localStorage.setItem('user', JSON.stringify(body.data.user));
       });
-      cy.get('input').first().clear().type(phone);
-      cy.get('button[type="submit"]').click();
-      cy.wait('@sendOtpAdmin', { timeout: 20000 }).then((interception) => {
-        const devOtp = interception.response?.body?.data?.devOtp as string;
-        cy.get('input').first().clear().type(devOtp);
-        cy.get('button[type="submit"]').click();
-      });
+      cy.visit('/dashboard');
       cy.location('pathname', { timeout: 30000 }).should('eq', '/dashboard');
     }
   );
@@ -77,22 +66,18 @@ const loginAdmin = () => {
 const loginDriver = () => {
   cy.origin(
     DRIVER_ORIGIN,
-    { args: { phone: DRIVER_PHONE } },
-    ({ phone }) => {
-      cy.intercept('POST', '**/auth/send-otp').as('sendOtpDriver');
-      cy.visit('/login', {
-        onBeforeLoad(win) {
-          win.localStorage.clear();
-          win.sessionStorage.clear();
-        },
+    { args: { phone: DRIVER_PHONE, password: SEED_PASSWORD } },
+    ({ phone, password }) => {
+      cy.request({
+        method: 'POST',
+        url: 'http://localhost:3000/api/auth/login',
+        body: { identifier: phone, password },
+      }).then(({ body }) => {
+        window.localStorage.setItem('accessToken', body.data.tokens.accessToken);
+        window.localStorage.setItem('refreshToken', body.data.tokens.refreshToken);
+        window.localStorage.setItem('user', JSON.stringify(body.data.user));
       });
-      cy.get('input').first().clear().type(phone);
-      cy.get('button[type="submit"]').click();
-      cy.wait('@sendOtpDriver', { timeout: 20000 }).then((interception) => {
-        const devOtp = interception.response?.body?.data?.devOtp as string;
-        cy.get('input').first().clear().type(devOtp);
-        cy.get('button[type="submit"]').click();
-      });
+      cy.visit('/dashboard');
       cy.location('pathname', { timeout: 30000 }).should('eq', '/dashboard');
     }
   );
@@ -103,28 +88,50 @@ const createRide = () => {
   chooseAutocompleteLocation('[data-testid="pickup-location-input"]', PICKUP_QUERY);
   chooseAutocompleteLocation('[data-testid="dropoff-location-input"]', DROPOFF_QUERY);
 
-  nativeClickButtonByText('Tiếp tục đặt xe');
-  cy.get('[data-testid="ride-booking-flow"]', { timeout: 30000 }).should('be.visible');
-  cy.get('[data-testid="ride-booking-next"]', { timeout: 30000 }).should('not.be.disabled').click();
-  cy.get('[data-testid="ride-booking-next"]', { timeout: 30000 }).should('not.be.disabled').click();
-  cy.get('[data-testid="confirm-booking-button"]', { timeout: 30000 }).click();
+  // Wait until both locations are set in Redux (button becomes enabled) then click
+  cy.get('[data-testid="open-booking-flow"]', { timeout: 30000 }).should('not.be.disabled').click({ force: true });
+  cy.get('[data-testid="ride-booking-flow"]', { timeout: 30000 }).scrollIntoView().should('be.visible');
+  cy.get('[data-testid="ride-booking-next"]', { timeout: 30000 }).scrollIntoView().should('not.be.disabled').click();
+  cy.get('[data-testid="ride-booking-next"]', { timeout: 30000 }).scrollIntoView().should('not.be.disabled').click();
+  cy.get('[data-testid="confirm-booking-button"]', { timeout: 30000 }).scrollIntoView().click();
   cy.location('pathname', { timeout: 30000 }).should('match', /^\/ride\/[0-9a-f-]+$/);
   return cy.location('pathname').then((pathname) => pathname.split('/').pop() || '');
 };
 
 describe('Browser smoke ride cancellations', () => {
+  const API_BASE = 'http://localhost:3000/api';
+
+  const cancelActiveRide = (phone: string, password: string) => {
+    cy.request({ method: 'POST', url: `${API_BASE}/auth/login`, body: { phone, password }, failOnStatusCode: false })
+      .then((loginRes) => {
+        if (loginRes.status !== 200) return;
+        const token: string = loginRes.body?.data?.tokens?.accessToken;
+        cy.request({ method: 'GET', url: `${API_BASE}/rides/customer/active`, headers: { Authorization: `Bearer ${token}` }, failOnStatusCode: false })
+          .then((activeRes) => {
+            const rideId: string | undefined = activeRes.body?.data?.ride?.id;
+            if (rideId) {
+              cy.request({ method: 'POST', url: `${API_BASE}/rides/${rideId}/cancel`, headers: { Authorization: `Bearer ${token}` }, body: { reason: 'test-cleanup' }, failOnStatusCode: false });
+            }
+          });
+      });
+  };
+
+  beforeEach(() => {
+    cancelActiveRide(CUSTOMER_PHONE, SEED_PASSWORD);
+  });
+
   it('lets the customer cancel an unassigned ride and shows it in admin', () => {
-    loginWithOtp(CUSTOMER_PHONE, '/home');
+    loginWithPassword(CUSTOMER_PHONE, '/home');
     loginAdmin();
 
     createRide().then((rideId) => {
       cy.origin(ADMIN_ORIGIN, { args: { rideId } }, ({ rideId }) => {
         cy.visit('/rides');
-        cy.contains('[role="row"]', rideId, { timeout: 30000 }).should('contain.text', 'FINDING_DRIVER');
+        cy.contains('[role="row"]', rideId, { timeout: 30000 }).should('contain.text', 'Đang tìm tài xế');
       });
 
       cy.visit(`/ride/${rideId}`);
-      cy.contains('button', 'Huy chuyen', { timeout: 30000 }).click();
+      cy.contains('button', 'Hủy chuyến', { timeout: 30000 }).click();
       cy.location('pathname', { timeout: 30000 }).should('eq', '/home');
 
       cy.visit('/activity');
@@ -133,13 +140,13 @@ describe('Browser smoke ride cancellations', () => {
 
       cy.origin(ADMIN_ORIGIN, { args: { rideId } }, ({ rideId }) => {
         cy.visit('/rides');
-        cy.contains('[role="row"]', rideId, { timeout: 30000 }).should('contain.text', 'CANCELLED');
+        cy.contains('[role="row"]', rideId, { timeout: 30000 }).should('contain.text', 'Đã hủy');
       });
     });
   });
 
   it('lets the driver cancel an accepted ride and propagates the status to customer and admin', () => {
-    loginWithOtp(CUSTOMER_PHONE, '/home');
+    loginWithPassword(CUSTOMER_PHONE, '/home');
     loginDriver();
     loginAdmin();
 
@@ -156,19 +163,19 @@ describe('Browser smoke ride cancellations', () => {
     createRide().then((rideId) => {
       cy.origin(DRIVER_ORIGIN, () => {
         cy.visit('/dashboard');
-        cy.get('[data-testid="accept-ride-button"]', { timeout: 30000 }).should('be.visible').click();
+        cy.get('[data-testid="accept-ride-button"]', { timeout: 60000 }).first().scrollIntoView().click({ force: true });
         cy.location('pathname', { timeout: 30000 }).should('eq', '/active-ride');
-        cy.contains('button', /cancel|huy/i, { timeout: 30000 }).click();
-        cy.get('[role="dialog"] .MuiDialogActions-root button', { timeout: 30000 }).last().click();
+        cy.get('[data-testid="cancel-ride-button"]', { timeout: 30000 }).scrollIntoView().click({ force: true });
+        cy.get('[data-testid="confirm-cancel-ride-button"]', { timeout: 30000 }).click();
         cy.location('pathname', { timeout: 30000 }).should('eq', '/dashboard');
       });
 
       cy.visit(`/ride/${rideId}`);
-      cy.contains('Chuyen di da huy', { timeout: 30000 });
+      cy.contains('Chuyến đi đã hủy', { timeout: 30000 });
 
       cy.origin(ADMIN_ORIGIN, { args: { rideId } }, ({ rideId }) => {
         cy.visit('/rides');
-        cy.contains('[role="row"]', rideId, { timeout: 30000 }).should('contain.text', 'CANCELLED');
+        cy.contains('[role="row"]', rideId, { timeout: 30000 }).should('contain.text', 'Đã hủy');
       });
     });
   });

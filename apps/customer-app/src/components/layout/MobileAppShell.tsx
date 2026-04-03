@@ -89,6 +89,8 @@ const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
     setLangAnchorEl(null);
   };
 
+  const shellMaxWidth = { xs: '100%', md: 1160 };
+
   return (
     <Box
       sx={{
@@ -108,7 +110,7 @@ const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
           borderBottom: '1px solid rgba(148, 163, 184, 0.18)',
         }}
       >
-        <Toolbar sx={{ minHeight: 76, px: 2 }}>
+        <Toolbar sx={{ minHeight: 76, width: shellMaxWidth, mx: 'auto', px: { xs: 2, sm: 2.5 } }}>
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.12em' }}>
               Cab Booking
@@ -149,15 +151,17 @@ const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
           px: { xs: 1.5, sm: 2 },
         }}
       >
-        <Box sx={{ minHeight: '100%' }}>{children}</Box>
+        <Box sx={{ minHeight: '100%', width: shellMaxWidth, mx: 'auto' }}>{children}</Box>
       </Box>
 
       <Paper
         elevation={16}
         sx={{
           position: 'fixed',
-          left: 12,
-          right: 12,
+          left: 0,
+          right: 0,
+          width: shellMaxWidth,
+          mx: 'auto',
           bottom: 'calc(12px + env(safe-area-inset-bottom))',
           borderRadius: 4,
           overflow: 'hidden',

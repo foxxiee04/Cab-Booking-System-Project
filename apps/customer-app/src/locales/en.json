@@ -153,9 +153,10 @@
     "cancelRide": "Cancel Ride"
   },
   "vehicle": {
-    "ECONOMY": "Economy",
-    "COMFORT": "Comfort",
-    "PREMIUM": "Premium"
+    "MOTORBIKE": "Motorbike",
+    "SCOOTER": "Scooter",
+    "CAR_4": "Car 4 seats",
+    "CAR_7": "Car 7 seats"
   },
   "payment": {
     "CASH": "Cash",

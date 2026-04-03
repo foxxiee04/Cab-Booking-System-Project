@@ -26,17 +26,27 @@ export interface RidesResponse {
 }
 
 const normalizeRide = (ride: any): Ride => {
-  const pickup = ride.pickup || ride.pickupLocation || (ride.pickupLat != null ? {
-    lat: ride.pickupLat,
-    lng: ride.pickupLng,
-    address: ride.pickupAddress || '',
-  } : undefined);
+  const rawPickup = ride.pickup || ride.pickupLocation;
+  const pickup = rawPickup
+    ? {
+        lat: rawPickup.lat ?? rawPickup.latitude ?? ride.pickupLat ?? 0,
+        lng: rawPickup.lng ?? rawPickup.longitude ?? ride.pickupLng ?? 0,
+        address: rawPickup.address || ride.pickupAddress || '',
+      }
+    : ride.pickupLat != null
+    ? { lat: ride.pickupLat, lng: ride.pickupLng, address: ride.pickupAddress || '' }
+    : { lat: 0, lng: 0, address: '' };
 
-  const dropoff = ride.dropoff || ride.dropoffLocation || (ride.dropoffLat != null ? {
-    lat: ride.dropoffLat,
-    lng: ride.dropoffLng,
-    address: ride.dropoffAddress || '',
-  } : undefined);
+  const rawDropoff = ride.dropoff || ride.dropoffLocation;
+  const dropoff = rawDropoff
+    ? {
+        lat: rawDropoff.lat ?? rawDropoff.latitude ?? ride.dropoffLat ?? 0,
+        lng: rawDropoff.lng ?? rawDropoff.longitude ?? ride.dropoffLng ?? 0,
+        address: rawDropoff.address || ride.dropoffAddress || '',
+      }
+    : ride.dropoffLat != null
+    ? { lat: ride.dropoffLat, lng: ride.dropoffLng, address: ride.dropoffAddress || '' }
+    : { lat: 0, lng: 0, address: '' };
 
   return {
     ...ride,

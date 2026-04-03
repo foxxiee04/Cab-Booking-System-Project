@@ -145,7 +145,7 @@ class DriverSocketService {
           address: data.dropoff?.address || 'Điểm đến'
         },
         fare: data.estimatedFare || 0,
-        vehicleType: (data.vehicleType as VehicleType) || 'ECONOMY',
+        vehicleType: (data.vehicleType as VehicleType) || 'CAR_4',
         distance: data.distance,
         duration: data.duration,
         estimatedDuration: data.duration,
@@ -248,9 +248,16 @@ class DriverSocketService {
   }
 
   // Emit location update
-  updateLocation(location: { lat: number; lng: number }) {
+  updateLocation(location: { lat: number; lng: number }, rideId?: string) {
     if (this.socket?.connected) {
-      this.socket.emit('driver:update-location', { location });
+      const state = store.getState();
+      const activeRideId = rideId || state.ride.currentRide?.id;
+
+      this.socket.emit('driver:update-location', {
+        rideId: activeRideId,
+        location,
+        timestamp: Date.now(),
+      });
     }
   }
 

@@ -7,6 +7,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ProfileSetup from './pages/ProfileSetup';
 import Dashboard from './pages/Dashboard';
 import ActiveRide from './pages/ActiveRide';
+import RideDemoPage from './pages/RideDemoPage';
 import Earnings from './pages/Earnings';
 import History from './pages/History';
 import Profile from './pages/Profile';
@@ -94,6 +95,7 @@ const App: React.FC = () => {
           }
         />
 
+        <Route path="/demo" element={<RideDemoPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>

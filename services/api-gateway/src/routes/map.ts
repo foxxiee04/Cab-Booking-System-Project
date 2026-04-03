@@ -52,57 +52,233 @@ interface GeocodeResult {
   type?: string;
 }
 
+const HCMC_VIEWBOX = {
+  left: 106.35,
+  top: 11.25,
+  right: 107.05,
+  bottom: 10.35,
+};
+
 function normalizeText(value: string): string {
   return value
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
+    .replace(/[đĐ]/g, 'd')
     .toLowerCase();
 }
 
-function scoreGeocodeResult(result: GeocodeResult, query: string): number {
+function isHcmContext(value: string): boolean {
+  const normalized = normalizeText(value);
+  return normalized.includes('ho chi minh') || normalized.includes('tp hcm') || normalized.includes('hcm');
+}
+
+/**
+ * Build a clean Vietnamese address from Nominatim's structured address object.
+ * Format: [POI name | road], ward, [district – skipped under HCMC], city/province
+ * Under HCMC the sub-city "Thành phố Thủ Đức" is intentionally omitted so the result
+ * reads naturally: "Cửu Long, Phường Tân Sơn Hòa, TP. HCM".
+ */
+function formatVietnameseAddress(
+  addressObj: Record<string, string>,
+  fallback: string,
+  poiName?: string,
+): string {
+  if (!addressObj) return fallback;
+
+  // Fine-grained road part
+  const road = addressObj.road || addressObj.pedestrian || addressObj.footway || '';
+  const houseNumber = addressObj.house_number || '';
+  const roadPart = road ? (houseNumber ? `${houseNumber} ${road}` : road) : '';
+
+  // Ward-level: suburb → quarter → neighbourhood
+  // Guard: Nominatim sometimes puts "Thành phố Thủ Đức" in suburb for Thu Duc locations.
+  // Filter those out — they are absorbed into "TP. HCM" at the city level.
+  const rawWard =
+    addressObj.suburb ||
+    addressObj.quarter ||
+    addressObj.neighbourhood ||
+    addressObj.village ||
+    '';
+  const ward = normalizeText(rawWard).includes('thu duc') ? '' : rawWard;
+
+  // Determine city / province
+  const cityField = addressObj.city || addressObj.town || addressObj.municipality || '';
+  const stateField = addressObj.state || addressObj.province || '';
+  // Nominatim can return HCMC at different admin levels depending on location.
+  // Sub-cities like "Thành phố Thủ Đức" live under county "Thành phố Hồ Chí Minh".
+  const countyField = addressObj.county || addressObj.county_code || '';
+  const stateDistrictField = addressObj.state_district || '';
+  const isHcmCity    = normalizeText(cityField).includes('ho chi minh');
+  const isHcmState   = normalizeText(stateField).includes('ho chi minh');
+  const isHcmCounty  = normalizeText(countyField).includes('ho chi minh');
+  const isHcmStateDist = normalizeText(stateDistrictField).includes('ho chi minh');
+  // "Thành phố Thủ Đức" is a sub-city of HCMC — treat it as HCMC context
+  // Check all relevant fields: city, town, municipality AND state_district
+  const isThuDucSubCity = normalizeText(cityField).includes('thu duc');
+  const isThuDucStateDist = normalizeText(stateDistrictField).includes('thu duc');
+
+  let city = '';
+  let district = '';
+
+  if (isHcmCity || isHcmState || isHcmCounty || isHcmStateDist || isThuDucSubCity || isThuDucStateDist) {
+    // Always collapse everything to "TP. HCM" — skip sub-city (Thủ Đức) and district
+    city = 'TP. HCM';
+  } else {
+    // Outside HCMC: include district level
+    let rawDistrict = addressObj.city_district || addressObj.district || addressObj.county || '';
+    // Guard: filter out misplaced "Thành phố Thủ Đức" in district field — it belongs to HCMC
+    if (rawDistrict && normalizeText(rawDistrict).includes('thu duc')) {
+      rawDistrict = '';
+    }
+    if (rawDistrict) {
+      district = rawDistrict
+        .replace(/^Thành phố\s+/i, 'TP. ')  // "Thành phố ..." → "TP. ..."
+        .replace(/^Quận\s+/i, 'Q.')          // "Quận 1" → "Q.1"
+        .replace(/^Huyện\s+/i, 'H.')         // "Huyện Bình Chánh" → "H.Bình Chánh"
+        .trim();
+    }
+    if (cityField) {
+      city = cityField.replace(/^Thành phố\s+/i, 'TP. ').replace(/^Tỉnh\s+/i, '').trim();
+    } else if (stateField) {
+      city = stateField.replace(/^Thành phố\s+/i, 'TP. ').replace(/^Tỉnh\s+/i, '').trim();
+    }
+  }
+
+  // Prefer POI name as the leading part; fall back to road
+  const firstPart = poiName && poiName !== road ? poiName : roadPart;
+
+  const parts = [firstPart, ward, district, city].filter(Boolean);
+  return parts.length > 0 ? parts.join(', ') : fallback;
+}
+
+/**
+ * Haversine distance in km between two coordinate pairs.
+ */
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function scoreGeocodeResult(
+  result: GeocodeResult,
+  query: string,
+  context?: string,
+  userLat?: number,
+  userLng?: number,
+): number {
   const normalizedQuery = normalizeText(query);
   const normalizedName = normalizeText(result.name || result.address);
   const normalizedAddress = normalizeText(result.address);
+  const normalizedContext = normalizeText(context || '');
+  const queryMentionsThuDuc = normalizedQuery.includes('thu duc');
+  const addressMentionsThuDuc = normalizedAddress.includes('thu duc');
   let score = 0;
 
+  // Name match quality (higher = more relevant)
   if (normalizedName.startsWith(normalizedQuery)) {
-    score += 5;
-  }
-  if (normalizedName.includes(normalizedQuery)) {
-    score += 3;
-  }
-  if (normalizedAddress.includes(normalizedQuery)) {
+    score += 6;
+  } else if (normalizedName.includes(normalizedQuery)) {
+    score += 4;
+  } else if (normalizedAddress.includes(normalizedQuery)) {
     score += 2;
   }
-  if (result.category === 'amenity' || result.category === 'railway' || result.category === 'aeroway') {
+
+  // Boost named POIs and transit
+  if (result.category === 'amenity' || result.category === 'railway' || result.category === 'aeroway' || result.category === 'tourism') {
     score += 2;
   }
   if (result.type === 'bus_station' || result.type === 'station' || result.type === 'stop' || result.type === 'terminal') {
     score += 2;
   }
-  if (result.category === 'highway') {
+  // Penalise bare road segments — they're not useful as destinations
+  if (result.category === 'highway' && !result.name) {
+    score -= 4;
+  }
+
+  if (!queryMentionsThuDuc && addressMentionsThuDuc) {
     score -= 2;
+  }
+
+  if (normalizedContext) {
+    if (normalizedAddress.includes(normalizedContext)) {
+      score += 2;
+    } else {
+      score -= 1;
+    }
+  }
+
+  // Proximity bonus: results within 2 km of user get +3, up to 10 km get scaled bonus
+  if (userLat !== undefined && userLng !== undefined) {
+    const distKm = haversineKm(userLat, userLng, result.lat, result.lng);
+    if (distKm <= 2) {
+      score += 3;
+    } else if (distKm <= 10) {
+      score += Math.round(2 * (1 - (distKm - 2) / 8));
+    }
   }
 
   return score;
 }
 
-async function searchNominatim(query: string, limit: number): Promise<GeocodeResult[]> {
+interface NominatimItem {
+  lat: string;
+  lon: string;
+  display_name: string;
+  name?: string;
+  category?: string;
+  type?: string;
+  address?: Record<string, string>;
+}
+
+async function searchNominatim(
+  query: string,
+  limit: number,
+  options?: { context?: string; userLat?: number; userLng?: number }
+): Promise<GeocodeResult[]> {
+  const context = options?.context || '';
+  const shouldBoundToHcm = isHcmContext(context) || isHcmContext(query);
+
+  // When user coordinates are available, build a small viewbox centred on those coords
+  // (±0.15 deg ≈ ±17 km) so Nominatim naturally surfaces nearby results first.
+  let proximityViewbox: string | undefined;
+  let proximityBounded = 0;
+  if (options?.userLat !== undefined && options?.userLng !== undefined && !shouldBoundToHcm) {
+    const d = 0.15;
+    proximityViewbox = `${options.userLng - d},${options.userLat + d},${options.userLng + d},${options.userLat - d}`;
+    proximityBounded = 0; // soft-bound: prefer, not restrict
+  }
+
   const response = await axios.get(`${config.map.nominatimUrl}/search`, {
     timeout: config.map.timeoutMs,
     headers: NOMINATIM_HEADERS,
     params: {
       q: query,
-      limit,
+      limit: limit + 3, // fetch a few extra for better re-ranking
+      dedupe: 1,
       ...NOMINATIM_PARAMS,
+      ...(shouldBoundToHcm
+        ? {
+            viewbox: `${HCMC_VIEWBOX.left},${HCMC_VIEWBOX.top},${HCMC_VIEWBOX.right},${HCMC_VIEWBOX.bottom}`,
+            bounded: 1,
+          }
+        : proximityViewbox
+          ? { viewbox: proximityViewbox, bounded: proximityBounded }
+          : {}),
       ...(config.map.nominatimEmail ? { email: config.map.nominatimEmail } : {}),
     },
   });
 
-  return (response.data || []).map((item: any) => ({
+  return (response.data || []).map((item: NominatimItem) => ({
     lat: parseFloat(item.lat),
     lng: parseFloat(item.lon),
-    address: item.display_name,
+    address: item.address
+      ? formatVietnameseAddress(item.address, item.display_name, item.name)
+      : (item.name ? `${item.name}, ${item.display_name}` : item.display_name),
     name: item.name,
     category: item.category,
     type: item.type,
@@ -114,7 +290,7 @@ function mergeGeocodeResults(primary: GeocodeResult[], secondary: GeocodeResult[
   const seen = new Set<string>();
 
   return merged.filter((result) => {
-    const key = `${result.lat.toFixed(5)}:${result.lng.toFixed(5)}:${result.address}`;
+    const key = `${result.lat.toFixed(4)}:${result.lng.toFixed(4)}`;
     if (seen.has(key)) {
       return false;
     }
@@ -124,14 +300,13 @@ function mergeGeocodeResults(primary: GeocodeResult[], secondary: GeocodeResult[
   }).slice(0, limit);
 }
 
-function sortGeocodeResults(results: GeocodeResult[], query: string): GeocodeResult[] {
-  return [...results].sort((left, right) => scoreGeocodeResult(right, query) - scoreGeocodeResult(left, query));
-}
-
 router.get('/geocode', async (req, res) => {
   const q = String(req.query.q || '').trim();
   const context = String(req.query.context || '').trim();
   const limit = Math.min(Math.max(parseInt(String(req.query.limit || '7'), 10), 1), 10);
+  const userLat = req.query.lat ? parseFloat(String(req.query.lat)) : undefined;
+  const userLng = req.query.lng ? parseFloat(String(req.query.lng)) : undefined;
+  const hasUserCoords = userLat !== undefined && Number.isFinite(userLat) && userLng !== undefined && Number.isFinite(userLng);
 
   if (!q) {
     return res.status(400).json({
@@ -141,11 +316,12 @@ router.get('/geocode', async (req, res) => {
   }
 
   try {
-    const primaryResults = await searchNominatim(q, limit);
+    const searchOpts = { context, ...(hasUserCoords ? { userLat, userLng } : {}) };
+    const primaryResults = await searchNominatim(q, limit, searchOpts);
     let results = primaryResults;
 
     if (context && !q.includes(',') && primaryResults.length <= 1) {
-      const contextualResults = await searchNominatim(`${q}, ${context}`, limit);
+      const contextualResults = await searchNominatim(`${q}, ${context}`, limit, searchOpts);
       if (contextualResults.length > primaryResults.length) {
         results = mergeGeocodeResults(contextualResults, primaryResults, limit);
       } else {
@@ -153,7 +329,13 @@ router.get('/geocode', async (req, res) => {
       }
     }
 
-    results = sortGeocodeResults(results, q).map(({ lat, lng, address }) => ({ lat, lng, address }));
+    results = [...results]
+      .sort((left, right) =>
+        scoreGeocodeResult(right, q, context, hasUserCoords ? userLat : undefined, hasUserCoords ? userLng : undefined) -
+        scoreGeocodeResult(left, q, context, hasUserCoords ? userLat : undefined, hasUserCoords ? userLng : undefined)
+      )
+      .slice(0, limit)
+      .map(({ lat, lng, address }) => ({ lat, lng, address }));
 
     return res.json({ success: true, data: { results } });
   } catch (error) {
@@ -188,7 +370,10 @@ router.get('/reverse', async (req, res) => {
       },
     });
 
-    const address = response.data?.display_name || 'Unknown location';
+    const data = response.data;
+    const address = data?.address
+      ? formatVietnameseAddress(data.address, data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`)
+      : data?.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     return res.json({ success: true, data: { address } });
   } catch (error) {
     logger.warn('Map reverse failed', { error: (error as Error).message });

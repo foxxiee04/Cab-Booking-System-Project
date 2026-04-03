@@ -41,7 +41,7 @@ describe('Pricing routes', () => {
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
-  it('POST /estimate should use ECONOMY as default vehicle type', async () => {
+  it('POST /estimate should use CAR_4 as default vehicle type', async () => {
     pricingService.estimateFare.mockResolvedValue({ fare: 10000 });
     const router = createPricingRouter(pricingService);
     const handler = getRouteHandler(router, 'post', '/estimate');
@@ -55,7 +55,7 @@ describe('Pricing routes', () => {
       pickupLng: 106.1,
       dropoffLat: 10.2,
       dropoffLng: 106.2,
-      vehicleType: 'ECONOMY',
+      vehicleType: 'CAR_4',
     });
     expect(res.json).toHaveBeenCalledWith({ success: true, data: { fare: 10000 } });
   });

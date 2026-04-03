@@ -1,3 +1,87 @@
+/* ── Global Map Animations ─────────────────────────────────── */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInBottom {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* ── POI Marker Styles ─────────────────────────────────── */
 
 /* Remove default leaflet-cluster styles */
@@ -9,33 +93,144 @@
 
 /* Smooth marker animation */
 .leaflet-marker-icon {
-  transition: transform 0.15s ease;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              filter 0.2s ease;
+  will-change: transform, filter;
+}
+
+.leaflet-marker-icon:hover {
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
+  transform: scale(1.1);
 }
 
 /* Cluster marker animation */
 .marker-cluster-animated .leaflet-marker-icon,
 .marker-cluster-animated .leaflet-marker-shadow {
-  transition: transform 0.3s ease-out, opacity 0.3s ease-in;
+  animation: scaleIn 0.3s ease-out;
 }
 
-/* Fix popup width */
+/* Driver marker pulse effect */
+.driver-marker {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.driver-marker-active {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Fix popup width and styling */
 .leaflet-popup-content {
   margin: 10px 14px !important;
+  animation: slideInBottom 0.2s ease;
 }
 
 .leaflet-popup-content-wrapper {
   border-radius: 12px !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(10px);
 }
 
 .leaflet-popup-tip {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
 }
 
+/* Smooth polyline animation */
+.leaflet-path {
+  transition: stroke 0.3s ease, stroke-width 0.3s ease;
+}
+
+.leaflet-path:hover {
+  stroke-width: 4;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+/* Map container */
+.leaflet-container {
+  z-index: 0;
+  background: #edf2f7;
+}
+
+/* Autocomplete dropdown positioning */
 .MuiAutocomplete-popper {
   z-index: 1800 !important;
 }
 
-.leaflet-container {
-  z-index: 0;
+/* ── UI Component Animations ─────────────────────────────────── */
+
+/* Fade in animations for elements */
+.map-card-enter {
+  animation: slideInBottom 0.3s ease;
 }
+
+.location-chip {
+  animation: slideInLeft 0.3s ease;
+}
+
+.driver-info-card {
+  animation: slideInRight 0.3s ease;
+}
+
+.route-info-panel {
+  animation: slideInLeft 0.4s ease;
+}
+
+/* Loading spinner */
+.loading-spinner {
+  animation: rotate 1s linear infinite;
+}
+
+/* Pulsing location button */
+.location-button-active {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+/* Search input focus transition */
+.location-search-input {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.location-search-input:focus {
+  box-shadow: 0 4px 12px rgba(90, 127, 184, 0.24);
+  transform: scale(1.02);
+}
+
+/* Marker cluster hover effect */
+.marker-cluster {
+  transition: all 0.2s ease;
+}
+
+.marker-cluster:hover {
+  transform: scale(1.1);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+}
+
+/* ── Mobile Optimization ─────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .leaflet-popup-content-wrapper {
+    max-width: 80vw;
+    min-width: auto;
+  }
+
+  .leaflet-popup-content {
+    font-size: 14px;
+    margin: 8px 10px;
+  }
+
+  .leaflet-marker-icon {
+    width: 32px !important;
+    height: 32px !important;
+  }
+}
+
+/* ── Accessibility ─────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+

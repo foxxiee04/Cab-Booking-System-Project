@@ -1,16 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
   Box,
   Typography,
   Button,
-  Card,
-  CardContent,
   Chip,
-  Grid,
+  Divider,
   LinearProgress,
   Stack,
+  Avatar,
 } from '@mui/material';
 import {
   LocationOn,
@@ -18,6 +17,11 @@ import {
   DirectionsCar,
   Phone,
   Timer,
+  Route as RouteIcon,
+  AccessTime,
+  AttachMoney,
+  TrendingUp,
+  Star,
 } from '@mui/icons-material';
 import { Ride } from '../../types';
 import { formatCurrency, getVehicleTypeLabel } from '../../utils/format.utils';
@@ -27,6 +31,9 @@ import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '../../store/hooks';
 import DriverTripMap from '../../features/trip/components/DriverTripMap';
 import SwipeToConfirm from '../../features/trip/components/SwipeToConfirm';
+
+// Default driver commission share when rate not available from earnings
+const DEFAULT_DRIVER_SHARE = 0.85;
 
 interface RideRequestModalProps {
   ride: Ride | null;
@@ -48,9 +55,12 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
   loading = false,
 }) => {
   const { t } = useTranslation();
-  const { currentLocation } = useAppSelector((state) => state.driver);
+  const { currentLocation, earnings } = useAppSelector((state) => state.driver);
   const [timeLeft, setTimeLeft] = useState(timeoutSeconds);
   const timeoutHandledForRideRef = useRef<string | null>(null);
+
+  // Derive driver share from actual earning rate if available
+  const commissionRate = earnings?.commissionRate != null ? 1 - earnings.commissionRate : DEFAULT_DRIVER_SHARE;
 
   useEffect(() => {
     if (open && ride) {
@@ -83,6 +93,10 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
 
   const progress = (timeLeft / timeoutSeconds) * 100;
   const progressColor = progress > 50 ? 'success' : progress > 25 ? 'warning' : 'error';
+  const rideCode = ride.id.slice(0, 8).toUpperCase();
+  const hasFare = ride.fare != null && ride.fare > 0;
+  const driverEarning = hasFare ? Math.round(ride.fare! * commissionRate) : null;
+  const platformFee = hasFare ? Math.round(ride.fare! * (1 - commissionRate)) : null;
 
   return (
     <Dialog
@@ -91,141 +105,200 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
       fullWidth
       PaperProps={{
         sx: {
-          borderRadius: 3,
-          maxHeight: '90vh',
+          borderRadius: 4,
+          maxHeight: '95vh',
+          overflow: 'hidden',
+          background: '#ffffff',
         },
       }}
       disableEscapeKeyDown
     >
-      <DialogContent sx={{ p: 0 }}>
+      <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column', maxHeight: '95vh' }}>
+        {/* Header gradient */}
         <Box
           sx={{
-            background: 'linear-gradient(135deg, #0f172a 0%, #0f766e 100%)',
+            background: 'linear-gradient(135deg, #0f172a 0%, #0284c7 60%, #0f766e 100%)',
             color: 'white',
-            p: 3,
-            textAlign: 'center',
+            px: 3,
+            pt: 2.5,
+            pb: 2,
           }}
         >
-          <Timer sx={{ fontSize: 48, mb: 1 }} />
-          <Typography variant="h5" fontWeight="bold">
-            {t('rideRequest.title')}
-          </Typography>
-          <CountdownTimer
-            seconds={timeLeft}
-            totalSeconds={timeoutSeconds}
-          />
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+            <Timer sx={{ fontSize: 22 }} />
+            <Typography variant="subtitle1" fontWeight={800} letterSpacing={0.5}>
+              {t('rideRequest.title', 'Cuốc xe mới')}
+            </Typography>
+            <Box sx={{ flex: 1 }} />
+            <Chip
+              label={`#${rideCode}`}
+              size="small"
+              sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', fontWeight: 700, fontSize: 12 }}
+            />
+          </Stack>
+
+          <CountdownTimer seconds={timeLeft} totalSeconds={timeoutSeconds} />
           <LinearProgress
             variant="determinate"
             value={progress}
             color={progressColor}
-            sx={{ mt: 2, height: 8, borderRadius: 4 }}
+            sx={{ height: 6, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.2)' }}
           />
         </Box>
 
-        <Box sx={{ p: 3 }}>
-          <DriverTripMap
-            currentLocation={currentLocation}
-            pickupLocation={ride.pickupLocation}
-            dropoffLocation={ride.dropoffLocation}
-            mode="request"
-            height={220}
-          />
+        {/* Scrollable content */}
+        <Box sx={{ overflowY: 'auto', flex: 1, px: 2.5, py: 2 }}>
+          {/* Map with route */}
+          <Box sx={{ borderRadius: 3, overflow: 'hidden', mb: 2.5, height: 200, border: '1px solid', borderColor: 'divider' }}>
+            <DriverTripMap
+              currentLocation={currentLocation}
+              pickupLocation={ride.pickupLocation}
+              dropoffLocation={ride.dropoffLocation}
+              mode="request"
+              height={200}
+              colorMode="light"
+            />
+          </Box>
 
-          {ride.customer && (
-            <Card variant="outlined" sx={{ mt: 2, mb: 2, borderRadius: 4 }}>
-              <CardContent>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                  {t('rideRequest.customer')}
+          {/* Pickup & Dropoff */}
+          <Box sx={{ mb: 2, bgcolor: '#f8fafc', borderRadius: 3, p: 2 }}>
+            <Stack spacing={1.5}>
+              <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                <Avatar sx={{ width: 32, height: 32, bgcolor: '#dcfce7', mt: 0.5 }}>
+                  <LocationOn sx={{ fontSize: 18, color: '#16a34a' }} />
+                </Avatar>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                    Điểm đón
+                  </Typography>
+                  <Typography variant="body2" fontWeight={600} sx={{ mt: 0.25 }}>
+                    {ride.pickupLocation?.address || t('rideRequest.locationProvided')}
+                  </Typography>
+                </Box>
+              </Stack>
+
+              <Box sx={{ ml: 2, pl: 1.75, borderLeft: '2px dashed #cbd5e1', py: 0.5 }} />
+
+              <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                <Avatar sx={{ width: 32, height: 32, bgcolor: '#fee2e2', mt: 0.5 }}>
+                  <Flag sx={{ fontSize: 18, color: '#dc2626' }} />
+                </Avatar>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                    Điểm đến
+                  </Typography>
+                  <Typography variant="body2" fontWeight={600} sx={{ mt: 0.25 }}>
+                    {ride.dropoffLocation?.address || t('rideRequest.locationProvided')}
+                  </Typography>
+                </Box>
+              </Stack>
+            </Stack>
+          </Box>
+
+          {/* Trip stats row */}
+          <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+            <Box sx={{ flex: 1, textAlign: 'center', bgcolor: '#f8fafc', borderRadius: 3, p: 1.5 }}>
+              <DirectionsCar sx={{ fontSize: 20, color: '#0284c7', mb: 0.5 }} />
+              <Typography variant="caption" color="text.secondary" display="block">Loại xe</Typography>
+              <Typography variant="body2" fontWeight={700}>
+                {ride.vehicleType ? getVehicleTypeLabel(ride.vehicleType) : t('rideRequest.vehicle')}
+              </Typography>
+            </Box>
+            <Box sx={{ flex: 1, textAlign: 'center', bgcolor: '#f8fafc', borderRadius: 3, p: 1.5 }}>
+              <RouteIcon sx={{ fontSize: 20, color: '#7c3aed', mb: 0.5 }} />
+              <Typography variant="caption" color="text.secondary" display="block">Khoảng cách</Typography>
+              <Typography variant="body2" fontWeight={700}>
+                {ride.distance ? formatDistance(ride.distance) : 'N/A'}
+              </Typography>
+            </Box>
+            <Box sx={{ flex: 1, textAlign: 'center', bgcolor: '#f8fafc', borderRadius: 3, p: 1.5 }}>
+              <AccessTime sx={{ fontSize: 20, color: '#d97706', mb: 0.5 }} />
+              <Typography variant="caption" color="text.secondary" display="block">Thời gian</Typography>
+              <Typography variant="body2" fontWeight={700}>
+                {(ride.duration || ride.estimatedDuration) ? formatDuration(ride.duration || ride.estimatedDuration || 0) : 'N/A'}
+              </Typography>
+            </Box>
+          </Stack>
+
+          {/* Fare & commission breakdown */}
+          <Box
+            sx={{
+              borderRadius: 3,
+              mb: 2,
+              overflow: 'hidden',
+              border: '2px solid #dcfce7',
+            }}
+          >
+            <Box sx={{ bgcolor: '#f0fdf4', px: 2, py: 1.5 }}>
+              <Stack direction="row" alignItems="center" spacing={1} justifyContent="space-between">
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <AttachMoney sx={{ color: '#16a34a', fontSize: 22 }} />
+                  <Typography variant="subtitle2" color="text.secondary">Tổng tiền cuốc</Typography>
+                </Stack>
+                <Typography variant="h5" fontWeight={800} color={hasFare ? '#15803d' : 'text.secondary'}>
+                  {hasFare ? formatCurrency(ride.fare!) : '—'}
                 </Typography>
-                <Typography variant="h6">
-                  {ride.customer.firstName} {ride.customer.lastName}
-                </Typography>
-                {ride.customer.phoneNumber && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                    <Phone sx={{ fontSize: 16, mr: 0.5 }} />
-                    <Typography variant="body2">{ride.customer.phoneNumber}</Typography>
+              </Stack>
+            </Box>
+            <Divider />
+            <Box sx={{ px: 2, py: 1.5 }}>
+              <Stack direction="row" alignItems="center" spacing={1} justifyContent="space-between">
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <TrendingUp sx={{ color: '#0284c7', fontSize: 20 }} />
+                  <Box>
+                    <Typography variant="body2" fontWeight={700} color="#0284c7">
+                      Hoa hồng bạn nhận
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {Math.round(commissionRate * 100)}% sau phí nền tảng
+                    </Typography>
                   </Box>
-                )}
-                {ride.customer.rating && (
-                  <Chip
-                    label={`⭐ ${ride.customer.rating.toFixed(1)}`}
+                </Stack>
+                <Typography variant="h6" fontWeight={800} color="#0284c7">
+                  {driverEarning != null ? formatCurrency(driverEarning) : '—'}
+                </Typography>
+              </Stack>
+            </Box>
+          </Box>
+
+          {/* Customer info */}
+          {ride.customer && (
+            <Box sx={{ bgcolor: '#f8fafc', borderRadius: 3, p: 2, mb: 2 }}>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Avatar sx={{ bgcolor: '#dbeafe', color: '#1d4ed8', fontWeight: 700 }}>
+                  {ride.customer.firstName?.[0]}
+                </Avatar>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="body2" fontWeight={700}>
+                    {ride.customer.firstName} {ride.customer.lastName}
+                  </Typography>
+                  {ride.customer.rating != null && (
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                      <Star sx={{ fontSize: 14, color: '#f59e0b' }} />
+                      <Typography variant="caption" color="text.secondary">
+                        {ride.customer.rating.toFixed(1)}
+                      </Typography>
+                    </Stack>
+                  )}
+                </Box>
+                {ride.customer.phoneNumber && (
+                  <Button
                     size="small"
-                    sx={{ mt: 1 }}
-                  />
+                    variant="outlined"
+                    startIcon={<Phone />}
+                    href={`tel:${ride.customer.phoneNumber}`}
+                    sx={{ borderRadius: 999, textTransform: 'none', minWidth: 0 }}
+                  >
+                    Gọi
+                  </Button>
                 )}
-              </CardContent>
-            </Card>
+              </Stack>
+            </Box>
           )}
+        </Box>
 
-          <Box sx={{ display: 'flex', mb: 2 }}>
-            <LocationOn sx={{ color: 'success.main', mr: 1 }} />
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="subtitle2" color="text.secondary">
-                {t('rideRequest.pickup')}
-              </Typography>
-              <Typography variant="body1">
-                {ride.pickupLocation?.address || t('rideRequest.locationProvided')}
-              </Typography>
-            </Box>
-          </Box>
-
-          <Box sx={{ display: 'flex', mb: 2 }}>
-            <Flag sx={{ color: 'error.main', mr: 1 }} />
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="subtitle2" color="text.secondary">
-                {t('rideRequest.dropoff')}
-              </Typography>
-              <Typography variant="body1">
-                {ride.dropoffLocation?.address || t('rideRequest.locationProvided')}
-              </Typography>
-            </Box>
-          </Box>
-
-          <Grid container spacing={2} sx={{ mb: 2 }}>
-            <Grid item xs={4}>
-              <Card variant="outlined" sx={{ textAlign: 'center', p: 1, borderRadius: 4 }}>
-                <DirectionsCar sx={{ color: 'primary.main', mb: 0.5 }} />
-                <Typography variant="caption" color="text.secondary">
-                  {t('rideRequest.vehicle')}
-                </Typography>
-                <Typography variant="body2" fontWeight="bold">
-                  {ride.vehicleType ? getVehicleTypeLabel(ride.vehicleType) : 'Economy'}
-                </Typography>
-              </Card>
-            </Grid>
-            <Grid item xs={4}>
-              <Card variant="outlined" sx={{ textAlign: 'center', p: 1, borderRadius: 4 }}>
-                <Typography variant="caption" color="text.secondary">
-                  {t('rideRequest.distance')}
-                </Typography>
-                <Typography variant="body2" fontWeight="bold">
-                  {ride.distance ? formatDistance(ride.distance) : 'N/A'}
-                </Typography>
-              </Card>
-            </Grid>
-            <Grid item xs={4}>
-              <Card variant="outlined" sx={{ textAlign: 'center', p: 1, borderRadius: 4 }}>
-                <Typography variant="caption" color="text.secondary">
-                  {t('rideRequest.duration')}
-                </Typography>
-                <Typography variant="body2" fontWeight="bold">
-                  {(ride.duration || ride.estimatedDuration) ? formatDuration(ride.duration || ride.estimatedDuration || 0) : 'N/A'}
-                </Typography>
-              </Card>
-            </Grid>
-          </Grid>
-
-          <Card variant="outlined" sx={{ bgcolor: 'success.50', mb: 3, borderRadius: 4 }}>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <Typography variant="subtitle2" color="text.secondary">
-                {t('rideRequest.estimatedEarnings')}
-              </Typography>
-              <Typography variant="h4" color="success.main" fontWeight="bold">
-                {ride.fare ? formatCurrency(ride.fare) : 'N/A'}
-              </Typography>
-            </CardContent>
-          </Card>
-
+        {/* Action buttons — sticky bottom */}
+        <Box sx={{ px: 2.5, pb: 2.5, pt: 1.5, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'white' }}>
           <Stack spacing={1.5}>
             <SwipeToConfirm
               label={t('rideRequest.accept', 'Vuốt để nhận chuyến')}
@@ -243,9 +316,9 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
               onClick={onReject}
               disabled={loading}
               data-testid="reject-ride-button"
-              sx={{ py: 1.5, borderRadius: 999 }}
+              sx={{ py: 1.5, borderRadius: 999, fontWeight: 700 }}
             >
-              {t('rideRequest.reject')}
+              {t('rideRequest.reject', 'Từ chối')}
             </Button>
           </Stack>
         </Box>

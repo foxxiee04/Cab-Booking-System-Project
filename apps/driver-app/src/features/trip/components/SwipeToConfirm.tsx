@@ -190,6 +190,19 @@ export const SwipeToConfirm: React.FC<SwipeToConfirmProps> = ({
           )}
         </Box>
       </Box>
+      {/* Hidden button for E2E test automation — triggers the same confirm logic as the swipe gesture */}
+      {actionButtonTestId && (
+        <Button
+          data-testid={actionButtonTestId}
+          onClick={triggerConfirm}
+          disabled={disabled || loading || confirmed}
+          sx={{ position: 'absolute', opacity: 0, width: 0, height: 0, minWidth: 0, padding: 0, overflow: 'hidden' }}
+          tabIndex={-1}
+          aria-hidden="true"
+        >
+          {actionLabel}
+        </Button>
+      )}
     </Box>
   );
 };

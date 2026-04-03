@@ -138,15 +138,15 @@ const Activity: React.FC = () => {
               <CardContent>
                 <Stack spacing={1.5}>
                   <Typography variant="body2" color="text.secondary">
-                    {currentRide.pickup.address || `${currentRide.pickup.lat}, ${currentRide.pickup.lng}`}
+                    {currentRide.pickup?.address || (currentRide.pickup?.lat ? `${currentRide.pickup.lat.toFixed(5)}, ${currentRide.pickup.lng.toFixed(5)}` : 'Không có địa chỉ')}
                   </Typography>
                   <Divider />
                   <Typography variant="body2" color="text.secondary">
-                    {currentRide.dropoff.address || `${currentRide.dropoff.lat}, ${currentRide.dropoff.lng}`}
+                    {currentRide.dropoff?.address || (currentRide.dropoff?.lat ? `${currentRide.dropoff.lat.toFixed(5)}, ${currentRide.dropoff.lng.toFixed(5)}` : 'Không có địa chỉ')}
                   </Typography>
 
                   <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                    {currentRide.distance ? <Chip icon={<RouteRounded />} label={`${(currentRide.distance / 1000).toFixed(1)} km`} size="small" /> : null}
+                    {currentRide.distance ? <Chip icon={<RouteRounded />} label={`${currentRide.distance.toFixed(1)} km`} size="small" /> : null}
                     {currentRide.duration ? <Chip icon={<AccessTimeRounded />} label={`${Math.max(1, Math.round(currentRide.duration / 60))} phút`} size="small" /> : null}
                     {currentRide.fare ? <Chip icon={<LocalAtmRounded />} label={formatCurrency(currentRide.fare)} size="small" /> : null}
                   </Stack>
@@ -199,10 +199,10 @@ const Activity: React.FC = () => {
                   </Stack>
 
                   <Typography variant="body2" sx={{ mb: 0.75 }}>
-                    {t('rideHistory.pickup')}: {ride.pickup.address || `${ride.pickup.lat}, ${ride.pickup.lng}`}
+                    {t('rideHistory.pickup')}: {ride.pickup?.address || (ride.pickup?.lat ? `${ride.pickup.lat.toFixed(5)}, ${ride.pickup.lng.toFixed(5)}` : t('common.na'))}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {t('rideHistory.dropoff')}: {ride.dropoff.address || `${ride.dropoff.lat}, ${ride.dropoff.lng}`}
+                    {t('rideHistory.dropoff')}: {ride.dropoff?.address || (ride.dropoff?.lat ? `${ride.dropoff.lat.toFixed(5)}, ${ride.dropoff.lng.toFixed(5)}` : t('common.na'))}
                   </Typography>
 
                   <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 2 }}>

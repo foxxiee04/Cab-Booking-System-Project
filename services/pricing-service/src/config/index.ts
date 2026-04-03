@@ -34,24 +34,27 @@ export const config = {
   pricing: {
     // Base fare (VND)
     baseFare: {
-      ECONOMY: 10000,
-      COMFORT: 15000,
-      PREMIUM: 25000,
+      MOTORBIKE: 9000,
+      SCOOTER: 11000,
+      CAR_4: 17000,
+      CAR_7: 22000,
     },
     // Per km (VND)
     perKmRate: {
-      ECONOMY: 12000,
-      COMFORT: 18000,
-      PREMIUM: 30000,
+      MOTORBIKE: 6500,
+      SCOOTER: 7800,
+      CAR_4: 12500,
+      CAR_7: 15500,
     },
     // Per minute (VND)
     perMinuteRate: {
-      ECONOMY: 2000,
-      COMFORT: 3000,
-      PREMIUM: 5000,
+      MOTORBIKE: 500,
+      SCOOTER: 650,
+      CAR_4: 1500,
+      CAR_7: 1900,
     },
     // Minimum fare
-    minimumFare: 25000,
+    minimumFare: 15000,
     // Surge pricing configuration
     surgeThresholds: {
       low: 1.0,

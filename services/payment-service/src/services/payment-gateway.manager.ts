@@ -3,6 +3,7 @@ import { momoGateway } from './momo.gateway';
 import { zaloPayGateway } from './zalopay.gateway';
 import { vnpayGateway } from './vnpay.gateway';
 import { logger } from '../utils/logger';
+import { config } from '../config';
 
 export enum PaymentGatewayType {
   STRIPE = 'STRIPE',
@@ -72,13 +73,25 @@ class PaymentGatewayManager {
             throw new Error('MoMo gateway not enabled');
           }
 
+          const isLocalUrl = (value?: string): boolean => Boolean(value && /(localhost|127\.0\.0\.1)/i.test(value));
+          const momoReturnUrl = returnUrl
+            || config.momo.returnUrl
+            || 'https://cab-booking.com/payment/return';
+          const momoNotifyUrl = (!isLocalUrl(notifyUrl) && notifyUrl)
+            || config.momo.notifyUrl
+            || 'https://cab-booking.com/api/payments/webhooks/momo';
+
           const momoResult = await momoGateway.createPayment({
             orderId,
             amount: Math.round(amount),
             orderInfo: description,
-            returnUrl: returnUrl || 'https://cab-booking.com/payment/return',
-            notifyUrl: notifyUrl || 'https://cab-booking.com/api/payments/webhooks/momo',
+            returnUrl: momoReturnUrl,
+            notifyUrl: momoNotifyUrl,
             extraData: JSON.stringify(metadata || {}),
+            requestType: typeof metadata?.momoRequestType === 'string' ? metadata.momoRequestType : undefined,
+            paymentCode: typeof metadata?.momoPaymentCode === 'string' ? metadata.momoPaymentCode : undefined,
+            orderGroupId: typeof metadata?.momoOrderGroupId === 'string' ? metadata.momoOrderGroupId : undefined,
+            autoCapture: typeof metadata?.momoAutoCapture === 'boolean' ? metadata.momoAutoCapture : undefined,
           });
 
           return {

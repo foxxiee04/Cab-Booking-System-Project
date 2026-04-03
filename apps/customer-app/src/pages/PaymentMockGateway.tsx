@@ -25,7 +25,7 @@ const PaymentMockGateway: React.FC = () => {
       rideId,
       mock: '1',
       paid: String(paid),
-      message: paid ? 'Mock payment success' : 'Mock payment failed',
+      message: paid ? 'Sandbox payment success' : 'Sandbox payment failed',
     });
 
     if (provider === 'MOMO') {
@@ -50,24 +50,51 @@ const PaymentMockGateway: React.FC = () => {
         <CardContent>
           <Stack spacing={2}>
             <Typography variant="h5" fontWeight={800} textAlign="center">
-              Mock Gateway {provider || 'Payment'}
+              {provider === 'MOMO' ? '💰 MoMo' : provider === 'VNPAY' ? '🏧 VNPay' : '💳'} Sandbox Gateway
             </Typography>
             <Typography variant="body2" color="text.secondary" textAlign="center">
-              Môi trường hiện chưa có credential sandbox thật. Trang này mô phỏng cổng thanh toán để kiểm thử browser end-to-end.
+              Cổng sandbox nội bộ để kiểm thử luồng callback.
             </Typography>
 
-            <Alert severity="info">
-              Ride: {rideId || 'N/A'}
-              <br />
-              Amount: {amount} VND
+            <Alert severity="info" icon={false}>
+              <Stack spacing={1.5}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Cổng thanh toán
+                  </Typography>
+                  <Typography variant="body2" fontWeight={700}>
+                    {provider || 'Unknown'} Sandbox
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Mã chuyến đi (Ride ID)
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    fontFamily="monospace"
+                    sx={{ wordBreak: 'break-all', bgcolor: 'action.hover', px: 1, py: 0.5, borderRadius: 1 }}
+                  >
+                    {rideId || 'N/A'}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Số tiền
+                  </Typography>
+                  <Typography variant="body2" fontWeight={700} color="success.main">
+                    {Number(amount).toLocaleString('vi-VN')} ₫
+                  </Typography>
+                </Box>
+              </Stack>
             </Alert>
 
             <Box sx={{ display: 'grid', gap: 1.5 }}>
               <Button variant="contained" color="success" href={buildCallbackUrl(true)}>
-                Mô phỏng thanh toán thành công
+                ✅ Thanh toán sandbox thành công
               </Button>
               <Button variant="contained" color="error" href={buildCallbackUrl(false)}>
-                Mô phỏng thanh toán thất bại
+                ❌ Thanh toán sandbox thất bại
               </Button>
             </Box>
           </Stack>

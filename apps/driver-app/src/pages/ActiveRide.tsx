@@ -31,10 +31,14 @@ import {
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { updateRideStatus, clearCurrentRide, setCurrentRide } from '../store/ride.slice';
+import { setCurrentLocation } from '../store/driver.slice';
 import { rideApi } from '../api/ride.api';
+import { driverApi } from '../api/driver.api';
 import { formatCurrency } from '../utils/format.utils';
 import { useTranslation } from 'react-i18next';
 import DriverTripMap from '../features/trip/components/DriverTripMap';
+import { driverSocketService } from '../socket/driver.socket';
+import { watchPosition, clearWatch } from '../utils/map.utils';
 
 const getOptimisticCompletedRidesKey = (userId?: string) => `driver:completedRidesCount:${userId || 'anonymous'}`;
 
@@ -75,14 +79,53 @@ const ActiveRide: React.FC = () => {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const { user } = useAppSelector((state) => state.auth);
+  const { accessToken } = useAppSelector((state) => state.auth);
 
-  const { currentLocation } = useAppSelector((state) => state.driver);
+  const { currentLocation, isOnline } = useAppSelector((state) => state.driver);
   const { currentRide } = useAppSelector((state) => state.ride);
 
   const [initializing, setInitializing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [watchId, setWatchId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (isOnline && accessToken) {
+      driverSocketService.connect(accessToken);
+    } else {
+      driverSocketService.disconnect();
+    }
+
+    return () => {
+      driverSocketService.disconnect();
+    };
+  }, [accessToken, isOnline]);
+
+  useEffect(() => {
+    if (!isOnline || !currentRide || watchId) {
+      return;
+    }
+
+    const id = watchPosition(
+      (location) => {
+        dispatch(setCurrentLocation(location));
+        driverSocketService.updateLocation(location, currentRide.id);
+        driverApi.updateLocation(location).catch(console.error);
+      },
+      (geoError) => {
+        console.error('Location error:', geoError);
+        setError(t('dashboard.gpsError'));
+      }
+    );
+
+    setWatchId(id);
+
+    return () => {
+      clearWatch(id);
+      setWatchId(null);
+    };
+  }, [currentRide, dispatch, isOnline, t, watchId]);
 
   useEffect(() => {
     if (currentRide) {
@@ -188,7 +231,7 @@ const ActiveRide: React.FC = () => {
 
   if (initializing && !currentRide) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', flexDirection: 'column', gap: 2 }}>
         <CircularProgress />
         <Typography color="text.secondary">{t('common.loading', 'Đang tải...')}</Typography>
       </Box>
@@ -197,7 +240,7 @@ const ActiveRide: React.FC = () => {
 
   if (!currentRide) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', flexDirection: 'column', gap: 2 }}>
         <Typography color="text.secondary">{t('activeRide.noActiveRide')}</Typography>
         <Button variant="contained" onClick={() => navigate('/dashboard')}>
           {t('common.backToDashboard', 'Quay về bảng điều khiển')}
@@ -243,6 +286,7 @@ const ActiveRide: React.FC = () => {
           dropoffLocation={currentRide.dropoffLocation}
           mode={status === 'IN_PROGRESS' ? 'trip' : 'pickup'}
           height="100%"
+          colorMode="light"
         />
 
         {error && (
@@ -259,7 +303,7 @@ const ActiveRide: React.FC = () => {
       <Card sx={{
         borderRadius: '20px 20px 0 0',
         boxShadow: '0 -4px 20px rgba(0,0,0,0.12)',
-        maxHeight: '45vh',
+        maxHeight: '40vh',
         overflow: 'auto',
       }}>
         <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1.5, pb: 0.5 }}>
@@ -352,6 +396,7 @@ const ActiveRide: React.FC = () => {
               fullWidth variant="outlined" color="error" size="small"
               onClick={() => setShowCancelDialog(true)}
               startIcon={<Cancel />}
+              data-testid="cancel-ride-button"
               sx={{ borderRadius: 3, mt: 1, py: 1 }}
             >
               {t('activeRide.cancelRide')}
@@ -387,6 +432,7 @@ const ActiveRide: React.FC = () => {
             color="error"
             variant="contained"
             disabled={loading}
+            data-testid="confirm-cancel-ride-button"
             sx={{ borderRadius: 2 }}
           >
             {loading ? <CircularProgress size={20} color="inherit" /> : t('common.yes', 'Xác nhận hủy chuyến')}

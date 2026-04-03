@@ -12,3 +12,8 @@ declare module 'leaflet/dist/images/marker-icon-2x.png' {
   const src: string;
   export default src;
 }
+
+declare module '*.jpg' {
+  const src: string;
+  export default src;
+}

@@ -2,7 +2,7 @@ import Joi from 'joi';
 
 // Vehicle Info DTO
 export interface VehicleDto {
-  type: 'CAR' | 'MOTORCYCLE' | 'SUV';
+  type: 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
   brand: string;
   model: string;
   plate: string;
@@ -11,7 +11,7 @@ export interface VehicleDto {
 }
 
 const vehicleSchema = Joi.object<VehicleDto>({
-  type: Joi.string().valid('CAR', 'MOTORCYCLE', 'SUV').required(),
+  type: Joi.string().valid('MOTORBIKE', 'SCOOTER', 'CAR_4', 'CAR_7').required(),
   brand: Joi.string().min(1).max(50).required(),
   model: Joi.string().min(1).max(50).required(),
   plate: Joi.string().min(1).max(20).required(),
@@ -70,7 +70,7 @@ export const findNearbySchema = Joi.object<FindNearbyDto>({
   lat: Joi.number().min(-90).max(90).required(),
   lng: Joi.number().min(-180).max(180).required(),
   radius: Joi.number().min(0.1).max(50).optional().default(5),
-  vehicleType: Joi.string().valid('STANDARD', 'PREMIUM', 'XL').optional(),
+  vehicleType: Joi.string().valid('MOTORBIKE', 'SCOOTER', 'CAR_4', 'CAR_7').optional(),
 });
 
 // Driver Status DTO

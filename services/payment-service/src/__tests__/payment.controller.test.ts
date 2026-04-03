@@ -23,10 +23,12 @@ function mockRes(): Response {
 
 describe('PaymentController', () => {
   const paymentService = {
+    createExternalPayment: jest.fn(),
     createPaymentIntent: jest.fn(),
     handleMockWebhook: jest.fn(),
     handleStripeWebhook: jest.fn(),
     handleMomoWebhook: jest.fn(),
+    getPaymentById: jest.fn(),
     getPaymentByRideId: jest.fn(),
     getCustomerPayments: jest.fn(),
     getDriverEarnings: jest.fn(),
@@ -63,6 +65,51 @@ describe('PaymentController', () => {
       idempotencyKey: 'idem-1',
     });
     expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('createPayment should return paymentId and payUrl', async () => {
+    paymentService.createExternalPayment.mockResolvedValue({
+      paymentId: 'payment-1',
+      payUrl: 'https://sandbox.example/pay',
+    });
+    const req = mockReq({
+      headers: { 'Idempotency-Key': 'idem-ext-1' },
+      body: {
+        orderId: 'ride-1',
+        service: 'BOOKING',
+        method: 'MOMO',
+        amount: 50000,
+      },
+    });
+    const res = mockRes();
+
+    await controller.createPayment(req, res, next);
+
+    expect(paymentService.createExternalPayment).toHaveBeenCalledWith({
+      orderId: 'ride-1',
+      service: 'BOOKING',
+      method: 'MOMO',
+      amount: 50000,
+      customerId: undefined,
+      returnUrl: undefined,
+      ipnUrl: undefined,
+      idempotencyKey: 'idem-ext-1',
+    });
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      paymentId: 'payment-1',
+      payUrl: 'https://sandbox.example/pay',
+    });
+  });
+
+  it('getPaymentById should return 404 when missing', async () => {
+    paymentService.getPaymentById.mockResolvedValue(null);
+    const req = mockReq({ params: { id: 'payment-404' } });
+    const res = mockRes();
+
+    await controller.getPaymentById(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(404);
   });
 
   it('getPaymentByRideId should return 404 when payment is missing', async () => {
@@ -134,9 +181,8 @@ describe('PaymentController', () => {
       data: {
         methods: [
           { id: 'CASH', name: 'Tiền mặt', icon: 'cash', enabled: true },
-          { id: 'CARD', name: 'Thẻ tín dụng/ghi nợ', icon: 'card', enabled: false, provider: 'STRIPE' },
-          { id: 'MOMO', name: 'MoMo', icon: 'wallet', enabled: false, provider: 'MOMO' },
-          { id: 'ZALOPAY', name: 'ZaloPay', icon: 'wallet', enabled: false, provider: 'ZALOPAY' },
+          { id: 'MOMO', name: 'Ví MoMo', icon: 'wallet', enabled: false, provider: 'MOMO' },
+          { id: 'VNPAY', name: 'VNPay (ATM/VISA/QR)', icon: 'bank', enabled: false, provider: 'VNPAY' },
         ],
       },
     });

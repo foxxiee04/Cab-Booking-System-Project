@@ -12,8 +12,26 @@ import {
   InputAdornment,
   MenuItem,
   TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Divider,
+  Stack,
+  IconButton,
 } from '@mui/material';
-import { SearchRounded } from '@mui/icons-material';
+import {
+  SearchRounded,
+  CloseRounded,
+  LocationOnRounded,
+  FlagRounded,
+  AttachMoneyRounded,
+  RouteRounded,
+  AccessTimeRounded,
+  DirectionsBikeRounded,
+  EventRounded,
+  TagRounded,
+} from '@mui/icons-material';
 import { driverApi } from '../api/driver.api';
 import { Ride } from '../types';
 import {
@@ -24,6 +42,7 @@ import {
   getVehicleTypeLabel,
   getPaymentMethodLabel,
 } from '../utils/format.utils';
+import { formatDistance, formatDuration } from '../utils/map.utils';
 import { useTranslation } from 'react-i18next';
 
 const PAGE_SIZE = 10;
@@ -37,6 +56,7 @@ const History: React.FC = () => {
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRide, setSelectedRide] = useState<Ride | null>(null);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -84,7 +104,7 @@ const History: React.FC = () => {
   }, [rides, searchQuery, statusFilter]);
 
   return (
-    <Container sx={{ py: 4 }}>
+    <Container sx={{ py: 4, pb: { xs: 16, sm: 12 } }}>
       <Typography variant="h4" fontWeight="bold">
         {t('history.title')}
       </Typography>
@@ -139,12 +159,26 @@ const History: React.FC = () => {
 
       <Box sx={{ mt: 2, display: 'grid', gap: 2 }}>
         {filteredRides.map((ride) => (
-          <Card key={ride.id} variant="outlined">
+          <Card
+            key={ride.id}
+            variant="outlined"
+            onClick={() => setSelectedRide(ride)}
+            sx={{
+              cursor: 'pointer',
+              transition: 'box-shadow 0.18s, border-color 0.18s',
+              '&:hover': { boxShadow: 3, borderColor: 'primary.main' },
+            }}
+          >
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="subtitle1" fontWeight="bold">
-                  {getVehicleTypeLabel(ride.vehicleType)}
-                </Typography>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    {getVehicleTypeLabel(ride.vehicleType)}
+                  </Typography>
+                  <Typography variant="caption" color="text.disabled" sx={{ fontFamily: 'monospace' }}>
+                    #{ride.id.slice(0, 8).toUpperCase()}
+                  </Typography>
+                </Box>
                 <Chip
                   label={getRideStatusLabel(ride.status)}
                   color={getRideStatusColor(ride.status)}
@@ -156,16 +190,230 @@ const History: React.FC = () => {
                 {ride.createdAt ? formatDate(ride.createdAt) : 'N/A'}
               </Typography>
 
-              <Typography variant="body2" sx={{ mt: 1 }}>
-                {t('history.fare')}: {ride.fare ? formatCurrency(ride.fare) : 'N/A'}
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 0.5 }}>
-                {t('history.payment')}: {ride.paymentMethod ? getPaymentMethodLabel(ride.paymentMethod) : 'N/A'}
-              </Typography>
+              {ride.pickupLocation?.address && (
+                <Typography variant="body2" sx={{ mt: 0.75 }} noWrap>
+                  <Box component="span" sx={{ color: 'success.main', fontWeight: 700 }}>↑ </Box>
+                  {ride.pickupLocation.address}
+                </Typography>
+              )}
+              {ride.dropoffLocation?.address && (
+                <Typography variant="body2" sx={{ mt: 0.25 }} noWrap>
+                  <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}>↓ </Box>
+                  {ride.dropoffLocation.address}
+                </Typography>
+              )}
+
+              <Box sx={{ display: 'flex', gap: 1.5, mt: 1, flexWrap: 'wrap' }}>
+                <Typography variant="body2">
+                  💰 {ride.fare ? formatCurrency(ride.fare) : 'Tính sau'}
+                </Typography>
+                {ride.distance && ride.distance > 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    📍 {formatDistance(ride.distance)}
+                  </Typography>
+                )}
+                {ride.paymentMethod && (
+                  <Typography variant="body2" color="text.secondary">
+                    {getPaymentMethodLabel(ride.paymentMethod)}
+                  </Typography>
+                )}
+              </Box>
             </CardContent>
           </Card>
         ))}
       </Box>
+
+      {/* Ride Detail Dialog */}
+      <Dialog
+        open={Boolean(selectedRide)}
+        onClose={() => setSelectedRide(null)}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{ sx: { borderRadius: 4 } }}
+      >
+        {selectedRide && (
+          <>
+            <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+              <Box>
+                <Typography variant="h6" fontWeight={800}>Chi tiết chuyến đi</Typography>
+                <Typography variant="caption" color="text.disabled" sx={{ fontFamily: 'monospace' }}>
+                  #{selectedRide.id.toUpperCase()}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Chip
+                  label={getRideStatusLabel(selectedRide.status)}
+                  color={getRideStatusColor(selectedRide.status)}
+                  size="small"
+                />
+                <IconButton size="small" onClick={() => setSelectedRide(null)}>
+                  <CloseRounded fontSize="small" />
+                </IconButton>
+              </Box>
+            </DialogTitle>
+
+            <DialogContent dividers>
+              <Stack spacing={2}>
+                {/* Locations */}
+                <Box>
+                  <Stack direction="row" spacing={1} alignItems="flex-start">
+                    <LocationOnRounded color="success" sx={{ mt: 0.25, flexShrink: 0 }} />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight={700}>ĐIỂM ĐÓN</Typography>
+                      <Typography variant="body2">
+                        {selectedRide.pickupLocation?.address || `${selectedRide.pickupLocation?.lat}, ${selectedRide.pickupLocation?.lng}`}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mt: 1.5 }}>
+                    <FlagRounded color="error" sx={{ mt: 0.25, flexShrink: 0 }} />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight={700}>ĐIỂM ĐẾN</Typography>
+                      <Typography variant="body2">
+                        {selectedRide.dropoffLocation?.address || `${selectedRide.dropoffLocation?.lat}, ${selectedRide.dropoffLocation?.lng}`}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </Box>
+
+                <Divider />
+
+                {/* Trip Stats */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <AttachMoneyRounded color="primary" fontSize="small" />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Tiền cước</Typography>
+                      <Typography variant="body2" fontWeight={700}>
+                        {selectedRide.fare ? formatCurrency(selectedRide.fare) : 'Chưa có'}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <DirectionsBikeRounded color="action" fontSize="small" />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Loại xe</Typography>
+                      <Typography variant="body2" fontWeight={700}>
+                        {getVehicleTypeLabel(selectedRide.vehicleType)}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  {(selectedRide.distance ?? 0) > 0 && (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <RouteRounded color="action" fontSize="small" />
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Khoảng cách</Typography>
+                        <Typography variant="body2" fontWeight={700}>
+                          {formatDistance(selectedRide.distance!)}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  )}
+                  {((selectedRide.duration ?? 0) > 0 || (selectedRide.estimatedDuration ?? 0) > 0) && (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <AccessTimeRounded color="action" fontSize="small" />
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Thời gian</Typography>
+                        <Typography variant="body2" fontWeight={700}>
+                          {formatDuration(selectedRide.duration || selectedRide.estimatedDuration || 0)}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  )}
+                  {selectedRide.paymentMethod && (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <TagRounded color="action" fontSize="small" />
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Thanh toán</Typography>
+                        <Typography variant="body2" fontWeight={700}>
+                          {getPaymentMethodLabel(selectedRide.paymentMethod)}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  )}
+                  {selectedRide.paymentStatus && (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <TagRounded color="action" fontSize="small" />
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">TT thanh toán</Typography>
+                        <Typography variant="body2" fontWeight={700}>
+                          {selectedRide.paymentStatus === 'COMPLETED' ? 'Đã thanh toán' :
+                           selectedRide.paymentStatus === 'FAILED' ? 'Thất bại' : 'Chờ thanh toán'}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  )}
+                </Box>
+
+                <Divider />
+
+                {/* Timestamps */}
+                <Box>
+                  <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ mb: 1, display: 'block' }}>
+                    THỜI GIAN
+                  </Typography>
+                  <Stack spacing={0.75}>
+                    {selectedRide.createdAt && (
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <EventRounded color="action" fontSize="small" />
+                        <Typography variant="body2" color="text.secondary">Tạo lúc:</Typography>
+                        <Typography variant="body2">{formatDate(selectedRide.createdAt)}</Typography>
+                      </Stack>
+                    )}
+                    {selectedRide.acceptedAt && (
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <EventRounded color="action" fontSize="small" />
+                        <Typography variant="body2" color="text.secondary">Nhận lúc:</Typography>
+                        <Typography variant="body2">{formatDate(selectedRide.acceptedAt)}</Typography>
+                      </Stack>
+                    )}
+                    {selectedRide.startedAt && (
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <EventRounded color="action" fontSize="small" />
+                        <Typography variant="body2" color="text.secondary">Bắt đầu:</Typography>
+                        <Typography variant="body2">{formatDate(selectedRide.startedAt)}</Typography>
+                      </Stack>
+                    )}
+                    {selectedRide.completedAt && (
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <EventRounded color="action" fontSize="small" />
+                        <Typography variant="body2" color="text.secondary">Hoàn tất:</Typography>
+                        <Typography variant="body2">{formatDate(selectedRide.completedAt)}</Typography>
+                      </Stack>
+                    )}
+                  </Stack>
+                </Box>
+
+                {/* Customer info if available */}
+                {selectedRide.customer && (
+                  <>
+                    <Divider />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ mb: 1, display: 'block' }}>
+                        KHÁCH HÀNG
+                      </Typography>
+                      <Typography variant="body2">
+                        {selectedRide.customer.firstName} {selectedRide.customer.lastName}
+                      </Typography>
+                      {selectedRide.customer.phoneNumber && (
+                        <Typography variant="body2" color="text.secondary">
+                          {selectedRide.customer.phoneNumber}
+                        </Typography>
+                      )}
+                    </Box>
+                  </>
+                )}
+              </Stack>
+            </DialogContent>
+
+            <DialogActions sx={{ p: 2 }}>
+              <Button variant="contained" onClick={() => setSelectedRide(null)} sx={{ px: 3, borderRadius: 999 }}>
+                Đóng
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
 
       <Box sx={{ mt: 3, display: 'flex', gap: 1 }}>
         <Button

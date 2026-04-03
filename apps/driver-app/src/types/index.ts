@@ -45,7 +45,7 @@ export interface Driver {
 
 export type DriverApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
 
-export type VehicleType = 'ECONOMY' | 'COMFORT' | 'PREMIUM' | 'CAR' | 'SUV' | 'MOTORCYCLE';
+export type VehicleType = 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
 
 export interface DriverRegistration {
   vehicleType: VehicleType;
@@ -63,6 +63,14 @@ export interface Location {
   lat: number;
   lng: number;
   address?: string;
+}
+
+export interface NearbyDriver {
+  id: string;
+  lat: number;
+  lng: number;
+  vehicleType?: string;
+  heading?: number;
 }
 
 // Ride Types

@@ -65,11 +65,11 @@
     "new": "Mới",
     "liveChannel": "Kênh chuyến đi hiện tại",
     "driverChatLocked": "Chat trực tiếp sẽ mở khi tài xế nhận chuyến",
-    "driverChatBody": "Hiện tại app đã hiển thị kênh hội thoại. Khi frontend chat realtime được bật, luồng này sẽ gắn trực tiếp với ride đang hoạt động.",
+    "driverChatBody": "Kênh trò chuyện với tài xế sẽ khả dụng ngay khi chuyến đi được xác nhận.",
     "openRide": "Mở màn hình chuyến đi",
-    "noActiveRide": "Chưa có chuyến đang hoạt động. Khi tài xế nhận chuyến, mục chat và hỗ trợ sẽ xuất hiện ở đây.",
+    "noActiveRide": "Chưa có chuyến đang hoạt động. Đặt xe ngay để bắt đầu hành trình.",
     "inbox": "Hộp thư dịch vụ",
-    "inboxBody": "Giao diện đã được tổ chức theo kiểu super-app để sẵn sàng gắn chat realtime và thông báo điều hành.",
+    "inboxBody": "Tổng hợp thông báo, hỗ trợ và trò chuyện chuyến đi trong một nơi.",
     "helpCenter": "Cần hỗ trợ ngay?",
     "helpCenterBody": "Bạn có thể chuyển sang trang Hồ sơ để xem trung tâm trợ giúp, cài đặt tài khoản và thông tin thanh toán.",
     "goProfile": "Đến Tài khoản"
@@ -118,17 +118,17 @@
     "subtitle": "Quản lý hồ sơ, phương thức thanh toán, địa điểm đã lưu và hỗ trợ tài khoản trong một nơi.",
     "paymentAndPlaces": "Thanh toán và địa điểm",
     "paymentMethods": "Phương thức thanh toán",
-    "paymentMethodsBody": "Tiền mặt đang là mặc định. Có thể mở rộng thêm thẻ và ví điện tử ở bước tiếp theo.",
+    "paymentMethodsBody": "Quản lý và chọn phương thức thanh toán phù hợp cho từng chuyến đi.",
     "savedHome": "Nhà",
     "savedHomeBody": "Lưu địa chỉ quen thuộc để đặt xe nhanh hơn.",
     "savedWork": "Công ty",
     "savedWorkBody": "Tạo phím tắt cho các tuyến đi làm thường xuyên.",
     "accountAndSupport": "Tài khoản và hỗ trợ",
     "notifications": "Cài đặt thông báo",
-    "notificationsBody": "Chuẩn bị sẵn cho Push Notification, Email và SMS qua Notification Service.",
+    "notificationsBody": "Tùy chỉnh cách nhận thông báo về chuyến đi và các ưu đãi.",
     "security": "Bảo mật tài khoản",
     "supportCenter": "Trung tâm trợ giúp",
-    "supportCenterBody": "FAQ, khiếu nại và luồng hỗ trợ sau chuyến sẽ được gom về đây."
+    "supportCenterBody": "Giải đáp thắc mắc, xử lý sự cố và hỗ trợ sau chuyến đi."
   },
   "rideHistory": {
     "title": "Lịch sử chuyến đi",
@@ -153,9 +153,10 @@
     "cancelRide": "Hủy chuyến"
   },
   "vehicle": {
-    "ECONOMY": "Phổ thông",
-    "COMFORT": "Tiện nghi",
-    "PREMIUM": "Cao cấp"
+    "MOTORBIKE": "Xe máy",
+    "SCOOTER": "Xe ga",
+    "CAR_4": "Ô tô 4 chỗ",
+    "CAR_7": "Ô tô 7 chỗ"
   },
   "payment": {
     "CASH": "Tiền mặt",

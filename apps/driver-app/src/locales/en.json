@@ -22,6 +22,12 @@
     "submit": "Sign Up",
     "haveAccount": "Already have an account?"
   },
+  "nav": {
+    "profile": "Profile",
+    "earnings": "Earnings",
+    "history": "History",
+    "logout": "Logout"
+  },
   "profileSetup": {
     "title": "Complete Your Profile",
     "subtitle": "Tell us about your vehicle to start accepting rides",
@@ -130,12 +136,10 @@
     "reviews": "reviews"
   },
   "vehicle": {
-    "ECONOMY": "Economy",
-    "COMFORT": "Comfort",
-    "PREMIUM": "Premium",
-    "CAR": "Car",
-    "SUV": "SUV",
-    "MOTORCYCLE": "Motorcycle"
+    "MOTORBIKE": "Motorbike",
+    "SCOOTER": "Scooter",
+    "CAR_4": "Car 4 seats",
+    "CAR_7": "Car 7 seats"
   },
   "payment": {
     "CASH": "Cash",
@@ -176,7 +180,7 @@
     "vehicleColorInvalid": "Vehicle color must have at least 2 characters",
     "vehicleYearInvalid": "Vehicle year must be between 1990 and next year",
     "licensePlateInvalid": "License plate format is invalid",
-    "licenseNumberInvalid": "License number must be 8-16 alphanumeric characters",
+    "licenseNumberInvalid": "License number must follow format 052 042 424 424 (12 digits)",
     "licenseExpiryPast": "License expiry date must be in the future"
   }
 }

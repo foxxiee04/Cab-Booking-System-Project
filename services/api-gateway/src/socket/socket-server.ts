@@ -12,6 +12,23 @@ export interface AuthenticatedSocket extends Socket {
   role?: 'CUSTOMER' | 'DRIVER' | 'ADMIN';
 }
 
+interface RideSubscriptionPayload {
+  rideId?: string;
+}
+
+interface DriverLocationPayload {
+  rideId?: string;
+  location?: {
+    lat?: number;
+    lng?: number;
+    heading?: number;
+  };
+  lat?: number;
+  lng?: number;
+  heading?: number;
+  timestamp?: number;
+}
+
 export class SocketServer {
   private io: Server;
   private pubClient: Redis;
@@ -21,6 +38,17 @@ export class SocketServer {
   private onlineUsers: Map<string, Set<string>> = new Map();
   // Track socket -> userId mapping
   private socketToUser: Map<string, string> = new Map();
+
+  // ── Location throttle ──────────────────────────────────────────────────────
+  // Prevent a driver from flooding the room with GPS updates.
+  // Only the first update in each LOCATION_THROTTLE_MS window is forwarded.
+  private readonly LOCATION_THROTTLE_MS = 3_000;
+  private lastLocationBroadcast: Map<string, number> = new Map(); // socketId → epoch ms
+
+  // ── Redis online-presence TTL ──────────────────────────────────────────────
+  // user:online:{userId} = role, expires after PRESENCE_TTL_S seconds.
+  // Renewed on every ping from the client.
+  private readonly PRESENCE_TTL_S = 60;
 
   constructor(httpServer: HttpServer) {
     this.io = new Server(httpServer, {
@@ -91,33 +119,126 @@ export class SocketServer {
       socket.join(roomName);
       logger.info(`Socket ${socket.id} joined room: ${roomName}`);
 
+      // Publish online presence to Redis (survives across pods)
+      this.pubClient.setex(`user:online:${userId}`, this.PRESENCE_TTL_S, role).catch(() => {});
+
       // Handle disconnect
       socket.on('disconnect', () => {
         logger.info(`Socket disconnected: ${socket.id}, userId=${userId}`);
-        
+
         // Remove from tracking
         const userSockets = this.onlineUsers.get(userId);
         if (userSockets) {
           userSockets.delete(socket.id);
           if (userSockets.size === 0) {
             this.onlineUsers.delete(userId);
+            // Remove Redis presence only when the LAST socket for this user disconnects
+            this.pubClient.del(`user:online:${userId}`).catch(() => {});
           }
         }
         this.socketToUser.delete(socket.id);
+        this.lastLocationBroadcast.delete(socket.id);
       });
 
-      // Ping-pong for connection health
+      // Ping-pong for connection health + presence renewal
       socket.on('ping', () => {
         socket.emit('pong');
+        // Renew Redis presence TTL on each client heartbeat
+        this.pubClient.setex(`user:online:${userId}`, this.PRESENCE_TTL_S, role).catch(() => {});
+      });
+
+      // Subscribe customer/driver socket into a ride-scoped room for realtime tracking.
+      const subscribeToRideRoom = (payload: RideSubscriptionPayload) => {
+        const rideId = payload?.rideId?.trim();
+        if (!rideId) {
+          return;
+        }
+
+        const rideRoom = `ride:${rideId}`;
+        socket.join(rideRoom);
+        logger.info(`Socket ${socket.id} joined room: ${rideRoom}`);
+      };
+
+      const unsubscribeFromRideRoom = (payload: RideSubscriptionPayload) => {
+        const rideId = payload?.rideId?.trim();
+        if (!rideId) {
+          return;
+        }
+
+        const rideRoom = `ride:${rideId}`;
+        socket.leave(rideRoom);
+        logger.info(`Socket ${socket.id} left room: ${rideRoom}`);
+      };
+
+      socket.on('ride:subscribe', subscribeToRideRoom);
+      socket.on('subscribe_ride_tracking', subscribeToRideRoom);
+      socket.on('ride:unsubscribe', unsubscribeFromRideRoom);
+
+      socket.on('driver:update-location', (payload: DriverLocationPayload) => {
+        if (role !== 'DRIVER') {
+          logger.warn(`Rejected driver:update-location from non-driver socket ${socket.id}`);
+          return;
+        }
+
+        // ── Rate limiter ────────────────────────────────────────────────────
+        // Discard updates that arrive within LOCATION_THROTTLE_MS of the last
+        // broadcast for this socket.  Drivers may send GPS events at up to 1 Hz;
+        // customers only need a refresh every 3 s to animate the marker smoothly.
+        const now = Date.now();
+        const lastBroadcast = this.lastLocationBroadcast.get(socket.id) ?? 0;
+        if (now - lastBroadcast < this.LOCATION_THROTTLE_MS) {
+          return; // Too soon — drop this update silently
+        }
+        this.lastLocationBroadcast.set(socket.id, now);
+        // ────────────────────────────────────────────────────────────────────
+
+        const rideId = payload?.rideId?.trim();
+        const lat = payload?.lat ?? payload?.location?.lat;
+        const lng = payload?.lng ?? payload?.location?.lng;
+        const heading = payload?.heading ?? payload?.location?.heading;
+
+        if (!rideId || typeof lat !== 'number' || typeof lng !== 'number') {
+          return;
+        }
+
+        const eventPayload = {
+          rideId,
+          lat,
+          lng,
+          heading,
+          timestamp: payload?.timestamp ?? now,
+        };
+
+        const rideRoom = `ride:${rideId}`;
+        this.io.to(rideRoom).emit('driver_location_update', eventPayload);
+        this.io.to(rideRoom).emit('driver:location', eventPayload);
       });
     });
   }
 
   /**
-   * Check if a user is currently online
+   * Check if a user is currently online (in-process check).
+   * Only reliable in single-pod deployments; use isUserOnlineRedis() for multi-pod.
    */
   public isUserOnline(userId: string): boolean {
     return this.onlineUsers.has(userId);
+  }
+
+  /**
+   * Check if a user is currently online via Redis presence key.
+   * Works correctly in multi-pod / horizontally-scaled deployments.
+   */
+  public async isUserOnlineRedis(userId: string): Promise<boolean> {
+    const exists = await this.pubClient.exists(`user:online:${userId}`);
+    return exists === 1;
+  }
+
+  /**
+   * Get the role of a connected user from Redis presence.
+   * Returns null if the user is offline or the key has expired.
+   */
+  public async getUserRoleRedis(userId: string): Promise<string | null> {
+    return this.pubClient.get(`user:online:${userId}`);
   }
 
   /**

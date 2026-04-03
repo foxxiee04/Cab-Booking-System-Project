@@ -47,6 +47,13 @@ class MoMoGateway {
       .digest('hex');
   }
 
+  private signRaw(rawSignature: string): string {
+    return crypto
+      .createHmac('sha256', this.secretKey)
+      .update(rawSignature)
+      .digest('hex');
+  }
+
   async createPayment(params: {
     orderId: string;
     amount: number;
@@ -54,6 +61,10 @@ class MoMoGateway {
     returnUrl: string;
     notifyUrl: string;
     extraData?: string;
+    requestType?: string;
+    paymentCode?: string;
+    orderGroupId?: string;
+    autoCapture?: boolean;
   }): Promise<MoMoPaymentResult> {
     if (!this.enabled) {
       throw new Error('MoMo gateway not enabled');
@@ -61,7 +72,9 @@ class MoMoGateway {
 
     try {
       const requestId = `${Date.now()}-${params.orderId}`;
-      const requestType = 'captureWallet';
+      const requestType = params.requestType || config.momo.requestType || 'captureWallet';
+      const autoCapture = typeof params.autoCapture === 'boolean' ? params.autoCapture : config.momo.autoCapture;
+      const paymentCode = params.paymentCode || config.momo.paymentCode || '';
 
       const rawData = {
         accessKey: this.accessKey,
@@ -76,12 +89,29 @@ class MoMoGateway {
         requestType,
       };
 
-      const signature = this.generateSignature(rawData);
+      // MoMo create API expects fixed-order signing (AIO v2 contract).
+      const rawSignature =
+        `accessKey=${rawData.accessKey}` +
+        `&amount=${rawData.amount}` +
+        `&extraData=${rawData.extraData}` +
+        `&ipnUrl=${rawData.ipnUrl}` +
+        `&orderId=${rawData.orderId}` +
+        `&orderInfo=${rawData.orderInfo}` +
+        `&partnerCode=${rawData.partnerCode}` +
+        `&redirectUrl=${rawData.redirectUrl}` +
+        `&requestId=${rawData.requestId}` +
+        `&requestType=${rawData.requestType}`;
+      const signature = this.signRaw(rawSignature);
 
       const requestBody = {
         ...rawData,
+        partnerName: config.momo.partnerName,
+        storeId: config.momo.storeId,
         signature,
         lang: 'vi',
+        autoCapture,
+        orderGroupId: params.orderGroupId || '',
+        ...(paymentCode ? { paymentCode } : {}),
       };
 
       logger.info('Creating MoMo payment:', { orderId: params.orderId, amount: params.amount });

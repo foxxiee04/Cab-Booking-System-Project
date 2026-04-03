@@ -28,10 +28,6 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPhone(e.target.value.replace(/\D/g, '').slice(0, 10));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -47,7 +43,7 @@ const Login: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await authApi.login({ phone, password });
+      const response = await authApi.login({ identifier: phone, password });
       if (response.success) {
         dispatch(setCredentials(response.data));
         navigate('/home');
@@ -89,10 +85,10 @@ const Login: React.FC = () => {
                 fullWidth
                 label="Số điện thoại"
                 value={phone}
-                onChange={handlePhoneChange}
+                onChange={(e) => setPhone(e.target.value)}
                 required
                 autoFocus
-                inputMode="numeric"
+                inputMode="tel"
                 sx={{ mb: 2 }}
                 InputProps={{
                   startAdornment: (

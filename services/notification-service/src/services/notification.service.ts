@@ -37,6 +37,26 @@ class NotificationService {
     return notification;
   }
 
+  async sendInAppNotification(data: {
+    userId: string;
+    subject?: string;
+    message: string;
+    metadata?: Record<string, any>;
+    priority?: NotificationPriority;
+  }): Promise<void> {
+    const notification = await this.createNotification({
+      userId: data.userId,
+      type: NotificationType.IN_APP,
+      recipient: data.userId,
+      subject: data.subject,
+      message: data.message,
+      metadata: data.metadata,
+      priority: data.priority || NotificationPriority.MEDIUM,
+    });
+
+    await this.sendNotification(notification._id.toString());
+  }
+
   async sendNotification(notificationId: string): Promise<boolean> {
     const notification = await NotificationModel.findById(notificationId);
     if (!notification) {

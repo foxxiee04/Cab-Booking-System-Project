@@ -12,13 +12,32 @@ export class DriverOfferManager {
   private readonly MAX_REASSIGN_ATTEMPTS = 3;
   private readonly OFFER_KEY_PREFIX = 'ride:offer:';
   private readonly OFFERED_DRIVERS_PREFIX = 'ride:offered:';
-  
+
+  // ── In-process fallback timers ─────────────────────────────────────────────
+  // If Redis keyspace notifications are disabled (managed Redis, ElastiCache, etc.),
+  // offer expirations would never fire via subscribeToExpirations().  We keep an
+  // in-process setTimeout per active offer as a secondary safety net.
+  // The primary path (keyspace notifications) and the fallback path are both safe
+  // to fire because handleOfferTimeout() is idempotent: it checks that the ride is
+  // still in OFFERED status before taking any action.
+  private readonly pendingTimeouts = new Map<string, NodeJS.Timeout>();
+  private _expirationCallback: ((rideId: string) => Promise<void>) | null = null;
+
   constructor(redis?: Redis) {
     this.redis = redis || new Redis(config.redis.url);
-    
+
     this.redis.on('error', (err) => {
       logger.error('Redis error in DriverOfferManager:', err);
     });
+  }
+
+  /**
+   * Register a callback that fires when an offer expires.
+   * Used as a fallback when Redis keyspace notifications are unavailable.
+   * The callback must be idempotent (it may fire even after a normal accept/reject).
+   */
+  registerExpirationCallback(callback: (rideId: string) => Promise<void>): void {
+    this._expirationCallback = callback;
   }
 
   /**
@@ -30,7 +49,7 @@ export class DriverOfferManager {
   async createOffer(rideId: string, driverId: string, ttlSeconds?: number): Promise<void> {
     const ttl = ttlSeconds || this.OFFER_TTL_SECONDS;
     const offerKey = `${this.OFFER_KEY_PREFIX}${rideId}`;
-    
+
     // Store the current offer with TTL
     await this.redis.setex(
       offerKey,
@@ -45,6 +64,28 @@ export class DriverOfferManager {
 
     // Add to offered drivers set (permanent record for this ride)
     await this.redis.sadd(`${this.OFFERED_DRIVERS_PREFIX}${rideId}`, driverId);
+
+    // ── In-process fallback timer ───────────────────────────────────────────
+    // Fires TTL + 2 s after creation to give Redis keyspace notification a chance
+    // to fire first.  If keyspace notification already fired, handleOfferTimeout
+    // will no-op because the ride status will no longer be OFFERED.
+    if (this._expirationCallback) {
+      const existing = this.pendingTimeouts.get(rideId);
+      if (existing) clearTimeout(existing);
+
+      const cb = this._expirationCallback; // capture for closure safety
+      const t = setTimeout(async () => {
+        this.pendingTimeouts.delete(rideId);
+        try {
+          await cb(rideId);
+        } catch (err) {
+          logger.error(`In-process offer expiration callback error for ride ${rideId}:`, err);
+        }
+      }, (ttl + 2) * 1_000);
+
+      t.unref(); // Do not block graceful shutdown
+      this.pendingTimeouts.set(rideId, t);
+    }
 
     logger.info(`Offer created for driver ${driverId} on ride ${rideId} with TTL ${ttl}s`);
   }
@@ -68,6 +109,9 @@ export class DriverOfferManager {
 
     // Remove the offer key (accepted)
     await this.redis.del(offerKey);
+    // Cancel the in-process fallback timer if present
+    const t = this.pendingTimeouts.get(rideId);
+    if (t) { clearTimeout(t); this.pendingTimeouts.delete(rideId); }
     logger.info(`Driver ${driverId} accepted offer for ride ${rideId}`);
     return true;
   }
@@ -88,6 +132,9 @@ export class DriverOfferManager {
 
     // Remove offer key
     await this.redis.del(offerKey);
+    // Cancel the in-process fallback timer if present
+    const t = this.pendingTimeouts.get(rideId);
+    if (t) { clearTimeout(t); this.pendingTimeouts.delete(rideId); }
 
     logger.info(`Offer cancelled for ride ${rideId}, driver ${offer.driverId}, reason: ${reason}`);
     return offer.driverId;
@@ -223,9 +270,12 @@ export class DriverOfferManager {
   }
 
   /**
-   * Close Redis connection
+   * Close Redis connection and clear all pending fallback timers
    */
   async close(): Promise<void> {
+    // Cancel all in-process fallback timers before closing
+    for (const t of this.pendingTimeouts.values()) clearTimeout(t);
+    this.pendingTimeouts.clear();
     await this.redis.quit();
   }
 }

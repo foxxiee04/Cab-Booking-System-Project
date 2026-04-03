@@ -8,7 +8,7 @@ interface EstimateFareRequest {
   pickupLng: number;
   dropoffLat: number;
   dropoffLng: number;
-  vehicleType: 'ECONOMY' | 'COMFORT' | 'PREMIUM';
+  vehicleType: 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
 }
 
 export class PricingGrpcClient {

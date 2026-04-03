@@ -4,7 +4,7 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 import { calculateDistance, estimateDuration } from '../utils/geo.utils';
 
-type VehicleType = 'ECONOMY' | 'COMFORT' | 'PREMIUM';
+type VehicleType = 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
 type AITimeOfDay = 'OFF_PEAK' | 'RUSH_HOUR';
 type AIDayType = 'WEEKDAY' | 'WEEKEND';
 

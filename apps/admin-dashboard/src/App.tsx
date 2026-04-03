@@ -15,6 +15,11 @@ import {
   Menu,
   MenuItem,
   Divider,
+  Badge,
+  Popover,
+  Paper,
+  Stack,
+  Chip,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -28,11 +33,13 @@ import {
   AccountCircle,
   AdminPanelSettings,
   FactCheck,
+  Notifications as NotificationsIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector, useAppDispatch } from './store/hooks';
 import { logout } from './store/auth.slice';
 import { adminSocketService } from './socket/admin.socket';
+import { adminApi } from './api/admin.api';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Rides from './pages/Rides';
@@ -60,8 +67,43 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
+  const [notifAnchorEl, setNotifAnchorEl] = useState<null | HTMLElement>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [recentNotifs, setRecentNotifs] = useState<Array<{ id: string; title: string; detail: string; tone: string; timestamp: string }>>([]);
+  const maxNotifHistory = 20;
   const { t } = useTranslation();
+
+  // Subscribe to realtime admin events for notification bell
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const unsub = adminSocketService.subscribeToEvents((event) => {
+      setUnreadCount((n) => n + 1);
+      setRecentNotifs((prev) => [event, ...prev].slice(0, maxNotifHistory));
+    });
+    return unsub;
+  }, [isAuthenticated]);
+
+  // Fetch pending driver approvals count
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const fetchCount = async () => {
+      try {
+        const res = await adminApi.getDrivers({ status: 'PENDING', limit: 1, offset: 0 });
+        const drivers = res.data?.drivers || [];
+        // API may return total count in meta; fall back to array length
+        const total = (res.data as any)?.total ?? (res.data as any)?.meta?.total ?? drivers.length;
+        setPendingApprovalCount(total);
+      } catch {
+        // non-critical
+      }
+    };
+    void fetchCount();
+    const id = window.setInterval(() => void fetchCount(), 30_000);
+    return () => window.clearInterval(id);
+  }, [isAuthenticated]);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -74,7 +116,15 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     { text: t('menu.profile'), icon: <AccountCircle />, path: '/profile' },
     { text: t('menu.rides'), icon: <DirectionsCar />, path: '/rides' },
     { text: t('menu.drivers'), icon: <DriveEta />, path: '/drivers' },
-    { text: t('menu.approvals'), icon: <FactCheck />, path: '/driver-approvals' },
+    {
+      text: t('menu.approvals'),
+      icon: (
+        <Badge badgeContent={pendingApprovalCount} color="error" max={99}>
+          <FactCheck />
+        </Badge>
+      ),
+      path: '/driver-approvals',
+    },
     { text: t('menu.customers'), icon: <People />, path: '/customers' },
     { text: t('menu.payments'), icon: <AttachMoney />, path: '/payments' },
     { text: t('menu.pricing'), icon: <TrendingUp />, path: '/pricing' },
@@ -94,6 +144,64 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {t('app.title')}
           </Typography>
+
+          {/* Notification Bell */}
+          <IconButton
+            sx={{ color: 'white', mr: 1 }}
+            onClick={(e) => {
+              setNotifAnchorEl(e.currentTarget);
+              setUnreadCount(0);
+            }}
+          >
+            <Badge badgeContent={unreadCount} color="error" max={99}>
+              <NotificationsIcon />
+            </Badge>
+          </IconButton>
+          <Popover
+            open={Boolean(notifAnchorEl)}
+            anchorEl={notifAnchorEl}
+            onClose={() => setNotifAnchorEl(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            PaperProps={{ sx: { width: 360, maxHeight: 480, borderRadius: 2 } }}
+          >
+            <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="subtitle1" fontWeight={700}>Thông báo</Typography>
+            </Box>
+            {recentNotifs.length === 0 ? (
+              <Box sx={{ p: 3, textAlign: 'center' }}>
+                <Typography variant="body2" color="text.secondary">Chưa có thông báo mới</Typography>
+              </Box>
+            ) : (
+              <Stack sx={{ maxHeight: 400, overflow: 'auto' }}>
+                {recentNotifs.map((notif) => (
+                  <Box
+                    key={notif.id}
+                    sx={{
+                      px: 2, py: 1.5,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      '&:hover': { bgcolor: 'action.hover' },
+                    }}
+                  >
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                      <Chip
+                        size="small"
+                        label={notif.title}
+                        color={notif.tone === 'success' ? 'success' : notif.tone === 'warning' ? 'warning' : 'info'}
+                        sx={{ fontWeight: 700, fontSize: 11 }}
+                      />
+                      <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto !important' }}>
+                        {new Date(notif.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                      </Typography>
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary">{notif.detail}</Typography>
+                  </Box>
+                ))}
+              </Stack>
+            )}
+          </Popover>
+
           <IconButton
             onClick={(e) => setAnchorEl(e.currentTarget)}
             sx={{ color: 'white' }}
@@ -147,7 +255,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           {menuItems.map((item) => (
             <ListItemButton
               key={item.text}
-              onClick={() => navigate(item.path)}
+              onClick={() => {
+                navigate(item.path);
+                if (item.path === '/driver-approvals') setPendingApprovalCount(0);
+              }}
               selected={window.location.pathname === item.path}
             >
               <ListItemIcon>{item.icon}</ListItemIcon>
@@ -166,7 +277,17 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           mt: 8,
         }}
       >
-        {children}
+        <Box
+          sx={{
+            width: '100%',
+            maxWidth: 1440,
+            mx: 'auto',
+            px: { xs: 2, md: 3 },
+            pb: { xs: 2, md: 3 },
+          }}
+        >
+          {children}
+        </Box>
       </Box>
     </Box>
   );

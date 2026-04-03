@@ -49,7 +49,7 @@ const ForgotPassword: React.FC = () => {
     try {
       const res = await authApi.forgotPassword({ phone });
       setResendDelay(res.data.resendDelay || 30);
-      setInfo(res.data.message || 'OTP đã gửi tới +84****xxx');
+      setInfo(res.data.message || 'Mã OTP đã được gửi đến số điện thoại của bạn.');
       setStep('otp');
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể gửi OTP. Vui lòng thử lại.');
@@ -106,7 +106,7 @@ const ForgotPassword: React.FC = () => {
       const res = await authApi.forgotPassword({ phone });
       setResendDelay(res.data.resendDelay || 60);
       setOtp('');
-      setInfo(res.data.message || 'OTP đã gửi tới +84****xxx');
+      setInfo(res.data.message || 'Mã OTP đã được gửi lại thành công.');
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể gửi lại OTP.');
     } finally {

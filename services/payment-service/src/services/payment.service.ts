@@ -1,5 +1,6 @@
 import { PrismaClient, PaymentStatus, PaymentMethod, PaymentProvider } from '../generated/prisma-client';
 import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
 import { config } from '../config';
 import { EventPublisher } from '../events/publisher';
 import { logger } from '../utils/logger';
@@ -7,6 +8,7 @@ import { momoGateway } from './momo.gateway';
 import { paymentGatewayManager, PaymentGatewayType } from './payment-gateway.manager';
 import { stripeGateway } from './stripe.gateway';
 import { zaloPayGateway } from './zalopay.gateway';
+import { commissionService, TripContext, DriverStats } from './commission.service';
 
 interface RideCompletedPayload {
   rideId: string;
@@ -18,6 +20,19 @@ interface RideCompletedPayload {
   surgeMultiplier?: number;
   vehicleType?: string; // ECONOMY, COMFORT, PREMIUM
   paymentMethod?: string; // CASH, MOMO, VISA, CARD, WALLET
+  /** Optional driver stats forwarded by driver-service for incentive/penalty calc */
+  driverStats?: DriverStats;
+}
+
+interface CreateExternalPaymentInput {
+  orderId: string;
+  service: 'BOOKING';
+  method: 'MOMO' | 'VNPAY';
+  amount: number;
+  customerId?: string;
+  returnUrl?: string;
+  ipnUrl?: string;
+  idempotencyKey?: string;
 }
 
 export class PaymentService {
@@ -27,6 +42,73 @@ export class PaymentService {
   constructor(prisma: PrismaClient, eventPublisher: EventPublisher) {
     this.prisma = prisma;
     this.eventPublisher = eventPublisher;
+  }
+
+  async createExternalPayment(input: CreateExternalPaymentInput): Promise<{ paymentId: string; payUrl: string }> {
+    const { orderId, service, method, amount, customerId, returnUrl, ipnUrl, idempotencyKey } = input;
+
+    if (service !== 'BOOKING') {
+      throw new Error('Only BOOKING service is supported');
+    }
+
+    const intent = await this.createPaymentIntent({
+      rideId: orderId,
+      customerId: customerId || 'booking-service',
+      amount,
+      currency: 'VND',
+      paymentMethod: method,
+      returnUrl,
+      notifyUrl: ipnUrl,
+      idempotencyKey,
+    });
+
+    const payUrl = intent.payUrl || intent.paymentUrl;
+    if (!payUrl) {
+      throw new Error(`Gateway did not return payUrl for method ${method}`);
+    }
+
+    const payment = await this.prisma.payment.findUnique({ where: { rideId: orderId } });
+    if (payment) {
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          metadata: {
+            ...(payment.metadata as Record<string, any> || {}),
+            serviceName: service,
+            orderId,
+            method,
+          },
+        },
+      });
+    }
+
+    return {
+      paymentId: intent.paymentId,
+      payUrl,
+    };
+  }
+
+  async getPaymentById(paymentId: string) {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) {
+      return null;
+    }
+
+    const metadata = (payment.metadata as Record<string, any> | null) || {};
+    const serviceName = typeof metadata.serviceName === 'string' ? metadata.serviceName : 'BOOKING';
+
+    return {
+      id: payment.id,
+      order_id: payment.rideId,
+      service_name: serviceName,
+      method: payment.method,
+      amount: payment.amount,
+      status: payment.status,
+      transaction_id: payment.transactionId,
+      raw_response: payment.gatewayResponse,
+      created_at: payment.createdAt,
+      updated_at: payment.updatedAt,
+    };
   }
 
   async handleStripeWebhook(payload: Buffer | string, signature: string): Promise<void> {
@@ -211,12 +293,18 @@ export class PaymentService {
 
     if (existing) {
       const existingGatewayResponse = this.parseGatewayResponse(existing.gatewayResponse);
+      const existingMetadata = existingGatewayResponse?.metadata || {};
+
       return {
         created: false,
         paymentId: existing.id,
         paymentIntentId: existing.paymentIntentId,
         clientSecret: existing.clientSecret,
         paymentUrl: existingGatewayResponse?.paymentUrl,
+        payUrl: existingMetadata.payUrl || existingGatewayResponse?.paymentUrl,
+        deeplink: existingMetadata.deeplink,
+        qrCodeUrl: existingMetadata.qrCodeUrl,
+        metadata: existingMetadata,
         provider: existing.provider,
         status: existing.status,
       };
@@ -295,6 +383,10 @@ export class PaymentService {
       paymentIntentId: payment.paymentIntentId,
       clientSecret: payment.clientSecret,
       paymentUrl: gatewayResult.paymentUrl,
+      payUrl: gatewayResult.metadata?.payUrl || gatewayResult.paymentUrl,
+      deeplink: gatewayResult.metadata?.deeplink,
+      qrCodeUrl: gatewayResult.metadata?.qrCodeUrl,
+      metadata: gatewayResult.metadata || {},
       provider: payment.provider,
       status: payment.status,
     };
@@ -325,7 +417,8 @@ export class PaymentService {
       duration, 
       surgeMultiplier = 1.0, 
       vehicleType = 'ECONOMY',
-      paymentMethod = 'CASH'
+      paymentMethod = 'CASH',
+      driverStats,
     } = payload;
 
     try {
@@ -347,6 +440,17 @@ export class PaymentService {
         vehicleType
       );
 
+      // Calculate driver commission & earnings
+      const now = new Date();
+      const tripCtx: TripContext = {
+        vehicleType,
+        surgeMultiplier,
+        paymentMethod,
+        completedAt: now,
+        driverStats,
+      };
+      const earnings = commissionService.calculateCommission(fareDetails.totalFare, tripCtx);
+
       // Generate idempotency key for payment
       const idempotencyKey = `ride_${rideId}_${Date.now()}`;
 
@@ -354,7 +458,7 @@ export class PaymentService {
       const mappedMethod = this.mapPaymentMethod(paymentMethod);
       const mappedProvider = this.mapPaymentProvider(paymentMethod);
 
-      // Create fare and payment in transaction
+      // Create fare, payment, and driver earnings in a single transaction
       const createdPayment = await this.prisma.$transaction(async (tx) => {
         // Create fare record
         await tx.fare.create({
@@ -368,6 +472,25 @@ export class PaymentService {
             distanceKm: distance || 0,
             durationMinutes: Math.ceil((duration || 0) / 60),
             currency: 'VND',
+          },
+        });
+
+        // Create driver earnings record
+        await tx.driverEarnings.create({
+          data: {
+            rideId,
+            driverId,
+            grossFare:       earnings.grossFare,
+            commissionRate:  earnings.commissionRate,
+            platformFee:     earnings.platformFee,
+            bonus:           earnings.bonus,
+            penalty:         earnings.penalty,
+            netEarnings:     earnings.netEarnings,
+            paymentMethod:   mappedMethod,
+            driverCollected: earnings.driverCollected,
+            cashDebt:        earnings.cashDebt,
+            bonusBreakdown:   earnings.breakdown.bonuses   as any,
+            penaltyBreakdown: earnings.breakdown.penalties as any,
           },
         });
 
@@ -393,15 +516,25 @@ export class PaymentService {
             payload: JSON.stringify({
               rideId,
               customerId,
+              driverId,
               fare: fareDetails.totalFare,
               breakdown: fareDetails,
               paymentMethod: mappedMethod,
+              earnings: {
+                commissionRate:  earnings.commissionRate,
+                platformFee:     earnings.platformFee,
+                bonus:           earnings.bonus,
+                penalty:         earnings.penalty,
+                netEarnings:     earnings.netEarnings,
+                driverCollected: earnings.driverCollected,
+                cashDebt:        earnings.cashDebt,
+              },
             }),
             correlationId: rideId,
           },
         });
 
-        logger.info(`Fare calculated for ride ${rideId}: ${fareDetails.totalFare} VND (Method: ${mappedMethod})`);
+        logger.info(`Fare + earnings calculated for ride ${rideId}: fare=${fareDetails.totalFare} VND, net=${earnings.netEarnings} VND, platform=${earnings.platformFee} VND (method: ${mappedMethod})`);
 
         return payment;
       });
@@ -447,8 +580,7 @@ export class PaymentService {
         data: { status: PaymentStatus.PROCESSING },
       });
 
-      // Cash payment - immediate completion (COD)
-      await this.mockPaymentGateway(payment.amount);
+      // Cash payment - immediate completion (COD), no gateway needed
 
       // Mark as completed
       await this.prisma.$transaction(async (tx) => {
@@ -746,29 +878,37 @@ export class PaymentService {
 
   async getDriverEarnings(driverId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
-    const [payments, total, totalEarnings] = await Promise.all([
-      this.prisma.payment.findMany({
-        where: { driverId, status: PaymentStatus.COMPLETED },
+
+    const [earningsRows, total, aggregates] = await Promise.all([
+      this.prisma.driverEarnings.findMany({
+        where: { driverId },
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.payment.count({ where: { driverId, status: PaymentStatus.COMPLETED } }),
-      this.prisma.payment.aggregate({
-        where: { driverId, status: PaymentStatus.COMPLETED },
-        _sum: { amount: true },
+      this.prisma.driverEarnings.count({ where: { driverId } }),
+      this.prisma.driverEarnings.aggregate({
+        where: { driverId },
+        _sum: { grossFare: true, platformFee: true, bonus: true, penalty: true, netEarnings: true, cashDebt: true },
       }),
     ]);
 
-    const fares = await this.prisma.fare.findMany({
-      where: { rideId: { in: payments.map((payment) => payment.rideId) } },
+    const unpaidCashDebt = await this.prisma.driverEarnings.aggregate({
+      where: { driverId, driverCollected: true, isPaid: false },
+      _sum: { cashDebt: true },
     });
-    const fareByRideId = new Map(fares.map((fare) => [fare.rideId, fare]));
 
-    return { 
-      payments: payments.map((payment) => ({ ...payment, fare: fareByRideId.get(payment.rideId) || null })),
-      total, 
-      totalEarnings: totalEarnings._sum.amount || 0 
+    return {
+      earnings: earningsRows,
+      total,
+      summary: {
+        totalGrossFare:  aggregates._sum.grossFare   || 0,
+        totalPlatformFee: aggregates._sum.platformFee || 0,
+        totalBonus:      aggregates._sum.bonus       || 0,
+        totalPenalty:    aggregates._sum.penalty     || 0,
+        totalNetEarnings: aggregates._sum.netEarnings || 0,
+        unpaidCashDebt:  unpaidCashDebt._sum.cashDebt || 0,
+      },
     };
   }
 
@@ -1112,6 +1252,15 @@ export class PaymentService {
       return;
     }
 
+    // Idempotency guard: do not override terminal states once finalized.
+    if (
+      payment.status === PaymentStatus.COMPLETED ||
+      payment.status === PaymentStatus.FAILED ||
+      payment.status === PaymentStatus.REFUNDED
+    ) {
+      return;
+    }
+
     const gatewayResponse = input.gatewayMetadata ? JSON.stringify(input.gatewayMetadata) : undefined;
 
     if (input.nextStatus === PaymentStatus.COMPLETED) {
@@ -1151,6 +1300,21 @@ export class PaymentService {
         amount: payment.amount,
         transactionId: input.transactionId,
       }, payment.rideId);
+
+      await this.eventPublisher.publish('payment.success', {
+        paymentId: payment.id,
+        orderId: payment.rideId,
+        service: 'BOOKING',
+        amount: payment.amount,
+        transactionId: input.transactionId,
+      }, payment.rideId);
+
+      await this.notifyBookingPaymentCallback({
+        orderId: payment.rideId,
+        status: 'SUCCESS',
+        paymentId: payment.id,
+        transactionId: input.transactionId,
+      });
       return;
     }
 
@@ -1186,6 +1350,14 @@ export class PaymentService {
         customerId: payment.customerId,
         reason: input.failureReason ?? 'Provider reported failure',
       }, payment.rideId);
+
+      await this.notifyBookingPaymentCallback({
+        orderId: payment.rideId,
+        status: 'FAILED',
+        paymentId: payment.id,
+        transactionId: input.transactionId,
+        failureReason: input.failureReason,
+      });
       return;
     }
 
@@ -1196,5 +1368,53 @@ export class PaymentService {
         gatewayResponse,
       },
     });
+  }
+
+  private async notifyBookingPaymentCallback(payload: {
+    orderId: string;
+    status: 'SUCCESS' | 'FAILED';
+    paymentId: string;
+    transactionId?: string;
+    failureReason?: string;
+  }): Promise<void> {
+    const callbackUrl = config.booking.callbackUrl;
+    if (!callbackUrl) {
+      return;
+    }
+
+    let attempt = 0;
+    const maxAttempts = 3;
+
+    while (attempt < maxAttempts) {
+      attempt += 1;
+      try {
+        await axios.post(callbackUrl, payload, {
+          timeout: 5000,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        logger.info('Booking callback delivered', {
+          orderId: payload.orderId,
+          status: payload.status,
+          attempt,
+        });
+        return;
+      } catch (error) {
+        logger.warn('Booking callback attempt failed', {
+          orderId: payload.orderId,
+          status: payload.status,
+          attempt,
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        if (attempt >= maxAttempts) {
+          break;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+      }
+    }
   }
 }

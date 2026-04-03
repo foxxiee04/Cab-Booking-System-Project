@@ -19,7 +19,7 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { setPickupLocation, setDropoffLocation, setCurrentRide } from '../store/ride.slice';
+import { setPickupLocation, setDropoffLocation, setCurrentRide, clearRide } from '../store/ride.slice';
 import { setCurrentLocation } from '../store/location.slice';
 import RideBookingFlow from '../components/booking/RideBookingFlow';
 import { getCurrentLocation, reverseGeocode } from '../utils/map.utils';
@@ -84,9 +84,12 @@ const HomeMap: React.FC = () => {
         if (activeRide?.data?.ride) {
           dispatch(setCurrentRide(activeRide.data.ride));
           navigate(`/ride/${activeRide.data.ride.id}`);
+        } else {
+          dispatch(clearRide());
         }
       } catch (activeRideError) {
         console.error('Failed to check active ride:', activeRideError);
+        dispatch(clearRide());
       }
     };
 
@@ -101,17 +104,30 @@ const HomeMap: React.FC = () => {
 
     let cancelled = false;
     let stopPolling = false;
+    let currentInterval: number | null = null;
 
     const fetchNearbyDrivers = async () => {
       try {
         const response = await driverApi.getNearbyDrivers({
           lat: pickupLocation.lat,
           lng: pickupLocation.lng,
-          radius: 4,
+          radius: 5, // Increased from 4km to 5km for better coverage
         });
 
         if (!cancelled) {
-          setNearbyDrivers(response.data.drivers);
+          // Filter and sort drivers by distance
+          const driversWithDistance = (response.data.drivers || [])
+            .filter((driver: any) => driver?.id && driver?.lat != null && driver?.lng != null)
+            .map((driver: any) => {
+              // Calculate rough distance
+              const latDiff = driver.lat - pickupLocation.lat;
+              const lngDiff = driver.lng - pickupLocation.lng;
+              const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff) * 111; // rough km
+              return { ...driver, distance };
+            })
+            .sort((a: any, b: any) => a.distance - b.distance);
+
+          setNearbyDrivers(driversWithDistance);
         }
       } catch (nearbyDriversError: any) {
         if (!cancelled) {
@@ -126,16 +142,21 @@ const HomeMap: React.FC = () => {
       }
     };
 
-    fetchNearbyDrivers();
-    const interval = window.setInterval(() => {
+    // Initial fetch
+    void fetchNearbyDrivers();
+
+    // Poll every 10 seconds (faster than before for real-time updates)
+    currentInterval = window.setInterval(() => {
       if (!stopPolling) {
         void fetchNearbyDrivers();
       }
-    }, 20000);
+    }, 10000);
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      if (currentInterval !== null) {
+        window.clearInterval(currentInterval);
+      }
     };
   }, [accessToken, isAuthenticated, pickupLocation?.lat, pickupLocation?.lng]);
 
@@ -196,7 +217,7 @@ const HomeMap: React.FC = () => {
         gridTemplateRows: bookingFlowOpen ? 'auto minmax(440px, 1fr) auto' : 'auto minmax(520px, 1fr) auto',
         gap: 1.5,
         pb: { xs: 14, sm: 2 },
-        background: 'radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 28%), linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%)',
+        background: '#f8fafc',
       }}
     >
       <Paper
@@ -204,8 +225,8 @@ const HomeMap: React.FC = () => {
         sx={{
           p: 2,
           borderRadius: 5,
-          background: 'linear-gradient(135deg, rgba(14,165,233,0.10), rgba(37,99,235,0.18))',
-          border: '1px solid rgba(59,130,246,0.12)',
+          background: '#ffffff',
+          border: '1px solid rgba(148,163,184,0.16)',
         }}
       >
         <Stack direction="row" spacing={1.5} alignItems="center">
@@ -234,9 +255,9 @@ const HomeMap: React.FC = () => {
           minHeight: { xs: 400, md: 560 },
           borderRadius: 6,
           overflow: 'hidden',
-          background: 'linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)',
-          boxShadow: '0 18px 48px rgba(15,23,42,0.12)',
-          border: '1px solid rgba(59,130,246,0.12)',
+          background: '#e2e8f0',
+          boxShadow: '0 8px 20px rgba(15,23,42,0.08)',
+          border: '1px solid rgba(148,163,184,0.2)',
         }}
       >
         {bootstrappingLocation && !pickupLocation ? (
@@ -265,8 +286,8 @@ const HomeMap: React.FC = () => {
           p: 2.25,
           pb: { xs: 3.5, sm: 2.25 },
           mb: { xs: 4, sm: 0 },
-          backgroundColor: 'rgba(255,255,255,0.96)',
-          backdropFilter: 'blur(18px)',
+          backgroundColor: '#ffffff',
+          backdropFilter: 'blur(8px)',
           border: '1px solid rgba(148,163,184,0.14)',
         }}
       >

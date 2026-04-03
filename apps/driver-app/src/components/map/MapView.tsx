@@ -47,11 +47,11 @@ const MapView: React.FC<MapViewProps> = ({
       style={{ height, width: '100%' }}
       zoomControl={true}
     >
-      {/* CartoDB Voyager — colorful, readable, free */}
+      {/* OpenStreetMap Standard — freshest Vietnam data, incl. latest district mergers */}
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-        maxZoom={20}
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        maxZoom={19}
       />
       <MapCenter center={center} zoom={zoom} />
       

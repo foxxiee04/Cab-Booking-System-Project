@@ -9,6 +9,74 @@ import { logger } from '../utils/logger';
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
+  /**
+   * POST /api/payments
+   * Independent payment API for internal service-to-service integration.
+   */
+  createPayment = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { orderId, service, method, amount, customerId, returnUrl, ipnUrl } = req.body || {};
+      const idempotencyKey = req.header('Idempotency-Key') || undefined;
+
+      const result = await this.paymentService.createExternalPayment({
+        orderId,
+        service,
+        method,
+        amount,
+        customerId,
+        returnUrl,
+        ipnUrl,
+        idempotencyKey,
+      });
+
+      res.status(201).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * GET /api/payments/:id
+   */
+  getPaymentById = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const payment = await this.paymentService.getPaymentById(req.params.id);
+
+      if (!payment) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Payment not found' },
+        });
+      }
+
+      res.json(payment);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * POST /api/payments/ipn/momo
+   * Unified MoMo IPN endpoint.
+   */
+  handleUnifiedMomoIpn = async (req: Request, res: Response) => {
+    try {
+      await this.paymentService.handleMomoWebhook(req.body as Record<string, any>);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('Unified MoMo IPN error:', error);
+      res.status(200).json({ resultCode: 1, message: 'Failed' });
+    }
+  };
+
+  /**
+   * POST /api/payments/ipn/vnpay
+   * Unified VNPay IPN endpoint accepting payload in request body.
+   */
+  handleUnifiedVnpayIpn = async (req: Request, res: Response) => {
+    await this.processVnpayIpnPayload((req.body || {}) as Record<string, string>, res);
+  };
+
   createPaymentIntent = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const idempotencyKey = req.header('Idempotency-Key') || undefined;
@@ -177,7 +245,6 @@ export class PaymentController {
         { id: 'CASH', name: 'Tiền mặt', icon: 'cash', enabled: true },
         { id: 'MOMO', name: 'Ví MoMo', icon: 'wallet', enabled: config.momo.enabled, provider: 'MOMO' },
         { id: 'VNPAY', name: 'VNPay (ATM/VISA/QR)', icon: 'bank', enabled: config.vnpay.enabled, provider: 'VNPAY' },
-        { id: 'CARD', name: 'Thẻ tín dụng/ghi nợ', icon: 'card', enabled: config.stripe.enabled, provider: 'STRIPE' },
       ];
       
       res.json({ success: true, data: { methods } });
@@ -336,6 +403,80 @@ export class PaymentController {
       });
     } catch (error) {
       next(error);
+    }
+  };
+
+  /**
+   * GET /api/payments/vnpay/ipn
+   * VNPay server-to-server IPN (Instant Payment Notification) callback.
+   * Called asynchronously by VNPay after the user completes payment.
+   * Must respond within 5 s with the JSON body shown below.
+   *
+   * Reference: https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html#ipn-url
+   */
+  handleVnpayIpn = async (req: Request, res: Response) => {
+    await this.processVnpayIpnPayload(req.query as Record<string, string>, res);
+  };
+
+  private processVnpayIpnPayload = async (query: Record<string, string>, res: Response) => {
+    try {
+      // 1. Verify HMAC-SHA512 signature
+      const result = vnpayGateway.verifyReturn(query);
+      if (!result.valid) {
+        logger.warn('VNPay IPN: invalid signature', { txnRef: query.vnp_TxnRef });
+        return res.json({ RspCode: '97', Message: 'Fail checksum' });
+      }
+
+      // 2. Resolve rideId from OrderInfo or TxnRef
+      const rideId =
+        this.extractRideIdFromOrderInfo(query.vnp_OrderInfo || '') ||
+        this.extractRideIdFromOrderInfo(query.vnp_TxnRef || '');
+
+      if (!rideId) {
+        logger.warn('VNPay IPN: cannot resolve rideId', { query });
+        return res.json({ RspCode: '01', Message: 'Order not found' });
+      }
+
+      // 3. Fetch existing payment (idempotency)
+      const payment = await this.paymentService.getPaymentByRideId(rideId);
+      if (!payment) {
+        return res.json({ RspCode: '01', Message: 'Order not found' });
+      }
+
+      if (payment.status === 'COMPLETED' || payment.status === 'REFUNDED') {
+        return res.json({ RspCode: '02', Message: 'Order already confirmed' });
+      }
+
+      // 4. Verify amount (VNPay sends amount × 100, verifyReturn already divides)
+      if (Math.round(payment.amount) !== result.amount) {
+        logger.warn('VNPay IPN: amount mismatch', {
+          rideId,
+          expected: payment.amount,
+          received: result.amount,
+        });
+        return res.json({ RspCode: '04', Message: 'Invalid Amount' });
+      }
+
+      // 5. Apply payment status
+      await this.paymentService.applyGatewayReturnByRideId({
+        rideId,
+        paid: result.success,
+        transactionId: result.transactionId,
+        failureReason: result.success ? undefined : `VNPay IPN code: ${result.responseCode}`,
+        gatewayMetadata: query,
+      });
+
+      logger.info('VNPay IPN processed', {
+        rideId,
+        txnRef: result.txnRef,
+        success: result.success,
+        responseCode: result.responseCode,
+      });
+
+      return res.json({ RspCode: '00', Message: 'Confirm Success' });
+    } catch (error) {
+      logger.error('VNPay IPN error:', error);
+      return res.json({ RspCode: '99', Message: 'Unknow error' });
     }
   };
 

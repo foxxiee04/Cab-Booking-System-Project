@@ -29,14 +29,12 @@ export const formatPhoneNumber = (phone: string): string => {
 
 // Get vehicle type label
 export const getVehicleTypeLabel = (type?: VehicleType): string => {
-  if (!type) return 'Economy';
+  if (!type) return i18n.t('vehicle.CAR_4');
   const labels: Record<VehicleType, string> = {
-    ECONOMY: i18n.t('vehicle.ECONOMY'),
-    COMFORT: i18n.t('vehicle.COMFORT'),
-    PREMIUM: i18n.t('vehicle.PREMIUM'),
-    CAR: i18n.t('vehicle.CAR'),
-    SUV: i18n.t('vehicle.SUV'),
-    MOTORCYCLE: i18n.t('vehicle.MOTORCYCLE'),
+    MOTORBIKE: i18n.t('vehicle.MOTORBIKE'),
+    SCOOTER: i18n.t('vehicle.SCOOTER'),
+    CAR_4: i18n.t('vehicle.CAR_4'),
+    CAR_7: i18n.t('vehicle.CAR_7'),
   };
   return labels[type] || type;
 };

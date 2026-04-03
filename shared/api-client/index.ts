@@ -170,7 +170,7 @@ class ApiClient {
     dropoffAddress: string;
     dropoffLat: number;
     dropoffLng: number;
-    vehicleType?: 'ECONOMY' | 'COMFORT' | 'PREMIUM';
+    vehicleType?: 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
     paymentMethod?: 'CASH' | 'CARD' | 'WALLET';
     notes?: string;
   }) {
@@ -198,7 +198,7 @@ class ApiClient {
   async createRide(data: {
     pickup: { lat: number; lng: number; address?: string };
     dropoff: { lat: number; lng: number; address?: string };
-    vehicleType?: 'ECONOMY' | 'COMFORT' | 'PREMIUM';
+    vehicleType?: 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
     paymentMethod?: 'CASH' | 'CARD' | 'WALLET';
   }) {
     const response = await this.client.post('/api/rides', {
@@ -208,7 +208,7 @@ class ApiClient {
       dropoffLat: data.dropoff.lat,
       dropoffLng: data.dropoff.lng,
       dropoffAddress: data.dropoff.address,
-      vehicleType: data.vehicleType || 'ECONOMY',
+      vehicleType: data.vehicleType || 'CAR_4',
       paymentMethod: data.paymentMethod || 'CASH',
     });
     return response.data;

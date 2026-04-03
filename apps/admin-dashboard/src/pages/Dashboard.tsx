@@ -15,20 +15,25 @@ import { formatCurrency, formatDate, formatNumber } from '../utils/format.utils'
 const mapLibraries: ('visualization')[] = ['visualization'];
 const defaultCenter = { lat: 10.7769, lng: 106.7009 };
 const heatmapGradient = [
-  'rgba(14, 165, 233, 0)',
-  'rgba(14, 165, 233, 1)',
-  'rgba(59, 130, 246, 1)',
-  'rgba(249, 115, 22, 1)',
-  'rgba(220, 38, 38, 1)',
+  'rgba(90, 127, 184, 0)',
+  'rgba(90, 127, 184, 0.65)',
+  'rgba(111, 149, 199, 0.78)',
+  'rgba(92, 163, 138, 0.78)',
+  'rgba(79, 110, 161, 0.9)',
 ];
-const darkMapStyles: google.maps.MapTypeStyle[] = [
-  { elementType: 'geometry', stylers: [{ color: '#111827' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#d1d5db' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#111827' }] },
-  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#2563eb' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
+const lightMapStyles: google.maps.MapTypeStyle[] = [
+  { elementType: 'geometry', stylers: [{ color: '#f8fafc' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#334155' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#dbeafe' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#93c5fd' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#bfdbfe' }] },
+];
+
+const MAJOR_CITY_POINTS = [
+  { id: 'benthanh', name: 'Cho Ben Thanh', lat: 10.7726, lng: 106.6980 },
+  { id: 'tsn', name: 'San bay Tan Son Nhat', lat: 10.8185, lng: 106.6588 },
+  { id: 'landmark81', name: 'Landmark 81', lat: 10.7949, lng: 106.7219 },
+  { id: 'thuduc', name: 'TP Thu Duc', lat: 10.8495, lng: 106.7718 },
 ];
 
 type RegionFilter = 'ALL' | 'NORTH' | 'CENTRAL' | 'SOUTH';
@@ -168,7 +173,7 @@ function createInitialRealtimeEvent(): AdminRealtimeEvent {
   };
 }
 
-const hotspotPalette = ['#dc2626', '#f97316', '#2563eb', '#0ea5e9'];
+const hotspotPalette = ['#5a7fb8', '#6f95c7', '#5ca38a', '#4f6ea1'];
 
 function getHotspotColor(index: number) {
   return hotspotPalette[index] || '#64748b';
@@ -239,11 +244,18 @@ const GoogleDriverHeatmap: React.FC<{
         fullscreenControl: false,
         rotateControl: false,
         clickableIcons: false,
-        styles: darkMapStyles,
+        styles: lightMapStyles,
       }}
     >
       {heatmapData.length > 0 && <HeatmapLayerF data={heatmapData} options={{ radius: 38, opacity: 0.7, gradient: heatmapGradient }} />}
       {drivers.slice(0, 120).map((driver) => <MarkerF key={driver.id} position={{ lat: driver.currentLocation!.lat, lng: driver.currentLocation!.lng }} title={`${driver.user?.firstName || 'Driver'} ${driver.user?.lastName || ''}`.trim()} />)}
+      {MAJOR_CITY_POINTS.map((point) => (
+        <MarkerF
+          key={point.id}
+          position={{ lat: point.lat, lng: point.lng }}
+          title={point.name}
+        />
+      ))}
     </GoogleMap>
   );
 };
@@ -318,8 +330,8 @@ const Dashboard: React.FC = () => {
     <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
       <LeafletMapContainer center={[mapCenter.lat, mapCenter.lng]} zoom={12} style={{ width: '100%', height: '100%' }} zoomControl scrollWheelZoom>
         <LeafletTileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           maxZoom={20}
         />
         <HeatmapViewportController drivers={filteredDrivers} hotspots={hotspots} />
@@ -348,8 +360,21 @@ const Dashboard: React.FC = () => {
             pathOptions={{
               color: '#ffffff',
               weight: 2,
-              fillColor: driver.isOnline || driver.isAvailable ? '#2563eb' : '#94a3b8',
+              fillColor: driver.isOnline || driver.isAvailable ? '#5a7fb8' : '#9fb0bf',
               fillOpacity: 0.95,
+            }}
+          />
+        ))}
+        {MAJOR_CITY_POINTS.map((point) => (
+          <LeafletCircleMarker
+            key={point.id}
+            center={[point.lat, point.lng]}
+            radius={6}
+            pathOptions={{
+              color: '#c4b5fd',
+              weight: 2,
+              fillColor: '#7c3aed',
+              fillOpacity: 0.9,
             }}
           />
         ))}
@@ -373,7 +398,7 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 3, minHeight: '100%', background: 'radial-gradient(circle at top left, rgba(59,130,246,0.14), transparent 32%), linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)' }}>
+    <Box sx={{ p: 3, minHeight: '100%', background: 'radial-gradient(circle at top left, rgba(90,127,184,0.12), transparent 34%), linear-gradient(180deg, #f7f9fc 0%, #eef3f9 100%)' }}>
       <Typography variant="h4" fontWeight={900} gutterBottom>{t('dashboard.title')}</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>{t('dashboardExtras.overviewBody')}</Typography>
 

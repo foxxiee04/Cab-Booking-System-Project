@@ -43,6 +43,15 @@ export class DriverGrpcClient {
 
     return response.data?.data?.driver ?? null;
   }
+
+  async getDriverById(driverId: string): Promise<any | null> {
+    const response = await axios.get(`${config.services.driver}/internal/drivers/${driverId}`, {
+      headers: { 'x-internal-token': config.internalServiceToken },
+      timeout: 3000,
+    });
+
+    return response.data?.data?.driver ?? null;
+  }
 }
 
 export const driverGrpcClient = new DriverGrpcClient();

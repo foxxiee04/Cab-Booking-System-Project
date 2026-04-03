@@ -48,6 +48,37 @@ export class RideController {
     return parsedStatuses.length > 0 ? parsedStatuses : undefined;
   }
 
+  private getCompatibleDriverVehicleTypes(requestedVehicleType?: string): string[] | null {
+    switch ((requestedVehicleType || '').toUpperCase()) {
+      case 'MOTORBIKE':
+        return ['MOTORBIKE'];
+      case 'SCOOTER':
+        return ['SCOOTER'];
+      case 'CAR_4':
+        return ['CAR_4'];
+      case 'CAR_7':
+        return ['CAR_7'];
+      // legacy fallback
+      case 'ECONOMY':
+        return ['MOTORBIKE'];
+      case 'COMFORT':
+        return ['CAR_4'];
+      case 'PREMIUM':
+        return ['CAR_7'];
+      default:
+        return null;
+    }
+  }
+
+  private isCompatibleDriverVehicleType(driverVehicleType: string | undefined, requestedVehicleType?: string): boolean {
+    const compatibleDriverTypes = this.getCompatibleDriverVehicleTypes(requestedVehicleType);
+    if (!compatibleDriverTypes || !driverVehicleType) {
+      return true;
+    }
+
+    return compatibleDriverTypes.includes(driverVehicleType.toUpperCase());
+  }
+
   getAllRides = async (req: AuthRequest, res: Response) => {
     try {
       if (req.user!.role !== UserRole.ADMIN) {
@@ -108,7 +139,11 @@ export class RideController {
 
       const lat = parseFloat(req.query.lat as string);
       const lng = parseFloat(req.query.lng as string);
-      const radius = parseInt(req.query.radius as string) || 5;
+      const parsedRadius = parseFloat(req.query.radius as string);
+      const configuredRadius = config.ride.searchRadiusKm;
+      const radius = Number.isFinite(parsedRadius)
+        ? Math.max(0.5, Math.min(parsedRadius, configuredRadius))
+        : configuredRadius;
       const vehicleType = req.query.vehicleType as string;
 
       const availableRides = await this.rideService.getAvailableRides(lat, lng, radius, vehicleType);
@@ -351,8 +386,33 @@ export class RideController {
         });
       }
 
-      const driverId = req.body.driverId || req.user!.userId;
-      const ride = await this.rideService.driverAcceptRide(req.params.rideId, driverId);
+      const driver = await driverGrpcClient.getDriverByUserId(req.user!.userId);
+      if (!driver?.id) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'DRIVER_NOT_FOUND', message: 'Driver profile not found' },
+        });
+      }
+
+      const requestedRide = await this.rideService.getRideById(req.params.rideId);
+      if (!requestedRide) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Ride not found' },
+        });
+      }
+
+      if (!this.isCompatibleDriverVehicleType(driver.vehicleType, requestedRide.vehicleType)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VEHICLE_TYPE_MISMATCH',
+            message: 'Loại xe của tài xế không phù hợp với chuyến đi này',
+          },
+        });
+      }
+
+      const ride = await this.rideService.driverAcceptRide(req.params.rideId, driver.id);
       res.json({ success: true, data: { ride } });
     } catch (err) {
       logger.error('Driver accept ride error:', err);

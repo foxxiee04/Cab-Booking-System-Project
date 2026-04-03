@@ -93,6 +93,47 @@ model Payment {
   @@index([idempotencyKey])
 }
 
+// Per-trip earnings record for the driver
+// Created inside the same transaction as Fare + Payment when a ride completes.
+model DriverEarnings {
+  id              String   @id @default(uuid())
+
+  // Identifiers
+  rideId          String   @unique
+  driverId        String
+
+  // Fare components (VND)
+  grossFare       Float                      // full fare charged to customer
+  commissionRate  Float                      // effective rate, e.g. 0.18
+  platformFee     Float                      // grossFare × commissionRate (rounded)
+
+  // Adjustments (VND)
+  bonus           Float    @default(0)       // total incentive bonus
+  penalty         Float    @default(0)       // total penalty deduction
+
+  // Net result (VND)
+  netEarnings     Float                      // grossFare − platformFee + bonus − penalty
+
+  // Payment accounting
+  paymentMethod   String                     // CASH | MOMO | VNPAY | …
+  driverCollected Boolean  @default(false)   // true = driver collected cash from rider
+  cashDebt        Float    @default(0)       // VND driver owes platform (cash rides only)
+
+  // Payout tracking
+  isPaid          Boolean  @default(false)
+  paidAt          DateTime?
+
+  // JSON breakdown for audit trail
+  bonusBreakdown   Json?                     // { peakHour: 15000, tripMilestone: 50000, … }
+  penaltyBreakdown Json?                     // { highCancelRate: 3000, … }
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([driverId, createdAt(sort: Desc)])
+  @@index([driverId, isPaid])
+}
+
 // Outbox pattern for reliable event publishing
 model OutboxEvent {
   id            String    @id @default(uuid())

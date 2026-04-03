@@ -42,9 +42,10 @@ export const formatPhoneNumber = (phone: string): string => {
  */
 export const getVehicleTypeLabel = (type: string): string => {
   const labels: Record<string, string> = {
-    ECONOMY: i18n.t('vehicle.ECONOMY'),
-    COMFORT: i18n.t('vehicle.COMFORT'),
-    PREMIUM: i18n.t('vehicle.PREMIUM'),
+    MOTORBIKE: i18n.t('vehicle.MOTORBIKE'),
+    SCOOTER: i18n.t('vehicle.SCOOTER'),
+    CAR_4: i18n.t('vehicle.CAR_4'),
+    CAR_7: i18n.t('vehicle.CAR_7'),
   };
   return labels[type] || type;
 };

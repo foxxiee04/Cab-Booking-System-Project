@@ -6,6 +6,7 @@ import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import App from './App';
 import { store } from './store';
 import './i18n';
+import './styles/mobile-optimized.css';
 
 // Create MUI theme
 const theme = createTheme({

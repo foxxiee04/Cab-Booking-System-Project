@@ -35,9 +35,13 @@ const cleanCache = (cache: Map<string, any>) => {
  */
 export const geocodeAddress = async (
   address: string,
-  options?: { signal?: AbortSignal; contextLabel?: string }
+  options?: { signal?: AbortSignal; contextLabel?: string; lat?: number; lng?: number }
 ): Promise<Location[]> => {
-  const cacheKey = `${address.toLowerCase().trim()}::${options?.contextLabel?.toLowerCase().trim() || ''}`;
+  const latlngKey =
+    options?.lat !== undefined && options?.lng !== undefined
+      ? `${options.lat.toFixed(3)},${options.lng.toFixed(3)}`
+      : '';
+  const cacheKey = `${address.toLowerCase().trim()}::${options?.contextLabel?.toLowerCase().trim() || ''}::${latlngKey}`;
 
   // Check cache first
   const cached = geocodeCache.get(cacheKey);
@@ -47,7 +51,14 @@ export const geocodeAddress = async (
 
   try {
     const response = await axiosInstance.get('/map/geocode', {
-      params: { q: address, limit: 7, ...(options?.contextLabel ? { context: options.contextLabel } : {}) },
+      params: {
+        q: address,
+        limit: 7,
+        ...(options?.contextLabel ? { context: options.contextLabel } : {}),
+        ...(options?.lat !== undefined && options?.lng !== undefined
+          ? { lat: options.lat, lng: options.lng }
+          : {}),
+      },
       signal: options?.signal,
     });
 
@@ -66,7 +77,8 @@ export const geocodeAddress = async (
 };
 
 /**
- * Reverse geocode coordinates to address
+ * Reverse geocode coordinates to address with enhanced accuracy for Vietnam
+ * Attempts to extract proper ward/district/city names
  * NOW WITH CACHING to reduce external API calls
  */
 export const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
@@ -83,7 +95,7 @@ export const reverseGeocode = async (lat: number, lng: number): Promise<string> 
       params: { lat, lng },
     });
 
-    const address = response.data?.data?.address || response.data?.data?.display_name || 'Unknown location';
+    const address = response.data?.data?.address || response.data?.data?.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 
     // Store in cache
     reverseGeocodeCache.set(cacheKey, { address, timestamp: Date.now() });
@@ -190,7 +202,47 @@ export const formatDuration = (seconds: number): string => {
 };
 
 /**
- * Get current location from browser
+ * Parse Vietnamese address to extract ward, district, city
+ * OSM/Nominatim often returns incomplete or incorrect ward names
+ */
+export const parseVietnameseAddress = (address: string): {
+  ward?: string;
+  district?: string;
+  city?: string;
+  fullAddress: string;
+} => {
+  const parts = address.split(',').map((p) => p.trim()).filter(Boolean);
+  
+  // Common Vietnamese administrative district/city indicators
+  const wardPatterns = /phường|xã|thị trấn|thị xã/i;
+  const districtPatterns = /quận|huyện|thành phố|tp\.|tp/i;
+  const cityPatterns = /thành phố|tp\.|tp|tỉnh/i;
+
+  let ward: string | undefined;
+  let district: string | undefined;
+  let city: string | undefined;
+
+  for (const part of parts) {
+    if (wardPatterns.test(part) && !ward) {
+      ward = part;
+    } else if (districtPatterns.test(part) && !district) {
+      district = part;
+    } else if (cityPatterns.test(part) && !city) {
+      city = part;
+    }
+  }
+
+  return {
+    ward,
+    district,
+    city,
+    fullAddress: address,
+  };
+};
+
+/**
+ * Get current location from browser with multi-strategy fallback
+ * Tries high-accuracy geolocation with timeout, then falls back to lower accuracy
  */
 export const getCurrentLocation = (): Promise<Location> => {
   return new Promise((resolve, reject) => {
@@ -200,40 +252,59 @@ export const getCurrentLocation = (): Promise<Location> => {
     }
 
     const resolvePosition = (position: GeolocationPosition) => {
+      // Validate location is within Vietnam bounds (roughly)
+      const { latitude: lat, longitude: lng, accuracy } = position.coords;
+      
+      // Vietnam bounds: roughly 8-24N, 102-109E
+      const isWithinVietnamBounds = lat >= 8 && lat <= 24.5 && lng >= 101 && lng <= 110;
+
+      if (!isWithinVietnamBounds) {
+        console.warn(
+          `Location outside Vietnam bounds: ${lat.toFixed(4)}, ${lng.toFixed(4)} (accuracy: ${accuracy}m)`
+        );
+      }
+
       resolve({
-        lat: position.coords.latitude,
-        lng: position.coords.longitude,
+        lat,
+        lng,
       });
     };
 
-    const fallbackRequest = () => {
-      navigator.geolocation.getCurrentPosition(
-        resolvePosition,
-        (error) => {
-          reject(error);
-        },
-        {
-          enableHighAccuracy: false,
-          timeout: 15000,
-          maximumAge: 60000,
-        }
+    const handleError = (error: GeolocationPositionError, isHighAccuracy: boolean) => {
+      console.error(
+        `Geolocation error (highAccuracy=${isHighAccuracy}, code=${error.code}):`,
+        error.message
       );
+
+      // If high accuracy failed, try lower accuracy
+      if (isHighAccuracy && (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE)) {
+        console.log('High accuracy geolocation timed out, trying lower accuracy...');
+        navigator.geolocation.getCurrentPosition(
+          resolvePosition,
+          (fallbackError) => {
+            console.error('Low accuracy geolocation also failed:', fallbackError.message);
+            reject(fallbackError);
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: 15000,
+            maximumAge: 300000, // Allow location up to 5 minutes old
+          }
+        );
+        return;
+      }
+
+      reject(error);
     };
 
+    // First attempt: High accuracy with reasonable timeout
     navigator.geolocation.getCurrentPosition(
       resolvePosition,
-      (error) => {
-        if (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE) {
-          fallbackRequest();
-          return;
-        }
-
-        reject(error);
-      },
+      (error) => handleError(error, true),
       {
         enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
+        timeout: 8000, // 8 seconds timeout for high accuracy
+        maximumAge: 0, // Force fresh location
       }
     );
   });

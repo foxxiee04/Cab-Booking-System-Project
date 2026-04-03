@@ -61,18 +61,29 @@ export class VNPayGateway {
       throw new Error('VNPay is not configured. Set VNPAY_TMN_CODE and VNPAY_HASH_SECRET.');
     }
 
-    const txnRef = params.orderId;
+    // Keep txnRef length <= 8 chars for sandbox but avoid collisions on retries.
+    const nowMs = Date.now();
+    const orderPrefix = params.orderId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase().padEnd(4, 'X');
+    const txnRef = `${orderPrefix}${String(nowMs).slice(-4)}`;
 
-    const formatVNPayDate = (d: Date) =>
-      d.getFullYear().toString() +
-      String(d.getMonth() + 1).padStart(2, '0') +
-      String(d.getDate()).padStart(2, '0') +
-      String(d.getHours()).padStart(2, '0') +
-      String(d.getMinutes()).padStart(2, '0') +
-      String(d.getSeconds()).padStart(2, '0');
+    const formatVNPayDate = (d: Date): string => {
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).formatToParts(d);
 
-    const now = new Date();
-    const expire = new Date(now.getTime() + 15 * 60 * 1000);
+      const pick = (type: string) => parts.find((p) => p.type === type)?.value || '';
+      return `${pick('year')}${pick('month')}${pick('day')}${pick('hour')}${pick('minute')}${pick('second')}`;
+    };
+
+    const now = new Date(nowMs);
+    const expire = new Date(nowMs + 15 * 60 * 1000);
     const createDate = formatVNPayDate(now);
     const expireDate = formatVNPayDate(expire);
 
@@ -82,6 +93,8 @@ export class VNPayGateway {
     const returnUrl = params.returnUrl || config.vnpay.returnUrl;
 
     // Build sorted params object (VNPay requires lexicographic sort)
+    const safeIpAddress = (params.ipAddress || '127.0.0.1').includes(':') ? '127.0.0.1' : (params.ipAddress || '127.0.0.1');
+
     const vnpParams: Record<string, string> = {
       vnp_Version: '2.1.0',
       vnp_Command: 'pay',
@@ -93,7 +106,7 @@ export class VNPayGateway {
       vnp_OrderType: 'other',
       vnp_Amount: vnpAmount.toString(),
       vnp_ReturnUrl: returnUrl,
-      vnp_IpAddr: params.ipAddress || '127.0.0.1',
+      vnp_IpAddr: safeIpAddress,
       vnp_CreateDate: createDate,
       vnp_ExpireDate: expireDate,
     };
@@ -102,10 +115,11 @@ export class VNPayGateway {
       vnpParams.vnp_BankCode = params.bankCode;
     }
 
-    const signData = this.buildSignData(vnpParams);
+    const encodedParams = this.sortAndEncodeParams(vnpParams);
+    const signData = this.buildSignData(encodedParams);
     const secureHash = this.hmacSha512(config.vnpay.hashSecret, signData);
 
-    const queryString = new URLSearchParams({ ...vnpParams, vnp_SecureHash: secureHash }).toString();
+    const queryString = `${this.buildSignData(encodedParams)}&vnp_SecureHash=${secureHash}`;
     const paymentUrl = `${config.vnpay.url}?${queryString}`;
 
     logger.info('VNPay payment URL created', { txnRef, amount: params.amount });
@@ -139,7 +153,10 @@ export class VNPayGateway {
     delete paramsCopy.vnp_SecureHash;
     delete paramsCopy.vnp_SecureHashType;
 
-    const signData = this.buildSignData(paramsCopy);
+    // VNPay signs over URL-encoded values (space as '+').
+    // Express decodes query params, so we must re-encode before verifying.
+    const encodedParamsCopy = this.sortAndEncodeParams(paramsCopy);
+    const signData = this.buildSignData(encodedParamsCopy);
     const expectedHash = this.hmacSha512(config.vnpay.hashSecret, signData);
 
     // Timing-safe comparison to prevent timing attacks
@@ -170,6 +187,20 @@ export class VNPayGateway {
       .sort()
       .map((k) => `${k}=${params[k]}`)
       .join('&');
+  }
+
+  /** VNPay requires sorted params and value encoding (space as '+') before signing */
+  private sortAndEncodeParams(params: Record<string, string>): Record<string, string> {
+    const sortedKeys = Object.keys(params)
+      .filter((k) => params[k] !== undefined && params[k] !== null && params[k] !== '')
+      .sort();
+
+    const encoded: Record<string, string> = {};
+    for (const key of sortedKeys) {
+      encoded[key] = encodeURIComponent(params[key]).replace(/%20/g, '+');
+    }
+
+    return encoded;
   }
 
   /** HMAC-SHA512 hash */

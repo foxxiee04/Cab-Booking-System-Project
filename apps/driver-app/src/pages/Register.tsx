@@ -61,7 +61,7 @@ const Register: React.FC = () => {
     try {
       const res = await authApi.registerPhoneStart({ phone: normalizedPhone });
       setResendDelay(res.data?.resendDelay || 30);
-      setSuccess(res.data?.message || 'OTP đã gửi tới +84****xxx');
+      setSuccess(res.data?.message || 'Mã OTP đã được gửi đến số điện thoại của bạn.');
       setStep('otp');
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể gửi OTP xác thực.');
@@ -149,7 +149,7 @@ const Register: React.FC = () => {
       const res = await authApi.registerPhoneStart({ phone });
       setResendDelay(res.data?.resendDelay || 60);
       setOtp('');
-      setSuccess(res.data?.message || 'OTP đã gửi tới +84****xxx');
+      setSuccess(res.data?.message || 'Mã OTP đã được gửi lại thành công.');
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể gửi lại OTP.');
     } finally {
@@ -173,7 +173,7 @@ const Register: React.FC = () => {
             <Box sx={{ textAlign: 'center', mb: 3 }}>
               <DriveEta sx={{ fontSize: 56, color: 'primary.main' }} />
               <Typography variant="h3" fontWeight="bold" color="text.primary" mt={1} sx={{ fontSize: { xs: '2rem', sm: '2.5rem' } }}>
-                {step === 'phone' && 'Đăng ký Tài Xế'}
+                {step === 'phone' && 'Đăng ký'}
                 {step === 'otp' && 'Xác minh SĐT'}
                 {step === 'profile' && 'Thông tin tài xế'}
               </Typography>
@@ -194,7 +194,6 @@ const Register: React.FC = () => {
                   label="Số điện thoại"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  placeholder="0912345678"
                   required
                   autoFocus
                   inputMode="numeric"
@@ -205,7 +204,6 @@ const Register: React.FC = () => {
                       </InputAdornment>
                     ),
                   }}
-                  helperText="10 chữ số, bắt đầu bằng 0"
                 />
 
                 <Button fullWidth type="submit" variant="contained" size="large" disabled={loading} sx={{ mt: 3, mb: 2, py: 1.8, fontSize: '1.2rem', fontWeight: 600, borderRadius: 2 }}>
@@ -226,7 +224,7 @@ const Register: React.FC = () => {
             {step === 'otp' && (
               <form onSubmit={handleVerifyPhoneOtp}>
                 <Alert severity="info" sx={{ mb: 2 }}>
-                  {success || 'OTP đã gửi tới +84****xxx'}
+                  {success || 'Mã OTP đã được gửi đến số điện thoại của bạn.'}
                 </Alert>
 
                 <TextField

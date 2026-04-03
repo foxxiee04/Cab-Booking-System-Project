@@ -29,6 +29,7 @@ export class EventConsumer {
       
       // Bind to booking.created event from Booking Service
       await this.channel.bindQueue(this.queue, EXCHANGE_NAME, 'booking.created');
+      await this.channel.bindQueue(this.queue, EXCHANGE_NAME, 'payment.completed');
       
       await this.channel.prefetch(10);
       
@@ -67,6 +68,9 @@ export class EventConsumer {
       case 'booking.created':
         await this.handleBookingCreated(payload);
         break;
+      case 'payment.completed':
+        await this.handlePaymentCompleted(payload);
+        break;
       default:
         logger.warn(`Unhandled event type: ${eventType}`);
     }
@@ -97,6 +101,17 @@ export class EventConsumer {
       logger.error('Failed to create ride from booking:', error);
       throw error;
     }
+  }
+
+  private async handlePaymentCompleted(payload: any): Promise<void> {
+    const rideId = payload?.rideId;
+    if (!rideId) {
+      logger.warn('payment.completed payload missing rideId');
+      return;
+    }
+
+    logger.info('Received payment.completed, starting driver search for ride', { rideId });
+    await this.rideService.startFindingDriverAfterPayment(rideId);
   }
 
   async close(): Promise<void> {

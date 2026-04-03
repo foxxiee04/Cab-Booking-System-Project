@@ -23,7 +23,7 @@ export interface Location {
   address?: string;
 }
 
-export type VehicleType = 'ECONOMY' | 'COMFORT' | 'PREMIUM';
+export type VehicleType = 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
 export type PaymentMethod = 'CASH' | 'CARD' | 'WALLET' | 'MOMO' | 'VNPAY';
 
 export type RideStatus = 
@@ -70,6 +70,8 @@ export interface Driver {
   rating: number;
   totalRides: number;
   currentLocation?: Location;
+  heading?: number;
+  acceptanceRate?: number;
 }
 
 export interface FareEstimate {

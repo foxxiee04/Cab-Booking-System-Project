@@ -13,6 +13,7 @@ import {
   Grid,
   MenuItem,
   InputAdornment,
+  Snackbar,
 } from '@mui/material';
 import {
   DirectionsCar,
@@ -23,29 +24,44 @@ import {
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { setProfile } from '../store/driver.slice';
 import { driverApi } from '../api/driver.api';
-import { VehicleType } from '../types';
+import { DriverRegistration, VehicleType } from '../types';
 import { useTranslation } from 'react-i18next';
 
-const VEHICLE_MAKE_OPTIONS = [
-  'Toyota',
-  'Hyundai',
-  'Kia',
-  'Honda',
-  'Mazda',
-  'Mitsubishi',
-  'VinFast',
-  'Ford',
-];
+const VEHICLE_OPTIONS_BY_TYPE: Record<VehicleType, Record<string, string[]>> = {
+  MOTORBIKE: {
+    Honda: ['Wave Alpha', 'Winner X', 'Blade'],
+    Yamaha: ['Sirius', 'Exciter', 'Jupiter'],
+    Suzuki: ['Raider', 'Axelo'],
+    SYM: ['Elegant', 'Galaxy'],
+  },
+  SCOOTER: {
+    Honda: ['Vision', 'Air Blade', 'Lead', 'SH Mode'],
+    Yamaha: ['Janus', 'FreeGo', 'Grande'],
+    Piaggio: ['Liberty', 'Medley'],
+    VinFast: ['Evo200', 'Klara S2'],
+  },
+  CAR_4: {
+    Toyota: ['Vios', 'Corolla Altis', 'Yaris Cross'],
+    Hyundai: ['Accent', 'Elantra'],
+    Kia: ['K3', 'Seltos'],
+    Honda: ['City', 'Civic'],
+    Mazda: ['Mazda2', 'Mazda3'],
+    VinFast: ['VF e34', 'VF 6'],
+  },
+  CAR_7: {
+    Toyota: ['Innova', 'Fortuner'],
+    Hyundai: ['Stargazer', 'Santa Fe'],
+    Mitsubishi: ['Xpander', 'Pajero Sport'],
+    Ford: ['Everest', 'Tourneo'],
+    Kia: ['Carens', 'Sorento'],
+  },
+};
 
-const VEHICLE_MODEL_OPTIONS: Record<string, string[]> = {
-  Toyota: ['Vios', 'Innova', 'Corolla Cross', 'Avanza Premio'],
-  Hyundai: ['Accent', 'Grand i10', 'Elantra', 'Stargazer'],
-  Kia: ['Morning', 'Soluto', 'K3', 'Carens'],
-  Honda: ['City', 'Civic', 'BR-V', 'CR-V'],
-  Mazda: ['Mazda2', 'Mazda3', 'CX-3', 'CX-5'],
-  Mitsubishi: ['Attrage', 'Xpander', 'Xforce'],
-  VinFast: ['VF e34', 'VF 5', 'VF 6', 'VF 7'],
-  Ford: ['EcoSport', 'Territory', 'Everest'],
+const VEHICLE_TYPE_LABELS: Record<VehicleType, string> = {
+  MOTORBIKE: 'Xe máy (số)',
+  SCOOTER: 'Xe ga',
+  CAR_4: 'Ô tô 4 chỗ',
+  CAR_7: 'Ô tô 7 chỗ',
 };
 
 const VEHICLE_COLOR_OPTIONS = [
@@ -59,6 +75,11 @@ const VEHICLE_COLOR_OPTIONS = [
   'Vàng',
 ];
 
+const formatLicenseNumberInput = (rawValue: string) => {
+  const digits = rawValue.replace(/\D/g, '').slice(0, 12);
+  return digits.replace(/(\d{3})(?=\d)/g, '$1 ').trim();
+};
+
 const ProfileSetup: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -67,8 +88,10 @@ const ProfileSetup: React.FC = () => {
   const currentYear = new Date().getFullYear();
   const minExpiryDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+
   const [formData, setFormData] = useState({
-    vehicleType: 'ECONOMY' as VehicleType,
+    vehicleType: 'CAR_4' as VehicleType,
     vehicleMake: '',
     vehicleModel: '',
     vehicleColor: '',
@@ -78,7 +101,8 @@ const ProfileSetup: React.FC = () => {
     licenseExpiryDate: '',
   });
   const vehicleYearOptions = Array.from({ length: currentYear - 2014 + 2 }, (_, index) => currentYear + 1 - index);
-  const availableModels = VEHICLE_MODEL_OPTIONS[formData.vehicleMake] || [];
+  const availableMakes = Object.keys(VEHICLE_OPTIONS_BY_TYPE[formData.vehicleType]);
+  const availableModels = VEHICLE_OPTIONS_BY_TYPE[formData.vehicleType][formData.vehicleMake] || [];
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -87,6 +111,8 @@ const ProfileSetup: React.FC = () => {
     // vehicleYear comes from a MUI Select so e.target.value is already a number.
     const nextValue = field === 'vehicleYear'
       ? Number(e.target.value)
+      : field === 'licenseNumber'
+        ? formatLicenseNumberInput(e.target.value)
       : e.target.value;
 
     setFormData({ ...formData, [field]: nextValue });
@@ -95,7 +121,7 @@ const ProfileSetup: React.FC = () => {
 
   const handleVehicleMakeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const nextMake = e.target.value;
-    const nextModels = VEHICLE_MODEL_OPTIONS[nextMake] || [];
+    const nextModels = VEHICLE_OPTIONS_BY_TYPE[formData.vehicleType][nextMake] || [];
 
     setFormData((prev) => ({
       ...prev,
@@ -105,13 +131,33 @@ const ProfileSetup: React.FC = () => {
     setFieldErrors((prev) => ({ ...prev, vehicleMake: '', vehicleModel: '' }));
   };
 
+  const handleVehicleTypeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const nextType = e.target.value as DriverRegistration['vehicleType'];
+    const makes = Object.keys(VEHICLE_OPTIONS_BY_TYPE[nextType]);
+    const firstMake = makes[0] || '';
+    const modelsForFirstMake = VEHICLE_OPTIONS_BY_TYPE[nextType][firstMake] || [];
+
+    setFormData((prev) => ({
+      ...prev,
+      vehicleType: nextType,
+      vehicleMake: makes.includes(prev.vehicleMake) ? prev.vehicleMake : firstMake,
+      vehicleModel: makes.includes(prev.vehicleMake)
+        ? (VEHICLE_OPTIONS_BY_TYPE[nextType][prev.vehicleMake] || []).includes(prev.vehicleModel)
+          ? prev.vehicleModel
+          : (VEHICLE_OPTIONS_BY_TYPE[nextType][prev.vehicleMake] || [])[0] || ''
+        : modelsForFirstMake[0] || '',
+    }));
+
+    setFieldErrors((prev) => ({ ...prev, vehicleType: '', vehicleMake: '', vehicleModel: '' }));
+  };
+
   const validateForm = () => {
     const nextErrors: Record<string, string> = {};
     const normalizedPlate = formData.licensePlate.trim().toUpperCase();
-    const normalizedLicense = formData.licenseNumber.trim().toUpperCase();
+    const normalizedLicense = formData.licenseNumber.trim();
+    const licenseDigits = normalizedLicense.replace(/\s+/g, '');
     const plateRegex = /^\d{2}[A-Z]{1,2}-?\d{4,5}$/;
-    // Vietnamese GPLX is exactly 12 digits
-    const licenseRegex = /^\d{12}$/
+    const licenseRegex = /^\d{3}\s\d{3}\s\d{3}\s\d{3}$/;
 
     if (formData.vehicleMake.trim().length < 2) {
       nextErrors.vehicleMake = t('errors.vehicleMakeInvalid');
@@ -133,7 +179,7 @@ const ProfileSetup: React.FC = () => {
       nextErrors.licensePlate = t('errors.licensePlateInvalid');
     }
 
-    if (!licenseRegex.test(normalizedLicense)) {
+    if (!licenseRegex.test(normalizedLicense) || licenseDigits.length !== 12) {
       nextErrors.licenseNumber = t('errors.licenseNumberInvalid');
     }
 
@@ -160,13 +206,17 @@ const ProfileSetup: React.FC = () => {
         throw new Error(t('errors.authRequired'));
       }
 
-      const response = await driverApi.registerDriver(formData);
+      const payload: DriverRegistration = {
+        ...formData,
+        licenseNumber: formData.licenseNumber.replace(/\s+/g, ''),
+      };
+
+      const response = await driverApi.registerDriver(payload);
 
       if (response.success) {
         dispatch(setProfile(response.data.driver));
-        // Show success and inform about approval process
-        alert(t('profileSetup.successMessage'));
-        navigate('/dashboard');
+        setSnackbarOpen(true);
+        setTimeout(() => navigate('/dashboard'), 3000);
       }
     } catch (err: any) {
       setError(err.response?.data?.error?.message || t('errors.profileSetupFailed'));
@@ -176,6 +226,7 @@ const ProfileSetup: React.FC = () => {
   };
 
   return (
+    <>
     <Box
       sx={{
         minHeight: '100vh',
@@ -216,7 +267,7 @@ const ProfileSetup: React.FC = () => {
                     select
                     label={t('profileSetup.vehicleType')}
                     value={formData.vehicleType}
-                    onChange={handleChange('vehicleType')}
+                    onChange={handleVehicleTypeChange}
                     required
                     InputProps={{
                       startAdornment: (
@@ -226,9 +277,10 @@ const ProfileSetup: React.FC = () => {
                       ),
                     }}
                   >
-                    <MenuItem value="ECONOMY">{t('vehicle.ECONOMY')} (4 chỗ)</MenuItem>
-                    <MenuItem value="COMFORT">{t('vehicle.COMFORT')} (4 chỗ, cao cấp)</MenuItem>
-                    <MenuItem value="PREMIUM">{t('vehicle.PREMIUM')} (sang trọng)</MenuItem>
+                    <MenuItem value="MOTORBIKE">{VEHICLE_TYPE_LABELS.MOTORBIKE}</MenuItem>
+                    <MenuItem value="SCOOTER">{VEHICLE_TYPE_LABELS.SCOOTER}</MenuItem>
+                    <MenuItem value="CAR_4">{VEHICLE_TYPE_LABELS.CAR_4}</MenuItem>
+                    <MenuItem value="CAR_7">{VEHICLE_TYPE_LABELS.CAR_7}</MenuItem>
                   </TextField>
                 </Grid>
 
@@ -251,7 +303,7 @@ const ProfileSetup: React.FC = () => {
                       ),
                     }}
                   >
-                    {VEHICLE_MAKE_OPTIONS.map((make) => (
+                    {availableMakes.map((make) => (
                       <MenuItem key={make} value={make}>
                         {make}
                       </MenuItem>
@@ -359,8 +411,8 @@ const ProfileSetup: React.FC = () => {
                     required
                     error={Boolean(fieldErrors.licenseNumber)}
                     helperText={fieldErrors.licenseNumber}
-                    placeholder="123456789012"
-                    inputProps={{ maxLength: 12, inputMode: 'numeric' }}
+                    placeholder="052 042 424 424"
+                    inputProps={{ maxLength: 15, inputMode: 'numeric' }}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -394,12 +446,6 @@ const ProfileSetup: React.FC = () => {
                 </Typography>
               </Alert>
 
-              <Alert severity="success" sx={{ mt: 2 }}>
-                <Typography variant="body2">
-                  {t('profileSetup.vehiclePhotoHint')}
-                </Typography>
-              </Alert>
-
               <Button
                 fullWidth
                 type="submit"
@@ -415,6 +461,23 @@ const ProfileSetup: React.FC = () => {
         </Card>
       </Container>
     </Box>
+
+    <Snackbar
+      open={snackbarOpen}
+      autoHideDuration={3000}
+      onClose={() => setSnackbarOpen(false)}
+      anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+    >
+      <Alert
+        onClose={() => setSnackbarOpen(false)}
+        severity="success"
+        variant="filled"
+        sx={{ width: '100%', borderRadius: 3 }}
+      >
+        {t('profileSetup.successMessage')}
+      </Alert>
+    </Snackbar>
+    </>
   );
 };
 

@@ -9,7 +9,7 @@ const GEO_KEY = 'drivers:geo:online';
 interface RegisterDriverInput {
   userId: string;
   vehicle: {
-    type: 'CAR' | 'MOTORCYCLE' | 'SUV';
+    type: 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
     brand: string;
     model: string;
     plate: string;

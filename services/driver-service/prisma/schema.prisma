@@ -23,9 +23,10 @@ enum AvailabilityStatus {
 }
 
 enum VehicleType {
-  CAR
-  MOTORCYCLE
-  SUV
+  MOTORBIKE
+  SCOOTER
+  CAR_4
+  CAR_7
 }
 
 model Driver {

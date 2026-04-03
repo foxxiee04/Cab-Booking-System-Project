@@ -35,6 +35,11 @@ const shouldForwardOverHttp = (
   service: keyof typeof import('../config').config.grpcServices,
   normalizedPath: string,
 ) => {
+  // All auth routes use HTTP forwarding (gRPC bridge internal fetch is unreliable)
+  if (service === 'auth') {
+    return true;
+  }
+
   if (service !== 'driver') {
     return false;
   }

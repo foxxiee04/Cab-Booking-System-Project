@@ -146,10 +146,18 @@ export class DriverController {
         });
       }
 
-      const { lat, lng, radius, vehicleType } = req.query;
+      const driver = await this.driverService.getDriverByUserId(req.user!.userId);
+      if (!driver) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'DRIVER_NOT_FOUND', message: 'Driver profile not found' },
+        });
+      }
+
+      const { lat, lng, radius } = req.query;
 
       const response = await axios.get(`${process.env.RIDE_SERVICE_URL || config.services.ride}/api/rides/available`, {
-        params: { lat, lng, radius, vehicleType },
+        params: { lat, lng, radius, vehicleType: driver.vehicleType },
         headers: { Authorization: req.header('authorization') || '' },
         timeout: 5000,
       });

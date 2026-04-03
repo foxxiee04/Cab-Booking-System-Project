@@ -2,6 +2,8 @@
 const mockPrisma: any = {
   fare: {
     findFirst: jest.fn(),
+    findUnique: jest.fn(),
+    findMany: jest.fn().mockResolvedValue([]),
     create: jest.fn(),
   },
   payment: {
@@ -11,6 +13,12 @@ const mockPrisma: any = {
     create: jest.fn(),
     update: jest.fn(),
     count: jest.fn(),
+  },
+  driverEarnings: {
+    create: jest.fn().mockResolvedValue({ id: 'earnings-1' }),
+    findMany: jest.fn(),
+    count: jest.fn(),
+    aggregate: jest.fn(),
   },
   outboxEvent: {
     create: jest.fn(),
@@ -58,6 +66,9 @@ describe('PaymentService - Simple Test Suite', () => {
 
     // Reset mocks
     mockPrisma.fare.findFirst.mockReset();
+    mockPrisma.fare.findUnique.mockReset();
+    mockPrisma.fare.findMany.mockReset();
+    mockPrisma.fare.findMany.mockResolvedValue([]);
     mockPrisma.fare.create.mockReset();
     mockPrisma.payment.findUnique.mockReset();
     mockPrisma.payment.findFirst.mockReset();
@@ -65,6 +76,10 @@ describe('PaymentService - Simple Test Suite', () => {
     mockPrisma.payment.create.mockReset();
     mockPrisma.payment.update.mockReset();
     mockPrisma.payment.count.mockReset();
+    mockPrisma.driverEarnings.create.mockReset();
+    mockPrisma.driverEarnings.findMany?.mockReset?.();
+    mockPrisma.driverEarnings.count?.mockReset?.();
+    mockPrisma.driverEarnings.aggregate?.mockReset?.();
     mockPrisma.outboxEvent.create.mockReset();
     mockPrisma.$transaction.mockImplementation((callback: any) => callback(mockPrisma));
 

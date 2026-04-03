@@ -14,7 +14,7 @@ export function createPricingGrpcRegistrations(
       serviceName: 'PricingService',
       implementation: {
         EstimateFare: async (
-          call: { request: { pickupLat: number; pickupLng: number; dropoffLat: number; dropoffLng: number; vehicleType: 'ECONOMY' | 'COMFORT' | 'PREMIUM' } },
+          call: { request: { pickupLat: number; pickupLng: number; dropoffLat: number; dropoffLng: number; vehicleType: 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7' } },
           callback: (error: Error | null, response?: unknown) => void,
         ) => {
           try {

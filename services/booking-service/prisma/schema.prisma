@@ -16,9 +16,10 @@ enum BookingStatus {
 }
 
 enum VehicleType {
-  ECONOMY
-  COMFORT
-  PREMIUM
+  MOTORBIKE
+  SCOOTER
+  CAR_4
+  CAR_7
 }
 
 enum PaymentMethod {
@@ -41,7 +42,7 @@ model Booking {
   dropoffLng     Float
   
   // Booking preferences
-  vehicleType   VehicleType    @default(ECONOMY)
+  vehicleType   VehicleType    @default(CAR_4)
   paymentMethod PaymentMethod  @default(CASH)
   
   // Pricing (from Pricing Service)

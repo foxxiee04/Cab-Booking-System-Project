@@ -22,7 +22,7 @@ export function createPricingRouter(pricingService: PricingService): Router {
         pickupLng,
         dropoffLat,
         dropoffLng,
-        vehicleType: vehicleType || 'ECONOMY',
+        vehicleType: vehicleType || 'CAR_4',
       });
 
       res.json({ success: true, data: estimate });

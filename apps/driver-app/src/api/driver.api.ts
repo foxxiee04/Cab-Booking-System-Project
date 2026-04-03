@@ -1,5 +1,10 @@
 import axiosInstance from './axios.config';
-import { ApiResponse, Driver, DriverRegistration, Location, Earnings } from '../types';
+import { ApiResponse, Driver, DriverRegistration, Location, Earnings, NearbyDriver } from '../types';
+
+interface NearbyDriversApiResponse {
+  success: boolean;
+  data: { drivers: NearbyDriver[] };
+}
 
 const DRIVER_COMMISSION_RATE = 0.2;
 const EARNINGS_DAYS = 7;
@@ -36,24 +41,7 @@ const normalizeDriver = (driver: any): Driver => {
   };
 };
 
-const mapVehicleType = (type: DriverRegistration['vehicleType']): 'CAR' | 'SUV' | 'MOTORCYCLE' => {
-  switch (type) {
-    case 'ECONOMY':
-      return 'CAR';
-    case 'COMFORT':
-      return 'CAR';
-    case 'PREMIUM':
-      return 'SUV';
-    case 'CAR':
-      return 'CAR';
-    case 'SUV':
-      return 'SUV';
-    case 'MOTORCYCLE':
-      return 'MOTORCYCLE';
-    default:
-      return 'CAR';
-  }
-};
+const mapVehicleType = (type: DriverRegistration['vehicleType']): DriverRegistration['vehicleType'] => type;
 
 export const driverApi = {
   // Register as driver (complete profile)
@@ -133,6 +121,22 @@ export const driverApi = {
         driver: normalizeDriver(payload.driver || payload),
       },
     };
+  },
+
+  // Get nearby online drivers
+  getNearbyDrivers: async (params: { lat: number; lng: number; radius?: number }): Promise<NearbyDriversApiResponse> => {
+    const response = await axiosInstance.get('/drivers/nearby', { params });
+    const payload = response.data?.data || response.data;
+    const drivers = (payload?.drivers || [])
+      .filter((d: any) => d?.id && d?.lat != null && d?.lng != null)
+      .map((d: any) => ({
+        id: d.id,
+        lat: Number(d.lat),
+        lng: Number(d.lng),
+        vehicleType: d.vehicleType,
+        heading: d.heading,
+      }));
+    return { ...response.data, data: { drivers } };
   },
 
   // Update location

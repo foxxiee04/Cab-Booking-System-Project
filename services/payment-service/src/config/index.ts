@@ -29,12 +29,39 @@ export const config = {
   },
   
   serviceName: process.env.SERVICE_NAME || 'payment-service',
+
+  booking: {
+    callbackUrl: process.env.BOOKING_PAYMENT_CALLBACK_URL || '',
+  },
   
   // Fare policy (in VND)
   farePolicy: {
     baseFare: parseInt(process.env.BASE_FARE || '15000', 10),
     perKmRate: parseInt(process.env.PER_KM_RATE || '12000', 10),
     perMinuteRate: parseInt(process.env.PER_MINUTE_RATE || '2000', 10),
+  },
+
+  // Commission & earnings policy
+  commission: {
+    // Base rates per vehicle class (0.0–1.0)
+    rateEconomy: parseFloat(process.env.COMMISSION_RATE_ECONOMY || '0.20'),
+    rateComfort:  parseFloat(process.env.COMMISSION_RATE_COMFORT  || '0.18'),
+    ratePremium:  parseFloat(process.env.COMMISSION_RATE_PREMIUM  || '0.15'),
+    // Incentive bonuses (VND)
+    peakHourBonus:         parseInt(process.env.INCENTIVE_PEAK_HOUR_BONUS         || '15000', 10),
+    tripMilestoneBonus:    parseInt(process.env.INCENTIVE_TRIP_MILESTONE_BONUS    || '50000', 10),
+    tripMilestoneInterval: parseInt(process.env.INCENTIVE_TRIP_MILESTONE_INTERVAL || '10',    10),
+    highRatingBonus:       parseInt(process.env.INCENTIVE_HIGH_RATING_BONUS       || '10000', 10),
+    highRatingThreshold:   parseFloat(process.env.INCENTIVE_HIGH_RATING_THRESHOLD || '4.8'),
+    highAcceptanceBonus:   parseInt(process.env.INCENTIVE_HIGH_ACCEPTANCE_BONUS   || '5000',  10),
+    acceptanceThreshold:   parseFloat(process.env.INCENTIVE_ACCEPTANCE_THRESHOLD  || '0.95'),
+    // Penalty rates (fraction of grossFare)
+    highCancelThreshold:      parseFloat(process.env.PENALTY_HIGH_CANCEL_THRESHOLD      || '0.10'),
+    highCancelPenalty:        parseFloat(process.env.PENALTY_HIGH_CANCEL_RATE            || '0.05'),
+    veryHighCancelThreshold:  parseFloat(process.env.PENALTY_VERY_HIGH_CANCEL_THRESHOLD || '0.20'),
+    veryHighCancelPenalty:    parseFloat(process.env.PENALTY_VERY_HIGH_CANCEL_RATE       || '0.10'),
+    lowAcceptanceThreshold:   parseFloat(process.env.PENALTY_LOW_ACCEPTANCE_THRESHOLD   || '0.70'),
+    lowAcceptancePenalty:     parseFloat(process.env.PENALTY_LOW_ACCEPTANCE_RATE         || '0.05'),
   },
   
   // Stripe Configuration
@@ -52,6 +79,13 @@ export const config = {
     accessKey: process.env.MOMO_ACCESS_KEY || '',
     secretKey: process.env.MOMO_SECRET_KEY || '',
     endpoint: process.env.MOMO_ENDPOINT || 'https://test-payment.momo.vn',
+    requestType: process.env.MOMO_REQUEST_TYPE || 'captureWallet',
+    partnerName: process.env.MOMO_PARTNER_NAME || 'CabBooking',
+    storeId: process.env.MOMO_STORE_ID || 'CabBookingStore',
+    autoCapture: process.env.MOMO_AUTO_CAPTURE !== 'false',
+    paymentCode: process.env.MOMO_PAYMENT_CODE || '',
+    notifyUrl: process.env.MOMO_NOTIFY_URL || '',
+    returnUrl: process.env.MOMO_RETURN_URL || '',
   },
   
   // ZaloPay Configuration

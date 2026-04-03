@@ -29,10 +29,6 @@ import {
 import {
   AccountBalanceWallet,
   AccountBalance,
-  AirportShuttle,
-  CreditCard,
-  DirectionsCar,
-  LocalTaxi,
   MoneyOff,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
@@ -42,6 +38,10 @@ import { pricingApi } from '../../api/pricing.api';
 import { rideApi } from '../../api/ride.api';
 import { paymentApi } from '../../api/payment.api';
 import { Location } from '../../types';
+import motorbikeImage from '../../assets/vehicles/xe_may.jpg';
+import scooterImage from '../../assets/vehicles/xe_ga.jpg';
+import car4Image from '../../assets/vehicles/xe_4_cho.jpg';
+import car7Image from '../../assets/vehicles/xe_7_cho.jpg';
 
 interface RideBookingFlowProps {
   open: boolean;
@@ -60,49 +60,94 @@ interface PriceEstimate {
 }
 
 interface VehicleOption {
-  type: 'ECONOMY' | 'COMFORT' | 'PREMIUM';
+  type: 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
   name: string;
-  icon: React.ReactNode;
+  imageSrc: string;
   description: string;
   capacity: number;
   priceMultiplier: number;
 }
 
+const FALLBACK_PRICING: Record<VehicleOption['type'], { baseFare: number; perKmRate: number; perMinuteRate: number }> = {
+  MOTORBIKE: { baseFare: 9000, perKmRate: 6500, perMinuteRate: 500 },
+  SCOOTER: { baseFare: 11000, perKmRate: 7800, perMinuteRate: 650 },
+  CAR_4: { baseFare: 17000, perKmRate: 12500, perMinuteRate: 1500 },
+  CAR_7: { baseFare: 22000, perKmRate: 15500, perMinuteRate: 1900 },
+};
+
+const MINIMUM_FARE = 15000;
+
+const MIN_PRICE_GAP: Record<'SCOOTER' | 'CAR_7', number> = {
+  SCOOTER: 1500,
+  CAR_7: 5000,
+};
+
 const vehicleOptions: VehicleOption[] = [
   {
-    type: 'ECONOMY',
-    name: 'Phổ thông',
-    icon: <DirectionsCar fontSize="large" />,
-    description: 'Tiết kiệm, dễ đặt',
-    capacity: 4,
+    type: 'MOTORBIKE',
+    name: 'Xe máy',
+    imageSrc: motorbikeImage,
+    description: 'Nhanh, linh hoạt',
+    capacity: 1,
     priceMultiplier: 1.0,
   },
   {
-    type: 'COMFORT',
-    name: 'Tiện nghi',
-    icon: <LocalTaxi fontSize="large" />,
-    description: 'Thoải mái hơn',
-    capacity: 4,
-    priceMultiplier: 1.3,
+    type: 'SCOOTER',
+    name: 'Xe ga',
+    imageSrc: scooterImage,
+    description: 'Êm và thoải mái',
+    capacity: 1,
+    priceMultiplier: 1.15,
   },
   {
-    type: 'PREMIUM',
-    name: 'Cao cấp',
-    icon: <AirportShuttle fontSize="large" />,
-    description: 'Không gian rộng, trải nghiệm tốt hơn',
-    capacity: 6,
-    priceMultiplier: 1.8,
+    type: 'CAR_4',
+    name: 'Xe 4 chỗ',
+    imageSrc: car4Image,
+    description: 'Phổ thông, nhóm nhỏ',
+    capacity: 4,
+    priceMultiplier: 1.7,
+  },
+  {
+    type: 'CAR_7',
+    name: 'Xe 7 chỗ',
+    imageSrc: car7Image,
+    description: 'Rộng rãi cho nhóm đông',
+    capacity: 7,
+    priceMultiplier: 2.2,
   },
 ];
 
 const paymentOptions = [
   { method: 'CASH', label: 'Tiền mặt', icon: <MoneyOff />, helper: 'Thanh toán trực tiếp khi kết thúc chuyến đi.' },
-  { method: 'MOMO', label: 'Ví MoMo', icon: <AccountBalanceWallet />, helper: 'Phù hợp cho thanh toán ví điện tử và luồng sandbox.' },
-  { method: 'VNPAY', label: 'VNPay QR / Ngân hàng', icon: <AccountBalance />, helper: 'Hỗ trợ quét QR hoặc điều hướng sang cổng thanh toán ngân hàng.' },
-  { method: 'CARD', label: 'Thẻ quốc tế', icon: <CreditCard />, helper: 'Dự phòng cho luồng thẻ qua gateway.' },
+  { method: 'MOMO', label: 'Ví MoMo', icon: <AccountBalanceWallet />, helper: 'Thanh toán bằng ví điện tử MoMo.' },
+  { method: 'VNPAY', label: 'VNPay QR / Ngân hàng', icon: <AccountBalance />, helper: 'Thanh toán qua QR hoặc ứng dụng ngân hàng.' },
 ];
 
-const VEHICLE_FETCH_ORDER: Array<'ECONOMY' | 'COMFORT' | 'PREMIUM'> = ['ECONOMY', 'COMFORT', 'PREMIUM'];
+const VEHICLE_FETCH_ORDER: Array<'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7'> = ['MOTORBIKE', 'SCOOTER', 'CAR_4', 'CAR_7'];
+
+const enforceVehiclePriceOrder = (estimates: Record<string, PriceEstimate>): Record<string, PriceEstimate> => {
+  const ordered = { ...estimates };
+
+  const motorbikeFare = ordered.MOTORBIKE?.fare;
+  const scooterFare = ordered.SCOOTER?.fare;
+  if (Number.isFinite(motorbikeFare) && Number.isFinite(scooterFare) && scooterFare <= motorbikeFare) {
+    ordered.SCOOTER = {
+      ...ordered.SCOOTER,
+      fare: Math.max(Math.round(motorbikeFare + MIN_PRICE_GAP.SCOOTER), MINIMUM_FARE),
+    };
+  }
+
+  const car4Fare = ordered.CAR_4?.fare;
+  const car7Fare = ordered.CAR_7?.fare;
+  if (Number.isFinite(car4Fare) && Number.isFinite(car7Fare) && car7Fare <= car4Fare) {
+    ordered.CAR_7 = {
+      ...ordered.CAR_7,
+      fare: Math.max(Math.round(car4Fare + MIN_PRICE_GAP.CAR_7), MINIMUM_FARE),
+    };
+  }
+
+  return ordered;
+};
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs = 5000): Promise<T> => {
   let timeoutHandle: number | undefined;
@@ -133,8 +178,8 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [activeStep, setActiveStep] = useState(0);
-  const [selectedVehicle, setSelectedVehicle] = useState<'ECONOMY' | 'COMFORT' | 'PREMIUM'>('ECONOMY');
-  const [selectedPayment, setSelectedPayment] = useState<'CASH' | 'CARD' | 'WALLET' | 'MOMO' | 'VNPAY'>('CASH');
+  const [selectedVehicle, setSelectedVehicle] = useState<'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7'>('CAR_4');
+  const [selectedPayment, setSelectedPayment] = useState<'CASH' | 'MOMO' | 'VNPAY'>('CASH');
   const [priceEstimates, setPriceEstimates] = useState<Record<string, PriceEstimate>>({});
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -150,7 +195,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
 
   const steps = ['Chọn xe', 'Thanh toán', 'Xác nhận'];
 
-  const fetchEstimate = useCallback(async (vehicleType: 'ECONOMY' | 'COMFORT' | 'PREMIUM') => {
+  const fetchEstimate = useCallback(async (vehicleType: 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7') => {
     const response = await withTimeout(
       pricingApi.estimateFare({
         pickup: {
@@ -168,12 +213,25 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
     );
 
     const estimate = response.data;
+    const distance = Number(estimate.distance) || 0;
+    const duration = Number(estimate.duration) || 0;
+    const durationMinutes = Math.max(1, Math.round(duration / 60));
+    const surgeMultiplier = Number(estimate.surgeMultiplier) > 0 ? Number(estimate.surgeMultiplier) : 1;
+    const fareFromApi = Number(estimate.fare);
+
+    let fare = Number.isFinite(fareFromApi) ? fareFromApi : 0;
+
+    if (fare <= 0) {
+      const fallback = FALLBACK_PRICING[vehicleType];
+      const subtotal = fallback.baseFare + distance * fallback.perKmRate + durationMinutes * fallback.perMinuteRate;
+      fare = Math.max(Math.round(subtotal * surgeMultiplier), MINIMUM_FARE);
+    }
 
     return {
-      fare: estimate.fare,
-      distance: estimate.distance,
-      duration: estimate.duration,
-      surgeMultiplier: estimate.surgeMultiplier || 1.0,
+      fare,
+      distance,
+      duration,
+      surgeMultiplier,
     };
   }, [dropoffAddress, dropoffLat, dropoffLng, pickupAddress, pickupLat, pickupLng]);
 
@@ -187,7 +245,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
     setPriceEstimates({});
 
     try {
-      const primaryVehicle: 'ECONOMY' | 'COMFORT' | 'PREMIUM' = 'ECONOMY';
+      const primaryVehicle: 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7' = 'CAR_4';
       const primaryEstimate = await fetchEstimate(primaryVehicle);
 
       if (estimateRequestIdRef.current !== requestId) {
@@ -214,7 +272,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
             return;
           }
 
-          setPriceEstimates((prev) => ({ ...prev, [vehicleType]: estimate }));
+          setPriceEstimates((prev) => enforceVehiclePriceOrder({ ...prev, [vehicleType]: estimate }));
         })
       );
     } catch (err: any) {
@@ -264,30 +322,31 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
       const rideId = response.data.ride.id;
 
       if (selectedPayment === 'MOMO' || selectedPayment === 'VNPAY') {
-        const amount = selectedEstimate?.fare || 0;
-        const callbackBase = `${window.location.origin}/payment/callback`;
-        const returnUrl = `${callbackBase}?provider=${selectedPayment}&rideId=${rideId}`;
+        const amount = Math.round(selectedEstimate?.fare || 0);
+        if (amount <= 0) {
+          throw new Error('Không thể khởi tạo thanh toán vì giá chuyến đi chưa hợp lệ. Vui lòng chọn lại điểm đón/điểm đến.');
+        }
 
-        const paymentResponse = selectedPayment === 'MOMO'
-          ? await paymentApi.createMomoPayment({ rideId, amount, returnUrl })
-          : await paymentApi.createVnpayPayment({ rideId, amount, returnUrl });
+        const returnUrl = `${window.location.origin}/payment/callback?provider=${selectedPayment}&rideId=${rideId}`;
 
-        const redirectUrl = paymentResponse.data.paymentUrl || paymentResponse.data.payUrl;
+        try {
+          const paymentResponse = selectedPayment === 'MOMO'
+            ? await paymentApi.createMomoPayment({ rideId, amount, returnUrl })
+            : await paymentApi.createVnpayPayment({ rideId, amount, returnUrl });
 
-        if (!redirectUrl) {
-          const mockParams = new URLSearchParams({
-            provider: selectedPayment,
-            rideId,
-            amount: String(amount),
-          });
-
-          onClose();
-          window.location.assign(`${window.location.origin}/payment/mock-gateway?${mockParams.toString()}`);
-          return;
+          const gatewayUrl = paymentResponse.data?.payUrl || paymentResponse.data?.paymentUrl;
+          if (gatewayUrl) {
+            onClose();
+            window.location.assign(gatewayUrl);
+            return;
+          }
+        } catch (paymentError) {
+          console.error('Online payment create failed:', paymentError);
         }
 
         onClose();
-        window.location.assign(redirectUrl);
+        const params = new URLSearchParams({ amount: String(amount), provider: selectedPayment, rideId });
+        window.location.assign(`${window.location.origin}/payment/sandbox-gateway?${params.toString()}`);
         return;
       }
 
@@ -339,7 +398,30 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                       <CardContent>
                         <Box display="flex" alignItems="center" justifyContent="space-between">
                           <Box display="flex" alignItems="center" gap={2}>
-                            <Box color="primary.main">{vehicle.icon}</Box>
+                            <Box
+                              sx={{
+                                width: 68,
+                                height: 68,
+                                borderRadius: 3,
+                                overflow: 'hidden',
+                                bgcolor: 'grey.100',
+                                border: '1px solid',
+                                borderColor: selectedVehicle === vehicle.type ? 'primary.main' : 'divider',
+                                flexShrink: 0,
+                              }}
+                            >
+                              <Box
+                                component="img"
+                                src={vehicle.imageSrc}
+                                alt={vehicle.name}
+                                sx={{
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'cover',
+                                  display: 'block',
+                                }}
+                              />
+                            </Box>
                             <Box>
                               <Typography variant="h6" fontWeight={800}>{vehicle.name}</Typography>
                               <Typography variant="body2" color="text.secondary">
@@ -389,9 +471,6 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
             <Typography variant="h6" gutterBottom>
               Phương thức thanh toán
             </Typography>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Với MoMo và VNPay, hệ thống lưu đúng phương thức đã chọn. Khi gateway thật chưa cấu hình, môi trường dev sẽ chạy theo chế độ sandbox/mock để vẫn kiểm thử được luồng nghiệp vụ.
-            </Alert>
             <FormControl component="fieldset" fullWidth>
               <RadioGroup
                 value={selectedPayment}
@@ -470,7 +549,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
               </CardContent>
             </Card>
             <Alert severity="info" sx={{ mt: 2 }}>
-              Hệ thống sẽ chuyển sang bước tìm tài xế gần nhất ngay sau khi bạn xác nhận chuyến. Phương thức thanh toán đã chọn sẽ được giữ xuyên suốt đến hóa đơn cuối chuyến.
+              Sau khi xác nhận, hệ thống bắt đầu tìm tài xế và giữ nguyên phương thức thanh toán bạn đã chọn.
             </Alert>
           </Box>
         );

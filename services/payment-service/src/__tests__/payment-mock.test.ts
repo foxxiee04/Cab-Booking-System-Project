@@ -44,6 +44,10 @@ describe('Payment Service - MoMo & Visa Mock', () => {
       update: jest.fn(),
     };
 
+    (prisma.driverEarnings as any) = {
+      create: jest.fn().mockResolvedValue({ id: 'earnings-1' }),
+    };
+
     (prisma.outboxEvent as any) = {
       create: jest.fn(),
     };

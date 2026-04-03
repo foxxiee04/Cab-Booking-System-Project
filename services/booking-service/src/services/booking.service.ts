@@ -20,7 +20,7 @@ export class BookingService {
     dropoffAddress: string;
     dropoffLat: number;
     dropoffLng: number;
-    vehicleType: 'ECONOMY' | 'COMFORT' | 'PREMIUM';
+    vehicleType: 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
     paymentMethod: 'CASH' | 'CARD' | 'WALLET';
     notes?: string;
     customerPhone?: string;

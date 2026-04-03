@@ -16,6 +16,8 @@ export interface GatewayCreateResponse {
   data: {
     paymentUrl?: string;
     payUrl?: string;
+    deeplink?: string;
+    qrCodeUrl?: string;
     paymentId?: string;
     paymentIntentId?: string;
     status?: string;
@@ -42,11 +44,18 @@ export const paymentApi = {
   }): Promise<GatewayCreateResponse> => {
     const response = await axiosInstance.post('/payments/momo/create', params);
     const payload = response.data?.data || {};
+    const metadata = payload.metadata || {};
+
+    const paymentUrl = payload.paymentUrl || metadata.paymentUrl;
+    const payUrl = payload.payUrl || metadata.payUrl || paymentUrl;
+
     return {
       success: Boolean(response.data?.success),
       data: {
-        paymentUrl: payload.paymentUrl,
-        payUrl: payload.payUrl,
+        paymentUrl,
+        payUrl,
+        deeplink: payload.deeplink || metadata.deeplink,
+        qrCodeUrl: payload.qrCodeUrl || metadata.qrCodeUrl,
         paymentId: payload.paymentId,
         paymentIntentId: payload.paymentIntentId,
         status: payload.status,
@@ -62,11 +71,18 @@ export const paymentApi = {
   }): Promise<GatewayCreateResponse> => {
     const response = await axiosInstance.post('/payments/vnpay/create', params);
     const payload = response.data?.data || {};
+    const metadata = payload.metadata || {};
+
+    const paymentUrl = payload.paymentUrl || metadata.paymentUrl;
+    const payUrl = payload.payUrl || metadata.payUrl || paymentUrl;
+
     return {
       success: Boolean(response.data?.success),
       data: {
-        paymentUrl: payload.paymentUrl,
-        payUrl: payload.payUrl,
+        paymentUrl,
+        payUrl,
+        deeplink: payload.deeplink || metadata.deeplink,
+        qrCodeUrl: payload.qrCodeUrl || metadata.qrCodeUrl,
         paymentId: payload.paymentId,
         paymentIntentId: payload.paymentIntentId,
         status: payload.status,

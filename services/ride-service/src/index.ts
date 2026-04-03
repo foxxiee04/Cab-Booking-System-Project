@@ -30,9 +30,16 @@ export async function start() {
   // Initialize services
   const rideService = new RideService(prisma, eventPublisher, offerManager);
 
-  // Subscribe to offer expirations (Redis keyspace notifications)
+  // Primary: Redis keyspace notification path
   await offerManager.subscribeToExpirations(async (rideId: string) => {
     logger.info(`Offer expired for ride ${rideId}, triggering timeout handler`);
+    await rideService.handleOfferTimeout(rideId);
+  });
+
+  // Fallback: in-process timer path (no keyspace notification dependency)
+  // handleOfferTimeout is idempotent — safe to call from both paths.
+  offerManager.registerExpirationCallback(async (rideId: string) => {
+    logger.debug(`In-process fallback timer fired for ride ${rideId}`);
     await rideService.handleOfferTimeout(rideId);
   });
 

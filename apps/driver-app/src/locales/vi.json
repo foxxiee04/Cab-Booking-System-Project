@@ -22,6 +22,12 @@
     "submit": "Đăng ký",
     "haveAccount": "Đã có tài khoản?"
   },
+  "nav": {
+    "profile": "Hồ sơ",
+    "earnings": "Thu nhập",
+    "history": "Lịch sử",
+    "logout": "Đăng xuất"
+  },
   "profileSetup": {
     "title": "Hoàn tất hồ sơ",
     "subtitle": "Cung cấp thông tin xe để bắt đầu nhận chuyến",
@@ -33,7 +39,6 @@
     "licensePlate": "Biển số",
     "licenseNumber": "Số GPLX",
     "licenseExpiry": "Ngày hết hạn GPLX",
-    "vehiclePhotoHint": "Hiện tại hệ thống chưa yêu cầu tải ảnh xe. Bạn chỉ cần khai báo đúng thông tin xe và GPLX.",
     "info": "Tất cả thông tin sẽ được xác minh trước khi nhận chuyến. Vui lòng nhập chính xác.",
     "submit": "Hoàn tất",
     "successMessage": "Hồ sơ đã được hoàn tất! Hồ sơ của bạn đang chờ admin phê duyệt. Bạn sẽ được thông báo khi được phê duyệt."
@@ -131,12 +136,10 @@
     "reviews": "đánh giá"
   },
   "vehicle": {
-    "ECONOMY": "Phổ thông",
-    "COMFORT": "Tiện nghi",
-    "PREMIUM": "Cao cấp",
-    "CAR": "Ô tô",
-    "SUV": "SUV",
-    "MOTORCYCLE": "Xe máy"
+    "MOTORBIKE": "Xe máy",
+    "SCOOTER": "Xe ga",
+    "CAR_4": "Ô tô 4 chỗ",
+    "CAR_7": "Ô tô 7 chỗ"
   },
   "payment": {
     "CASH": "Tiền mặt",
@@ -177,7 +180,7 @@
     "vehicleColorInvalid": "Màu xe phải có ít nhất 2 ký tự",
     "vehicleYearInvalid": "Năm sản xuất phải từ 1990 đến năm sau",
     "licensePlateInvalid": "Biển số xe không đúng định dạng",
-    "licenseNumberInvalid": "Số GPLX phải dài 8-16 ký tự chữ hoặc số",
+    "licenseNumberInvalid": "Số GPLX phải theo định dạng 052 042 424 424 (12 số)",
     "licenseExpiryPast": "Ngày hết hạn GPLX phải ở tương lai"
   }
 }

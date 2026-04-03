@@ -4,12 +4,23 @@ import { logger } from '../utils/logger';
 import { SocketServer } from '../socket/socket-server';
 import Redis from 'ioredis';
 import { driverGrpcClient } from '../grpc/driver.client';
+import {
+  DriverMatcher,
+  DriverCandidate,
+  ScoredDriver,
+  DriverStats,
+  buildCandidate,
+  driverStatsKey,
+} from '../matching/driver-matcher';
 
 const EXCHANGE_NAME = 'domain-events';
 const QUEUE_NAME = 'api-gateway-events';
 const DRIVER_GEO_KEY = 'drivers:geo:online';
 const DEFAULT_MATCH_RADIUS_METERS = 5000;
 const DEFAULT_OFFER_TIMEOUT_SECONDS = 30;
+
+// Singleton matcher — sequential dispatch, top-5 candidates
+const matcher = new DriverMatcher({ topN: 5, dispatchMode: 'sequential' });
 
 interface MatchingLocation {
   lat: number;
@@ -65,18 +76,21 @@ interface DriverRecipient {
 
 function getCompatibleDriverVehicleTypes(requestedVehicleType?: string): string[] | null {
   switch ((requestedVehicleType || '').toUpperCase()) {
+    case 'MOTORBIKE':
+      return ['MOTORBIKE'];
+    case 'SCOOTER':
+      return ['SCOOTER'];
+    case 'CAR_4':
+      return ['CAR_4'];
+    case 'CAR_7':
+      return ['CAR_7'];
+    // legacy fallback
     case 'ECONOMY':
-      return ['CAR', 'MOTORCYCLE'];
+      return ['MOTORBIKE'];
     case 'COMFORT':
-      return ['CAR'];
+      return ['CAR_4'];
     case 'PREMIUM':
-      return ['SUV'];
-    case 'CAR':
-      return ['CAR'];
-    case 'SUV':
-      return ['SUV'];
-    case 'MOTORCYCLE':
-      return ['MOTORCYCLE'];
+      return ['CAR_7'];
     default:
       return null;
   }
@@ -192,19 +206,22 @@ export class EventConsumer {
     logger.info(`Processing driver matching request for ride ${payload.rideId}`);
 
     try {
-      const nearbyDrivers = await this.findNearbyOnlineDrivers(
+      // 1. Fetch all geo-candidates and enrich with stats
+      const candidates = await this.buildCandidates(
         payload.pickup,
         this.getMatchRadiusMeters(payload.searchRadiusKm),
         payload.excludeDriverIds,
-        payload.vehicleType,
       );
 
-      if (nearbyDrivers.length === 0) {
-        logger.warn(`No online drivers found for ride ${payload.rideId}`);
+      // 2. Score & rank — returns top-N ordered by composite score
+      const result = matcher.match(candidates, payload.vehicleType);
+
+      if (DriverMatcher.noDriverFound(result)) {
+        logger.warn(`No suitable drivers found for ride ${payload.rideId} (candidates=${candidates.length})`);
         return;
       }
 
-      const notificationData = {
+      const baseNotification = {
         rideId: payload.rideId,
         customerId: payload.customerId,
         pickup: payload.pickup,
@@ -217,18 +234,105 @@ export class EventConsumer {
         searchAttempt: payload.attempt,
       };
 
-      this.socketServer.emitToDrivers(
-        nearbyDrivers.map((driver) => driver.userId),
-        'NEW_RIDE_AVAILABLE',
-        notificationData
-      );
+      if (result.dispatchMode === 'sequential') {
+        // Sequential: offer to the best-scored driver only.
+        // The ride-service will emit ride.offer_timeout → reassignment_requested
+        // which re-triggers this handler with the timed-out driver in excludeDriverIds.
+        const top = result.dispatchList[0];
+        this.socketServer.emitToDriver(top.userId, 'NEW_RIDE_AVAILABLE', {
+          ...baseNotification,
+          etaMinutes: top.etaMinutes,
+          etaText: top.etaText,
+          driverScore: top.score.toFixed(3),
+        });
+        logger.info(
+          `[Sequential] Dispatched to driver ${top.driverId} (score=${top.score.toFixed(3)}, ` +
+          `eta=${top.etaText}, distance=${top.distanceKm.toFixed(2)} km) for ride ${payload.rideId}`,
+        );
+      } else {
+        // Broadcast: push to all topN simultaneously (first-accept-wins).
+        const userIds = result.dispatchList.map((d) => d.userId);
+        this.socketServer.emitToDrivers(userIds, 'NEW_RIDE_AVAILABLE', baseNotification);
+        logger.info(
+          `[Broadcast] Dispatched to ${userIds.length} drivers for ride ${payload.rideId}`,
+        );
+      }
 
       logger.info(
-        `Pushed NEW_RIDE_AVAILABLE to ${nearbyDrivers.length} drivers for ride ${payload.rideId}`
+        `Matching summary for ride ${payload.rideId}: ` +
+        result.ranked.slice(0, 5).map(
+          (d, i) => `#${i + 1} driver=${d.driverId} score=${d.score.toFixed(3)} eta=${d.etaText}`,
+        ).join(' | '),
       );
     } catch (error) {
       logger.error('Error handling driver matching request:', error);
     }
+  }
+
+  /**
+   * Build scored DriverCandidate list from Raw Redis geo results.
+   * Enriches each candidate with stats (idle time, acceptance/cancel rates)
+   * stored in driver:stats:{driverId} Redis hash.
+   */
+  private async buildCandidates(
+    location: { lat: number; lng: number },
+    radiusMeters: number,
+    excludeDriverIds: string[] = [],
+  ): Promise<DriverCandidate[]> {
+    const geoResults = await this.redis.georadius(
+      DRIVER_GEO_KEY,
+      location.lng,
+      location.lat,
+      radiusMeters,
+      'm',
+      'WITHDIST',
+      'ASC',
+    ).catch(() => [] as any[]);
+
+    if (!geoResults || geoResults.length === 0) return [];
+
+    const excluded = new Set(excludeDriverIds);
+    const candidates: DriverCandidate[] = [];
+
+    for (const entry of geoResults) {
+      const driverId = Array.isArray(entry) ? String(entry[0]) : String(entry);
+      const distanceKm = Array.isArray(entry) ? parseFloat(entry[1]) / 1000 : 0;
+
+      if (excluded.has(driverId)) continue;
+
+      const driver = await driverGrpcClient.getDriverById(driverId).catch(() => null);
+      if (!driver?.userId) continue;
+      if (!this.socketServer.isUserOnline(driver.userId)) continue;
+
+      // Cache userId
+      this.driverUserCache.set(driverId, driver.userId);
+
+      // Fetch stats from Redis hash
+      const statsRaw = await this.redis.hgetall(driverStatsKey(driverId)).catch(() => null);
+      const stats: DriverStats | null = statsRaw && Object.keys(statsRaw).length > 0
+        ? {
+            lastTripEndAt: parseInt(statsRaw.lastTripEndAt || '0', 10),
+            totalAccepted: parseInt(statsRaw.totalAccepted || '0', 10),
+            totalDeclined: parseInt(statsRaw.totalDeclined || '0', 10),
+            totalCancelled: parseInt(statsRaw.totalCancelled || '0', 10),
+          }
+        : null;
+
+      candidates.push(
+        buildCandidate(
+          driverId,
+          driver.userId,
+          driver.lastLocationLat ?? location.lat,
+          driver.lastLocationLng ?? location.lng,
+          distanceKm,
+          driver.vehicleType ?? 'CAR',
+          driver.ratingAverage ?? 5.0,
+          stats,
+        ),
+      );
+    }
+
+    return candidates;
   }
 
   private async handleRideOffered(payload: RideOfferedPayload): Promise<void> {
@@ -284,6 +388,8 @@ export class EventConsumer {
           rideId: payload.rideId,
         });
       }
+      // Count timeout as a declined offer for scoring purposes
+      this.redis.hincrby(driverStatsKey(payload.timedOutDriverId), 'totalDeclined', 1).catch(() => {});
     }
 
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', {
@@ -312,6 +418,11 @@ export class EventConsumer {
         rideId: payload.rideId,
         status: 'ACCEPTED',
       });
+    }
+
+    // Track acceptance for scoring
+    if (payload.driverId) {
+      this.redis.hincrby(driverStatsKey(payload.driverId), 'totalAccepted', 1).catch(() => {});
     }
   }
 
@@ -377,6 +488,11 @@ export class EventConsumer {
         status: 'COMPLETED',
       });
     }
+
+    // Track idle-time start for future matching scoring
+    if (payload.driverId) {
+      this.redis.hset(driverStatsKey(payload.driverId), 'lastTripEndAt', String(Date.now())).catch(() => {});
+    }
   }
 
   private async handleRideCancelled(payload: RideEventPayload): Promise<void> {
@@ -398,58 +514,28 @@ export class EventConsumer {
         reason: payload.status,
       });
     }
+
+    // Track driver-side cancellation (penalises cancel rate in future scoring)
+    if (payload.driverId) {
+      this.redis.hincrby(driverStatsKey(payload.driverId), 'totalCancelled', 1).catch(() => {});
+    }
   }
 
   /**
    * Find nearby online drivers using Redis geospatial queries
    * Assumes driver locations are stored in Redis with GEOADD
    */
+  /** @deprecated Use buildCandidates + matcher.match() instead */
   private async findNearbyOnlineDrivers(
     location: { lat: number; lng: number },
     radiusMeters: number,
     excludeDriverIds: string[] = [],
     requestedVehicleType?: string,
   ): Promise<DriverRecipient[]> {
-    try {
-      const results = await this.redis.georadius(
-        DRIVER_GEO_KEY,
-        location.lng,
-        location.lat,
-        radiusMeters,
-        'm',
-        'WITHDIST'
-      );
-
-      if (!results || results.length === 0) {
-        return [];
-      }
-
-      const excluded = new Set(excludeDriverIds);
-      const driverRecipients: DriverRecipient[] = [];
-
-      for (const result of results) {
-        const driverId = Array.isArray(result) ? result[0] : result;
-        if (excluded.has(driverId)) {
-          continue;
-        }
-
-        const driver = await driverGrpcClient.getDriverById(driverId);
-        const userId = driver?.userId || await this.resolveDriverUserId(driverId);
-        if (!isCompatibleDriverVehicleType(driver?.vehicleType, requestedVehicleType)) {
-          continue;
-        }
-
-        if (userId && this.socketServer.isUserOnline(userId)) {
-          this.driverUserCache.set(driverId, userId);
-          driverRecipients.push({ driverId, userId });
-        }
-      }
-
-      return driverRecipients;
-    } catch (error) {
-      logger.error('Error finding nearby drivers:', error);
-      return [];
-    }
+    const candidates = await this.buildCandidates(location, radiusMeters, excludeDriverIds);
+    return candidates
+      .filter((c) => !requestedVehicleType || isCompatibleDriverVehicleType(c.vehicleType, requestedVehicleType))
+      .map((c) => ({ driverId: c.driverId, userId: c.userId }));
   }
 
   private getMatchRadiusMeters(searchRadiusKm?: number): number {

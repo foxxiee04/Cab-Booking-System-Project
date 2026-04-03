@@ -20,6 +20,7 @@ const PaymentCallback: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const provider = (params.get('provider') || '').toUpperCase();
 
   const [state, setState] = useState<CallbackState>('processing');
   const [message, setMessage] = useState('Đang xác thực kết quả thanh toán từ cổng sandbox...');
@@ -29,8 +30,6 @@ const PaymentCallback: React.FC = () => {
     let cancelled = false;
 
     const run = async () => {
-      const provider = (params.get('provider') || '').toUpperCase();
-
       if (provider !== 'MOMO' && provider !== 'VNPAY') {
         setState('failed');
         setMessage('Không xác định được cổng thanh toán trả về.');
@@ -53,7 +52,7 @@ const PaymentCallback: React.FC = () => {
 
         if (response.data?.paid) {
           setState('success');
-          setMessage('Thanh toán thành công. Bạn có thể quay lại màn hình theo dõi chuyến.');
+          setMessage('Thanh toán thành công. Hệ thống đang quay lại trang chuyến đi...');
         } else {
           setState('failed');
           setMessage(response.data?.message || 'Thanh toán chưa thành công hoặc đã bị hủy.');
@@ -73,7 +72,21 @@ const PaymentCallback: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [params]);
+  }, [params, provider]);
+
+  useEffect(() => {
+    if (state !== 'success' || !rideId) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      navigate(`/ride/${rideId}`, { replace: true });
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [navigate, rideId, state]);
 
   return (
     <Container maxWidth="sm" sx={{ py: 4 }}>
@@ -98,6 +111,15 @@ const PaymentCallback: React.FC = () => {
             )}
 
             <Box sx={{ display: 'flex', gap: 1.5, width: '100%', justifyContent: 'center' }}>
+              {state === 'failed' && rideId && (
+                <Button
+                  variant="contained"
+                  color="warning"
+                  onClick={() => navigate(`/ride/${rideId}?retryPayment=1&failedProvider=${provider || 'UNKNOWN'}`, { replace: true })}
+                >
+                  Chọn phương thức khác
+                </Button>
+              )}
               {rideId && (
                 <Button variant="contained" onClick={() => navigate(`/ride/${rideId}`, { replace: true })}>
                   Về trang chuyến đi

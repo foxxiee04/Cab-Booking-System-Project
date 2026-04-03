@@ -61,7 +61,7 @@ const Register: React.FC = () => {
     try {
       const res = await authApi.registerPhoneStart({ phone: normalizedPhone });
       setResendDelay(res.data.resendDelay || 30);
-      setSuccess(res.data.message || 'OTP đã gửi tới +84****xxx');
+      setSuccess(res.data.message || 'Mã OTP đã được gửi đến số điện thoại của bạn.');
       setStep('otp');
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể gửi OTP xác thực.');
@@ -151,7 +151,7 @@ const Register: React.FC = () => {
       const res = await authApi.registerPhoneStart({ phone });
       setResendDelay(res.data.resendDelay || 60);
       setOtp('');
-      setSuccess(res.data.message || 'OTP đã gửi tới +84****xxx');
+      setSuccess(res.data.message || 'Mã OTP đã được gửi lại thành công.');
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể gửi lại OTP.');
     } finally {
@@ -227,7 +227,7 @@ const Register: React.FC = () => {
             {step === 'otp' && (
               <form onSubmit={handleVerifyPhoneOtp}>
                 <Alert severity="info" sx={{ mb: 2 }}>
-                  {success || 'OTP đã gửi tới +84****xxx'}
+                  {success || 'Mã OTP đã được gửi đến số điện thoại của bạn.'}
                 </Alert>
 
                 <TextField

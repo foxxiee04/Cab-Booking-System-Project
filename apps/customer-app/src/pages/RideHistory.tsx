@@ -159,10 +159,10 @@ const RideHistory: React.FC = () => {
               </Typography>
 
               <Typography variant="body2" sx={{ mt: 1 }}>
-                {t('rideHistory.pickup')}: {ride.pickup.address || `${ride.pickup.lat}, ${ride.pickup.lng}`}
+                {t('rideHistory.pickup')}: {ride.pickup?.address || (ride.pickup?.lat ? `${ride.pickup.lat.toFixed(5)}, ${ride.pickup.lng.toFixed(5)}` : t('common.na'))}
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5 }}>
-                {t('rideHistory.dropoff')}: {ride.dropoff.address || `${ride.dropoff.lat}, ${ride.dropoff.lng}`}
+                {t('rideHistory.dropoff')}: {ride.dropoff?.address || (ride.dropoff?.lat ? `${ride.dropoff.lat.toFixed(5)}, ${ride.dropoff.lng.toFixed(5)}` : t('common.na'))}
               </Typography>
 
               <Typography variant="body2" sx={{ mt: 1 }}>

@@ -28,9 +28,33 @@ export const pricingApi = {
       pickupLng: data.pickup.lng,
       dropoffLat: data.dropoff.lat,
       dropoffLng: data.dropoff.lng,
-      vehicleType: data.vehicleType || 'ECONOMY',
+      vehicleType: data.vehicleType || 'CAR_4',
     });
-    return response.data;
+    const payload = response.data || {};
+    const rawEstimate = payload?.data?.data || payload?.data || {};
+
+    const fare = Number(rawEstimate.fare);
+    const distance = Number(rawEstimate.distance);
+    const duration = Number(rawEstimate.duration);
+    const surgeMultiplier = Number(rawEstimate.surgeMultiplier);
+
+    return {
+      success: Boolean(payload?.success ?? true),
+      data: {
+        fare: Number.isFinite(fare) ? fare : 0,
+        distance: Number.isFinite(distance) ? distance : 0,
+        duration: Number.isFinite(duration) ? duration : 0,
+        surgeMultiplier: Number.isFinite(surgeMultiplier) && surgeMultiplier > 0 ? surgeMultiplier : 1,
+        breakdown: rawEstimate.breakdown
+          ? {
+              baseFare: Number(rawEstimate.breakdown.baseFare) || 0,
+              distanceFare: Number(rawEstimate.breakdown.distanceFare) || 0,
+              timeFare: Number(rawEstimate.breakdown.timeFare) || 0,
+              surgeFare: Number(rawEstimate.breakdown.surgeFare ?? rawEstimate.breakdown.surgeAmount) || 0,
+            }
+          : undefined,
+      },
+    };
   },
 
   getSurge: async (): Promise<SurgeResponse> => {

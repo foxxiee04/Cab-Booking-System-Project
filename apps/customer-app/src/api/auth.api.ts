@@ -12,7 +12,7 @@ export interface RegisterRequest {
 }
 
 export interface LoginRequest {
-  phone: string;
+  identifier: string;
   password: string;
 }
 

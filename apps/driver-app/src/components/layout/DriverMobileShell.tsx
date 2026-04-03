@@ -34,6 +34,8 @@ interface DriverMobileShellProps {
   children: React.ReactNode;
 }
 
+const NAV_HEIGHT = 72;
+
 const tabs = [
   { value: '/dashboard', icon: <DriveEtaRounded />, labelKey: 'dashboard.title', fallback: 'Tổng quan' },
   { value: '/history', icon: <HistoryRounded />, labelKey: 'history.title', fallback: 'Lịch sử' },
@@ -115,6 +117,8 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
     setLangAnchorEl(null);
   };
 
+  const shellMaxWidth = { xs: '100%', md: 1160 };
+
   return (
     <Box
       sx={{
@@ -134,7 +138,7 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
           borderBottom: '1px solid rgba(148, 163, 184, 0.18)',
         }}
       >
-        <Toolbar sx={{ minHeight: 76, px: 2 }}>
+        <Toolbar sx={{ minHeight: 76, width: shellMaxWidth, mx: 'auto', px: { xs: 2, sm: 2.5 } }}>
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.12em' }}>
               Cab Booking Driver
@@ -176,21 +180,25 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
         component="main"
         sx={{
           flexGrow: 1,
-          minHeight: 0,
           pt: 'calc(88px + env(safe-area-inset-top))',
-          pb: 'calc(92px + env(safe-area-inset-bottom))',
+          pb: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom) + 56px)`,
           px: { xs: 1.5, sm: 2 },
+          minHeight: 0,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
         }}
       >
-        <Box sx={{ height: '100%' }}>{children}</Box>
+        <Box sx={{ minHeight: '100%', width: shellMaxWidth, mx: 'auto' }}>{children}</Box>
       </Box>
 
       <Paper
         elevation={16}
         sx={{
           position: 'fixed',
-          left: 12,
-          right: 12,
+          left: 0,
+          right: 0,
+          width: shellMaxWidth,
+          mx: 'auto',
           bottom: 'calc(12px + env(safe-area-inset-bottom))',
           borderRadius: 4,
           overflow: 'hidden',
@@ -235,7 +243,7 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
         </MenuItem>
         <MenuItem onClick={handleLogout}>
           <LogoutRounded fontSize="small" style={{ marginRight: 8 }} />
-          {t('nav.logout')}
+          {t('dashboard.logout', 'Đăng xuất')}
         </MenuItem>
       </Menu>
 

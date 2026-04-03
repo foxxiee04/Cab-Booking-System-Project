@@ -203,6 +203,7 @@ services:
       - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
       - PRICING_SERVICE_URL=http://pricing-service:3009
       - PRICING_GRPC_ADDRESS=pricing-service:50057
+      - DRIVER_SERVICE_URL=http://driver-service:3003
       - DRIVER_GRPC_ADDRESS=driver-service:50055
       - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}

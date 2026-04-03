@@ -1,9 +1,62 @@
 # =====================================================
 # CAB BOOKING SYSTEM - GITIGNORE
 # =====================================================
-# Updated: 2026-02-05
-# Comprehensive gitignore for microservices backend + React frontend
+# Updated: 2026-03-27
 # =====================================================
+
+# =====================================================
+# !! SENSITIVE — NEVER COMMIT THESE !!
+# =====================================================
+
+# Service environment configs (DB passwords, JWT secrets, API keys)
+# The /env/ folder at project root holds all service .env files
+env/
+!env/*.example
+!env/README.md
+
+# All .env files everywhere (catch-all)
+.env
+.env.*
+!.env.example
+!**/.env.example
+services/**/.env*
+!services/**/.env.example
+apps/**/.env*
+!apps/**/.env.example
+
+# Private keys & certificates
+*.pem
+*.key
+*.cert
+*.crt
+*.csr
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Named secret/token files
+*.secret
+*.token
+secrets/
+.secrets/
+
+# GCP / Firebase / OAuth credential files
+*credentials*.json
+*service-account*.json
+*-key.json
+google-credentials.json
+firebase-adminsdk*.json
+serviceAccountKey.json
+
+# Payment gateway key dumps (in case saved locally)
+stripe-keys.txt
+momo-keys.txt
+vnpay-keys.txt
+
+# Redis / Sentinel auth configs (may contain passwords)
+sentinel.conf
+redis.conf
 
 # =====================================================
 # Dependencies
@@ -11,16 +64,14 @@
 node_modules/
 jspm_packages/
 
-# Lock files (keep only one per project)
-package-lock.json
+# Keep package-lock.json; ignore other lock files
 yarn.lock
 pnpm-lock.yaml
 .pnpm-store/
 
-# Python dependencies
+# Python dependencies / virtual envs
 __pycache__/
 *.py[cod]
-*$py.class
 *.so
 *.egg
 *.egg-info/
@@ -32,52 +83,23 @@ dist-python/
 .venv/
 venv/
 ENV/
-env/
 Pipfile.lock
 poetry.lock
 
 # =====================================================
 # Build Outputs & Compiled Code
 # =====================================================
-# TypeScript/JavaScript builds
 dist/
 build/
 out/
 *.tsbuildinfo
 *.js.map
 *.d.ts.map
-
-# Next.js
 .next/
 .turbo/
-
-# React build
 apps/*/build/
 apps/*/dist/
-
-# Vite
 apps/*/.vite/
-
-# =====================================================
-# Environment Variables & Secrets
-# =====================================================
-# IMPORTANT: Never commit real secrets!
-.env
-.env.local
-.env.*.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Service-specific env files (sensitive)
-services/**/.env
-services/**/.env.local
-apps/**/.env.local
-
-# Keep example files
-!.env.example
-!**/.env.example
-!env/*.env.example
 
 # =====================================================
 # Logs
@@ -90,8 +112,6 @@ pnpm-debug.log*
 lerna-debug.log*
 logs/
 *.log.*
-
-# PM2 logs
 pm2-logs/
 .pm2/
 
@@ -106,50 +126,45 @@ junit.xml
 playwright-report/
 playwright/.cache/
 .jest-cache/
-
-# Test databases
 **/*.test.db
 **/*.test.sqlite
 
 # =====================================================
 # IDE & Editors
 # =====================================================
-# VSCode
+
+# VS Code — settings.json excluded (may store API tokens / paths)
 .vscode/*
-!.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
 *.code-workspace
+
+# VS Code Copilot agent / instruction files (may contain internal notes)
+.github/copilot-instructions.md
+**/*.instructions.md
+**/*.prompt.md
+**/*.agent.md
+.copilot/
+
+# Local AI memory / session notes
+memories/
 
 # IntelliJ IDEA
 .idea/
 *.iml
 *.iws
 *.ipr
-out/
 
-# Sublime Text
-*.sublime-project
-*.sublime-workspace
-
-# Vim
+# Vim / Emacs swap files
 *.swp
 *.swo
 *~
-.vim/
-
-# Emacs
-*~
 \#*\#
-/.emacs.desktop
-/.emacs.desktop.lock
-*.elc
 
 # =====================================================
 # OS Files
 # =====================================================
-# macOS
 .DS_Store
 .DS_Store?
 .AppleDouble
@@ -157,23 +172,12 @@ out/
 ._*
 .Spotlight-V100
 .Trashes
-.DocumentRevisions-V100
-.fseventsd
-.TemporaryItems
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-
-# Windows
 Thumbs.db
 Thumbs.db:encryptable
 ehthumbs.db
-ehthumbs_vista.db
-*.stackdump
 [Dd]esktop.ini
 $RECYCLE.BIN/
 *.lnk
-
-# Linux
 .directory
 .Trash-*
 
@@ -183,8 +187,6 @@ $RECYCLE.BIN/
 *.env.docker
 .docker/
 docker-compose.override.yml
-
-# Docker volumes data (don't commit actual data)
 postgres-data/
 mongo-data/
 redis-data/
@@ -198,18 +200,13 @@ rabbitmq-data/
 *.sqlite3
 *.db-shm
 *.db-wal
-
-# PostgreSQL
 *.pgsql
 *.dump
-
-# MongoDB
 *.bson
 
 # =====================================================
 # Prisma
 # =====================================================
-# Keep schema, ignore generated client
 **/prisma/client/
 **/prisma/migrations/**/migration.sql.bak
 .prisma/
@@ -221,8 +218,6 @@ rabbitmq-data/
 **/gen/
 **/.generated/
 schema.prisma.client/
-
-# GraphQL
 **/graphql/generated/
 **/__generated__/
 
@@ -240,58 +235,25 @@ tmp/
 # =====================================================
 # Frontend Specific
 # =====================================================
-# React production build
-apps/*/build/
-
-# Static files (if auto-generated)
-apps/*/public/static/
-
-# Bundle analysis
 apps/*/.bundle-analyzer/
 apps/*/stats.json
-
-# Service workers cache
 apps/*/sw.js
 apps/*/workbox-*.js
 
 # =====================================================
 # Backend Specific
 # =====================================================
-# Uploaded files (if any)
 services/**/uploads/
 services/**/public/uploads/
-
-# Session files
 services/**/.sessions/
 
 # =====================================================
 # Monitoring & Performance
 # =====================================================
-# Heap dumps
 *.heapsnapshot
 *.cpuprofile
-
-# Performance logs
 perf.data
 perf.data.old
-
-# =====================================================
-# Security & Keys
-# =====================================================
-# Private keys
-*.pem
-*.key
-*.cert
-*.crt
-*.p12
-*.pfx
-*.jks
-*.keystore
-
-# Secrets
-secrets/
-.secrets/
-*.secret
 
 # =====================================================
 # CI/CD
@@ -364,9 +326,6 @@ lib-cov/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
-
-
-
 
 
 tests/postman/Cab-Booking-System-Backend.guide.md

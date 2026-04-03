@@ -5,14 +5,12 @@ import {
   Chip,
   IconButton,
   InputAdornment,
-  List,
   ListItem,
   ListItemText,
   Paper,
   Skeleton,
   Stack,
   TextField,
-  Typography,
 } from '@mui/material';
 import {
   AccessTimeRounded,
@@ -23,6 +21,9 @@ import {
 } from '@mui/icons-material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { GoogleMap, MarkerF, PolylineF, useJsApiLoader } from '@react-google-maps/api';
 import { MapContainer as LeafletMapContainer, Marker as LeafletMarker, Polyline as LeafletPolyline, TileLayer as LeafletTileLayer, useMap } from 'react-leaflet';
 import {
@@ -39,6 +40,17 @@ import '../../../styles/map.css';
 const libraries: ('places' | 'geometry')[] = [];
 
 const defaultCenter = { lat: 10.7769, lng: 106.7009 };
+const MAP_COLORS = {
+  accent: '#2563eb',
+  neutral: '#334155',
+};
+
+const MAJOR_CITY_POINTS = [
+  { id: 'benthanh', name: 'Cho Ben Thanh', lat: 10.7726, lng: 106.698 },
+  { id: 'tsn', name: 'San bay Tan Son Nhat', lat: 10.8185, lng: 106.6588 },
+  { id: 'landmark81', name: 'Landmark 81', lat: 10.7949, lng: 106.7219 },
+  { id: 'thuductech', name: 'TP Thu Duc', lat: 10.8495, lng: 106.7718 },
+];
 
 const darkMapStyles: google.maps.MapTypeStyle[] = [
   { elementType: 'geometry', stylers: [{ color: '#111827' }] },
@@ -63,6 +75,17 @@ interface PlacePredictionOption {
 
 const DEFAULT_SEARCH_CONTEXT = 'Thành phố Hồ Chí Minh';
 
+// Ensure Leaflet default marker assets resolve correctly in bundled builds.
+L.Marker.prototype.options.icon = L.icon({
+  iconUrl: markerIcon,
+  iconRetinaUrl: markerIcon2x,
+  shadowUrl: markerShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
 function stripVietnamese(value: string) {
   return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 }
@@ -76,15 +99,15 @@ function getSearchContextLabel(...addresses: Array<string | undefined>) {
     const parts = address.split(',').map((part) => part.trim()).filter(Boolean);
     const directMatch = [...parts].reverse().find((part) => {
       const normalized = stripVietnamese(part);
-      return normalized.includes('thanh pho') || normalized.includes('tinh') || normalized.includes('ho chi minh') || normalized.includes('ha noi');
+      if (normalized.includes('thu duc')) {
+        return false;
+      }
+
+      return normalized.includes('ho chi minh') || normalized.includes('ha noi') || normalized.includes('da nang') || normalized.includes('can tho') || normalized.includes('tinh');
     });
 
     if (directMatch) {
       return directMatch;
-    }
-
-    if (parts.length >= 2) {
-      return parts[parts.length - 2];
     }
   }
 
@@ -118,17 +141,17 @@ function getLeafletMarkerIcon(html: string, className: string, size: [number, nu
 
 function createLeafletPin(label: string, color: string) {
   return getLeafletMarkerIcon(
-    `<div style="width:30px;height:30px;border-radius:999px;background:${color};border:3px solid #ffffff;color:#ffffff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px rgba(15,23,42,0.18);">${label}</div>`,
+    `<div style="width:28px;height:28px;border-radius:999px;background:${color};border:2px solid #ffffff;color:#ffffff;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(15,23,42,0.16);">${label}</div>`,
     'booking-leaflet-pin',
-    [30, 30],
-    [15, 15],
+    [28, 28],
+    [14, 14],
   );
 }
 
 function createLeafletDriverIcon(color: string, heading = 0, emphasize = false) {
-  const size = emphasize ? 30 : 24;
+  const size = emphasize ? 32 : 26;
   return getLeafletMarkerIcon(
-    `<div style="width:${size}px;height:${size}px;border-radius:999px;background:${color};border:3px solid #ffffff;box-shadow:0 10px 24px rgba(15,23,42,0.22);display:flex;align-items:center;justify-content:center;transform:rotate(${heading}deg);"><span style="display:block;font-size:${emphasize ? 14 : 12}px;line-height:1;transform:rotate(${-heading}deg);">🚕</span></div>`,
+    `<div style="width:${size}px;height:${size}px;border-radius:999px;background:${color};border:2px solid #ffffff;box-shadow:${emphasize ? '0 4px 10px rgba(15,23,42,0.2)' : '0 3px 8px rgba(15,23,42,0.14)'};display:flex;align-items:center;justify-content:center;transform:rotate(${heading}deg);"><span style="display:block;font-size:${emphasize ? 15 : 13}px;line-height:1;transform:rotate(${-heading}deg);">🚕</span></div>`,
     emphasize ? 'booking-leaflet-driver-live' : 'booking-leaflet-driver',
     [size, size],
     [Math.round(size / 2), Math.round(size / 2)],
@@ -188,7 +211,7 @@ function getCarSymbol(rotation: number, fillColor: string, scale = 1): google.ma
     fillOpacity: 1,
     strokeColor: '#ffffff',
     strokeOpacity: 0.95,
-    strokeWeight: 1,
+    strokeWeight: 1.4,
     rotation,
     scale,
     anchor: new google.maps.Point(12, 12),
@@ -202,7 +225,7 @@ function getMarkerIcon(label: string, color: string): google.maps.Symbol {
     fillOpacity: 1,
     strokeColor: '#ffffff',
     strokeWeight: 2,
-    scale: 12,
+    scale: 11,
     labelOrigin: new google.maps.Point(0, 1),
   };
 }
@@ -280,7 +303,7 @@ const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
       {pickup && (
         <MarkerF
           position={pickup}
-          icon={getMarkerIcon('A', '#16a34a')}
+          icon={getMarkerIcon('A', MAP_COLORS.accent)}
           label={{ text: 'A', color: '#ffffff', fontWeight: '700' }}
           title={pickup.address || 'Pickup'}
         />
@@ -289,40 +312,29 @@ const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
       {dropoff && (
         <MarkerF
           position={dropoff}
-          icon={getMarkerIcon('B', '#dc2626')}
+          icon={getMarkerIcon('B', MAP_COLORS.neutral)}
           label={{ text: 'B', color: '#ffffff', fontWeight: '700' }}
           title={dropoff.address || 'Dropoff'}
         />
       )}
 
       {routeSummary && (
-        <>
-          <PolylineF
-            path={routeSummary.polylinePath}
-            options={{
-              strokeColor: '#ffffff',
-              strokeOpacity: 0.92,
-              strokeWeight: 10,
-              zIndex: 10,
-            }}
-          />
-          <PolylineF
-            path={routeSummary.polylinePath}
-            options={{
-              strokeColor: '#0f62fe',
-              strokeOpacity: 0.98,
-              strokeWeight: 6,
-              zIndex: 11,
-            }}
-          />
-        </>
+        <PolylineF
+          path={routeSummary.polylinePath}
+          options={{
+            strokeColor: MAP_COLORS.accent,
+            strokeOpacity: 0.95,
+            strokeWeight: 5,
+            zIndex: 11,
+          }}
+        />
       )}
 
       {nearbyDrivers.map((driver) => (
         <MarkerF
           key={driver.id}
           position={{ lat: driver.lat, lng: driver.lng }}
-          icon={getCarSymbol(driver.heading || 0, '#111827', 0.75)}
+          icon={getCarSymbol(driver.heading || 0, MAP_COLORS.neutral, 0.75)}
           title={driver.status || 'Tài xế gần bạn'}
         />
       ))}
@@ -330,11 +342,21 @@ const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
       {animatedDriverPosition && (
         <MarkerF
           position={animatedDriverPosition}
-          icon={getCarSymbol(driverHeading, '#f97316', 1)}
+          icon={getCarSymbol(driverHeading, MAP_COLORS.accent, 1)}
           title="Vị trí tài xế theo thời gian thực"
           zIndex={999}
         />
       )}
+
+      {MAJOR_CITY_POINTS.map((point) => (
+        <MarkerF
+          key={point.id}
+          position={{ lat: point.lat, lng: point.lng }}
+          icon={getMarkerIcon('L', '#7c3aed')}
+          title={point.name}
+          zIndex={5}
+        />
+      ))}
     </GoogleMap>
   );
 };
@@ -348,10 +370,6 @@ function resolveColorMode(colorMode: BookingMapProps['colorMode']): 'light' | 'd
     return colorMode;
   }
 
-  if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    return 'dark';
-  }
-
   return 'light';
 }
 
@@ -363,7 +381,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
   driverLocation = null,
   mode = 'booking',
   height = '100vh',
-  colorMode = 'system',
+  colorMode = 'light',
   onPickupChange,
   onDropoffChange,
   onRouteComputed,
@@ -389,6 +407,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
   const [animatedDriverPosition, setAnimatedDriverPosition] = useState<google.maps.LatLngLiteral | null>(null);
   const [driverHeading, setDriverHeading] = useState(0);
   const searchContextLabel = useMemo(() => getSearchContextLabel(pickup?.address, dropoff?.address), [dropoff?.address, pickup?.address]);
+  const visibleNearbyDrivers = nearbyDrivers;
 
   useEffect(() => {
     setPickupInput(pickup?.address || '');
@@ -415,7 +434,11 @@ export const BookingMap: React.FC<BookingMapProps> = ({
     setPredictionLoading((prev) => ({ ...prev, [field]: true }));
 
     try {
-      const results = await geocodeAddress(query, { contextLabel: searchContextLabel });
+      const results = await geocodeAddress(query, {
+        contextLabel: searchContextLabel,
+        lat: pickup?.lat,
+        lng: pickup?.lng,
+      });
       if (predictionRequestRef.current !== requestId) {
         return;
       }
@@ -476,7 +499,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
 
     predictionDebounceRef.current[field] = window.setTimeout(() => {
       void fetchPredictions(field, value);
-    }, 280);
+    }, 200);
   }, [fetchPredictions]);
 
   const fitMapToLocations = useCallback((points: google.maps.LatLngLiteral[]) => {
@@ -724,10 +747,10 @@ export const BookingMap: React.FC<BookingMapProps> = ({
         borderRadius: 4,
         position: 'relative',
         zIndex: 3,
-        backgroundColor: themeMode === 'dark' ? 'rgba(17, 24, 39, 0.96)' : 'rgba(255, 255, 255, 0.98)',
-        backdropFilter: 'blur(16px)',
+        backgroundColor: themeMode === 'dark' ? 'rgba(17, 24, 39, 0.96)' : '#ffffff',
+        backdropFilter: 'blur(8px)',
         border: '1px solid rgba(148, 163, 184, 0.2)',
-        boxShadow: '0 18px 40px rgba(15, 23, 42, 0.14)',
+        boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
       }}
     >
       <Stack spacing={1.5}>
@@ -765,7 +788,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
                 ...params.InputProps,
                 startAdornment: (
                   <InputAdornment position="start">
-                    <NearMeRounded sx={{ color: '#16a34a' }} />
+                    <NearMeRounded sx={{ color: MAP_COLORS.accent }} />
                   </InputAdornment>
                 ),
               }}
@@ -809,7 +832,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
                 ...params.InputProps,
                 startAdornment: (
                   <InputAdornment position="start">
-                    <PlaceRounded sx={{ color: '#2563eb' }} />
+                    <PlaceRounded sx={{ color: MAP_COLORS.neutral }} />
                   </InputAdornment>
                 ),
               }}
@@ -852,6 +875,16 @@ export const BookingMap: React.FC<BookingMapProps> = ({
     </Paper>
   ) : null;
 
+  const leafletTileUrl =
+    themeMode === 'dark'
+      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+  const leafletAttribution =
+    themeMode === 'dark'
+      ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>'
+      : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
   const leafletMap = (
     <LeafletMapContainer
       center={[currentCenter.lat, currentCenter.lng]}
@@ -861,38 +894,40 @@ export const BookingMap: React.FC<BookingMapProps> = ({
       scrollWheelZoom
     >
       <LeafletTileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+        attribution={leafletAttribution}
+        url={leafletTileUrl}
         maxZoom={20}
       />
       <LeafletViewportController pickup={pickup ?? null} dropoff={dropoff ?? null} />
-      {pickup && <LeafletMarker position={[pickup.lat, pickup.lng]} icon={createLeafletPin('A', '#16a34a')} />}
-      {dropoff && <LeafletMarker position={[dropoff.lat, dropoff.lng]} icon={createLeafletPin('B', '#dc2626')} />}
+      {pickup && <LeafletMarker position={[pickup.lat, pickup.lng]} icon={createLeafletPin('A', MAP_COLORS.accent)} />}
+      {dropoff && <LeafletMarker position={[dropoff.lat, dropoff.lng]} icon={createLeafletPin('B', MAP_COLORS.neutral)} />}
       {routeSummary && (
-        <>
-          <LeafletPolyline
-            positions={routeSummary.polylinePath.map((point) => [point.lat, point.lng])}
-            pathOptions={{ color: '#ffffff', opacity: 0.92, weight: 10 }}
-          />
-          <LeafletPolyline
-            positions={routeSummary.polylinePath.map((point) => [point.lat, point.lng])}
-            pathOptions={{ color: '#0f62fe', opacity: 0.98, weight: 6 }}
-          />
-        </>
+        <LeafletPolyline
+          positions={routeSummary.polylinePath.map((point) => [point.lat, point.lng])}
+          pathOptions={{ color: MAP_COLORS.accent, opacity: 0.95, weight: 5 }}
+        />
       )}
-      {nearbyDrivers.map((driver) => (
+      {visibleNearbyDrivers.map((driver) => (
         <LeafletMarker
           key={driver.id}
           position={[driver.lat, driver.lng]}
-          icon={createLeafletDriverIcon('#111827', driver.heading || 0)}
+          icon={createLeafletDriverIcon(MAP_COLORS.neutral, driver.heading || 0)}
         />
       ))}
       {animatedDriverPosition && (
         <LeafletMarker
           position={[animatedDriverPosition.lat, animatedDriverPosition.lng]}
-          icon={createLeafletDriverIcon('#f97316', driverHeading, true)}
+          icon={createLeafletDriverIcon(MAP_COLORS.accent, driverHeading, true)}
         />
       )}
+
+      {MAJOR_CITY_POINTS.map((point) => (
+        <LeafletMarker
+          key={point.id}
+          position={[point.lat, point.lng]}
+          icon={createLeafletPin('L', '#7c3aed')}
+        />
+      ))}
     </LeafletMapContainer>
   );
 
@@ -910,7 +945,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
     >
       {renderSearchPanelAsSection && searchPanel}
 
-      <Box sx={{ position: 'relative', minHeight: 0, overflow: 'hidden', borderRadius: 6, bgcolor: '#dbeafe', border: '1px solid rgba(148,163,184,0.12)' }}>
+      <Box sx={{ position: 'relative', minHeight: 0, overflow: 'hidden', borderRadius: 6, bgcolor: '#e2e8f0', border: '1px solid rgba(148,163,184,0.14)' }}>
         {hasGoogleMapsApiKey ? (
           <GoogleBookingMapCanvas
             googleMapsApiKey={googleMapsApiKey}
@@ -918,7 +953,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
             themeMode={themeMode}
             pickup={pickup}
             dropoff={dropoff}
-            nearbyDrivers={nearbyDrivers}
+            nearbyDrivers={visibleNearbyDrivers}
             animatedDriverPosition={animatedDriverPosition}
             driverHeading={driverHeading}
             routeSummary={routeSummary}
