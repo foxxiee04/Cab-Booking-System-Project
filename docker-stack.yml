@@ -461,12 +461,26 @@ services:
 
 volumes:
   postgres_data:
+    name: cab-booking-postgres-data
+    driver: local
   mongo_data:
+    name: cab-booking-mongo-data
+    driver: local
   redis_data:
+    name: cab-booking-redis-data
+    driver: local
   rabbitmq_data:
+    name: cab-booking-rabbitmq-data
+    driver: local
   prometheus_data:
+    name: cab-booking-prometheus-data
+    driver: local
   grafana_data:
+    name: cab-booking-grafana-data
+    driver: local
   loki_data:
+    name: cab-booking-loki-data
+    driver: local
 
 networks:
   frontend:
