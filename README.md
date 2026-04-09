@@ -57,7 +57,7 @@ Các yêu cầu kỹ thuật cốt lõi của hệ thống được hiện thự
 
 ### 1.3 Chức năng chính
 
-Hệ thống được thiết kế để đáp ứng các mục tiêu chính sau:
+Hệ thống được thiết kế để đáp ứng các mục tiêu chính sau: a
 
 - Cung cấp trải nghiệm đặt xe xuyên suốt cho khách hàng từ tạo yêu cầu, ghép tài xế, theo dõi chuyến đi, thanh toán đến đánh giá sau chuyến.
 - Hỗ trợ tài xế vận hành trên di động hoặc web: nhận chuyến, cập nhật trạng thái, theo dõi thu nhập, xem lịch sử hoạt động.
