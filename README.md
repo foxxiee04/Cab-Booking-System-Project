@@ -55,7 +55,7 @@ Các yêu cầu kỹ thuật cốt lõi của hệ thống được hiện thự
 - Authentication: JWT và internal service token.
 - Triển khai: Docker, Docker Compose, Docker Swarm, GitHub Actions.
 
-### 1.3 Chức năng chính
+### 1.3 Chức năng chínha 
 
 Hệ thống được thiết kế để đáp ứng các mục tiêu chính sau: a
 
