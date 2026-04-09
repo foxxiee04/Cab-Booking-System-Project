@@ -88,6 +88,18 @@ export interface DriverCandidate {
 
   /** Pre-calculated great-circle distance from passenger (km) */
   distanceKm: number;
+
+  /** Optional system priority boost in range [0, 1] */
+  driverPriority?: number;
+
+  /** Optional AI score adjustment before bounded clamp */
+  aiAdjustment?: number;
+
+  /**
+   * Accept probability multiplier from ML model — clamped [0.3, 1.2].
+   * Defaults to 1.0 (neutral) when disabled or on fallback.
+   */
+  pAccept?: number;
 }
 
 export interface ScoredDriver extends DriverCandidate {
@@ -97,6 +109,19 @@ export interface ScoredDriver extends DriverCandidate {
   etaMinutes: number;
   /** Human-readable ETA string */
   etaText: string;
+  /** Component-wise breakdown for observability/demo */
+  scoreBreakdown: {
+    etaScore: number;
+    ratingScore: number;
+    acceptScore: number;
+    cancelPenalty: number;
+    idleScore: number;
+    distancePenalty: number;
+    priorityScore: number;
+    aiAdjustment: number;
+    /** Accept-probability multiplier actually applied (1.0 = no effect) */
+    pAcceptMultiplier: number;
+  };
 }
 
 export interface MatchingResult {
@@ -120,6 +145,9 @@ export interface MatchingConfig {
 
   // ── Scoring weights ──────────────────────────────────────────────────────
 
+  /** Reward weight for inverse ETA (0–1) */
+  wEta: number;
+
   /** Penalty weight for distance (0–1) */
   wDistance: number;
   /** Reward weight for driver rating (0–1) */
@@ -130,6 +158,24 @@ export interface MatchingConfig {
   wAcceptance: number;
   /** Penalty weight for cancel rate (0–1) */
   wCancelRate: number;
+
+  /** Reward weight for system-level driver priority (0–1) */
+  wDriverPriority: number;
+
+  /** Enable bounded AI score adjustment */
+  aiAdjustmentEnabled: boolean;
+
+  /** Absolute max delta added by AI adjustment */
+  aiAdjustmentDeltaMax: number;
+
+  /** Enable P_accept score multiplier from ML model */
+  pAcceptEnabled: boolean;
+
+  /** Clamp floor for P_accept multiplier (default 0.3) */
+  pAcceptClampMin: number;
+
+  /** Clamp ceiling for P_accept multiplier (default 1.2) */
+  pAcceptClampMax: number;
 
   // ── Normalisation caps ───────────────────────────────────────────────────
 
@@ -152,11 +198,20 @@ export const DEFAULT_CONFIG: Readonly<MatchingConfig> = {
   topN: 5,
   dispatchMode: 'sequential',
 
-  wDistance: 0.40,
-  wRating: 0.25,
-  wIdleTime: 0.15,
+  wEta: 0.40,
+  wDistance: 0.05,
+  wRating: 0.20,
+  wIdleTime: 0.05,
   wAcceptance: 0.15,
-  wCancelRate: 0.05,
+  wCancelRate: 0.15,
+  wDriverPriority: 0.05,
+
+  aiAdjustmentEnabled: false,
+  aiAdjustmentDeltaMax: 0.08,
+
+  pAcceptEnabled: false,
+  pAcceptClampMin: 0.3,
+  pAcceptClampMax: 1.2,
 
   maxIdleSeconds: 7_200, // 2 hours
   avgUrbanSpeedKmh: 25,
@@ -210,6 +265,28 @@ export class DriverMatcher {
     this.cfg = { ...DEFAULT_CONFIG, ...config };
   }
 
+  private boundedAiAdjustment(raw: number | undefined): number {
+    if (!this.cfg.aiAdjustmentEnabled) {
+      return 0;
+    }
+
+    const maxDelta = Math.max(0, this.cfg.aiAdjustmentDeltaMax);
+    const value = Number.isFinite(raw) ? (raw as number) : 0;
+    return Math.max(-maxDelta, Math.min(maxDelta, value));
+  }
+
+  /**
+   * Returns the P_accept multiplier to apply to the final score.
+   * - If pAcceptEnabled is false → 1.0 (neutral, no effect)
+   * - If driver.pAccept is missing → 1.0 (fallback)
+   * - Otherwise → clamp(pAccept, clampMin, clampMax)
+   */
+  private resolvedPAccept(raw: number | undefined): number {
+    if (!this.cfg.pAcceptEnabled) return 1.0;
+    if (raw === undefined || !Number.isFinite(raw)) return 1.0;
+    return Math.max(this.cfg.pAcceptClampMin, Math.min(this.cfg.pAcceptClampMax, raw));
+  }
+
   // ── Public API ──────────────────────────────────────────────────────────────
 
   /**
@@ -218,22 +295,80 @@ export class DriverMatcher {
    * Higher score → better match.
    */
   scoreDriver(driver: DriverCandidate): number {
-    const { wDistance, wRating, wIdleTime, wAcceptance, wCancelRate, maxRadiusKm, maxIdleSeconds } = this.cfg;
+    const {
+      wEta,
+      wDistance,
+      wRating,
+      wIdleTime,
+      wAcceptance,
+      wCancelRate,
+      wDriverPriority,
+      maxRadiusKm,
+      maxIdleSeconds,
+      avgUrbanSpeedKmh,
+    } = this.cfg;
 
     // Normalise each factor to [0, 1] — cap outliers at the defined max.
+    const etaMinutes = estimateEtaMinutes(driver.distanceKm, avgUrbanSpeedKmh);
+    const etaScore = Math.max(0, Math.min(1, 1 / Math.max(1, etaMinutes)));
     const normDist = Math.min(driver.distanceKm, maxRadiusKm) / maxRadiusKm;
     const normRating = driver.rating / 5;
     const normIdle = Math.min(driver.idleSeconds, maxIdleSeconds) / maxIdleSeconds;
     const normAccept = Math.max(0, Math.min(1, driver.acceptanceRate));
     const normCancel = Math.max(0, Math.min(1, driver.cancelRate));
+    const normPriority = Math.max(0, Math.min(1, driver.driverPriority ?? 0));
+    const aiAdjustment = this.boundedAiAdjustment(driver.aiAdjustment);
+    const pAcceptMultiplier = this.resolvedPAccept(driver.pAccept);
 
-    return (
-      -wDistance * normDist
+    const baseScore =
+      + wEta * etaScore
       + wRating * normRating
-      + wIdleTime * normIdle
       + wAcceptance * normAccept
       - wCancelRate * normCancel
-    );
+      + wIdleTime * normIdle
+      - wDistance * normDist
+      + wDriverPriority * normPriority
+      + aiAdjustment;
+
+    return baseScore * pAcceptMultiplier;
+  }
+
+  scoreBreakdown(driver: DriverCandidate): ScoredDriver['scoreBreakdown'] {
+    const {
+      wEta,
+      wDistance,
+      wRating,
+      wIdleTime,
+      wAcceptance,
+      wCancelRate,
+      wDriverPriority,
+      maxRadiusKm,
+      maxIdleSeconds,
+      avgUrbanSpeedKmh,
+    } = this.cfg;
+
+    const etaMinutes = estimateEtaMinutes(driver.distanceKm, avgUrbanSpeedKmh);
+    const etaScore = Math.max(0, Math.min(1, 1 / Math.max(1, etaMinutes)));
+    const normDist = Math.min(driver.distanceKm, maxRadiusKm) / maxRadiusKm;
+    const normRating = driver.rating / 5;
+    const normIdle = Math.min(driver.idleSeconds, maxIdleSeconds) / maxIdleSeconds;
+    const normAccept = Math.max(0, Math.min(1, driver.acceptanceRate));
+    const normCancel = Math.max(0, Math.min(1, driver.cancelRate));
+    const normPriority = Math.max(0, Math.min(1, driver.driverPriority ?? 0));
+    const aiAdjustment = this.boundedAiAdjustment(driver.aiAdjustment);
+    const pAcceptMultiplier = this.resolvedPAccept(driver.pAccept);
+
+    return {
+      etaScore: wEta * etaScore,
+      ratingScore: wRating * normRating,
+      acceptScore: wAcceptance * normAccept,
+      cancelPenalty: wCancelRate * normCancel,
+      idleScore: wIdleTime * normIdle,
+      distancePenalty: wDistance * normDist,
+      priorityScore: wDriverPriority * normPriority,
+      aiAdjustment,
+      pAcceptMultiplier,
+    };
   }
 
   /**
@@ -254,13 +389,24 @@ export class DriverMatcher {
       })
       .map((d) => {
         const eta = estimateEtaMinutes(d.distanceKm, avgUrbanSpeedKmh);
+        const breakdown = this.scoreBreakdown(d);
         return {
           ...d,
           acceptanceRate: d.acceptanceRate ?? ASSUMED_ACCEPTANCE_RATE,
           cancelRate: d.cancelRate ?? ASSUMED_CANCEL_RATE,
-          score: this.scoreDriver(d),
+          score: (
+            breakdown.etaScore +
+            breakdown.ratingScore +
+            breakdown.acceptScore -
+            breakdown.cancelPenalty +
+            breakdown.idleScore -
+            breakdown.distancePenalty +
+            breakdown.priorityScore +
+            breakdown.aiAdjustment
+          ) * breakdown.pAcceptMultiplier,
           etaMinutes: eta,
           etaText: formatEta(eta),
+          scoreBreakdown: breakdown,
         };
       })
       .sort((a, b) => b.score - a.score)
@@ -396,6 +542,12 @@ export function buildCandidate(
     ? computeRates(stats)
     : { acceptanceRate: ASSUMED_ACCEPTANCE_RATE, cancelRate: ASSUMED_CANCEL_RATE };
 
+  const totalOffers = stats ? (stats.totalAccepted + stats.totalDeclined) : 0;
+  const newDriverBoost = totalOffers < 5 ? 0.35 : 0;
+  const idleBoost = Math.min(idleSeconds / 3_600, 1) * 0.45;
+  const reliabilityPenalty = cancelRate * 0.25;
+  const driverPriority = Math.max(0, Math.min(1, newDriverBoost + idleBoost - reliabilityPenalty));
+
   return {
     driverId,
     userId,
@@ -407,5 +559,6 @@ export function buildCandidate(
     cancelRate,
     vehicleType,
     distanceKm,
+    driverPriority,
   };
 }

@@ -5,6 +5,33 @@ import { grpcBridgeClient, ForwardableRequestLike } from '../grpc/bridge.client'
 
 const router = Router();
 
+function normalizeForwardQuery(
+  service: keyof typeof import('../config').config.grpcServices,
+  normalizedPath: string,
+  originalQuery: Request['query'],
+): Request['query'] {
+  const query = { ...originalQuery };
+
+  if (service === 'driver' && /^\/api\/drivers\/nearby(?:\/|$)/.test(normalizedPath)) {
+    const maxRadiusKm = Math.max(0.5, config.customer.nearbyDriverMaxRadiusKm || 3);
+    const rawRadius = Array.isArray(query.radius) ? query.radius[0] : query.radius;
+    const parsedRadius = Number(rawRadius);
+    const safeRadius = Number.isFinite(parsedRadius)
+      ? Math.max(0.1, Math.min(parsedRadius, maxRadiusKm))
+      : maxRadiusKm;
+
+    if (Number.isFinite(parsedRadius) && parsedRadius !== safeRadius) {
+      logger.info(
+        `Clamped nearby-driver radius from ${parsedRadius}km to ${safeRadius}km for ${normalizedPath}`,
+      );
+    }
+
+    query.radius = String(safeRadius);
+  }
+
+  return query;
+}
+
 function normalizeProxyPath(service: keyof typeof import('../config').config.grpcServices, originalUrl: string): string {
   const path = originalUrl.split('?')[0];
 
@@ -56,8 +83,9 @@ async function forwardOverHttp(
   normalizedPath: string,
 ) {
   const url = new URL(normalizedPath, config.services[service]);
+  const normalizedQuery = normalizeForwardQuery(service, normalizedPath, req.query);
 
-  Object.entries(req.query).forEach(([key, value]) => {
+  Object.entries(normalizedQuery).forEach(([key, value]) => {
     if (Array.isArray(value)) {
       value.forEach((entry) => {
         if (entry !== undefined && entry !== null) {
@@ -90,6 +118,7 @@ async function forwardOverHttp(
 async function forward(service: keyof typeof import('../config').config.grpcServices, req: Request, res: Response) {
   try {
     const normalizedPath = normalizeProxyPath(service, req.originalUrl);
+    const normalizedQuery = normalizeForwardQuery(service, normalizedPath, req.query);
 
     if (shouldForwardOverHttp(service, normalizedPath)) {
       await forwardOverHttp(service, req, res, normalizedPath);
@@ -99,7 +128,7 @@ async function forward(service: keyof typeof import('../config').config.grpcServ
     const forwardedRequest: ForwardableRequestLike = {
       method: req.method,
       originalUrl: normalizedPath,
-      query: req.query,
+      query: normalizedQuery,
       body: req.body,
       headers: req.headers,
     };

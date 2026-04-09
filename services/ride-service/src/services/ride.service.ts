@@ -997,6 +997,8 @@ export class RideService {
       excludeDriverIds: excludedDrivers,
       attempt: ride.reassignAttempts + 1,
       maxAttempts: this.offerManager.getMaxReassignAttempts(),
+      matchingStartedAt: ride.requestedAt?.toISOString?.() || new Date().toISOString(),
+      maxWaitMs: config.ride.searchTimeoutMs,
     }, ride.id);
 
     logger.info(`Reassignment request sent for ride ${ride.id}, excluding ${excludedDrivers.length} drivers`);
@@ -1083,6 +1085,10 @@ export class RideService {
      vehicleType: ride.vehicleType,
      fare: ride.fare,
       searchRadiusKm: config.ride.searchRadiusKm,
+      attempt: 1,
+      maxAttempts: this.offerManager.getMaxReassignAttempts(),
+      matchingStartedAt: ride.requestedAt?.toISOString?.() || new Date().toISOString(),
+      maxWaitMs: config.ride.searchTimeoutMs,
     }, ride.id);
 
     // ── Search timeout guard ──────────────────────────────────────────────
@@ -1101,7 +1107,7 @@ export class RideService {
    * consider a Redis SETEX key + keyspace notification.
    */
   private scheduleRideSearchTimeout(ride: Ride): void {
-    const timeoutMs = (config.ride as any).searchTimeoutMs ?? 5 * 60 * 1_000; // 5 min
+    const timeoutMs = config.ride.searchTimeoutMs;
 
     const timer = setTimeout(async () => {
       try {

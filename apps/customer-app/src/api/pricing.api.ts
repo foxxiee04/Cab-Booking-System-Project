@@ -37,6 +37,8 @@ export const pricingApi = {
     const distance = Number(rawEstimate.distance);
     const duration = Number(rawEstimate.duration);
     const surgeMultiplier = Number(rawEstimate.surgeMultiplier);
+    const rawWait = Number(rawEstimate.estimatedWaitMinutes);
+    const estimatedWaitMinutes = Number.isFinite(rawWait) && rawWait > 0 ? rawWait : undefined;
 
     return {
       success: Boolean(payload?.success ?? true),
@@ -45,6 +47,7 @@ export const pricingApi = {
         distance: Number.isFinite(distance) ? distance : 0,
         duration: Number.isFinite(duration) ? duration : 0,
         surgeMultiplier: Number.isFinite(surgeMultiplier) && surgeMultiplier > 0 ? surgeMultiplier : 1,
+        estimatedWaitMinutes,
         breakdown: rawEstimate.breakdown
           ? {
               baseFare: Number(rawEstimate.breakdown.baseFare) || 0,

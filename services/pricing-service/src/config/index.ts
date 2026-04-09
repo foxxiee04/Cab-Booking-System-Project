@@ -16,7 +16,11 @@ export const config = {
   
   ai: {
     baseUrl: getRequiredEnv('AI_SERVICE_URL'),
-    timeoutMs: parseInt(process.env.AI_SERVICE_TIMEOUT_MS || '1500', 10),
+    timeoutMs: parseInt(process.env.AI_SERVICE_TIMEOUT_MS || '150', 10),
+    surgeMin: parseFloat(process.env.AI_SURGE_MIN || '1.0'),
+    surgeMax: parseFloat(process.env.AI_SURGE_MAX || '2.0'),
+    radiusMinKm: parseFloat(process.env.AI_RADIUS_MIN_KM || '2.0'),
+    radiusMaxKm: parseFloat(process.env.AI_RADIUS_MAX_KM || '5.0'),
   },
   
   redis: {

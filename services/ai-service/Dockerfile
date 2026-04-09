@@ -26,9 +26,11 @@ COPY app/ ./app/
 # Copy training pipeline
 COPY training/ ./training/
 
-# Create models directory and train model at build time
+# Create models directory and train all models at build time
 RUN mkdir -p app/models \
-    && python training/train_model.py
+    && python training/train_model.py \
+    && python training/train_accept_model.py \
+    && python training/train_wait_model.py
 
 # Expose port
 EXPOSE 8000

@@ -2,6 +2,22 @@ import dotenv from 'dotenv';
 import { getRequiredEnv, grpcAddressFromHttpUrl } from '../../../../shared/dist';
 dotenv.config();
 
+function readNumberEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function readBoundedIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const parsed = Math.floor(readNumberEnv(name, fallback));
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function readBoundedFloatEnv(name: string, fallback: number, min: number, max: number): number {
+  const parsed = readNumberEnv(name, fallback);
+  return Math.min(max, Math.max(min, parsed));
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '3000'),
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -20,6 +36,7 @@ export const config = {
     driver: process.env.DRIVER_SERVICE_URL || 'http://localhost:3003',
     payment: process.env.PAYMENT_SERVICE_URL || 'http://localhost:3004',
     notification: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3005',
+    ai: process.env.AI_SERVICE_URL || 'http://localhost:8000',
   },
 
   grpcServices: {
@@ -46,5 +63,28 @@ export const config = {
     nominatimCountry: process.env.NOMINATIM_COUNTRY || 'vn',
     osrmUrl: process.env.OSRM_URL || 'http://router.project-osrm.org',
     timeoutMs: parseInt(process.env.MAP_TIMEOUT_MS || '10000'),
+  },
+
+  matching: {
+    maxAttempts: readBoundedIntEnv('MATCHING_MAX_ATTEMPTS', 3, 1, 10),
+    retryDelayMs: readBoundedIntEnv('MATCHING_RETRY_DELAY_MS', 2500, 2000, 10000),
+    maxWaitMs: readBoundedIntEnv('MATCHING_MAX_WAIT_MS', 120000, 10000, 600000),
+    // Format: radiusKm:offerCount:surgeHint,radiusKm:offerCount:surgeHint
+    rounds: process.env.MATCHING_ROUNDS || '2:1:1.0,3:3:1.1,5:5:1.2',
+    scoreLogVerbose: process.env.MATCHING_SCORE_LOG_VERBOSE === 'true',
+    aiAdjustmentEnabled: process.env.MATCHING_AI_ADJUSTMENT_ENABLED === 'true',
+    aiAdjustmentDeltaMax: readBoundedFloatEnv('MATCHING_AI_ADJUSTMENT_DELTA_MAX', 0.08, 0, 0.2),
+    aiTimeoutMs: readBoundedIntEnv('MATCHING_AI_TIMEOUT_MS', 150, 50, 1000),
+    pAcceptEnabled: process.env.MATCHING_PACCEPT_ENABLED === 'true',
+    pAcceptClampMin: readBoundedFloatEnv('MATCHING_PACCEPT_CLAMP_MIN', 0.3, 0.1, 1.0),
+    pAcceptClampMax: readBoundedFloatEnv('MATCHING_PACCEPT_CLAMP_MAX', 1.2, 1.0, 2.0),
+    avgUrbanSpeedKmh: readBoundedFloatEnv('MATCHING_AVG_SPEED_KMH', 25, 10, 60),
+    waitPredictionEnabled: process.env.MATCHING_WAIT_PREDICTION_ENABLED === 'true',
+    waitThresholdMinutes: readBoundedFloatEnv('MATCHING_WAIT_THRESHOLD_MINUTES', 8, 2, 15),
+    maxRadiusKm: readBoundedFloatEnv('MATCHING_MAX_RADIUS_KM', 5, 1, 20),
+  },
+
+  customer: {
+    nearbyDriverMaxRadiusKm: readBoundedFloatEnv('CUSTOMER_NEARBY_DRIVER_MAX_RADIUS_KM', 3, 0.5, 10),
   },
 };

@@ -79,6 +79,7 @@ export interface FareEstimate {
   distance: number;
   duration: number;
   surgeMultiplier: number;
+  estimatedWaitMinutes?: number;
   breakdown?: {
     baseFare: number;
     distanceFare: number;

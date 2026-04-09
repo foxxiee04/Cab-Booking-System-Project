@@ -4,13 +4,35 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 import { calculateDistance, estimateDuration } from '../utils/geo.utils';
 
-type VehicleType = 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
+type VehicleType =
+  | 'MOTORBIKE'
+  | 'SCOOTER'
+  | 'CAR_4'
+  | 'CAR_7'
+  | 'ECONOMY'
+  | 'COMFORT'
+  | 'PREMIUM';
+type CanonicalVehicleType = 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
 type AITimeOfDay = 'OFF_PEAK' | 'RUSH_HOUR';
 type AIDayType = 'WEEKDAY' | 'WEEKEND';
+type AIReasonCode =
+  | 'AI_OK'
+  | 'AI_TIMEOUT'
+  | 'AI_HTTP_ERROR'
+  | 'AI_INVALID_RESPONSE'
+  | 'AI_LOW_CONFIDENCE'
+  | 'AI_DISABLED_BY_FLAG';
 
 interface AIPrediction {
   eta_minutes: number;
   price_multiplier: number;
+  recommended_driver_radius_km?: number;
+  surge_hint?: number;
+  confidence_score?: number;
+  reason_code?: AIReasonCode;
+  model_version?: string;
+  feature_version?: string;
+  inference_ms?: number;
   distance_km: number;
   time_of_day: AITimeOfDay;
   day_type: AIDayType;
@@ -22,7 +44,37 @@ interface AIPrediction {
   };
 }
 
+interface AIPredictionResult {
+  prediction: AIPrediction | null;
+  reasonCode: AIReasonCode;
+  latencyMs: number;
+}
+
+interface WaitTimePrediction {
+  wait_time_minutes: number;
+  confidence: number;
+  model_version: string;
+  reason_code: string;
+}
+
 export class PricingService {
+  private normalizeVehicleType(vehicleType: VehicleType): CanonicalVehicleType {
+    switch (vehicleType) {
+      case 'ECONOMY':
+        return 'MOTORBIKE';
+      case 'COMFORT':
+        return 'CAR_4';
+      case 'PREMIUM':
+        return 'CAR_7';
+      default:
+        return vehicleType;
+    }
+  }
+
+
+  private clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+  }
   
   /**
    * Calculate fare estimate
@@ -35,6 +87,10 @@ export class PricingService {
     vehicleType: VehicleType;
   }) {
     const { pickupLat, pickupLng, dropoffLat, dropoffLng, vehicleType } = params;
+    const normalizedVehicleType = this.normalizeVehicleType(vehicleType);
+    const pricingKey = Object.prototype.hasOwnProperty.call(config.pricing.baseFare, vehicleType)
+      ? vehicleType
+      : normalizedVehicleType;
 
     // Calculate distance & duration via OSRM (fallback to Haversine)
     let distance = 0;
@@ -60,16 +116,31 @@ export class PricingService {
 
     // Get surge multiplier
     const configuredSurgeMultiplier = await this.getCurrentSurgeMultiplier();
-    const aiPrediction = await this.getAIPrediction(distance);
+    const aiResult = await this.getAIPrediction(distance);
+    const aiPrediction = aiResult.prediction;
     const durationMinutes = aiPrediction?.eta_minutes ?? baseDurationMinutes;
-    const surgeMultiplier = aiPrediction
-      ? Math.max(configuredSurgeMultiplier, aiPrediction.price_multiplier)
+
+    const surgeCandidate = aiPrediction
+      ? (aiPrediction.surge_hint ?? aiPrediction.price_multiplier)
       : configuredSurgeMultiplier;
+    const boundedSurge = this.clamp(surgeCandidate, config.ai.surgeMin, config.ai.surgeMax);
+    // Final decision keeps rule-based baseline and allows bounded AI suggestion.
+    const surgeMultiplier = this.clamp(
+      Math.max(configuredSurgeMultiplier, boundedSurge),
+      config.ai.surgeMin,
+      config.ai.surgeMax,
+    );
+
+    const aiRadiusSuggestion =
+      aiPrediction?.recommended_driver_radius_km
+      ?? aiPrediction?.insights?.recommended_driver_radius_km
+      ?? 3;
+    const boundedRecommendedRadius = this.clamp(aiRadiusSuggestion, config.ai.radiusMinKm, config.ai.radiusMaxKm);
 
     // Calculate base components
-    const baseFare = config.pricing.baseFare[vehicleType];
-    const distanceFare = distance * config.pricing.perKmRate[vehicleType];
-    const timeFare = durationMinutes * config.pricing.perMinuteRate[vehicleType];
+    const baseFare = config.pricing.baseFare[pricingKey as keyof typeof config.pricing.baseFare];
+    const distanceFare = distance * config.pricing.perKmRate[pricingKey as keyof typeof config.pricing.perKmRate];
+    const timeFare = durationMinutes * config.pricing.perMinuteRate[pricingKey as keyof typeof config.pricing.perMinuteRate];
 
     // Calculate total
     const subtotal = baseFare + distanceFare + timeFare;
@@ -86,18 +157,32 @@ export class PricingService {
       fare: totalFare,
     });
 
+    // Fetch wait time prediction — fire in parallel, non-blocking on failure
+    const waitResult = await this.getWaitTimePrediction({
+      demandLevel: (aiPrediction?.insights?.demand_level || 'MEDIUM') as 'LOW' | 'MEDIUM' | 'HIGH',
+      surgeMultiplier,
+      pickupLat,
+      pickupLng,
+    });
+
     return {
       fare: totalFare,
       distance,
       duration: durationMinutes * 60,
       durationMinutes,
       surgeMultiplier,
+      estimatedWaitMinutes: waitResult.wait_time_minutes,
       aiPrediction,
       operationalHints: {
         predictionSource: aiPrediction ? 'AI' : 'RULE_ENGINE',
+        reasonCode: aiResult.reasonCode,
         demandLevel: aiPrediction?.insights?.demand_level || 'LOW',
         etaConfidence: aiPrediction?.insights?.eta_confidence || 'MEDIUM',
-        recommendedDriverRadiusKm: aiPrediction?.insights?.recommended_driver_radius_km || 3,
+        confidenceScore: aiPrediction?.confidence_score ?? null,
+        modelVersion: aiPrediction?.model_version || null,
+        featureVersion: aiPrediction?.feature_version || null,
+        inferenceMs: aiPrediction?.inference_ms ?? aiResult.latencyMs,
+        recommendedDriverRadiusKm: boundedRecommendedRadius,
         surgeReason: aiPrediction?.insights?.surge_reason || 'Deterministic pricing fallback is active',
       },
       breakdown: {
@@ -202,7 +287,54 @@ export class PricingService {
     return { multiplier, demandSupplyRatio };
   }
 
-  private async getAIPrediction(distanceKm: number): Promise<AIPrediction | null> {
+  private async getWaitTimePrediction(params: {
+    demandLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+    surgeMultiplier: number;
+    pickupLat: number;
+    pickupLng: number;
+  }): Promise<WaitTimePrediction> {
+    const fallback: WaitTimePrediction = {
+      wait_time_minutes: 4.0,
+      confidence: 0.4,
+      model_version: 'heuristic-v1',
+      reason_code: 'AI_FALLBACK',
+    };
+    try {
+      const now = new Date();
+      // Derive zone from lat/lng (central HCMC = A, inner = B, else D)
+      const isZoneA =
+        params.pickupLat >= 10.76 && params.pickupLat <= 10.80 &&
+        params.pickupLng >= 106.69 && params.pickupLng <= 106.72;
+      const isZoneB =
+        params.pickupLat >= 10.70 && params.pickupLat <= 10.82 &&
+        params.pickupLng >= 106.65 && params.pickupLng <= 106.75;
+      const pickupZone = isZoneA ? 'A' : isZoneB ? 'B' : 'D';
+
+      const body = {
+        demand_level: params.demandLevel,
+        active_booking_count: 0,
+        available_driver_count: 5,
+        hour_of_day: now.getHours(),
+        day_of_week: now.getDay() === 0 ? 6 : now.getDay() - 1, // Mon=0…Sun=6
+        surge_multiplier: params.surgeMultiplier,
+        avg_accept_rate: 0.75,
+        historical_wait_p50: 4.0,
+        pickup_zone: pickupZone,
+      };
+
+      const response = await axios.post(
+        `${config.ai.baseUrl}/api/predict/wait-time`,
+        body,
+        { timeout: config.ai.timeoutMs },
+      );
+      return response.data as WaitTimePrediction;
+    } catch {
+      return fallback;
+    }
+  }
+
+  private async getAIPrediction(distanceKm: number): Promise<AIPredictionResult> {
+    const startedAt = Date.now();
     try {
       const response = await axios.post(
         `${config.ai.baseUrl}/api/predict`,
@@ -216,13 +348,29 @@ export class PricingService {
 
       const payload = response.data;
       if (!payload || typeof payload.eta_minutes !== 'number' || typeof payload.price_multiplier !== 'number') {
-        return null;
+        return {
+          prediction: null,
+          reasonCode: 'AI_INVALID_RESPONSE',
+          latencyMs: Date.now() - startedAt,
+        };
       }
 
-      return payload as AIPrediction;
+      return {
+        prediction: payload as AIPrediction,
+        reasonCode: 'AI_OK',
+        latencyMs: Date.now() - startedAt,
+      };
     } catch (error) {
       logger.warn('AI prediction unavailable, using deterministic pricing', error);
-      return null;
+      const reasonCode: AIReasonCode =
+        (error as { code?: string })?.code === 'ECONNABORTED'
+          ? 'AI_TIMEOUT'
+          : 'AI_HTTP_ERROR';
+      return {
+        prediction: null,
+        reasonCode,
+        latencyMs: Date.now() - startedAt,
+      };
     }
   }
 

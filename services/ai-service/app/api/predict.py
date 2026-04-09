@@ -1,8 +1,22 @@
 """Prediction API endpoints"""
 
 from fastapi import APIRouter, HTTPException
-from app.schemas.prediction import PredictionRequest, PredictionResponse, HealthResponse
+from app.schemas.prediction import (
+    PredictionRequest,
+    PredictionResponse,
+    HealthResponse,
+)
+from app.schemas.accept_prediction import (
+    AcceptPredictionBatchRequest,
+    AcceptPredictionBatchResponse,
+)
+from app.schemas.wait_prediction import (
+    WaitTimePredictionRequest,
+    WaitTimePredictionResponse,
+)
 from app.services.prediction_service import prediction_service
+from app.services.accept_service import accept_service
+from app.services.wait_service import wait_service
 from app.core.config import settings
 
 router = APIRouter(prefix="/api", tags=["predictions"])
@@ -50,6 +64,13 @@ async def predict(request: PredictionRequest):
         response = PredictionResponse(
             eta_minutes=predictions['eta_minutes'],
             price_multiplier=predictions['price_multiplier'],
+            recommended_driver_radius_km=predictions['recommended_driver_radius_km'],
+            surge_hint=predictions['surge_hint'],
+            confidence_score=predictions['confidence_score'],
+            reason_code=predictions['reason_code'],
+            model_version=predictions['model_version'],
+            feature_version=predictions['feature_version'],
+            inference_ms=predictions['inference_ms'],
             distance_km=request.distance_km,
             time_of_day=request.time_of_day.value,
             day_type=request.day_type.value,
@@ -65,11 +86,41 @@ async def predict(request: PredictionRequest):
         )
 
 
+@router.post("/predict/accept/batch", response_model=AcceptPredictionBatchResponse)
+async def predict_accept_batch(request: AcceptPredictionBatchRequest):
+    """
+    Batch accept probability prediction.
+
+    Returns per-driver P(accept) predictions and a clamped multiplier [0.3, 1.2]
+    that can be applied directly to dispatch scores.
+
+    Falls back to p_accept_clamped=1.0 (neutral) if the model is not loaded.
+    """
+    try:
+        return accept_service.predict_batch(request)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Accept prediction error: {exc}")
+
+
+@router.post("/predict/wait-time", response_model=WaitTimePredictionResponse)
+async def predict_wait_time(request: WaitTimePredictionRequest):
+    """
+    Predict customer wait time (minutes from booking → driver acceptance).
+
+    Returns wait_time_minutes ∈ [1, 15] with confidence score.
+    Falls back to heuristic if model is unavailable.
+    """
+    try:
+        return wait_service.predict(request)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Wait-time prediction error: {exc}")
+
+
 @router.get("/stats")
 async def get_stats():
     """
-    Get AI service statistics (placeholder for future metrics)
-    
+    Get AI service statistics.
+
     Returns:
         Dictionary with service statistics
     """
@@ -78,5 +129,9 @@ async def get_stats():
         "version": settings.APP_VERSION,
         "status": "running",
         "model_loaded": prediction_service.model is not None,
-        "model_path": settings.MODEL_PATH
+        "accept_model_loaded": accept_service.is_ready,
+        "wait_model_loaded": wait_service.model is not None,
+        "model_path": settings.MODEL_PATH,
+        "accept_model_path": settings.ACCEPT_MODEL_PATH,
+        "wait_model_path": settings.WAIT_MODEL_PATH,
     }

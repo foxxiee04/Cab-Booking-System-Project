@@ -15,6 +15,10 @@ jest.mock('../config', () => ({
     ai: {
       baseUrl: 'http://ai-service:8000',
       timeoutMs: 1500,
+      surgeMin: 1.0,
+      surgeMax: 2.0,
+      radiusMinKm: 2.0,
+      radiusMaxKm: 5.0,
     },
     osrm: {
       baseUrl: 'http://router.project-osrm.org',

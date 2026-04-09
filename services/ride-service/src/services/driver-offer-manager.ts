@@ -9,7 +9,7 @@ import { logger } from '../utils/logger';
 export class DriverOfferManager {
   private redis: Redis;
   private readonly OFFER_TTL_SECONDS = 20; // 20 seconds for driver to respond
-  private readonly MAX_REASSIGN_ATTEMPTS = 3;
+  private readonly MAX_REASSIGN_ATTEMPTS: number;
   private readonly OFFER_KEY_PREFIX = 'ride:offer:';
   private readonly OFFERED_DRIVERS_PREFIX = 'ride:offered:';
 
@@ -25,6 +25,7 @@ export class DriverOfferManager {
 
   constructor(redis?: Redis) {
     this.redis = redis || new Redis(config.redis.url);
+    this.MAX_REASSIGN_ATTEMPTS = Math.max(1, config.ride.maxMatchingRetries || 3);
 
     this.redis.on('error', (err) => {
       logger.error('Redis error in DriverOfferManager:', err);

@@ -57,6 +57,7 @@ interface PriceEstimate {
   distance: number;
   duration: number;
   surgeMultiplier: number;
+  estimatedWaitMinutes?: number;
 }
 
 interface VehicleOption {
@@ -232,6 +233,9 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
       distance,
       duration,
       surgeMultiplier,
+      estimatedWaitMinutes: Number.isFinite(Number(estimate.estimatedWaitMinutes)) && Number(estimate.estimatedWaitMinutes) > 0
+        ? Number(estimate.estimatedWaitMinutes)
+        : undefined,
     };
   }, [dropoffAddress, dropoffLat, dropoffLng, pickupAddress, pickupLat, pickupLng]);
 
@@ -428,10 +432,20 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                                 {vehicle.description} • {vehicle.capacity} chỗ
                               </Typography>
                               {estimate && (
-                                <Typography variant="caption" color="text.secondary">
-                                  {formatDistance(estimate.distance)} • ~
-                                  {Math.round(estimate.duration / 60)} min
-                                </Typography>
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {formatDistance(estimate.distance)} • ~
+                                    {Math.round(estimate.duration / 60)} min
+                                  </Typography>
+                                  {estimate.estimatedWaitMinutes != null && (
+                                    <Chip
+                                      size="small"
+                                      label={`Chờ ~${Math.round(estimate.estimatedWaitMinutes)} phút`}
+                                      color={estimate.estimatedWaitMinutes > 8 ? 'warning' : 'default'}
+                                      sx={{ height: 18, fontSize: '0.68rem' }}
+                                    />
+                                  )}
+                                </Box>
                               )}
                             </Box>
                           </Box>

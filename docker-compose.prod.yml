@@ -28,6 +28,7 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+      - mongo_config_data:/data/configdb
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -91,8 +92,24 @@ services:
       DRIVER_GRPC_ADDRESS: driver-service:50055
       PAYMENT_GRPC_ADDRESS: payment-service:50056
       PRICING_GRPC_ADDRESS: pricing-service:50057
+      AI_SERVICE_URL: ${AI_SERVICE_URL:-http://ai-service:8000}
       NOTIFICATION_GRPC_ADDRESS: notification-service:50058
       REVIEW_GRPC_ADDRESS: review-service:50059
+      MATCHING_MAX_ATTEMPTS: ${MATCHING_MAX_ATTEMPTS:-3}
+      MATCHING_RETRY_DELAY_MS: ${MATCHING_RETRY_DELAY_MS:-2500}
+      MATCHING_MAX_WAIT_MS: ${MATCHING_MAX_WAIT_MS:-120000}
+      MATCHING_ROUNDS: ${MATCHING_ROUNDS:-2:1:1.0,3:3:1.1,5:5:1.2}
+      MATCHING_SCORE_LOG_VERBOSE: ${MATCHING_SCORE_LOG_VERBOSE:-false}
+      MATCHING_AI_ADJUSTMENT_ENABLED: ${MATCHING_AI_ADJUSTMENT_ENABLED:-false}
+      MATCHING_AI_ADJUSTMENT_DELTA_MAX: ${MATCHING_AI_ADJUSTMENT_DELTA_MAX:-0.08}
+      MATCHING_AI_TIMEOUT_MS: ${MATCHING_AI_TIMEOUT_MS:-150}
+      MATCHING_PACCEPT_ENABLED: ${MATCHING_PACCEPT_ENABLED:-false}
+      MATCHING_PACCEPT_CLAMP_MIN: ${MATCHING_PACCEPT_CLAMP_MIN:-0.3}
+      MATCHING_PACCEPT_CLAMP_MAX: ${MATCHING_PACCEPT_CLAMP_MAX:-1.2}
+      MATCHING_WAIT_PREDICTION_ENABLED: ${MATCHING_WAIT_PREDICTION_ENABLED:-false}
+      MATCHING_WAIT_THRESHOLD_MINUTES: ${MATCHING_WAIT_THRESHOLD_MINUTES:-8}
+      MATCHING_MAX_RADIUS_KM: ${MATCHING_MAX_RADIUS_KM:-5}
+      CUSTOMER_NEARBY_DRIVER_MAX_RADIUS_KM: ${CUSTOMER_NEARBY_DRIVER_MAX_RADIUS_KM:-3}
     depends_on:
       - postgres
       - redis
@@ -182,6 +199,9 @@ services:
       PRICING_GRPC_ADDRESS: pricing-service:50057
       DRIVER_GRPC_ADDRESS: driver-service:50055
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+      RIDE_SEARCH_TIMEOUT_MS: ${RIDE_SEARCH_TIMEOUT_MS:-120000}
+      RIDE_MAX_MATCHING_RETRIES: ${RIDE_MAX_MATCHING_RETRIES:-3}
+      RIDE_SEARCH_RADIUS_KM: ${RIDE_SEARCH_RADIUS_KM:-3}
     depends_on:
       postgres:
         condition: service_healthy
@@ -364,6 +384,11 @@ services:
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
       OSRM_BASE_URL: ${OSRM_BASE_URL:-http://router.project-osrm.org}
       AI_SERVICE_URL: http://ai-service:8000
+      AI_SERVICE_TIMEOUT_MS: ${AI_SERVICE_TIMEOUT_MS:-150}
+      AI_SURGE_MIN: ${AI_SURGE_MIN:-1.0}
+      AI_SURGE_MAX: ${AI_SURGE_MAX:-2.0}
+      AI_RADIUS_MIN_KM: ${AI_RADIUS_MIN_KM:-2.0}
+      AI_RADIUS_MAX_KM: ${AI_RADIUS_MAX_KM:-5.0}
     depends_on:
       redis:
         condition: service_healthy
@@ -391,6 +416,14 @@ services:
       HOST: 0.0.0.0
       PORT: 8000
       MODEL_PATH: app/models/eta_price_model.joblib
+      ACCEPT_MODEL_PATH: app/models/accept_model.joblib
+      WAIT_MODEL_PATH: app/models/wait_model.joblib
+      MODEL_VERSION: ${MODEL_VERSION:-eta-rf-v2}
+      FEATURE_VERSION: ${FEATURE_VERSION:-features-v1}
+      SUGGESTED_RADIUS_MIN_KM: ${SUGGESTED_RADIUS_MIN_KM:-2.0}
+      SUGGESTED_RADIUS_MAX_KM: ${SUGGESTED_RADIUS_MAX_KM:-5.0}
+      SUGGESTED_SURGE_MIN: ${SUGGESTED_SURGE_MIN:-1.0}
+      SUGGESTED_SURGE_MAX: ${SUGGESTED_SURGE_MAX:-2.0}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
@@ -505,6 +538,9 @@ volumes:
     driver: local
   mongo_data:
     name: cab-booking-mongo-data
+    driver: local
+  mongo_config_data:
+    name: cab-booking-mongo-config-data
     driver: local
   redis_data:
     name: cab-booking-redis-data

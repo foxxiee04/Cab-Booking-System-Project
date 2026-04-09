@@ -35,8 +35,9 @@ export const config = {
   
   // Ride configuration
   ride: {
-    matchingTimeoutMs: 30000,  // 30 seconds to find driver
-    maxMatchingRetries: 3,
-    searchRadiusKm: 3,
+    matchingTimeoutMs: parseInt(process.env.RIDE_MATCHING_TIMEOUT_MS || '30000', 10),
+    maxMatchingRetries: parseInt(process.env.RIDE_MAX_MATCHING_RETRIES || '3', 10),
+    searchRadiusKm: parseInt(process.env.RIDE_SEARCH_RADIUS_KM || '3', 10),
+    searchTimeoutMs: parseInt(process.env.RIDE_SEARCH_TIMEOUT_MS || '120000', 10),
   },
 };

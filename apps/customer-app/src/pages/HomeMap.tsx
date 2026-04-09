@@ -36,6 +36,15 @@ const normalizeLocation = (location: BookingMapLocation | null) => {
   return { lat: location.lat, lng: location.lng, address: location.address };
 };
 
+const MAX_VISIBLE_NEARBY_RADIUS_KM = 3;
+const NEARBY_DRIVER_RADIUS_KM = Math.max(
+  0.5,
+  Math.min(
+    Number(import.meta.env.VITE_NEARBY_DRIVER_RADIUS_KM || MAX_VISIBLE_NEARBY_RADIUS_KM),
+    MAX_VISIBLE_NEARBY_RADIUS_KM,
+  ),
+);
+
 const HomeMap: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -111,7 +120,7 @@ const HomeMap: React.FC = () => {
         const response = await driverApi.getNearbyDrivers({
           lat: pickupLocation.lat,
           lng: pickupLocation.lng,
-          radius: 5, // Increased from 4km to 5km for better coverage
+          radius: NEARBY_DRIVER_RADIUS_KM,
         });
 
         if (!cancelled) {
@@ -125,6 +134,7 @@ const HomeMap: React.FC = () => {
               const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff) * 111; // rough km
               return { ...driver, distance };
             })
+            .filter((driver: any) => driver.distance <= NEARBY_DRIVER_RADIUS_KM)
             .sort((a: any, b: any) => a.distance - b.distance);
 
           setNearbyDrivers(driversWithDistance);

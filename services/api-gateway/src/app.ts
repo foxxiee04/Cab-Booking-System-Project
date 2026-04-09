@@ -12,6 +12,7 @@ import mapRoutes from './routes/map';
 import adminRoutes from './routes/admin';
 import { logger } from './utils/logger';
 import { swaggerSpec } from './swagger';
+import { collectMetricsText, getMetricsContentType } from './metrics/matching-ai.metrics';
 
 interface GatewayAppOptions {
   getReadiness: () => Promise<Record<string, boolean>>;
@@ -64,6 +65,16 @@ export function createApp({
       service: 'api-gateway',
       dependencies,
     });
+  });
+
+  app.get('/metrics', async (_req, res) => {
+    try {
+      res.setHeader('Content-Type', getMetricsContentType());
+      res.status(200).send(await collectMetricsText());
+    } catch (error) {
+      logger.error('Failed to collect Prometheus metrics', error);
+      res.status(500).send('metrics_unavailable');
+    }
   });
 
   app.get('/health/services', async (_req, res) => {

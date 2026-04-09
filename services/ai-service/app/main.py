@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api import predict
 from app.services.prediction_service import prediction_service
+from app.services.accept_service import accept_service  # noqa: F401 — eager load at startup
+from app.services.wait_service import wait_service  # noqa: F401 — eager load at startup
 
 # Configure logging
 logging.basicConfig(
@@ -66,6 +68,9 @@ async def root():
 async def readiness_check(response: Response):
     """Dependency readiness endpoint"""
     model_path = Path(settings.MODEL_PATH)
+    if not model_path.is_absolute():
+        service_root = Path(__file__).resolve().parents[1]
+        model_path = service_root / model_path
     model_loaded = prediction_service.model is not None and prediction_service.scaler is not None
     model_file_present = model_path.exists()
     ready = model_loaded and model_file_present

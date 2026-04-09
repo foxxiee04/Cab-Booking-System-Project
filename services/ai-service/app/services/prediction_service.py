@@ -2,6 +2,8 @@
 
 import logging
 import joblib
+import time
+from pathlib import Path
 from typing import Dict
 import numpy as np
 
@@ -29,10 +31,15 @@ class PredictionService:
     def load_model(self):
         """Load trained model from disk"""
         try:
-            model_data = joblib.load(settings.MODEL_PATH)
+            model_path = Path(settings.MODEL_PATH)
+            if not model_path.is_absolute():
+                service_root = Path(__file__).resolve().parents[2]
+                model_path = service_root / model_path
+
+            model_data = joblib.load(model_path)
             self.model = model_data['model']
             self.scaler = model_data['scaler']
-            logger.info(f"Model loaded successfully from {settings.MODEL_PATH}")
+            logger.info(f"Model loaded successfully from {model_path}")
         except FileNotFoundError:
             logger.error(f"Model file not found at {settings.MODEL_PATH}")
             raise RuntimeError(f"Model file not found at {settings.MODEL_PATH}")
@@ -78,6 +85,7 @@ class PredictionService:
         Returns:
             Dictionary with eta_minutes and price_multiplier
         """
+        start_time = time.perf_counter()
         try:
             # Encode features
             features_scaled = self._encode_features(request)
@@ -88,6 +96,12 @@ class PredictionService:
             # Extract predictions
             eta_minutes = int(max(1, min(120, predictions[0])))  # Clamp to [1, 120]
             price_multiplier = float(max(1.0, min(2.0, predictions[1])))  # Clamp to [1.0, 2.0]
+            confidence_score = self._compute_confidence_score(request, eta_minutes, price_multiplier)
+            bounded_radius = self._compute_recommended_radius(request, eta_minutes, price_multiplier)
+            bounded_surge_hint = float(
+                max(settings.SUGGESTED_SURGE_MIN, min(settings.SUGGESTED_SURGE_MAX, round(price_multiplier, 2)))
+            )
+            inference_ms = int((time.perf_counter() - start_time) * 1000)
             
             logger.info(
                 f"Prediction: distance={request.distance_km}km, "
@@ -98,6 +112,13 @@ class PredictionService:
             return {
                 'eta_minutes': eta_minutes,
                 'price_multiplier': round(price_multiplier, 2),
+                'recommended_driver_radius_km': bounded_radius,
+                'surge_hint': bounded_surge_hint,
+                'confidence_score': confidence_score,
+                'reason_code': 'AI_OK',
+                'model_version': settings.MODEL_VERSION,
+                'feature_version': settings.FEATURE_VERSION,
+                'inference_ms': inference_ms,
                 'insights': self._build_operational_insights(
                     request,
                     eta_minutes=eta_minutes,
@@ -107,17 +128,59 @@ class PredictionService:
             
         except Exception as e:
             logger.error(f"Error making prediction: {str(e)}")
-            # Return default values on error instead of crashing
-            logger.warning("Returning default values due to prediction error")
-            return {
-                'eta_minutes': 20,
-                'price_multiplier': 1.0,
-                'insights': self._build_operational_insights(
-                    request,
-                    eta_minutes=20,
-                    price_multiplier=1.0,
-                ),
-            }
+            raise RuntimeError(f"Prediction inference failed: {str(e)}") from e
+
+    def _compute_confidence_score(
+        self,
+        request: PredictionRequest,
+        eta_minutes: int,
+        price_multiplier: float,
+    ) -> float:
+        score = 0.75
+
+        if request.distance_km <= 8:
+            score += 0.15
+        elif request.distance_km > 20:
+            score -= 0.15
+
+        if request.time_of_day == TimeOfDayEnum.RUSH_HOUR:
+            score -= 0.05
+
+        if eta_minutes > 45:
+            score -= 0.10
+
+        if price_multiplier >= 1.6:
+            score -= 0.08
+
+        return round(max(0.05, min(0.99, score)), 2)
+
+    def _compute_recommended_radius(
+        self,
+        request: PredictionRequest,
+        eta_minutes: int,
+        price_multiplier: float,
+    ) -> float:
+        radius = 2.5
+
+        if request.time_of_day == TimeOfDayEnum.RUSH_HOUR:
+            radius += 0.7
+
+        if request.day_type == DayTypeEnum.WEEKEND:
+            radius += 0.3
+
+        if request.distance_km >= 12:
+            radius += 0.4
+
+        if eta_minutes >= 30:
+            radius += 0.6
+
+        if price_multiplier >= 1.4:
+            radius += 0.4
+
+        return round(
+            max(settings.SUGGESTED_RADIUS_MIN_KM, min(settings.SUGGESTED_RADIUS_MAX_KM, radius)),
+            1,
+        )
 
     def _build_operational_insights(
         self,

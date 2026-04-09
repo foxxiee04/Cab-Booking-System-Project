@@ -30,6 +30,16 @@ class ConfidenceLevelEnum(str, Enum):
     HIGH = "HIGH"
 
 
+class ReasonCodeEnum(str, Enum):
+    """Reason code for prediction outcome and fallback awareness"""
+    AI_OK = "AI_OK"
+    AI_TIMEOUT = "AI_TIMEOUT"
+    AI_HTTP_ERROR = "AI_HTTP_ERROR"
+    AI_INVALID_RESPONSE = "AI_INVALID_RESPONSE"
+    AI_LOW_CONFIDENCE = "AI_LOW_CONFIDENCE"
+    AI_DISABLED_BY_FLAG = "AI_DISABLED_BY_FLAG"
+
+
 class PredictionRequest(BaseModel):
     """Request schema for prediction endpoint"""
     
@@ -101,6 +111,41 @@ class PredictionResponse(BaseModel):
         le=2.0,
         description="Price multiplier (surge pricing factor)"
     )
+    recommended_driver_radius_km: float = Field(
+        ...,
+        ge=1.0,
+        le=10.0,
+        description="AI suggested driver search radius in kilometers"
+    )
+    surge_hint: float = Field(
+        ...,
+        ge=1.0,
+        le=3.0,
+        description="AI suggested surge hint before downstream clamp"
+    )
+    confidence_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Prediction confidence score in range [0, 1]"
+    )
+    reason_code: ReasonCodeEnum = Field(
+        default=ReasonCodeEnum.AI_OK,
+        description="Reason code for the prediction response"
+    )
+    model_version: str = Field(
+        ...,
+        description="Model version used for this prediction"
+    )
+    feature_version: str = Field(
+        ...,
+        description="Feature schema version used for this prediction"
+    )
+    inference_ms: int = Field(
+        ...,
+        ge=0,
+        description="Model inference latency in milliseconds"
+    )
     distance_km: float = Field(
         ...,
         description="Input distance in kilometers"
@@ -124,6 +169,13 @@ class PredictionResponse(BaseModel):
                 {
                     "eta_minutes": 22,
                     "price_multiplier": 1.08,
+                    "recommended_driver_radius_km": 3.5,
+                    "surge_hint": 1.08,
+                    "confidence_score": 0.83,
+                    "reason_code": "AI_OK",
+                    "model_version": "eta-rf-v2",
+                    "feature_version": "features-v1",
+                    "inference_ms": 18,
                     "distance_km": 8.5,
                     "time_of_day": "RUSH_HOUR",
                     "day_type": "WEEKDAY",
