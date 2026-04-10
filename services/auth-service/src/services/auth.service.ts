@@ -35,6 +35,9 @@ interface SendOtpInput {
 interface OtpDeliveryResult {
   resendDelay: number;
   maskedPhone: string;
+  expiresInSeconds: number;
+  maxAttempts: number;
+  deliveryMethod: 'SERVER_LOG' | 'SMS';
 }
 
 interface VerifyOtpInput {
@@ -81,14 +84,6 @@ export class AuthService {
     this.eventPublisher = eventPublisher;
     this.otpService = otpService;
     this.smsService = new SmsService();
-  }
-
-  /**
-   * [DEV ONLY] Retrieve the plaintext OTP for a phone + purpose from Redis.
-   * Returns null when running in production or when no OTP exists.
-   */
-  async getDevOtp(phone: string, purpose: string = 'register'): Promise<string | null> {
-    return this.otpService.getDevOtp(phone, purpose);
   }
 
   /**
@@ -304,7 +299,7 @@ export class AuthService {
 
     const otp = this.otpService.generateOtp();
     await this.otpService.storeOtp(input.phone, otp, purpose);
-    await this.smsService.sendOtp(input.phone, otp);
+    await this.smsService.sendOtp(input.phone, otp, purpose);
 
     await auditLog({
       action: 'OTP_REQUESTED',
@@ -319,6 +314,9 @@ export class AuthService {
     return {
       resendDelay: nextDelay,
       maskedPhone: this.maskPhone(input.phone),
+      expiresInSeconds: config.otp.ttlSeconds,
+      maxAttempts: config.otp.maxAttempts,
+      deliveryMethod: config.sms.mode === 'mock' ? 'SERVER_LOG' : 'SMS',
     };
   }
 
@@ -462,6 +460,9 @@ export class AuthService {
       return {
         resendDelay: 0,
         maskedPhone: this.maskPhone(phone),
+        expiresInSeconds: config.otp.ttlSeconds,
+        maxAttempts: config.otp.maxAttempts,
+        deliveryMethod: config.sms.mode === 'mock' ? 'SERVER_LOG' : 'SMS',
       };
     }
     if (user.status === UserStatus.SUSPENDED) {

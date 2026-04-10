@@ -168,12 +168,13 @@ services:
       - REFRESH_TOKEN_EXPIRES_IN=7d
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
       - REDIS_URL=redis://redis:6379
-      - OTP_TTL_SECONDS=300
+      - OTP_TTL_SECONDS=120
       - OTP_MAX_ATTEMPTS=5
       - OTP_RATE_MAX_PER_PHONE=3
       - OTP_RATE_PHONE_WINDOW=600
       - OTP_RATE_MAX_PER_IP=10
       - OTP_RATE_IP_WINDOW=60
+      - OTP_SMS_MODE=mock
     depends_on:
       postgres:
         condition: service_healthy

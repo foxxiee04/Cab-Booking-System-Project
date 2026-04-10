@@ -68,9 +68,102 @@ function normalizeText(value: string): string {
     .toLowerCase();
 }
 
+function normalizeSearchText(value: string): string {
+  return normalizeText(value)
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function isHcmContext(value: string): boolean {
   const normalized = normalizeText(value);
   return normalized.includes('ho chi minh') || normalized.includes('tp hcm') || normalized.includes('hcm');
+}
+
+interface AddressHints {
+  main?: string;
+  roadOrPoi?: string;
+  houseNumber?: string;
+  ward?: string;
+  district?: string;
+  subCity?: string;
+  city?: string;
+}
+
+function normalizeComponentText(value?: string): string {
+  return normalizeSearchText(value || '')
+    .replace(/\b(tp|thanh pho|tinh|quan|huyen|phuong|xa|thi tran|thi xa)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseAddressHints(value: string): AddressHints {
+  const parts = value.split(',').map((part) => part.trim()).filter(Boolean);
+  const hints: AddressHints = {};
+  const nonAdministrativeParts: string[] = [];
+  const normalizedFullValue = normalizeSearchText(value);
+
+  for (const part of parts) {
+    const normalizedPart = normalizeSearchText(part);
+    if (!normalizedPart) {
+      continue;
+    }
+
+    if (!hints.subCity && normalizedPart.includes('thu duc') && !normalizedPart.includes('ho chi minh') && !normalizedPart.includes('tp hcm')) {
+      hints.subCity = part;
+      continue;
+    }
+
+    if (!hints.ward && /\b(phuong|xa|thi tran|thi xa)\b/.test(normalizedPart)) {
+      hints.ward = part;
+      continue;
+    }
+
+    if (!hints.district && /\b(quan|huyen)\b/.test(normalizedPart)) {
+      hints.district = part;
+      continue;
+    }
+
+    if (!hints.city && (normalizedPart.includes('ho chi minh') || normalizedPart.includes('tp hcm') || /\b(tp|thanh pho|tinh)\b/.test(normalizedPart))) {
+      hints.city = part;
+      continue;
+    }
+
+    nonAdministrativeParts.push(part);
+  }
+
+  const main = nonAdministrativeParts[0] || parts[0] || value;
+  const normalizedMain = normalizeSearchText(main);
+  const houseMatch = normalizedMain.match(/^(\d+[a-z0-9/-]*)\b/i);
+
+  hints.main = main;
+  hints.houseNumber = houseMatch?.[1];
+  hints.roadOrPoi = main.replace(/^\s*\d+[a-z0-9/-]*\s*/i, '').trim() || main;
+
+  if (!hints.subCity && normalizedFullValue.includes('thu duc')) {
+    hints.subCity = 'Thủ Đức';
+  }
+
+  if (!hints.city && (normalizedFullValue.includes('ho chi minh') || normalizedFullValue.includes('tp hcm'))) {
+    hints.city = 'TP. HCM';
+  }
+
+  return hints;
+}
+
+function matchesAddressComponent(candidate?: string, expected?: string): boolean {
+  const normalizedCandidate = normalizeComponentText(candidate);
+  const normalizedExpected = normalizeComponentText(expected);
+
+  return Boolean(
+    normalizedCandidate
+    && normalizedExpected
+    && (
+      normalizedCandidate === normalizedExpected
+      || normalizedCandidate.includes(normalizedExpected)
+      || normalizedExpected.includes(normalizedCandidate)
+    )
+  );
 }
 
 /**
@@ -110,10 +203,12 @@ function scoreGeocodeResult(
   userLat?: number,
   userLng?: number,
 ): number {
-  const normalizedQuery = normalizeText(query);
-  const normalizedName = normalizeText(result.name || result.address);
-  const normalizedAddress = normalizeText(result.address);
-  const normalizedContext = normalizeText(context || '');
+  const normalizedQuery = normalizeSearchText(query);
+  const normalizedName = normalizeSearchText(result.name || result.address);
+  const normalizedAddress = normalizeSearchText(result.address);
+  const normalizedContext = normalizeSearchText(context || '');
+  const queryHints = parseAddressHints(context ? `${query}, ${context}` : query);
+  const resultHints = parseAddressHints(result.address);
   const queryMentionsThuDuc = normalizedQuery.includes('thu duc');
   const addressMentionsThuDuc = normalizedAddress.includes('thu duc');
   let score = 0;
@@ -125,6 +220,41 @@ function scoreGeocodeResult(
     score += 4;
   } else if (normalizedAddress.includes(normalizedQuery)) {
     score += 2;
+  }
+
+  if (queryHints.houseNumber) {
+    if (normalizedAddress.includes(queryHints.houseNumber)) {
+      score += 7;
+    } else {
+      score -= 2;
+    }
+  }
+
+  if (queryHints.roadOrPoi) {
+    const normalizedRoadOrPoi = normalizeSearchText(queryHints.roadOrPoi);
+    if (normalizedRoadOrPoi && (normalizedName.startsWith(normalizedRoadOrPoi) || normalizedAddress.includes(normalizedRoadOrPoi))) {
+      score += 5;
+    }
+  }
+
+  if (queryHints.ward) {
+    score += matchesAddressComponent(resultHints.ward, queryHints.ward) ? 5 : -2;
+  }
+
+  if (queryHints.district) {
+    score += matchesAddressComponent(resultHints.district, queryHints.district) ? 4 : -1;
+  }
+
+  if (queryHints.subCity) {
+    score += matchesAddressComponent(resultHints.subCity, queryHints.subCity) ? 5 : -2;
+  }
+
+  if (queryHints.city) {
+    score += matchesAddressComponent(resultHints.city, queryHints.city) ? 4 : -1;
+  }
+
+  if (queryHints.subCity && queryHints.city && matchesAddressComponent(resultHints.subCity, queryHints.subCity) && matchesAddressComponent(resultHints.city, queryHints.city)) {
+    score += 3;
   }
 
   // Boost named POIs and transit

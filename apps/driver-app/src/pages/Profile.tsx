@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Container,
   Box,
@@ -16,11 +16,8 @@ import {
   TextField,
   Avatar,
   Paper,
-  IconButton,
-  Tooltip,
 } from '@mui/material';
 import {
-  CameraAltRounded,
   DirectionsBikeRounded,
   StarRounded,
   BadgeRounded,
@@ -90,6 +87,7 @@ type ProfileFormData = {
 const Profile: React.FC = () => {
   const dispatch = useAppDispatch();
   const { profile } = useAppSelector((state) => state.driver);
+  const user = useAppSelector((state) => state.auth.user);
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -147,7 +145,13 @@ const Profile: React.FC = () => {
   }, [profile]);
 
   const hasReviews = (profile?.reviewCount ?? 0) > 0;
-  const availableLicenseClasses = LICENSE_CLASS_OPTIONS_BY_VEHICLE[formData.vehicleType] || [...LICENSE_CLASS_OPTIONS];
+  const availableLicenseClasses = useMemo(
+    () => LICENSE_CLASS_OPTIONS_BY_VEHICLE[formData.vehicleType] || [...LICENSE_CLASS_OPTIONS],
+    [formData.vehicleType],
+  );
+  const driverDisplayName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Tài xế';
+  const driverInitials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.trim().toUpperCase() || 'TX';
+  const vehiclePreviewUrl = resolveVehicleImageUrl(formData.vehicleImageUrl || profile?.vehicleImageUrl);
   const approvalStatus = profile?.status || 'PENDING';
   const approvalTone = approvalStatus === 'APPROVED'
     ? { color: 'success' as const, label: t('profile.approved', 'Da duoc duyet') }
@@ -294,57 +298,31 @@ const Profile: React.FC = () => {
                 {t('profile.driverProfile')}
               </Typography>
               <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.75)', mt: 0.5 }}>
-                {profile.vehicleMake} {profile.vehicleModel} • {profile.licensePlate}
+                {driverDisplayName}{user?.phoneNumber ? ` • ${user.phoneNumber}` : ''}
               </Typography>
             </Box>
 
-            {/* Avatar section overlapping the gradient */}
             <Box
               sx={{
                 position: 'absolute',
                 bottom: -40,
                 left: 24,
-                display: 'flex',
-                alignItems: 'flex-end',
-                gap: 1.5,
               }}
             >
-              <Box sx={{ position: 'relative' }}>
-                <Avatar
-                  src={resolveVehicleImageUrl(formData.vehicleImageUrl || profile.vehicleImageUrl)}
-                  sx={{
-                    width: 84,
-                    height: 84,
-                    bgcolor: 'white',
-                    border: '4px solid white',
-                    boxShadow: '0 8px 24px rgba(15,23,42,0.18)',
-                    fontSize: 32,
-                    color: 'primary.main',
-                    fontWeight: 900,
-                  }}
-                >
-                  {(profile.vehicleMake?.[0] || 'T').toUpperCase()}
-                </Avatar>
-                <Tooltip title="Cập nhật ảnh xe" placement="top">
-                  <IconButton
-                    size="small"
-                    sx={{
-                      position: 'absolute',
-                      bottom: 0,
-                      right: 0,
-                      bgcolor: 'white',
-                      border: '2px solid',
-                      borderColor: 'primary.main',
-                      p: 0.5,
-                      '&:hover': { bgcolor: 'primary.50' },
-                    }}
-                    component="label"
-                  >
-                    <CameraAltRounded sx={{ fontSize: 14, color: 'primary.main' }} />
-                    <input hidden accept="image/png,image/jpeg,image/webp" type="file" onChange={handleVehicleImageUpload} />
-                  </IconButton>
-                </Tooltip>
-              </Box>
+              <Avatar
+                sx={{
+                  width: 84,
+                  height: 84,
+                  bgcolor: 'white',
+                  border: '4px solid white',
+                  boxShadow: '0 8px 24px rgba(15,23,42,0.18)',
+                  fontSize: 28,
+                  color: 'primary.main',
+                  fontWeight: 900,
+                }}
+              >
+                {driverInitials}
+              </Avatar>
             </Box>
           </Paper>
 
@@ -389,23 +367,96 @@ const Profile: React.FC = () => {
                 </Button>
               </Stack>
               <Divider sx={{ my: 1.5 }} />
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.25 }}>
-                {[
-                  { label: 'Hãng xe', value: profile.vehicleMake },
-                  { label: 'Dòng xe', value: profile.vehicleModel },
-                  { label: 'Màu xe', value: profile.vehicleColor },
-                  { label: 'Biển số', value: profile.licensePlate },
-                  { label: 'Hạng GPLX', value: profile.licenseClass },
-                  { label: 'Năm SX', value: profile.vehicleYear?.toString() },
-                  { label: 'Số GPLX', value: profile.licenseNumber },
-                ].map(({ label, value }) => (
-                  <Box key={label}>
-                    <Typography variant="caption" color="text.secondary">{label}</Typography>
-                    <Typography variant="body2" fontWeight={600}>{value || '—'}</Typography>
+              <Grid container spacing={2.5}>
+                <Grid item xs={12} md={5}>
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 3,
+                      borderColor: 'rgba(148,163,184,0.22)',
+                      height: '100%',
+                    }}
+                  >
+                    <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1 }}>
+                      Ảnh xe đối chiếu
+                    </Typography>
+                    {vehiclePreviewUrl ? (
+                      <Box
+                        component="img"
+                        src={vehiclePreviewUrl}
+                        alt="vehicle-preview"
+                        sx={{
+                          width: '100%',
+                          aspectRatio: '4 / 3',
+                          objectFit: 'cover',
+                          display: 'block',
+                          borderRadius: 3,
+                          border: '1px solid #e2e8f0',
+                          bgcolor: '#f8fafc',
+                        }}
+                      />
+                    ) : (
+                      <Stack
+                        spacing={1}
+                        alignItems="center"
+                        justifyContent="center"
+                        sx={{
+                          aspectRatio: '4 / 3',
+                          borderRadius: 3,
+                          border: '1px dashed #cbd5e1',
+                          bgcolor: '#f8fafc',
+                          color: 'text.secondary',
+                          textAlign: 'center',
+                          px: 2,
+                        }}
+                      >
+                        <DirectionsBikeRounded sx={{ fontSize: 38, color: 'primary.main' }} />
+                        <Typography variant="body2" fontWeight={700}>
+                          Chưa cập nhật ảnh xe
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Ảnh xe sẽ hiển thị ở đây để admin đối chiếu biển số và phương tiện.
+                        </Typography>
+                      </Stack>
+                    )}
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.1 }}>
+                      Dùng cho bước đối chiếu hồ sơ và nhận diện phương tiện khi duyệt tài xế.
+                    </Typography>
+                    {editing && (
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        startIcon={<AddPhotoAlternate />}
+                        disabled={imageUploading}
+                        sx={{ mt: 1.5, borderRadius: 999 }}
+                      >
+                        {imageUploading ? 'Đang xử lý ảnh...' : vehiclePreviewUrl ? 'Đổi ảnh xe' : 'Tải ảnh xe'}
+                        <input hidden accept="image/png,image/jpeg,image/webp" type="file" onChange={handleVehicleImageUpload} />
+                      </Button>
+                    )}
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={7}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25 }}>
+                    {[
+                      { label: 'Hãng xe', value: profile.vehicleMake },
+                      { label: 'Dòng xe', value: profile.vehicleModel },
+                      { label: 'Màu xe', value: profile.vehicleColor },
+                      { label: 'Biển số', value: profile.licensePlate },
+                      { label: 'Hạng GPLX', value: profile.licenseClass },
+                      { label: 'Năm SX', value: profile.vehicleYear?.toString() },
+                      { label: 'Số GPLX', value: profile.licenseNumber },
+                    ].map(({ label, value }) => (
+                      <Box key={label}>
+                        <Typography variant="caption" color="text.secondary">{label}</Typography>
+                        <Typography variant="body2" fontWeight={600}>{value || '—'}</Typography>
+                      </Box>
+                    ))}
                   </Box>
-                ))}
-              </Box>
-              <Stack direction="row" spacing={1.25} sx={{ mt: 2 }}>
+                </Grid>
+              </Grid>
+              <Stack direction="row" justifyContent="center" spacing={1.25} sx={{ mt: 2 }}>
                 <Button variant="text" size="small" onClick={fetchProfile} sx={{ borderRadius: 999 }}>
                   {t('profile.refresh')}
                 </Button>
@@ -454,27 +505,8 @@ const Profile: React.FC = () => {
                       <Grid item xs={12} sm={6}>
                         <TextField fullWidth label={t('profile.licenseExpiry', 'Ngày hết hạn GPLX')} type="date" value={formData.licenseExpiryDate} onChange={handleChange('licenseExpiryDate')} InputLabelProps={{ shrink: true }} />
                       </Grid>
-                      <Grid item xs={12}>
-                        <Button
-                          component="label"
-                          variant="outlined"
-                          startIcon={<AddPhotoAlternate />}
-                          disabled={imageUploading}
-                        >
-                          {imageUploading ? 'Đang xử lý ảnh...' : 'Đổi ảnh xe'}
-                          <input hidden accept="image/png,image/jpeg,image/webp" type="file" onChange={handleVehicleImageUpload} />
-                        </Button>
-                        {formData.vehicleImageUrl && (
-                          <Box
-                            component="img"
-                            src={resolveVehicleImageUrl(formData.vehicleImageUrl)}
-                            alt="vehicle-preview"
-                            sx={{ mt: 1.25, width: '100%', maxWidth: 320, borderRadius: 2, border: '1px solid #e5e7eb' }}
-                          />
-                        )}
-                      </Grid>
                     </Grid>
-                    <Stack direction="row" spacing={1.25} sx={{ mt: 2.5 }}>
+                    <Stack direction="row" spacing={1.25} justifyContent="center" sx={{ mt: 2.5, flexWrap: 'wrap' }}>
                       <Button variant="contained" onClick={handleSave} disabled={saving}>
                         {saving ? <CircularProgress size={20} /> : t('profile.saveProfile', 'Lưu thay đổi')}
                       </Button>

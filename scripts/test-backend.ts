@@ -7,6 +7,8 @@
  * Prerequisites: All services must be running (docker-compose up)
  */
 
+import { spawnSync } from 'node:child_process';
+
 const BASE_URLS = {
   gateway: process.env.GATEWAY_URL || 'http://localhost:3000',
   auth: process.env.AUTH_URL || 'http://localhost:3001',
@@ -80,6 +82,47 @@ function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
 }
 
+function readCommandOutput(command: string, args: string[]): string {
+  const result = spawnSync(command, args, { encoding: 'utf8' });
+  if (result.status !== 0) {
+    return '';
+  }
+
+  return `${result.stdout || ''}\n${result.stderr || ''}`;
+}
+
+function stripAnsi(output: string): string {
+  return output.replace(/\u001b\[[0-9;]*m/g, '');
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForOtpFromAuthLogs(phone: string, purpose: 'register' | 'reset' = 'register'): Promise<string> {
+  const pattern = new RegExp(`\\[OTP\\]\\[${purpose}\\]\\s+${phone}:\\s*(\\d{6})`);
+  const commands: Array<[string, string[]]> = [
+    ['docker', ['logs', '--tail', '200', 'cab-auth-service']],
+    ['docker', ['compose', 'logs', '--tail', '200', '--no-color', 'auth-service']],
+    ['docker-compose', ['logs', '--tail', '200', '--no-color', 'auth-service']],
+  ];
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    for (const [command, args] of commands) {
+      const output = stripAnsi(readCommandOutput(command, args));
+      const matches = [...output.matchAll(pattern)];
+      const latest = matches[matches.length - 1];
+      if (latest?.[1]) {
+        return latest[1];
+      }
+    }
+
+    await delay(500);
+  }
+
+  throw new Error(`Khong tim thay OTP cua ${phone} trong log auth-service.`);
+}
+
 // ============ TEST FUNCTIONS ============
 
 async function testHealthChecks() {
@@ -114,18 +157,20 @@ async function testHealthChecks() {
 async function testAuthFlow() {
   console.log('\n📋 Phase 2: Authentication Flow (Phone + OTP)');
   console.log('─'.repeat(50));
+  const password = 'Password@1';
 
   // Use unique phone numbers per test run (last 9 digits vary by timestamp → 10-digit phone)
   const ts = Date.now().toString().slice(-9).padStart(9, '0');
   const customerPhone = `0${ts}`;                                        // e.g. 0123456789
   const driverPhone   = `0${(parseInt(ts) + 1).toString().padStart(9, '0')}`;
 
-  // Helper: register → sendOtp → verifyOtp → return { token, userId }
+  // Helper: register → read OTP from auth-service logs → verifyOtp → return { token, userId }
   async function registerAndLogin(phone: string, role: 'CUSTOMER' | 'DRIVER', label: string) {
     // 1. Register
     await runTest(`Register ${label}`, async () => {
       const res = await httpRequest(`${BASE_URLS.auth}/api/auth/register`, 'POST', {
         phone,
+        password,
         role,
         firstName: 'Test',
         lastName: label,
@@ -135,21 +180,18 @@ async function testAuthFlow() {
       return res.data;
     });
 
-    // 2. Send OTP (devOtp returned in non-production)
-    const otpData = await runTest(`Send OTP ${label}`, async () => {
-      const res = await httpRequest(`${BASE_URLS.auth}/api/auth/send-otp`, 'POST', { phone });
-      assert(res.status === 200, `Send OTP failed: ${res.status} ${JSON.stringify(res.data)}`);
-      assert(res.data?.data?.devOtp, 'devOtp not returned — is NODE_ENV set to production?');
-      return res.data;
+    // 2. Read OTP from auth-service logs in KLTN/dev mode
+    const otp = await runTest(`Read OTP from auth logs ${label}`, async () => {
+      const currentOtp = await waitForOtpFromAuthLogs(phone, 'register');
+      assert(/^\d{6}$/.test(currentOtp), `OTP log parse failed: ${currentOtp}`);
+      return currentOtp;
     });
-
-    const devOtp: string = otpData?.data?.devOtp;
 
     // 3. Verify OTP → get tokens
     const verifyData = await runTest(`Verify OTP ${label}`, async () => {
       const res = await httpRequest(`${BASE_URLS.auth}/api/auth/verify-otp`, 'POST', {
         phone,
-        otp: devOtp,
+        otp,
       });
       assert(res.status === 200, `Verify OTP failed: ${res.status} ${JSON.stringify(res.data)}`);
       const tokens = res.data?.data?.tokens;

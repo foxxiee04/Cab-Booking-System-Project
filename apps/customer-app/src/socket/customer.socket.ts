@@ -7,6 +7,51 @@ import { refreshAuthSession } from '../api/axios.config';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
 
+const getRideStatusNotification = (status: string, message?: string) => {
+  switch (status) {
+    case 'ASSIGNED':
+      return {
+        type: 'success' as const,
+        title: 'Đã có tài xế nhận chuyến',
+        message: message || 'Tài xế đã nhận chuyến và đang chuẩn bị tới điểm đón của bạn.',
+      };
+    case 'ACCEPTED':
+      return {
+        type: 'success' as const,
+        title: 'Tài xế đang tới đón',
+        message: message || 'Bạn có thể theo dõi vị trí tài xế theo thời gian thực.',
+      };
+    case 'PICKING_UP':
+      return {
+        type: 'info' as const,
+        title: 'Tài xế đã tới điểm đón',
+        message: message || 'Hãy chuẩn bị lên xe để bắt đầu chuyến đi.',
+      };
+    case 'COMPLETED':
+      return {
+        type: 'success' as const,
+        title: 'Chuyến đi đã hoàn tất',
+        message: message || 'Bạn có thể xem hóa đơn và đánh giá tài xế ngay bây giờ.',
+      };
+    case 'CANCELLED':
+      return {
+        type: 'warning' as const,
+        title: 'Chuyến đi đã bị hủy',
+        message: message || 'Bạn có thể quay lại trang chủ để đặt chuyến mới.',
+      };
+    default:
+      if (!message) {
+        return null;
+      }
+
+      return {
+        type: 'info' as const,
+        title: 'Cập nhật chuyến đi',
+        message,
+      };
+  }
+};
+
 class SocketService {
   private socket: Socket | null = null;
   private isConnected = false;
@@ -36,6 +81,7 @@ class SocketService {
       store.dispatch(
         showNotification({
           type: 'warning',
+          title: 'Phiên đăng nhập',
           message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
         })
       );
@@ -53,6 +99,7 @@ class SocketService {
         store.dispatch(
           showNotification({
             type: 'warning',
+            title: 'Phiên đăng nhập',
             message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
           })
         );
@@ -107,6 +154,7 @@ class SocketService {
       store.dispatch(
         showNotification({
           type: 'error',
+          title: 'Mất kết nối',
           message: 'Lỗi kết nối. Vui lòng kiểm tra mạng Internet của bạn.',
         })
       );
@@ -116,11 +164,12 @@ class SocketService {
     this.socket.on('RIDE_STATUS_UPDATE', (data: { rideId: string; status: string; message?: string; driverId?: string }) => {
       store.dispatch(updateRideStatus({ rideId: data.rideId, status: data.status }));
 
-      if (data.message) {
+      const notification = getRideStatusNotification(data.status, data.message);
+      if (notification) {
         store.dispatch(
           showNotification({
-            type: data.status === 'CANCELLED' ? 'warning' : data.status === 'COMPLETED' ? 'success' : 'info',
-            message: data.message,
+            ...notification,
+            rideId: data.rideId,
           })
         );
       }
@@ -131,7 +180,9 @@ class SocketService {
       store.dispatch(
         showNotification({
           type: 'success',
+          title: 'Chuyến đi đã hoàn tất',
           message: data.message || 'Chuyến đi đã hoàn tất thành công.',
+          rideId: data.rideId,
         })
       );
     });
@@ -143,7 +194,10 @@ class SocketService {
       store.dispatch(
         showNotification({
           type: 'success',
-          message: `Tài xế ${data.driver.firstName} đã được gán cho chuyến đi của bạn.`,
+          title: 'Đã có tài xế nhận chuyến',
+          message: `Tài xế ${data.driver.firstName} đã nhận chuyến và đang tới điểm đón của bạn.`,
+          rideId: data.ride?.id,
+          persistMs: 7000,
         })
       );
     });
@@ -158,7 +212,9 @@ class SocketService {
       store.dispatch(
         showNotification({
           type: 'warning',
+          title: 'Chuyến đi đã bị hủy',
           message: `Chuyến đi đã bị hủy: ${data.reason}`,
+          rideId: data.rideId,
         })
       );
     });
@@ -167,7 +223,9 @@ class SocketService {
       store.dispatch(
         showNotification({
           type: 'warning',
-          message: 'Đang tìm tài xế khác...',
+          title: 'Đang mở rộng tìm kiếm',
+          message: 'Chưa có tài xế nhận chuyến, hệ thống đang tiếp tục tìm tài xế khác.',
+          rideId: data.rideId,
         })
       );
     });

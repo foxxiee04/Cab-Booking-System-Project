@@ -1,20 +1,30 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   Card,
   CardContent,
   Chip,
+  Divider,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Grid,
+  Paper,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
+import {
+  BadgeOutlined,
+  CalendarMonthOutlined,
+  DirectionsCarFilledOutlined,
+  LocalPhoneOutlined,
+  MailOutline,
+} from '@mui/icons-material';
 import { adminApi } from '../api/admin.api';
 import { Driver } from '../types';
 import { useTranslation } from 'react-i18next';
@@ -46,6 +56,54 @@ const resolveVehicleImageUrl = (rawUrl?: string) => {
 
   return `${API_ROOT}/${rawUrl}`;
 };
+
+const VEHICLE_TYPE_LABELS: Record<Driver['vehicleType'], string> = {
+  MOTORBIKE: 'Xe máy số',
+  SCOOTER: 'Xe tay ga',
+  CAR_4: 'Ô tô 4 chỗ',
+  CAR_7: 'Ô tô 7 chỗ',
+};
+
+const DetailRow: React.FC<{ label: string; value: React.ReactNode; emphasize?: boolean }> = ({ label, value, emphasize = false }) => (
+  <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+    <Typography variant="body2" color="text.secondary" sx={{ minWidth: 132 }}>
+      {label}
+    </Typography>
+    <Box
+      sx={{
+        flex: 1,
+        textAlign: 'right',
+        color: emphasize ? 'text.primary' : 'text.secondary',
+        fontWeight: emphasize ? 700 : 500,
+        fontSize: '0.875rem',
+        lineHeight: 1.5,
+      }}
+    >
+      {value}
+    </Box>
+  </Stack>
+);
+
+const InfoSection: React.FC<{ title: string; icon?: React.ReactNode; children: React.ReactNode }> = ({ title, icon, children }) => (
+  <Paper
+    variant="outlined"
+    sx={{
+      p: 2,
+      borderRadius: 3,
+      borderColor: 'rgba(148,163,184,0.25)',
+      bgcolor: '#fff',
+      height: '100%',
+    }}
+  >
+    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+      {icon}
+      <Typography variant="subtitle2" fontWeight={800} sx={{ letterSpacing: 0.2 }}>
+        {title}
+      </Typography>
+    </Stack>
+    <Stack spacing={1.1}>{children}</Stack>
+  </Paper>
+);
 
 const DriverApprovals: React.FC = () => {
   const { t } = useTranslation();
@@ -132,9 +190,6 @@ const DriverApprovals: React.FC = () => {
       <Typography variant="h4" fontWeight="bold">
         {t('tables.driverApprovals')}
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-        {t('approvals.subtitle')}
-      </Typography>
 
       {error && (
         <Alert severity="error" sx={{ mt: 2 }}>
@@ -150,63 +205,177 @@ const DriverApprovals: React.FC = () => {
 
       <Grid container spacing={2} sx={{ mt: 1 }}>
         {drivers.map((driver) => (
-          <Grid item xs={12} md={6} key={driver.id}>
-            <Card sx={{ height: '100%', borderRadius: 4 }}>
-              <CardContent>
-                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
-                  <Box>
-                    <Typography variant="h6" fontWeight={800}>
-                      {driver.user ? `${driver.user.firstName} ${driver.user.lastName}` : driver.id}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {driver.user?.email || t('labels.na')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {driver.user?.phoneNumber || t('labels.na')}
-                    </Typography>
-                  </Box>
-                  <Chip label={t('labels.pending')} color="warning" size="small" />
-                </Stack>
+          <Grid item xs={12} key={driver.id}>
+            <Card
+              sx={{
+                height: '100%',
+                borderRadius: 4,
+                border: '1px solid rgba(148,163,184,0.18)',
+                boxShadow: '0 18px 44px rgba(15,23,42,0.06)',
+                overflow: 'hidden',
+              }}
+            >
+              <CardContent sx={{ p: 0 }}>
+                <Box
+                  sx={{
+                    px: 2.5,
+                    py: 2.25,
+                    background: 'linear-gradient(135deg, rgba(248,250,252,1) 0%, rgba(241,245,249,0.96) 100%)',
+                    borderBottom: '1px solid rgba(148,163,184,0.16)',
+                  }}
+                >
+                  <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+                    <Stack direction="row" spacing={1.5} alignItems="center">
+                      <Avatar sx={{ bgcolor: '#0f172a', width: 48, height: 48, fontWeight: 800 }}>
+                        {driver.user?.firstName?.[0] || 'D'}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1 }}>
+                          Hồ sơ tài xế chờ duyệt
+                        </Typography>
+                        <Typography variant="h6" fontWeight={900} sx={{ lineHeight: 1.2 }}>
+                          {driver.user ? `${driver.user.firstName} ${driver.user.lastName}` : driver.id}
+                        </Typography>
+                        <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.75, flexWrap: 'wrap' }}>
+                          <Chip label={t('labels.pending')} color="warning" size="small" sx={{ fontWeight: 700 }} />
+                          <Chip label={VEHICLE_TYPE_LABELS[driver.vehicleType]} variant="outlined" size="small" />
+                        </Stack>
+                      </Box>
+                    </Stack>
+                    <Box sx={{ textAlign: 'right' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        Mã hồ sơ
+                      </Typography>
+                      <Typography variant="body2" fontWeight={700}>
+                        {driver.id.slice(0, 8).toUpperCase()}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </Box>
 
-                <Stack spacing={1.5} sx={{ mt: 2 }}>
-                  <Box>
-                    <Typography variant="overline" color="text.secondary">{t('approvals.driverInfo')}</Typography>
-                    <Typography variant="body2">{t('approvals.createdAt')}: {formatDateValue(driver.createdAt)}</Typography>
-                    <Typography variant="body2">{t('approvals.reviewSummary')}: {driver.reviewCount > 0 ? `${driver.rating.toFixed(1)} / 5 (${driver.reviewCount})` : t('labels.noReviews')}</Typography>
-                  </Box>
+                <Box sx={{ p: 2.5 }}>
+                  <Grid container spacing={2.5}>
+                    <Grid item xs={12} lg={4}>
+                      <InfoSection title="Ảnh xe đối chiếu" icon={<DirectionsCarFilledOutlined sx={{ fontSize: 18, color: '#475569' }} />}>
+                        {driver.vehicleImageUrl ? (
+                          <Box>
+                            <Box
+                              component="img"
+                              src={resolveVehicleImageUrl(driver.vehicleImageUrl)}
+                              alt={`${driver.vehicleMake} ${driver.vehicleModel}`.trim() || 'vehicle'}
+                              sx={{
+                                width: '100%',
+                                minHeight: { xs: 240, md: 320 },
+                                maxHeight: 380,
+                                objectFit: 'cover',
+                                borderRadius: 3,
+                                border: '1px solid rgba(148,163,184,0.22)',
+                                bgcolor: '#f8fafc',
+                              }}
+                            />
+                          </Box>
+                        ) : (
+                          <Box
+                            sx={{
+                              minHeight: { xs: 220, md: 300 },
+                              borderRadius: 3,
+                              border: '1px dashed rgba(148,163,184,0.4)',
+                              bgcolor: '#f8fafc',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              px: 2,
+                            }}
+                          >
+                            <Typography variant="body2" color="text.secondary" align="center">
+                              Chưa có ảnh xe để đối chiếu.
+                            </Typography>
+                          </Box>
+                        )}
 
-                  <Box>
-                    <Typography variant="overline" color="text.secondary">{t('approvals.vehicleInfo')}</Typography>
-                    <Typography variant="body2">{t('approvals.vehicleType')}: {driver.vehicleType}</Typography>
-                    <Typography variant="body2">{driver.vehicleMake} {driver.vehicleModel}</Typography>
-                    <Typography variant="body2">{driver.vehicleColor} • {t('approvals.vehicleYear')}: {driver.vehicleYear || t('labels.na')}</Typography>
-                    <Typography variant="body2">Biển số: {driver.licensePlate}</Typography>
-                    {driver.vehicleImageUrl && (
-                      <Box
-                        component="img"
-                        src={resolveVehicleImageUrl(driver.vehicleImageUrl)}
-                        alt={`vehicle-${driver.id}`}
-                        sx={{ mt: 1, width: '100%', maxWidth: 280, borderRadius: 2, border: '1px solid #e5e7eb' }}
-                      />
-                    )}
-                  </Box>
+                        <Divider sx={{ my: 0.5 }} />
 
-                  <Box>
-                    <Typography variant="overline" color="text.secondary">{t('approvals.licenseInfo')}</Typography>
-                    <Typography variant="body2">Hạng GPLX: {driver.licenseClass || t('labels.na')}</Typography>
-                    <Typography variant="body2">GPLX: {driver.licenseNumber}</Typography>
-                    <Typography variant="body2">{t('approvals.licenseExpiry')}: {formatDateValue(driver.licenseExpiryDate)}</Typography>
-                  </Box>
-                </Stack>
+                        <DetailRow label="Loại xe" value={VEHICLE_TYPE_LABELS[driver.vehicleType]} emphasize />
+                        <DetailRow label="Dòng xe" value={`${driver.vehicleMake} ${driver.vehicleModel}`.trim() || t('labels.na')} emphasize />
+                        <DetailRow label="Màu sắc" value={driver.vehicleColor || t('labels.na')} />
+                        <DetailRow label="Năm sản xuất" value={driver.vehicleYear || t('labels.na')} />
+                        <DetailRow label="Biển số" value={driver.licensePlate || t('labels.na')} emphasize />
+                      </InfoSection>
+                    </Grid>
 
-                <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-                  <Button variant="contained" color="success" onClick={() => openConfirm(driver, 'approve')}>
-                    {t('labels.approve')}
-                  </Button>
-                  <Button variant="outlined" color="error" onClick={() => openConfirm(driver, 'reject')}>
-                    {t('labels.reject')}
-                  </Button>
-                </Stack>
+                    <Grid item xs={12} lg={8}>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12}>
+                          <InfoSection title="Thông tin tài xế" icon={<BadgeOutlined sx={{ fontSize: 18, color: '#475569' }} />}>
+                            <Grid container spacing={1.5}>
+                              <Grid item xs={12} md={6}>
+                                <DetailRow
+                                  label="Họ và tên"
+                                  value={driver.user ? `${driver.user.firstName} ${driver.user.lastName}` : t('labels.na')}
+                                  emphasize
+                                />
+                              </Grid>
+                              <Grid item xs={12} md={6}>
+                                <DetailRow
+                                  label="Ngày gửi hồ sơ"
+                                  value={<Stack direction="row" spacing={0.75} justifyContent="flex-end" alignItems="center"><CalendarMonthOutlined sx={{ fontSize: 15, color: '#64748b' }} /><span>{formatDateValue(driver.createdAt)}</span></Stack>}
+                                />
+                              </Grid>
+                              <Grid item xs={12} md={6}>
+                                <DetailRow
+                                  label="Email"
+                                  value={<Stack direction="row" spacing={0.75} justifyContent="flex-end" alignItems="center"><MailOutline sx={{ fontSize: 15, color: '#64748b' }} /><span>{driver.user?.email || t('labels.na')}</span></Stack>}
+                                />
+                              </Grid>
+                              <Grid item xs={12} md={6}>
+                                <DetailRow
+                                  label="Số liên hệ"
+                                  value={<Stack direction="row" spacing={0.75} justifyContent="flex-end" alignItems="center"><LocalPhoneOutlined sx={{ fontSize: 15, color: '#64748b' }} /><span>{driver.user?.phoneNumber || t('labels.na')}</span></Stack>}
+                                />
+                              </Grid>
+                            </Grid>
+                          </InfoSection>
+                        </Grid>
+
+                        <Grid item xs={12}>
+                          <InfoSection title="Thông tin giấy phép & phương tiện" icon={<BadgeOutlined sx={{ fontSize: 18, color: '#475569' }} />}>
+                            <Grid container spacing={1.5}>
+                              <Grid item xs={12} md={6}>
+                                <DetailRow label="Mã hồ sơ" value={driver.id.slice(0, 8).toUpperCase()} emphasize />
+                              </Grid>
+                              <Grid item xs={12} md={6}>
+                                <DetailRow label="Trạng thái" value={<Chip label={t('labels.pending')} color="warning" size="small" sx={{ fontWeight: 700 }} />} />
+                              </Grid>
+                              <Grid item xs={12} md={6}>
+                                <DetailRow label="Hạng GPLX" value={driver.licenseClass || t('labels.na')} emphasize />
+                              </Grid>
+                              <Grid item xs={12} md={6}>
+                                <DetailRow label="Số GPLX" value={driver.licenseNumber || t('labels.na')} emphasize />
+                              </Grid>
+                              <Grid item xs={12} md={6}>
+                                <DetailRow label="Ngày hết hạn" value={formatDateValue(driver.licenseExpiryDate)} />
+                              </Grid>
+                              <Grid item xs={12} md={6}>
+                                <DetailRow label="Loại dịch vụ" value={VEHICLE_TYPE_LABELS[driver.vehicleType]} />
+                              </Grid>
+                            </Grid>
+                          </InfoSection>
+                        </Grid>
+                      </Grid>
+                    </Grid>
+                  </Grid>
+
+                  <Divider sx={{ my: 2 }} />
+
+                  <Stack direction="row" spacing={1} justifyContent="center" useFlexGap flexWrap="wrap" sx={{ mt: 0.5 }}>
+                    <Button variant="contained" color="success" onClick={() => openConfirm(driver, 'approve')} sx={{ minWidth: 120, borderRadius: 999 }}>
+                      {t('labels.approve')}
+                    </Button>
+                    <Button variant="outlined" color="error" onClick={() => openConfirm(driver, 'reject')} sx={{ minWidth: 120, borderRadius: 999 }}>
+                      {t('labels.reject')}
+                    </Button>
+                  </Stack>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
@@ -231,7 +400,7 @@ const DriverApprovals: React.FC = () => {
             />
           )}
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ justifyContent: 'center', pb: 2, px: 3 }}>
           <Button onClick={closeConfirm}>{t('approvals.cancel')}</Button>
           <Button onClick={handleConfirm} variant="contained" color={pendingAction === 'approve' ? 'success' : 'error'}>
             {t('approvals.confirm')}

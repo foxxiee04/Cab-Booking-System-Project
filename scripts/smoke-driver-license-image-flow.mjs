@@ -1,5 +1,48 @@
+import { spawnSync } from 'node:child_process';
+
 const BASE_URL = process.env.SMOKE_BASE_URL || 'http://localhost:3000';
 const AUTH_URL = process.env.SMOKE_AUTH_URL || 'http://localhost:3001';
+
+function readCommandOutput(command, args) {
+  const result = spawnSync(command, args, { encoding: 'utf8' });
+  if (result.status !== 0) {
+    return '';
+  }
+
+  return `${result.stdout || ''}\n${result.stderr || ''}`;
+}
+
+function stripAnsi(output) {
+  return output.replace(/\u001b\[[0-9;]*m/g, '');
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForOtpFromAuthLogs(phone, purpose = 'register') {
+  const pattern = new RegExp(`\\[OTP\\]\\[${purpose}\\]\\s+${phone}:\\s*(\\d{6})`);
+  const commands = [
+    ['docker', ['logs', '--tail', '200', 'cab-auth-service']],
+    ['docker', ['compose', 'logs', '--tail', '200', '--no-color', 'auth-service']],
+    ['docker-compose', ['logs', '--tail', '200', '--no-color', 'auth-service']],
+  ];
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    for (const [command, args] of commands) {
+      const output = stripAnsi(readCommandOutput(command, args));
+      const matches = [...output.matchAll(pattern)];
+      const latest = matches[matches.length - 1];
+      if (latest?.[1]) {
+        return latest[1];
+      }
+    }
+
+    await delay(500);
+  }
+
+  throw new Error(`Khong tim thay OTP cua ${phone} trong log auth-service.`);
+}
 
 async function request(path, options = {}) {
   const response = await fetch(`${BASE_URL}${path}`, {
@@ -97,8 +140,7 @@ try {
     }),
   });
 
-  const otpResp = await authRequest(`/api/auth/dev/otp/${newDriverPhone}?purpose=register`, { method: 'GET' });
-  const otp = otpResp.data.otp;
+  const otp = await waitForOtpFromAuthLogs(newDriverPhone, 'register');
 
   const verifyResp = await authRequest('/api/auth/verify-otp', {
     method: 'POST',

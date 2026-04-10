@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 /**
  * Cab Booking System - Database Seed Script
  * Seeds all databases with sample data for development/testing
@@ -8,6 +10,7 @@
  */
 
 import path from 'node:path';
+import fs from 'node:fs';
 import bcrypt from 'bcryptjs';
 
 // Use direct connection URLs for local development
@@ -18,6 +21,14 @@ const POSTGRES_PASSWORD = process.env.POSTGRES_PASSWORD || 'postgres';
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
 const DRIVER_GEO_KEY = 'drivers:geo:online';
+const SEED_REFERENCE_OUTPUT = path.resolve(process.cwd(), 'docs', 'seed-accounts-reference.md');
+
+type SeededDriverLocation = {
+  driverId: string;
+  lat: number;
+  lng: number;
+  isOnline: boolean;
+};
 
 // Default password for all seed users: Password@1
 const SEED_PASSWORD_HASH = bcrypt.hashSync('Password@1', 10);
@@ -64,7 +75,7 @@ function createRedisClient() {
 }
 
 async function seedDriverGeoIndex(
-  locations: Array<{ driverId: string; lat: number; lng: number; isOnline: boolean }>
+  locations: SeededDriverLocation[]
 ) {
   const redis = createRedisClient();
 
@@ -315,6 +326,10 @@ const VEHICLE_IMAGE_BY_TYPE: Record<string, string> = {
 };
 
 const VEHICLE_IMAGE_BY_MODEL: Record<string, string> = {
+  'Wave Alpha': 'wave-alpha.jpg',
+  'Winner X': 'winner-x.jpg',
+  'Sirius': 'sirius.jpg',
+  'Raider': 'raider.jpg',
   'Vios': 'vios.jpg',
   'City': 'city.jpg',
   'Accent': 'accent.jpg',
@@ -326,8 +341,15 @@ const VEHICLE_IMAGE_BY_MODEL: Record<string, string> = {
   'Vision': 'vision.jpg',
   'Air Blade': 'air-blade.jpg',
   'Lead': 'lead.jpg',
+  'Janus': 'janus.jpg',
   'Corolla Altis': 'altis.jpg',
   'Yaris Cross': 'yaris.jpg',
+  'Innova': 'innova.jpg',
+  'Fortuner': 'fortuner.jpg',
+  'Stargazer': 'stargazer.jpg',
+  'Xpander': 'xpander.jpg',
+  'Everest': 'everest.jpg',
+  'Sorento': 'sorento.jpg',
   'VF e34': 'vin34.jpg',
   'VF 6': 'vin6.jpg',
 };
@@ -351,14 +373,52 @@ function getLicenseClassByVehicleType(vehicleType: string) {
 
 const EXTRA_DRIVER_COUNT = 30;
 const EXTRA_VEHICLE_TYPES = ['CAR_4', 'CAR_7', 'MOTORBIKE', 'SCOOTER'] as const;
-const EXTRA_VEHICLE_BRANDS = ['Toyota', 'Hyundai', 'Kia', 'Honda', 'VinFast'] as const;
-const EXTRA_VEHICLE_MODELS = ['Vios', 'Accent', 'Seltos', 'City', 'VF e34'] as const;
 const EXTRA_VEHICLE_COLORS = ['White', 'Black', 'Silver', 'Blue', 'Red'] as const;
+
+const EXTRA_VEHICLES_BY_TYPE: Record<typeof EXTRA_VEHICLE_TYPES[number], Array<{ brand: string; model: string }>> = {
+  CAR_4: [
+    { brand: 'Toyota', model: 'Vios' },
+    { brand: 'Toyota', model: 'Corolla Altis' },
+    { brand: 'Toyota', model: 'Yaris Cross' },
+    { brand: 'Hyundai', model: 'Accent' },
+    { brand: 'Hyundai', model: 'Elantra' },
+    { brand: 'Kia', model: 'K3' },
+    { brand: 'Honda', model: 'City' },
+    { brand: 'Honda', model: 'Civic' },
+    { brand: 'Mazda', model: 'Mazda2' },
+    { brand: 'Mazda', model: 'Mazda3' },
+    { brand: 'VinFast', model: 'VF e34' },
+    { brand: 'VinFast', model: 'VF 6' },
+  ],
+  CAR_7: [
+    { brand: 'Toyota', model: 'Innova' },
+    { brand: 'Toyota', model: 'Fortuner' },
+    { brand: 'Hyundai', model: 'Stargazer' },
+    { brand: 'Mitsubishi', model: 'Xpander' },
+    { brand: 'Ford', model: 'Everest' },
+    { brand: 'Kia', model: 'Sorento' },
+  ],
+  MOTORBIKE: [
+    { brand: 'Honda', model: 'Wave Alpha' },
+    { brand: 'Honda', model: 'Winner X' },
+    { brand: 'Yamaha', model: 'Sirius' },
+    { brand: 'Suzuki', model: 'Raider' },
+  ],
+  SCOOTER: [
+    { brand: 'Honda', model: 'Vision' },
+    { brand: 'Honda', model: 'Air Blade' },
+    { brand: 'Honda', model: 'Lead' },
+    { brand: 'Yamaha', model: 'Janus' },
+  ],
+};
 
 for (let i = 0; i < EXTRA_DRIVER_COUNT; i += 1) {
   const serial = i + 11;
   const phone = `0919${String(100000 + i).slice(-6)}`;
   const email = `driver${serial}@example.com`;
+  const vehicleType = EXTRA_VEHICLE_TYPES[i % EXTRA_VEHICLE_TYPES.length];
+  const vehicleOptions = EXTRA_VEHICLES_BY_TYPE[vehicleType];
+  const selectedVehicle = vehicleOptions[i % vehicleOptions.length];
 
   DRIVERS.push({
     email,
@@ -366,15 +426,15 @@ for (let i = 0; i < EXTRA_DRIVER_COUNT; i += 1) {
     firstName: `Seed${serial}`,
     lastName: 'Driver',
     vehicle: {
-      type: EXTRA_VEHICLE_TYPES[i % EXTRA_VEHICLE_TYPES.length],
-      brand: EXTRA_VEHICLE_BRANDS[i % EXTRA_VEHICLE_BRANDS.length],
-      model: EXTRA_VEHICLE_MODELS[i % EXTRA_VEHICLE_MODELS.length],
+      type: vehicleType,
+      brand: selectedVehicle.brand,
+      model: selectedVehicle.model,
       plate: `59Z-${String(10000 + serial).slice(-5)}`,
       color: EXTRA_VEHICLE_COLORS[i % EXTRA_VEHICLE_COLORS.length],
       year: 2021 + (i % 4),
     },
     license: {
-      class: getLicenseClassByVehicleType(EXTRA_VEHICLE_TYPES[i % EXTRA_VEHICLE_TYPES.length]),
+      class: getLicenseClassByVehicleType(vehicleType),
       number: `GP-EXTRA-${String(serial).padStart(4, '0')}`,
       expiryDate: new Date('2029-12-31'),
     },
@@ -382,12 +442,12 @@ for (let i = 0; i < EXTRA_DRIVER_COUNT; i += 1) {
 }
 
 const DRIVER_LOCATION_HUBS = [
-  { lat: 10.7726, lng: 106.6980 }, // Ben Thanh
-  { lat: 10.8185, lng: 106.6588 }, // TSN
-  { lat: 10.7294, lng: 106.7187 }, // Q7
-  { lat: 10.8495, lng: 106.7718 }, // Thu Duc
-  { lat: 10.7628, lng: 106.6825 }, // Q5
-  { lat: 10.8018, lng: 106.6187 }, // Tan Phu
+  { name: 'Cụm Bến Thành - Quận 1', lat: 10.7726, lng: 106.6980 },
+  { name: 'Cụm Tân Sơn Nhất - Tân Bình', lat: 10.8185, lng: 106.6588 },
+  { name: 'Cụm Phú Mỹ Hưng - Quận 7', lat: 10.7294, lng: 106.7187 },
+  { name: 'Cụm Thủ Đức', lat: 10.8495, lng: 106.7718 },
+  { name: 'Cụm Quận 5 - Chợ Rẫy', lat: 10.7628, lng: 106.6825 },
+  { name: 'Cụm Tân Phú', lat: 10.8018, lng: 106.6187 },
 ];
 
 function seededDriverLocation(index: number) {
@@ -661,6 +721,226 @@ function hoursAgo(hours: number) {
   return new Date(Date.now() - hours * 60 * 60 * 1000);
 }
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const startLat = toRad(lat1);
+  const endLat = toRad(lat2);
+
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(startLat) * Math.cos(endLat) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return 6371 * c;
+}
+
+function formatCoordinate(lat: number, lng: number) {
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
+
+function getVehicleTypeLabel(vehicleType: string) {
+  if (vehicleType === 'MOTORBIKE') {
+    return 'Xe máy số';
+  }
+  if (vehicleType === 'SCOOTER') {
+    return 'Xe tay ga';
+  }
+  if (vehicleType === 'CAR_4') {
+    return 'Ô tô 4 chỗ';
+  }
+  if (vehicleType === 'CAR_7') {
+    return 'Ô tô 7 chỗ';
+  }
+  return vehicleType;
+}
+
+function getNearestDriverHub(lat: number, lng: number) {
+  return DRIVER_LOCATION_HUBS
+    .map((hub) => ({
+      ...hub,
+      distanceKm: haversineKm(lat, lng, hub.lat, hub.lng),
+    }))
+    .sort((left, right) => left.distanceKm - right.distanceKm)[0];
+}
+
+function getCustomerReference(index: number) {
+  const rideSeed = RIDE_SEEDS.find((item) => item.customerIndex === index);
+  if (rideSeed) {
+    return {
+      address: rideSeed.pickupAddress,
+      lat: rideSeed.pickupLat,
+      lng: rideSeed.pickupLng,
+    };
+  }
+
+  const booking = BOOKINGS[index % BOOKINGS.length];
+  return {
+    address: booking.pickupAddress,
+    lat: booking.pickupLat,
+    lng: booking.pickupLng,
+  };
+}
+
+async function generateSeedReferenceReport(
+  adminId: string,
+  customerIds: string[],
+  driverUserIds: string[],
+  driverIds: string[]
+) {
+  const authPrisma = createServicePrismaClient('auth-service', 'auth_db');
+  const driverPrisma = createServicePrismaClient('driver-service', 'driver_db');
+
+  try {
+    const [customerUsers, driverUsers, drivers]: [any[], any[], any[]] = await Promise.all([
+      authPrisma.user.findMany({ where: { id: { in: customerIds } } }),
+      authPrisma.user.findMany({ where: { id: { in: driverUserIds } } }),
+      driverPrisma.driver.findMany({ where: { id: { in: driverIds } } }),
+    ]);
+
+    const customerUsersById = new Map(customerUsers.map((user: any) => [user.id, user]));
+    const driverUsersById = new Map(driverUsers.map((user: any) => [user.id, user]));
+    const driversById = new Map(drivers.map((driver: any) => [driver.id, driver]));
+
+    const driverRows = driverIds.map((driverId, index) => {
+      const driver = driversById.get(driverId) as any;
+      const authUser = driverUsersById.get(driver?.userId || driverUserIds[index]);
+      const nearestHub = getNearestDriverHub(driver.lastLocationLat, driver.lastLocationLng);
+
+      return {
+        index: index + 1,
+        id: driverId,
+        name: `${authUser?.firstName || DRIVERS[index].firstName} ${authUser?.lastName || DRIVERS[index].lastName}`,
+        email: authUser?.email || DRIVERS[index].email,
+        phone: authUser?.phone || DRIVERS[index].phone,
+        status: driver.status,
+        availabilityStatus: driver.availabilityStatus,
+        vehicleType: driver.vehicleType,
+        vehicleLabel: getVehicleTypeLabel(driver.vehicleType),
+        vehicleName: `${driver.vehicleBrand} ${driver.vehicleModel}`,
+        plate: driver.vehiclePlate,
+        imageUrl: driver.vehicleImageUrl,
+        lat: Number(driver.lastLocationLat),
+        lng: Number(driver.lastLocationLng),
+        nearestHubName: nearestHub.name,
+        nearestHubDistanceKm: nearestHub.distanceKm,
+      };
+    });
+
+    const customerRows = customerIds.map((customerId, index) => {
+      const authUser = customerUsersById.get(customerId) as any;
+      const reference = getCustomerReference(index);
+
+      return {
+        index: index + 1,
+        id: customerId,
+        name: `${authUser?.firstName || CUSTOMERS[index].firstName} ${authUser?.lastName || CUSTOMERS[index].lastName}`,
+        email: authUser?.email || CUSTOMERS[index].email,
+        phone: authUser?.phone || CUSTOMERS[index].phone,
+        address: reference.address,
+        lat: reference.lat,
+        lng: reference.lng,
+      };
+    });
+
+    const clusterRows = DRIVER_LOCATION_HUBS.map((hub) => {
+      const driversInCluster = driverRows.filter((driver) => driver.nearestHubName === hub.name);
+      return {
+        hub,
+        drivers: driversInCluster,
+      };
+    });
+
+    const nearbyScenarioRows = customerRows.map((customer) => {
+      const distances = driverRows
+        .filter((driver) => driver.status === 'APPROVED')
+        .map((driver) => ({
+          ...driver,
+          distanceKm: haversineKm(customer.lat, customer.lng, driver.lat, driver.lng),
+        }))
+        .sort((left, right) => left.distanceKm - right.distanceKm);
+
+      return {
+        customer,
+        within3km: distances.filter((driver) => driver.distanceKm <= 3).slice(0, 5),
+        outside3km: distances.filter((driver) => driver.distanceKm > 3).slice(0, 5),
+      };
+    });
+
+    const lines: string[] = [];
+    lines.push('# Seed Account Reference');
+    lines.push('');
+    lines.push(`Generated at: ${new Date().toLocaleString('vi-VN')}`);
+    lines.push('');
+    lines.push('## Credentials');
+    lines.push('');
+    lines.push(`- Admin: ${ADMIN.email} / ${ADMIN.phone}`);
+    lines.push('- Password chung: Password@1');
+    lines.push(`- Admin userId: ${adminId}`);
+    lines.push('');
+    lines.push('## Driver Accounts');
+    lines.push('');
+    lines.push('| # | Tài xế | Điện thoại | Trạng thái | Loại xe | Xe | Biển số | Ảnh | Vị trí hiện tại | Cụm gần nhất |');
+    lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+    for (const driver of driverRows) {
+      lines.push(`| ${driver.index} | ${driver.name} | ${driver.phone} | ${driver.status} / ${driver.availabilityStatus} | ${driver.vehicleLabel} | ${driver.vehicleName} | ${driver.plate} | ${driver.imageUrl} | ${formatCoordinate(driver.lat, driver.lng)} | ${driver.nearestHubName} (${driver.nearestHubDistanceKm.toFixed(2)} km) |`);
+    }
+    lines.push('');
+    lines.push('## Customer Accounts');
+    lines.push('');
+    lines.push('| # | Khách hàng | Điện thoại | Email | Điểm seed tham chiếu | Tọa độ |');
+    lines.push('| --- | --- | --- | --- | --- | --- |');
+    for (const customer of customerRows) {
+      lines.push(`| ${customer.index} | ${customer.name} | ${customer.phone} | ${customer.email} | ${customer.address} | ${formatCoordinate(customer.lat, customer.lng)} |`);
+    }
+    lines.push('');
+    lines.push('## Driver Clusters');
+    lines.push('');
+    for (const cluster of clusterRows) {
+      lines.push(`### ${cluster.hub.name}`);
+      lines.push('');
+      if (cluster.drivers.length === 0) {
+        lines.push('- Không có tài xế trong cụm này.');
+        lines.push('');
+        continue;
+      }
+
+      for (const driver of cluster.drivers) {
+        lines.push(`- ${driver.phone} - ${driver.name} - ${driver.vehicleName} - ${driver.plate} - ${formatCoordinate(driver.lat, driver.lng)}`);
+      }
+      lines.push('');
+    }
+    lines.push('## Kịch bản tài xế trong và ngoài 3 km theo từng khách hàng');
+    lines.push('');
+    for (const scenario of nearbyScenarioRows) {
+      lines.push(`### ${scenario.customer.phone} - ${scenario.customer.name}`);
+      lines.push(`- Điểm tham chiếu: ${scenario.customer.address} (${formatCoordinate(scenario.customer.lat, scenario.customer.lng)})`);
+      lines.push('- Tài xế trong 3 km:');
+      if (scenario.within3km.length === 0) {
+        lines.push('  Không có tài xế nào trong bán kính 3 km.');
+      } else {
+        for (const driver of scenario.within3km) {
+          lines.push(`  ${driver.phone} - ${driver.vehicleName} - ${driver.plate} - ${driver.distanceKm.toFixed(2)} km - ${driver.nearestHubName}`);
+        }
+      }
+      lines.push('- Tài xế ngoài 3 km gần nhất:');
+      if (scenario.outside3km.length === 0) {
+        lines.push('  Không có tài xế ngoài 3 km.');
+      } else {
+        for (const driver of scenario.outside3km) {
+          lines.push(`  ${driver.phone} - ${driver.vehicleName} - ${driver.plate} - ${driver.distanceKm.toFixed(2)} km - ${driver.nearestHubName}`);
+        }
+      }
+      lines.push('');
+    }
+
+    fs.writeFileSync(SEED_REFERENCE_OUTPUT, `${lines.join('\n')}\n`, 'utf8');
+    console.log(`   Seed account reference: ${SEED_REFERENCE_OUTPUT}`);
+  } finally {
+    await authPrisma.$disconnect();
+    await driverPrisma.$disconnect();
+  }
+}
+
 // ============ SEED FUNCTIONS ============
 
 async function seedAuthDB() {
@@ -800,19 +1080,21 @@ async function seedDriverDB(driverUserIds: string[]) {
 
   try {
     const driverIds: string[] = [];
-    const seededLocations: Array<{ driverId: string; lat: number; lng: number; isOnline: boolean }> = [];
+    const seededLocations: SeededDriverLocation[] = [];
 
     for (let i = 0; i < driverUserIds.length; i++) {
       const d = DRIVERS[i];
       const location = seededDriverLocation(i);
-      const availabilityStatus = i % 9 === 0 ? 'OFFLINE' : 'ONLINE';
-      const ratingAverage = 4.3 + (i % 7) * 0.08;
-      const ratingCount = 25 + i * 3;
+      const seedPendingApproval = i >= driverUserIds.length - 3;
+      const availabilityStatus = seedPendingApproval ? 'OFFLINE' : (i % 9 === 0 ? 'OFFLINE' : 'ONLINE');
+      const status = seedPendingApproval ? 'PENDING' : 'APPROVED';
+      const ratingAverage = seedPendingApproval ? 0 : 4.3 + (i % 7) * 0.08;
+      const ratingCount = seedPendingApproval ? 0 : 25 + i * 3;
 
       const driver = await prisma.driver.upsert({
         where: { userId: driverUserIds[i] },
         update: {
-          status: 'APPROVED',
+          status,
           availabilityStatus,
           vehicleType: d.vehicle.type,
           vehicleBrand: d.vehicle.brand,
@@ -824,7 +1106,7 @@ async function seedDriverDB(driverUserIds: string[]) {
           licenseClass: d.license.class || getLicenseClassByVehicleType(d.vehicle.type),
           licenseNumber: d.license.number,
           licenseExpiryDate: d.license.expiryDate,
-          licenseVerified: true,
+          licenseVerified: !seedPendingApproval,
           ratingAverage,
           ratingCount,
           lastLocationLat: location.lat,
@@ -833,7 +1115,7 @@ async function seedDriverDB(driverUserIds: string[]) {
         },
         create: {
           userId: driverUserIds[i],
-          status: 'APPROVED',
+          status,
           availabilityStatus,
           vehicleType: d.vehicle.type,
           vehicleBrand: d.vehicle.brand,
@@ -845,7 +1127,7 @@ async function seedDriverDB(driverUserIds: string[]) {
           licenseClass: d.license.class || getLicenseClassByVehicleType(d.vehicle.type),
           licenseNumber: d.license.number,
           licenseExpiryDate: d.license.expiryDate,
-          licenseVerified: true,
+          licenseVerified: !seedPendingApproval,
           ratingAverage,
           ratingCount,
           lastLocationLat: location.lat,
@@ -866,7 +1148,7 @@ async function seedDriverDB(driverUserIds: string[]) {
     await seedDriverGeoIndex(seededLocations);
 
     await prisma.$disconnect();
-    return driverIds;
+    return { driverIds, seededLocations };
   } catch (error) {
     await prisma.$disconnect();
     throw error;
@@ -1294,7 +1576,7 @@ async function main() {
     await seedUserDB(customerIds, driverUserIds, adminId);
 
     // 3. Seed driver database
-    const driverIds = await seedDriverDB(driverUserIds);
+    const { driverIds } = await seedDriverDB(driverUserIds);
 
     // 4. Seed bookings
     const bookingIds = await seedBookingDB(customerIds);
@@ -1306,6 +1588,7 @@ async function main() {
 
     // 6. Seed MongoDB (notifications + reviews)
     await seedMongoDB(rides, bookingIds, customerIds, driverIds);
+    await generateSeedReferenceReport(adminId, customerIds, driverUserIds, driverIds);
 
     console.log('');
     console.log('========================================');
@@ -1327,6 +1610,7 @@ async function main() {
   console.log('   Admin: admin@cabbooking.com / 0900000001');
   console.log('   Customers: 0901234561 – 0901234570');
   console.log('   Drivers:   0911234561 – 0911234570, plus 30 seeded phones (prefix 0919xxxxxx)');
+  console.log(`   Seed report: ${SEED_REFERENCE_OUTPUT}`);
     console.log('');
   } catch (error: any) {
     console.error('');

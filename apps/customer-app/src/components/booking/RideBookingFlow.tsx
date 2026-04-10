@@ -33,7 +33,6 @@ import {
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { formatCurrency } from '../../utils/format.utils';
-import { formatDistance } from '../../utils/map.utils';
 import { pricingApi } from '../../api/pricing.api';
 import { rideApi } from '../../api/ride.api';
 import { paymentApi } from '../../api/payment.api';
@@ -166,6 +165,26 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs = 5000): Promise<T
       window.clearTimeout(timeoutHandle);
     }
   }
+};
+
+const formatEstimateDistance = (distanceKm: number): string => {
+  if (!Number.isFinite(distanceKm) || distanceKm <= 0) {
+    return 'Đang cập nhật';
+  }
+
+  if (distanceKm < 1) {
+    return `${Math.round(distanceKm * 1000)} m`;
+  }
+
+  return `${distanceKm >= 10 ? distanceKm.toFixed(0) : distanceKm.toFixed(1)} km`;
+};
+
+const formatEstimateDuration = (durationSeconds: number): string => {
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    return 'Đang cập nhật';
+  }
+
+  return `~${Math.max(1, Math.round(durationSeconds / 60))} phút`;
 };
 
 const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
@@ -437,20 +456,22 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                                 {vehicle.description} • {vehicle.capacity} chỗ
                               </Typography>
                               {estimate && (
-                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                                <Stack spacing={0.45} sx={{ mt: 0.75 }}>
                                   <Typography variant="caption" color="text.secondary">
-                                    {formatDistance(estimate.distance)} • ~
-                                    {Math.round(estimate.duration / 60)} min
+                                    Lộ trình dự kiến: {formatEstimateDistance(estimate.distance)} • Di chuyển {formatEstimateDuration(estimate.duration)}
                                   </Typography>
                                   {estimate.estimatedWaitMinutes != null && (
                                     <Chip
                                       size="small"
-                                      label={`Chờ ~${Math.round(estimate.estimatedWaitMinutes)} phút`}
+                                      label={`Ghép tài xế ${Math.max(1, Math.round(estimate.estimatedWaitMinutes))} phút`}
                                       color={estimate.estimatedWaitMinutes > 8 ? 'warning' : 'default'}
                                       sx={{ height: 18, fontSize: '0.68rem' }}
                                     />
                                   )}
-                                </Box>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Cước và quãng đường dựa trên tuyến đường hiện tại; thời gian ghép tài xế dựa trên mật độ tài xế gần điểm đón.
+                                  </Typography>
+                                </Stack>
                               )}
                             </Box>
                           </Box>
@@ -566,6 +587,30 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                     {paymentOptions.find((p) => p.method === selectedPayment)?.label}
                   </Typography>
                 </Box>
+                {selectedEstimate && (
+                  <>
+                    <Box display="flex" justifyContent="space-between" mb={1}>
+                      <Typography>Quãng đường dự kiến</Typography>
+                      <Typography fontWeight="bold">
+                        {formatEstimateDistance(selectedEstimate.distance)}
+                      </Typography>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between" mb={1}>
+                      <Typography>Thời gian di chuyển</Typography>
+                      <Typography fontWeight="bold">
+                        {formatEstimateDuration(selectedEstimate.duration)}
+                      </Typography>
+                    </Box>
+                    {selectedEstimate.estimatedWaitMinutes != null && (
+                      <Box display="flex" justifyContent="space-between" mb={1}>
+                        <Typography>Thời gian ghép tài xế</Typography>
+                        <Typography fontWeight="bold">
+                          ~{Math.max(1, Math.round(selectedEstimate.estimatedWaitMinutes))} phút
+                        </Typography>
+                      </Box>
+                    )}
+                  </>
+                )}
                 <Box display="flex" justifyContent="space-between">
                   <Typography variant="h6">Tổng cước</Typography>
                   <Typography variant="h6" color="primary">

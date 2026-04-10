@@ -52,6 +52,14 @@ export interface ResetPasswordRequest {
   newPassword: string;
 }
 
+export interface OtpDeliveryPayload {
+  message: string;
+  resendDelay: number;
+  expiresInSeconds?: number;
+  maxAttempts?: number;
+  deliveryMethod?: 'SERVER_LOG' | 'SMS';
+}
+
 export interface AuthResponse {
   success: boolean;
   data: {
@@ -97,19 +105,19 @@ export const authApi = {
   },
 
   /** Step 1 of registration: create account (auto-sends OTP) */
-  register: async (data: RegisterRequest): Promise<{ success: boolean; data: { message: string; resendDelay: number } }> => {
+  register: async (data: RegisterRequest): Promise<{ success: boolean; data: OtpDeliveryPayload }> => {
     const response = await axiosInstance.post('/auth/register', data);
     return response.data;
   },
 
   /** Resend OTP for phone verification during registration */
-  sendOtp: async (data: SendOtpRequest): Promise<{ success: boolean; data: { message: string; resendDelay: number } }> => {
+  sendOtp: async (data: SendOtpRequest): Promise<{ success: boolean; data: OtpDeliveryPayload }> => {
     const response = await axiosInstance.post('/auth/send-otp', data);
     return response.data;
   },
 
   /** New registration flow step 1: send OTP to phone before entering profile */
-  registerPhoneStart: async (data: RegisterPhoneStartRequest): Promise<{ success: boolean; data: { message: string; resendDelay: number } }> => {
+  registerPhoneStart: async (data: RegisterPhoneStartRequest): Promise<{ success: boolean; data: OtpDeliveryPayload }> => {
     const response = await axiosInstance.post('/auth/register-phone/start', data);
     return response.data;
   },
@@ -170,7 +178,7 @@ export const authApi = {
   },
 
   /** Forgot password: send OTP to phone */
-  forgotPassword: async (data: ForgotPasswordRequest): Promise<{ success: boolean; data: { message: string; resendDelay: number } }> => {
+  forgotPassword: async (data: ForgotPasswordRequest): Promise<{ success: boolean; data: OtpDeliveryPayload }> => {
     const response = await axiosInstance.post('/auth/forgot-password', data);
     return response.data;
   },

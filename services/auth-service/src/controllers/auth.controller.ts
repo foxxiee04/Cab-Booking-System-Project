@@ -41,6 +41,9 @@ export class AuthController {
         data: {
           message: `OTP đã gửi tới ${result.maskedPhone}`,
           resendDelay: result.resendDelay,
+          expiresInSeconds: result.expiresInSeconds,
+          maxAttempts: result.maxAttempts,
+          deliveryMethod: result.deliveryMethod,
         },
       });
     } catch (err) {
@@ -156,6 +159,9 @@ export class AuthController {
         data: {
           message: `OTP đã gửi tới ${result.maskedPhone}`,
           resendDelay: result.resendDelay,
+          expiresInSeconds: result.expiresInSeconds,
+          maxAttempts: result.maxAttempts,
+          deliveryMethod: result.deliveryMethod,
         },
       });
     } catch (err) {
@@ -241,6 +247,9 @@ export class AuthController {
         data: {
           message: `OTP đã gửi tới ${result.maskedPhone}`,
           resendDelay: result.resendDelay,
+          expiresInSeconds: result.expiresInSeconds,
+          maxAttempts: result.maxAttempts,
+          deliveryMethod: result.deliveryMethod,
         },
       });
     } catch (err) {
@@ -480,30 +489,6 @@ export class AuthController {
   };
 
   /**
-   * GET /api/auth/dev/otp/:phone?purpose=register
-   * [NON-PRODUCTION ONLY] Retrieve the current plaintext OTP for a phone.
-   * Blocked in production (NODE_ENV=production).
-   */
-  devGetOtp = async (req: Request, res: Response) => {
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(403).json({
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Not available in production' },
-      });
-    }
-    const phone = req.params.phone;
-    const purpose = (req.query.purpose as string) || 'register';
-    const otp = await this.authService.getDevOtp(phone, purpose);
-    if (!otp) {
-      return res.status(404).json({
-        success: false,
-        error: { code: 'NOT_FOUND', message: 'No active OTP found for this phone / purpose' },
-      });
-    }
-    return res.json({ success: true, data: { phone, purpose, otp } });
-  };
-
-  /**
    * POST /api/auth/forgot-password
    * Send OTP to phone for password reset flow.
    */
@@ -524,6 +509,9 @@ export class AuthController {
         data: {
           message: `OTP đã gửi tới ${result.maskedPhone}`,
           resendDelay: result.resendDelay,
+          expiresInSeconds: result.expiresInSeconds,
+          maxAttempts: result.maxAttempts,
+          deliveryMethod: result.deliveryMethod,
         },
       });
     } catch (err) {

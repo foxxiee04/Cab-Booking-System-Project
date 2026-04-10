@@ -63,8 +63,6 @@ export class OtpService {
   private ipLimitKey(ip: string)        { return `otp:rate:ip:${ip}`; }
   private resendKey(phone: string, purpose: string = 'register') { return `otp:resend:${purpose}:${phone}`; }
   private verifiedPhoneKey(phone: string) { return `otp:verified:register:${phone}`; }
-  /** Dev-only key: stores plaintext OTP for retrieval via dev endpoint */
-  private devPlainKey(phone: string, purpose: string) { return `otp:dev:plain:${purpose}:${phone}`; }
 
   /**
    * Check both per-phone and per-IP rate limits.
@@ -142,26 +140,12 @@ export class OtpService {
       JSON.stringify(otpData),
     );
 
-    // In non-production environments, store plaintext OTP for the dev endpoint
-    if (process.env.NODE_ENV !== 'production') {
-      await this.redis.setEx(this.devPlainKey(phone, purpose), config.otp.ttlSeconds, otp);
-    }
-
     // Update resend cooldown tracker (TTL: 1 hour)
     await this.redis.setEx(
       this.resendKey(phone, purpose),
       3600,
       JSON.stringify({ count: sendCount, lastAt: Date.now() }),
     );
-  }
-
-  /**
-   * Retrieve plaintext OTP for a phone (non-production only).
-   * Returns null if not available.
-   */
-  async getDevOtp(phone: string, purpose: string = 'register'): Promise<string | null> {
-    if (process.env.NODE_ENV === 'production') return null;
-    return this.redis.get(this.devPlainKey(phone, purpose));
   }
 
   /**

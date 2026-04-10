@@ -1,20 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  Container,
+  Alert,
   Box,
+  Button,
   Card,
   CardContent,
-  TextField,
-  Button,
-  Typography,
-  Alert,
   CircularProgress,
-  Grid,
+  Container,
   InputAdornment,
-  Divider,
+  Stack,
+  TextField,
+  Typography,
 } from '@mui/material';
-import { DriveEta, Phone, Lock, Person } from '@mui/icons-material';
+import {
+  DriveEta,
+  Lock,
+  Person,
+  Phone,
+} from '@mui/icons-material';
 import { useAppDispatch } from '../store/hooks';
 import { setCredentials } from '../store/auth.slice';
 import { authApi } from '../api/auth.api';
@@ -40,13 +44,16 @@ const Register: React.FC = () => {
   const [resendDelay, setResendDelay] = useState(0);
 
   useEffect(() => {
-    if (resendDelay <= 0) return;
-    const timer = setTimeout(() => setResendDelay((d) => d - 1), 1000);
+    if (resendDelay <= 0) {
+      return;
+    }
+
+    const timer = setTimeout(() => setResendDelay((value) => value - 1), 1000);
     return () => clearTimeout(timer);
   }, [resendDelay]);
 
-  const handleStartWithPhone = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleStartWithPhone = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError('');
 
     const normalizedPhone = phone.replace(/\D/g, '').slice(0, 10);
@@ -59,9 +66,9 @@ const Register: React.FC = () => {
 
     setLoading(true);
     try {
-      const res = await authApi.registerPhoneStart({ phone: normalizedPhone });
-      setResendDelay(res.data?.resendDelay || 30);
-      setSuccess(res.data?.message || 'Mã OTP đã được gửi đến số điện thoại của bạn.');
+      const response = await authApi.registerPhoneStart({ phone: normalizedPhone });
+      setResendDelay(response.data?.resendDelay || 30);
+      setSuccess(response.data?.message || 'Mã OTP đã được gửi.');
       setStep('otp');
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể gửi OTP xác thực.');
@@ -70,9 +77,10 @@ const Register: React.FC = () => {
     }
   };
 
-  const handleVerifyPhoneOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleVerifyPhoneOtp = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError('');
+
     if (otp.length !== 6) {
       setError('Vui lòng nhập đủ 6 chữ số OTP');
       return;
@@ -81,13 +89,13 @@ const Register: React.FC = () => {
     setLoading(true);
     try {
       await authApi.registerPhoneVerify({ phone, otp });
-      setSuccess('Số điện thoại đã được xác thực. Vui lòng điền thông tin tài khoản tài xế.');
+      setSuccess('Số điện thoại đã được xác thực.');
       setStep('profile');
     } catch (err: any) {
-      const msg = err.response?.data?.error?.message || 'OTP không hợp lệ hoặc đã hết hạn.';
-      setError(msg);
-      setOtp(''); // xóa để nhập lại
-      if (msg.includes('Quá nhiều') || msg.includes('hết hạn')) {
+      const message = err.response?.data?.error?.message || 'OTP không hợp lệ hoặc đã hết hạn.';
+      setError(message);
+      setOtp('');
+      if (message.includes('Quá nhiều') || message.includes('hết hạn')) {
         setResendDelay(0);
       }
     } finally {
@@ -95,8 +103,8 @@ const Register: React.FC = () => {
     }
   };
 
-  const handleCompleteRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCompleteRegister = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError('');
 
     if (!formData.firstName.trim() || !formData.lastName.trim()) {
@@ -142,19 +150,28 @@ const Register: React.FC = () => {
   };
 
   const handleResendOtp = async () => {
-    if (resendDelay > 0) return;
+    if (resendDelay > 0) {
+      return;
+    }
+
     setError('');
     setLoading(true);
     try {
-      const res = await authApi.registerPhoneStart({ phone });
-      setResendDelay(res.data?.resendDelay || 60);
+      const response = await authApi.registerPhoneStart({ phone });
+      setResendDelay(response.data?.resendDelay || 60);
       setOtp('');
-      setSuccess(res.data?.message || 'Mã OTP đã được gửi lại thành công.');
+      setSuccess(response.data?.message || 'Mã OTP đã được gửi lại.');
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể gửi lại OTP.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const titleByStep: Record<Step, string> = {
+    phone: 'Đăng ký tài xế',
+    otp: 'Xác thực OTP',
+    profile: 'Tạo tài khoản',
   };
 
   return (
@@ -163,117 +180,118 @@ const Register: React.FC = () => {
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
-        background: 'linear-gradient(135deg, #1976d2 0%, #2e7d32 100%)',
-        py: 3,
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       }}
     >
       <Container maxWidth="sm">
-        <Card elevation={6} sx={{ borderRadius: 4 }}>
+        <Card
+          elevation={10}
+          sx={{
+            borderRadius: 3,
+          }}
+        >
           <CardContent sx={{ p: 4 }}>
-            <Box sx={{ textAlign: 'center', mb: 3 }}>
-              <DriveEta sx={{ fontSize: 56, color: 'primary.main' }} />
-              <Typography variant="h3" fontWeight="bold" color="text.primary" mt={1} sx={{ fontSize: { xs: '2rem', sm: '2.5rem' } }}>
-                {step === 'phone' && 'Đăng ký'}
-                {step === 'otp' && 'Xác minh SĐT'}
-                {step === 'profile' && 'Thông tin tài xế'}
-              </Typography>
-              <Typography variant="h6" color="text.secondary" mt={1}>
-                {step === 'phone' && 'Nhập số điện thoại để nhận OTP'}
-                {step === 'otp' && 'Xác minh OTP để tiếp tục đăng ký'}
-                {step === 'profile' && 'Hoàn tất hồ sơ tài khoản'}
-              </Typography>
-            </Box>
+            <Stack spacing={3}>
+              <Box sx={{ textAlign: 'center' }}>
+                <DriveEta sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
+                <Typography variant="h4" fontWeight="bold" gutterBottom>
+                  {titleByStep[step]}
+                </Typography>
+              </Box>
 
-            {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-            {success && step !== 'otp' && <Alert severity="success" sx={{ mb: 3 }}>{success}</Alert>}
+              {error && <Alert severity="error">{error}</Alert>}
+              {success && step !== 'otp' && <Alert severity="success">{success}</Alert>}
 
-            {step === 'phone' && (
-              <form onSubmit={handleStartWithPhone}>
-                <TextField
-                  fullWidth
-                  label="Số điện thoại"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  required
-                  autoFocus
-                  inputMode="numeric"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Phone color="action" />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
+              {step === 'phone' && (
+                <form onSubmit={handleStartWithPhone}>
+                  <Stack spacing={0}>
+                    <TextField
+                      fullWidth
+                      label="Số điện thoại"
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value.replace(/\D/g, '').slice(0, 10))}
+                      required
+                      autoFocus
+                      inputMode="numeric"
+                      autoComplete="tel"
+                      sx={{ mb: 3 }}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Phone color="action" />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
 
-                <Button fullWidth type="submit" variant="contained" size="large" disabled={loading} sx={{ mt: 3, mb: 2, py: 1.8, fontSize: '1.2rem', fontWeight: 600, borderRadius: 2 }}>
-                  {loading ? <CircularProgress size={28} color="inherit" /> : 'Gửi OTP xác thực'}
-                </Button>
+                    <Button fullWidth type="submit" variant="contained" size="large" disabled={loading} sx={{ py: 1.5 }}>
+                      {loading ? <CircularProgress size={24} /> : 'Tiếp tục'}
+                    </Button>
 
-                <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="body1" color="text.secondary">
-                    Đã có tài khoản?{' '}
-                    <Link to="/login" style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 600 }}>
-                      Đăng nhập
-                    </Link>
-                  </Typography>
-                </Box>
-              </form>
-            )}
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 2 }}>
+                      Đã có tài khoản?{' '}
+                      <Link to="/login" style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 700 }}>
+                        Đăng nhập
+                      </Link>
+                    </Typography>
+                  </Stack>
+                </form>
+              )}
 
-            {step === 'otp' && (
-              <form onSubmit={handleVerifyPhoneOtp}>
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  {success || 'Mã OTP đã được gửi đến số điện thoại của bạn.'}
-                </Alert>
+              {step === 'otp' && (
+                <form onSubmit={handleVerifyPhoneOtp}>
+                  <Stack spacing={0}>
+                    <Alert severity="info" sx={{ mb: 2 }}>{success || 'Mã OTP đã được gửi.'}</Alert>
 
-                <TextField
-                  fullWidth
-                  label="Mã OTP (6 chữ số)"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="______"
-                  required
-                  autoFocus
-                  inputMode="numeric"
-                  sx={{ mb: 3 }}
-                  inputProps={{ style: { letterSpacing: '0.35em', fontSize: '1.3rem', textAlign: 'center' } }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Lock color="action" />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
+                    <TextField fullWidth label="Số điện thoại" value={phone} disabled sx={{ mb: 2 }} />
 
-                <Button fullWidth type="submit" variant="contained" size="large" disabled={loading} sx={{ mb: 2, py: 1.8, fontSize: '1.1rem', fontWeight: 600, borderRadius: 2 }}>
-                  {loading ? <CircularProgress size={28} color="inherit" /> : 'Xác minh số điện thoại'}
-                </Button>
+                    <TextField
+                      fullWidth
+                      label="Mã OTP"
+                      value={otp}
+                      onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                      required
+                      autoFocus
+                      inputMode="numeric"
+                      sx={{ mb: 3 }}
+                      inputProps={{ style: { letterSpacing: '0.35em', fontSize: '1.1rem', textAlign: 'center' } }}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Lock color="action" />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
 
-                <Divider sx={{ mb: 2 }} />
+                    <Button fullWidth type="submit" variant="contained" size="large" disabled={loading} sx={{ py: 1.5 }}>
+                      {loading ? <CircularProgress size={24} /> : 'Xác minh'}
+                    </Button>
 
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Button variant="text" size="small" onClick={() => { setStep('phone'); setOtp(''); setError(''); setSuccess(''); }}>
-                    ← Quay lại
-                  </Button>
-                  <Button variant="text" size="small" onClick={handleResendOtp} disabled={resendDelay > 0 || loading}>
-                    {resendDelay > 0 ? `Gửi lại (${resendDelay}s)` : 'Gửi lại OTP'}
-                  </Button>
-                </Box>
-              </form>
-            )}
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ mt: 2 }}>
+                      <Button variant="text" size="small" onClick={() => { setStep('phone'); setOtp(''); setError(''); setSuccess(''); }}>
+                        Quay lại
+                      </Button>
+                      <Button variant="text" size="small" onClick={handleResendOtp} disabled={resendDelay > 0 || loading}>
+                        {resendDelay > 0 ? `Gửi lại sau ${resendDelay}s` : 'Gửi lại OTP'}
+                      </Button>
+                    </Stack>
+                  </Stack>
+                </form>
+              )}
 
-            {step === 'profile' && (
-              <form onSubmit={handleCompleteRegister}>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
+              {step === 'profile' && (
+                <form onSubmit={handleCompleteRegister}>
+                  <Stack spacing={0}>
+                    <TextField fullWidth label="Số điện thoại" value={phone} disabled sx={{ mb: 2 }} />
+
                     <TextField
                       fullWidth
                       label="Họ"
                       value={formData.lastName}
-                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                      onChange={(event) => setFormData({ ...formData, lastName: event.target.value })}
                       required
+                      sx={{ mb: 2 }}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
@@ -282,25 +300,26 @@ const Register: React.FC = () => {
                         ),
                       }}
                     />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
+
                     <TextField
                       fullWidth
                       label="Tên"
                       value={formData.firstName}
-                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                      onChange={(event) => setFormData({ ...formData, firstName: event.target.value })}
                       required
+                      autoFocus
+                      sx={{ mb: 2 }}
                     />
-                  </Grid>
 
-                  <Grid item xs={12}>
                     <TextField
                       fullWidth
                       label="Mật khẩu"
                       type="password"
                       value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      onChange={(event) => setFormData({ ...formData, password: event.target.value })}
                       required
+                      autoComplete="new-password"
+                      sx={{ mb: 2 }}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
@@ -308,18 +327,17 @@ const Register: React.FC = () => {
                           </InputAdornment>
                         ),
                       }}
-                      helperText="Ít nhất 8 ký tự, 1 chữ hoa, 1 ký tự đặc biệt"
                     />
-                  </Grid>
 
-                  <Grid item xs={12}>
                     <TextField
                       fullWidth
                       label="Xác nhận mật khẩu"
                       type="password"
                       value={formData.confirmPassword}
-                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                      onChange={(event) => setFormData({ ...formData, confirmPassword: event.target.value })}
                       required
+                      autoComplete="new-password"
+                      sx={{ mb: 3 }}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
@@ -328,18 +346,18 @@ const Register: React.FC = () => {
                         ),
                       }}
                     />
-                  </Grid>
-                </Grid>
 
-                <Button fullWidth type="submit" variant="contained" size="large" disabled={loading} sx={{ mt: 3, mb: 2, py: 1.8, fontSize: '1.2rem', fontWeight: 600, borderRadius: 2 }}>
-                  {loading ? <CircularProgress size={28} color="inherit" /> : 'Hoàn tất đăng ký'}
-                </Button>
+                    <Button fullWidth type="submit" variant="contained" size="large" disabled={loading} sx={{ py: 1.5 }}>
+                      {loading ? <CircularProgress size={24} /> : 'Tạo tài khoản'}
+                    </Button>
 
-                <Button variant="text" size="small" onClick={() => { setStep('otp'); setError(''); setSuccess(''); }}>
-                  ← Quay lại bước OTP
-                </Button>
-              </form>
-            )}
+                    <Button variant="text" size="small" sx={{ mt: 2 }} onClick={() => { setStep('otp'); setError(''); setSuccess(''); }}>
+                      Quay lại
+                    </Button>
+                  </Stack>
+                </form>
+              )}
+            </Stack>
           </CardContent>
         </Card>
       </Container>

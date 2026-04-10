@@ -400,7 +400,6 @@ const Dashboard: React.FC = () => {
   return (
     <Box sx={{ p: 3, minHeight: '100%', background: 'radial-gradient(circle at top left, rgba(90,127,184,0.12), transparent 34%), linear-gradient(180deg, #f7f9fc 0%, #eef3f9 100%)' }}>
       <Typography variant="h4" fontWeight={900} gutterBottom>{t('dashboard.title')}</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>{t('dashboardExtras.overviewBody')}</Typography>
 
       <Grid container spacing={3} sx={{ mb: 1 }}>
         <Grid item xs={12} sm={6} md={3}><StatCard title={t('dashboard.totalRides')} value={formatNumber(stats.rides.total)} caption={`+${stats.rides.today} ${t('dashboard.today')}`} icon={<DirectionsCar sx={{ fontSize: 44 }} />} tone="#dbeafe" /></Grid>
@@ -416,8 +415,14 @@ const Dashboard: React.FC = () => {
               <Box sx={{ p: 3, pb: 2 }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2}>
                   <Box>
-                    <Typography variant="h6" fontWeight={800}>{t('dashboardExtras.heatmapTitle')}</Typography>
-                    <Typography variant="body2" color="text.secondary">{t('dashboardExtras.heatmapBody')}</Typography>
+                    <Typography
+                      variant="h6"
+                      fontWeight={800}
+                      noWrap
+                      sx={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
+                    >
+                      {t('dashboardExtras.heatmapTitle')}
+                    </Typography>
                   </Box>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                     <FormControl size="small" sx={{ minWidth: 170 }}>

@@ -24,7 +24,7 @@ export const config = {
 
   // OTP configuration
   otp: {
-    ttlSeconds: parseInt(process.env.OTP_TTL_SECONDS || '300', 10),      // 5 minutes
+    ttlSeconds: parseInt(process.env.OTP_TTL_SECONDS || '120', 10),      // 2 minutes
     maxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS || '5', 10),
     length: 6,
     rateLimit: {
@@ -34,6 +34,15 @@ export const config = {
       ipWindowSeconds: parseInt(process.env.OTP_RATE_IP_WINDOW || '60', 10),
     },
     resendDelays: [0, 30, 60], // seconds: 1st send immediately, 2nd after 30s, 3rd+ after 60s
+  },
+
+  sms: {
+    mode: (process.env.OTP_SMS_MODE || 'mock').toLowerCase(),
+    twilio: {
+      accountSid: process.env.TWILIO_ACCOUNT_SID || '',
+      authToken: process.env.TWILIO_AUTH_TOKEN || '',
+      fromPhone: process.env.TWILIO_FROM_PHONE || '',
+    },
   },
 
   rabbitmq: {

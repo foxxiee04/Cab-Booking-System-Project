@@ -70,6 +70,52 @@ describe('map routes', () => {
     });
   });
 
+  it('GET /geocode should prioritize exact street and Thu Duc sub-city matches', async () => {
+    axios.get.mockResolvedValue({
+      data: [
+        {
+          lat: '10.8501',
+          lon: '106.7601',
+          name: '366 Võ Văn Ngân',
+          address: {
+            road: 'Võ Văn Ngân',
+            house_number: '366',
+            suburb: 'Bình Thọ',
+            city: 'Thành phố Thủ Đức',
+            state: 'Hồ Chí Minh',
+          },
+        },
+        {
+          lat: '10.8305',
+          lon: '106.6842',
+          name: '366 Võ Văn Ngân',
+          address: {
+            road: 'Võ Văn Ngân',
+            house_number: '366',
+            suburb: 'Hạnh Thông',
+            neighbourhood: 'Gò Vấp',
+            state: 'Hồ Chí Minh',
+          },
+        },
+      ],
+    });
+    const handler = getRouteHandler(router, 'get', '/geocode');
+    const req: any = { query: { q: '366 Võ Văn Ngân, Thủ Đức, TP. HCM', limit: '5' } };
+    const res = mockRes();
+
+    await handler(req, res);
+
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: {
+        results: [
+          { lat: 10.8501, lng: 106.7601, address: '366 Võ Văn Ngân, Phường Bình Thọ, Thành phố Thủ Đức, TP. HCM' },
+          { lat: 10.8305, lng: 106.6842, address: '366 Võ Văn Ngân, Phường Hạnh Thông, TP. HCM' },
+        ],
+      },
+    });
+  });
+
   it('GET /route should return 400 when coordinates are invalid', async () => {
     const handler = getRouteHandler(router, 'get', '/route');
     const req: any = { query: { fromLat: 'x' } };

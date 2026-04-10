@@ -3,7 +3,10 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 interface Notification {
   id: string;
   type: 'success' | 'error' | 'warning' | 'info';
+  title?: string;
   message: string;
+  rideId?: string;
+  persistMs?: number;
 }
 
 interface UIState {

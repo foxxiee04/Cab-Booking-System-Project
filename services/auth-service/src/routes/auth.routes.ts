@@ -33,11 +33,6 @@ export const createAuthRouter = (authService: AuthService): Router => {
   // Refresh access token using refresh token
   router.post('/refresh', controller.refreshToken);
 
-  // [NON-PRODUCTION] Retrieve current plaintext OTP for a phone — used for testing
-  if (process.env.NODE_ENV !== 'production') {
-    router.get('/dev/otp/:phone', controller.devGetOtp);
-  }
-
   // Logout (revoke all refresh tokens)
   router.post('/logout', authenticate, controller.logout);
 

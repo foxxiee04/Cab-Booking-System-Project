@@ -50,6 +50,14 @@ export interface ResetPasswordRequest {
   newPassword: string;
 }
 
+export interface OtpDeliveryPayload {
+  message: string;
+  resendDelay: number;
+  expiresInSeconds?: number;
+  maxAttempts?: number;
+  deliveryMethod?: 'SERVER_LOG' | 'SMS';
+}
+
 const normalizeUser = (user: any) => ({
   ...user,
   phoneNumber: user.phoneNumber || user.phone || '',
@@ -65,17 +73,17 @@ export const authApi = {
     return result;
   },
 
-  register: async (data: RegisterRequest): Promise<ApiResponse<{ message: string; resendDelay: number }>> => {
+  register: async (data: RegisterRequest): Promise<ApiResponse<OtpDeliveryPayload>> => {
     const response = await axiosInstance.post('/auth/register', data);
     return response.data;
   },
 
-  sendOtp: async (data: SendOtpRequest): Promise<ApiResponse<{ message: string; resendDelay: number }>> => {
+  sendOtp: async (data: SendOtpRequest): Promise<ApiResponse<OtpDeliveryPayload>> => {
     const response = await axiosInstance.post('/auth/send-otp', data);
     return response.data;
   },
 
-  registerPhoneStart: async (data: RegisterPhoneStartRequest): Promise<ApiResponse<{ message: string; resendDelay: number }>> => {
+  registerPhoneStart: async (data: RegisterPhoneStartRequest): Promise<ApiResponse<OtpDeliveryPayload>> => {
     const response = await axiosInstance.post('/auth/register-phone/start', data);
     return response.data;
   },
@@ -124,7 +132,7 @@ export const authApi = {
   },
 
   /** Forgot password: send OTP to phone */
-  forgotPassword: async (data: ForgotPasswordRequest): Promise<ApiResponse<{ message: string; resendDelay: number }>> => {
+  forgotPassword: async (data: ForgotPasswordRequest): Promise<ApiResponse<OtpDeliveryPayload>> => {
     const response = await axiosInstance.post('/auth/forgot-password', data);
     return response.data;
   },

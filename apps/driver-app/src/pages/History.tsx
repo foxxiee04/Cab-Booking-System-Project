@@ -486,7 +486,7 @@ const History: React.FC = () => {
         )}
       </Dialog>
 
-      <Box sx={{ mt: 3, display: 'flex', gap: 1 }}>
+      <Box sx={{ mt: 3, display: 'flex', gap: 1, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
         <Button
           variant="outlined"
           disabled={page <= 0}
@@ -494,6 +494,9 @@ const History: React.FC = () => {
         >
           {t('history.previous')}
         </Button>
+        <Typography variant="body2" color="text.secondary" sx={{ minWidth: 92, textAlign: 'center' }}>
+          {t('history.page', { page: page + 1, total: totalPages })}
+        </Typography>
         <Button
           variant="outlined"
           disabled={page >= totalPages - 1}
@@ -501,9 +504,6 @@ const History: React.FC = () => {
         >
           {t('history.next')}
         </Button>
-        <Typography variant="body2" color="text.secondary" sx={{ alignSelf: 'center' }}>
-          {t('history.page', { page: page + 1, total: totalPages })}
-        </Typography>
       </Box>
     </Container>
   );
