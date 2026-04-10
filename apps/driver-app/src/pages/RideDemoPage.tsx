@@ -217,7 +217,6 @@ const RideDemoPage: React.FC = () => {
           currentLocation={currentLocation}
           pickupLocation={PICKUP}
           dropoffLocation={DROPOFF}
-          nearbyDrivers={[]}
           mode={mapMode}
           height="100%"
         />

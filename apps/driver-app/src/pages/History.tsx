@@ -42,10 +42,66 @@ import {
   getVehicleTypeLabel,
   getPaymentMethodLabel,
 } from '../utils/format.utils';
-import { formatDistance, formatDuration } from '../utils/map.utils';
+import { calculateDistance, formatDistance, formatDuration } from '../utils/map.utils';
 import { useTranslation } from 'react-i18next';
 
 const PAGE_SIZE = 10;
+
+const normalizeDistanceMeters = (distance?: number) => {
+  if (!distance || Number.isNaN(distance) || distance <= 0) {
+    return undefined;
+  }
+
+  return distance > 100 ? distance : distance * 1000;
+};
+
+const normalizeDurationSeconds = (duration?: number, estimatedDuration?: number) => {
+  const raw = duration && duration > 0 ? duration : estimatedDuration && estimatedDuration > 0 ? estimatedDuration : undefined;
+  if (!raw) {
+    return undefined;
+  }
+
+  return raw <= 180 ? raw * 60 : raw;
+};
+
+const getRideDistanceAndDuration = (ride: Ride) => {
+  const normalizedDistance = normalizeDistanceMeters(ride.distance);
+  const normalizedDuration = normalizeDurationSeconds(ride.duration, ride.estimatedDuration);
+
+  if (normalizedDistance && normalizedDuration) {
+    return { distanceMeters: normalizedDistance, durationSeconds: normalizedDuration };
+  }
+
+  const pickup = ride.pickupLocation;
+  const dropoff = ride.dropoffLocation;
+  if (pickup?.lat && pickup?.lng && dropoff?.lat && dropoff?.lng) {
+    const straightLineKm = calculateDistance(pickup, dropoff);
+    const routedKm = Math.max(straightLineKm * 1.22, 0.2);
+    const estimatedDistanceMeters = Math.round(routedKm * 1000);
+    const estimatedDurationSeconds = Math.round((routedKm / 24) * 3600);
+    return {
+      distanceMeters: normalizedDistance || estimatedDistanceMeters,
+      durationSeconds: normalizedDuration || Math.max(180, estimatedDurationSeconds),
+    };
+  }
+
+  return {
+    distanceMeters: normalizedDistance,
+    durationSeconds: normalizedDuration,
+  };
+};
+
+const getLocationText = (location?: { address?: string; lat?: number; lng?: number }) => {
+  if (location?.address && location.address.trim()) {
+    return location.address;
+  }
+
+  if (typeof location?.lat === 'number' && typeof location?.lng === 'number' && !Number.isNaN(location.lat) && !Number.isNaN(location.lng)) {
+    return `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`;
+  }
+
+  return 'Không có dữ liệu vị trí';
+};
 
 const History: React.FC = () => {
   const { t } = useTranslation();
@@ -159,6 +215,9 @@ const History: React.FC = () => {
 
       <Box sx={{ mt: 2, display: 'grid', gap: 2 }}>
         {filteredRides.map((ride) => (
+          (() => {
+            const metrics = getRideDistanceAndDuration(ride);
+            return (
           <Card
             key={ride.id}
             variant="outlined"
@@ -207,9 +266,14 @@ const History: React.FC = () => {
                 <Typography variant="body2">
                   💰 {ride.fare ? formatCurrency(ride.fare) : 'Tính sau'}
                 </Typography>
-                {ride.distance && ride.distance > 0 && (
+                {metrics.distanceMeters && (
                   <Typography variant="body2" color="text.secondary">
-                    📍 {formatDistance(ride.distance)}
+                    📍 {formatDistance(metrics.distanceMeters)}
+                  </Typography>
+                )}
+                {metrics.durationSeconds && (
+                  <Typography variant="body2" color="text.secondary">
+                    ⏱ {formatDuration(metrics.durationSeconds)}
                   </Typography>
                 )}
                 {ride.paymentMethod && (
@@ -220,6 +284,8 @@ const History: React.FC = () => {
               </Box>
             </CardContent>
           </Card>
+            );
+          })()
         ))}
       </Box>
 
@@ -232,6 +298,9 @@ const History: React.FC = () => {
         PaperProps={{ sx: { borderRadius: 4 } }}
       >
         {selectedRide && (
+          (() => {
+            const metrics = getRideDistanceAndDuration(selectedRide);
+            return (
           <>
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
               <Box>
@@ -255,13 +324,13 @@ const History: React.FC = () => {
             <DialogContent dividers>
               <Stack spacing={2}>
                 {/* Locations */}
-                <Box>
+                <Box sx={{ bgcolor: '#f8fafc', borderRadius: 3, p: 1.5 }}>
                   <Stack direction="row" spacing={1} alignItems="flex-start">
                     <LocationOnRounded color="success" sx={{ mt: 0.25, flexShrink: 0 }} />
                     <Box>
                       <Typography variant="caption" color="text.secondary" fontWeight={700}>ĐIỂM ĐÓN</Typography>
                       <Typography variant="body2">
-                        {selectedRide.pickupLocation?.address || `${selectedRide.pickupLocation?.lat}, ${selectedRide.pickupLocation?.lng}`}
+                        {getLocationText(selectedRide.pickupLocation)}
                       </Typography>
                     </Box>
                   </Stack>
@@ -270,7 +339,7 @@ const History: React.FC = () => {
                     <Box>
                       <Typography variant="caption" color="text.secondary" fontWeight={700}>ĐIỂM ĐẾN</Typography>
                       <Typography variant="body2">
-                        {selectedRide.dropoffLocation?.address || `${selectedRide.dropoffLocation?.lat}, ${selectedRide.dropoffLocation?.lng}`}
+                        {getLocationText(selectedRide.dropoffLocation)}
                       </Typography>
                     </Box>
                   </Stack>
@@ -298,24 +367,24 @@ const History: React.FC = () => {
                       </Typography>
                     </Box>
                   </Stack>
-                  {(selectedRide.distance ?? 0) > 0 && (
+                  {metrics.distanceMeters && (
                     <Stack direction="row" spacing={1} alignItems="center">
                       <RouteRounded color="action" fontSize="small" />
                       <Box>
                         <Typography variant="caption" color="text.secondary">Khoảng cách</Typography>
                         <Typography variant="body2" fontWeight={700}>
-                          {formatDistance(selectedRide.distance!)}
+                          {formatDistance(metrics.distanceMeters)}
                         </Typography>
                       </Box>
                     </Stack>
                   )}
-                  {((selectedRide.duration ?? 0) > 0 || (selectedRide.estimatedDuration ?? 0) > 0) && (
+                  {metrics.durationSeconds && (
                     <Stack direction="row" spacing={1} alignItems="center">
                       <AccessTimeRounded color="action" fontSize="small" />
                       <Box>
                         <Typography variant="caption" color="text.secondary">Thời gian</Typography>
                         <Typography variant="body2" fontWeight={700}>
-                          {formatDuration(selectedRide.duration || selectedRide.estimatedDuration || 0)}
+                          {formatDuration(metrics.durationSeconds)}
                         </Typography>
                       </Box>
                     </Stack>
@@ -412,6 +481,8 @@ const History: React.FC = () => {
               </Button>
             </DialogActions>
           </>
+            );
+          })()
         )}
       </Dialog>
 

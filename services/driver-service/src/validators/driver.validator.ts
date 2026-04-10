@@ -1,4 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
+import {
+  isLicenseClassCompatible,
+  isSupportedLicenseClassInput,
+  normalizeLicenseClass,
+} from '../utils/license-class';
 
 const VEHICLE_YEAR_MIN = 1990;
 const SUPPORTED_VEHICLE_TYPES = new Set(['MOTORBIKE', 'SCOOTER', 'CAR_4', 'CAR_7']);
@@ -20,6 +25,19 @@ const isFutureDate = (value: string) => {
 const isValidVehiclePlate = (value: string) => /^\d{2}[A-Z]{1,2}-?\d{4,5}$/i.test(value.trim());
 // Vietnamese GPLX is exactly 12 digits
 const isValidLicenseNumber = (value: string) => /^\d{12}$/.test(value.trim());
+const isValidVehicleImageUrl = (value: string) => {
+  const trimmed = value.trim();
+  if (trimmed.length < 16 || trimmed.length > 6_000_000) {
+    return false;
+  }
+
+  const isDataUrl = /^data:image\/(png|jpg|jpeg|webp);base64,[A-Za-z0-9+/=\s]+$/i.test(trimmed);
+  if (isDataUrl) {
+    return true;
+  }
+
+  return /^(https?:\/\/|\/)[\w\-./%]+$/i.test(trimmed);
+};
 
 export const validateDriverRegistration = (req: Request, res: Response, next: NextFunction) => {
   const { vehicle, license } = req.body;
@@ -49,6 +67,33 @@ export const validateDriverRegistration = (req: Request, res: Response, next: Ne
     return res.status(400).json({
       success: false,
       error: { code: 'VALIDATION_ERROR', message: 'License number and expiry date required' },
+    });
+  }
+
+  if (!license.class || !isSupportedLicenseClassInput(license.class)) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'License class is invalid' },
+    });
+  }
+
+  const normalizedLicenseClass = normalizeLicenseClass(license.class);
+  if (!normalizedLicenseClass) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'License class is invalid' },
+    });
+  }
+
+  license.class = normalizedLicenseClass;
+
+  if (!isLicenseClassCompatible(String(vehicle.type), normalizedLicenseClass)) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Hạng GPLX không phù hợp với loại xe đăng ký',
+      },
     });
   }
 
@@ -85,6 +130,13 @@ export const validateDriverRegistration = (req: Request, res: Response, next: Ne
     return res.status(400).json({
       success: false,
       error: { code: 'VALIDATION_ERROR', message: 'Vehicle plate format is invalid' },
+    });
+  }
+
+  if (vehicle.imageUrl !== undefined && !isValidVehicleImageUrl(String(vehicle.imageUrl))) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle image format is invalid' },
     });
   }
 
@@ -170,6 +222,8 @@ export const validateDriverProfileUpdate = (req: Request, res: Response, next: N
     vehicleColor,
     vehicleYear,
     licensePlate,
+    licenseClass,
+    vehicleImageUrl,
     licenseNumber,
     licenseExpiryDate,
   } = req.body;
@@ -181,6 +235,8 @@ export const validateDriverProfileUpdate = (req: Request, res: Response, next: N
     vehicleColor,
     vehicleYear,
     licensePlate,
+    licenseClass,
+    vehicleImageUrl,
     licenseNumber,
     licenseExpiryDate,
   ].some((value) => value !== undefined);
@@ -196,6 +252,13 @@ export const validateDriverProfileUpdate = (req: Request, res: Response, next: N
     return res.status(400).json({
       success: false,
       error: { code: 'VALIDATION_ERROR', message: 'Vehicle year is invalid' },
+    });
+  }
+
+  if (vehicleType !== undefined && !SUPPORTED_VEHICLE_TYPES.has(String(vehicleType))) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle type is invalid' },
     });
   }
 
@@ -224,6 +287,42 @@ export const validateDriverProfileUpdate = (req: Request, res: Response, next: N
     return res.status(400).json({
       success: false,
       error: { code: 'VALIDATION_ERROR', message: 'Vehicle plate format is invalid' },
+    });
+  }
+
+  if (licenseClass !== undefined && !isSupportedLicenseClassInput(licenseClass)) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'License class is invalid' },
+    });
+  }
+
+  const normalizedLicenseClass = licenseClass !== undefined ? normalizeLicenseClass(licenseClass) : null;
+  if (licenseClass !== undefined && !normalizedLicenseClass) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'License class is invalid' },
+    });
+  }
+
+  if (normalizedLicenseClass) {
+    req.body.licenseClass = normalizedLicenseClass;
+  }
+
+  if (vehicleType !== undefined && normalizedLicenseClass !== null && !isLicenseClassCompatible(String(vehicleType), normalizedLicenseClass)) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Hạng GPLX không phù hợp với loại xe cập nhật',
+      },
+    });
+  }
+
+  if (vehicleImageUrl !== undefined && !isValidVehicleImageUrl(String(vehicleImageUrl))) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Vehicle image format is invalid' },
     });
   }
 

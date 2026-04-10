@@ -39,6 +39,12 @@ export const loginSchema = Joi.object({
   if (!value.phone && !value.email && !value.identifier) {
     return helpers.error('any.required', { key: 'identifier' });
   }
+
+  const identifier = String(value.identifier || '').trim();
+  if (identifier && /^\d+$/.test(identifier) && !/^0\d{9}$/.test(identifier)) {
+    return helpers.message({ custom: 'Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0' });
+  }
+
   return value;
 }, 'login identifier validation');
 

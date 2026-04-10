@@ -20,6 +20,7 @@ export class DriverController {
         vehicle,
         license: {
           ...license,
+          class: license.class,
           expiryDate: new Date(license.expiryDate),
         },
       });

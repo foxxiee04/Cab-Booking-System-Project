@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -75,6 +75,7 @@ const PHASE_CONFIG: Record<string, {
 };
 
 const ActiveRide: React.FC = () => {
+  const loggedGeoErrorCodesRef = useRef<Set<number>>(new Set());
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -114,7 +115,10 @@ const ActiveRide: React.FC = () => {
         driverApi.updateLocation(location).catch(console.error);
       },
       (geoError) => {
-        console.error('Location error:', geoError);
+        if (geoError?.code !== 1 && !loggedGeoErrorCodesRef.current.has(geoError?.code)) {
+          loggedGeoErrorCodesRef.current.add(geoError.code);
+          console.error('Location error:', geoError);
+        }
         setError(t('dashboard.gpsError'));
       }
     );

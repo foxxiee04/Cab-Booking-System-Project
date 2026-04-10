@@ -18,6 +18,7 @@ import {
   NearMeRounded,
   PlaceRounded,
   RouteRounded,
+  SpeedRounded,
 } from '@mui/icons-material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -34,7 +35,7 @@ import {
   interpolatePosition,
 } from '../utils/mapAnimation';
 import { BookingMapLocation, DriverLocationUpdate, NearbyDriver, RouteSummary } from '../types';
-import { geocodeAddress, getCurrentLocation, getRoute } from '../../../utils/map.utils';
+import { geocodeAddress, getCurrentLocation, getRoute, reverseGeocode } from '../../../utils/map.utils';
 import '../../../styles/map.css';
 
 const libraries: ('places' | 'geometry')[] = [];
@@ -44,13 +45,6 @@ const MAP_COLORS = {
   accent: '#2563eb',
   neutral: '#334155',
 };
-
-const MAJOR_CITY_POINTS = [
-  { id: 'benthanh', name: 'Cho Ben Thanh', lat: 10.7726, lng: 106.698 },
-  { id: 'tsn', name: 'San bay Tan Son Nhat', lat: 10.8185, lng: 106.6588 },
-  { id: 'landmark81', name: 'Landmark 81', lat: 10.7949, lng: 106.7219 },
-  { id: 'thuductech', name: 'TP Thu Duc', lat: 10.8495, lng: 106.7718 },
-];
 
 const darkMapStyles: google.maps.MapTypeStyle[] = [
   { elementType: 'geometry', stylers: [{ color: '#111827' }] },
@@ -202,6 +196,9 @@ export interface BookingMapProps {
   onDropoffChange?: (location: BookingMapLocation | null) => void;
   onRouteComputed?: (summary: RouteSummary | null) => void;
   onError?: (message: string) => void;
+  trackingEtaText?: string;
+  trackingDistanceText?: string;
+  trackingSpeedText?: string;
 }
 
 function getCarSymbol(rotation: number, fillColor: string, scale = 1): google.maps.Symbol {
@@ -240,6 +237,7 @@ interface GoogleBookingMapCanvasProps {
   animatedDriverPosition: google.maps.LatLngLiteral | null;
   driverHeading: number;
   routeSummary: RouteSummary | null;
+  showReferenceMarkers: boolean;
   mapRef: React.MutableRefObject<google.maps.Map | null>;
   onMapLoad: (points: google.maps.LatLngLiteral[]) => void;
   fallback: React.ReactNode;
@@ -255,6 +253,7 @@ const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
   animatedDriverPosition,
   driverHeading,
   routeSummary,
+  showReferenceMarkers,
   mapRef,
   onMapLoad,
   fallback,
@@ -300,7 +299,7 @@ const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
         styles: themeMode === 'dark' ? darkMapStyles : undefined,
       }}
     >
-      {pickup && (
+      {showReferenceMarkers && pickup && (
         <MarkerF
           position={pickup}
           icon={getMarkerIcon('A', MAP_COLORS.accent)}
@@ -309,7 +308,7 @@ const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
         />
       )}
 
-      {dropoff && (
+      {showReferenceMarkers && dropoff && (
         <MarkerF
           position={dropoff}
           icon={getMarkerIcon('B', MAP_COLORS.neutral)}
@@ -318,7 +317,7 @@ const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
         />
       )}
 
-      {routeSummary && (
+      {showReferenceMarkers && routeSummary && (
         <PolylineF
           path={routeSummary.polylinePath}
           options={{
@@ -330,7 +329,7 @@ const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
         />
       )}
 
-      {nearbyDrivers.map((driver) => (
+      {showReferenceMarkers && nearbyDrivers.map((driver) => (
         <MarkerF
           key={driver.id}
           position={{ lat: driver.lat, lng: driver.lng }}
@@ -348,15 +347,6 @@ const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
         />
       )}
 
-      {MAJOR_CITY_POINTS.map((point) => (
-        <MarkerF
-          key={point.id}
-          position={{ lat: point.lat, lng: point.lng }}
-          icon={getMarkerIcon('L', '#7c3aed')}
-          title={point.name}
-          zIndex={5}
-        />
-      ))}
     </GoogleMap>
   );
 };
@@ -386,6 +376,9 @@ export const BookingMap: React.FC<BookingMapProps> = ({
   onDropoffChange,
   onRouteComputed,
   onError,
+  trackingEtaText,
+  trackingDistanceText,
+  trackingSpeedText,
 }) => {
   const themeMode = resolveColorMode(colorMode);
   const hasGoogleMapsApiKey = googleMapsApiKey.trim().length > 0;
@@ -408,6 +401,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
   const [driverHeading, setDriverHeading] = useState(0);
   const searchContextLabel = useMemo(() => getSearchContextLabel(pickup?.address, dropoff?.address), [dropoff?.address, pickup?.address]);
   const visibleNearbyDrivers = nearbyDrivers;
+  const showReferenceMarkers = mode !== 'tracking';
 
   useEffect(() => {
     setPickupInput(pickup?.address || '');
@@ -615,7 +609,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
           distanceMeters: route.distance,
           durationSeconds: route.duration,
           distanceText: formatDistance(route.distance),
-          durationText: `${Math.max(1, Math.round(route.duration / 60))} min`,
+          durationText: `${Math.max(1, Math.round(route.duration / 60))} phút`,
           polylinePath: (route.geometry?.coordinates || []).map(([lng, lat]) => ({ lat, lng })),
         };
 
@@ -724,9 +718,10 @@ export const BookingMap: React.FC<BookingMapProps> = ({
     void (async () => {
       try {
         const currentLocation = await getCurrentLocation();
+        const resolvedAddress = await reverseGeocode(currentLocation.lat, currentLocation.lng);
         const location = {
           ...currentLocation,
-          address: 'Vị trí hiện tại',
+          address: resolvedAddress || 'Vị trí hiện tại',
         };
 
         mapRef.current?.panTo(location);
@@ -863,13 +858,25 @@ export const BookingMap: React.FC<BookingMapProps> = ({
         zIndex: 2,
       }}
     >
+      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1 }}>
+        <Chip
+          size="small"
+          color={animatedDriverPosition ? 'success' : 'warning'}
+          label={animatedDriverPosition ? 'Đang theo dõi vị trí tài xế realtime' : 'Đang đồng bộ vị trí tài xế'}
+        />
+      </Stack>
       <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 0 }}>
-        {routeSummary && (
-          <Chip icon={<RouteRounded />} label={routeSummary.distanceText} variant="outlined" />
-        )}
-        {routeSummary && (
-          <Chip icon={<AccessTimeRounded />} label={routeSummary.durationText} variant="outlined" />
-        )}
+        <Chip
+          icon={<AccessTimeRounded />}
+          label={trackingEtaText || 'ETA đón: Đang cập nhật'}
+          variant="outlined"
+        />
+        <Chip
+          icon={<RouteRounded />}
+          label={trackingDistanceText || routeSummary?.distanceText || 'Khoảng cách: Đang cập nhật'}
+          variant="outlined"
+        />
+        {trackingSpeedText ? <Chip icon={<SpeedRounded />} label={trackingSpeedText} variant="outlined" /> : null}
       </Stack>
 
     </Paper>
@@ -899,15 +906,15 @@ export const BookingMap: React.FC<BookingMapProps> = ({
         maxZoom={20}
       />
       <LeafletViewportController pickup={pickup ?? null} dropoff={dropoff ?? null} />
-      {pickup && <LeafletMarker position={[pickup.lat, pickup.lng]} icon={createLeafletPin('A', MAP_COLORS.accent)} />}
-      {dropoff && <LeafletMarker position={[dropoff.lat, dropoff.lng]} icon={createLeafletPin('B', MAP_COLORS.neutral)} />}
-      {routeSummary && (
+      {showReferenceMarkers && pickup && <LeafletMarker position={[pickup.lat, pickup.lng]} icon={createLeafletPin('A', MAP_COLORS.accent)} />}
+      {showReferenceMarkers && dropoff && <LeafletMarker position={[dropoff.lat, dropoff.lng]} icon={createLeafletPin('B', MAP_COLORS.neutral)} />}
+      {showReferenceMarkers && routeSummary && (
         <LeafletPolyline
           positions={routeSummary.polylinePath.map((point) => [point.lat, point.lng])}
           pathOptions={{ color: MAP_COLORS.accent, opacity: 0.95, weight: 5 }}
         />
       )}
-      {visibleNearbyDrivers.map((driver) => (
+      {showReferenceMarkers && visibleNearbyDrivers.map((driver) => (
         <LeafletMarker
           key={driver.id}
           position={[driver.lat, driver.lng]}
@@ -920,14 +927,6 @@ export const BookingMap: React.FC<BookingMapProps> = ({
           icon={createLeafletDriverIcon(MAP_COLORS.accent, driverHeading, true)}
         />
       )}
-
-      {MAJOR_CITY_POINTS.map((point) => (
-        <LeafletMarker
-          key={point.id}
-          position={[point.lat, point.lng]}
-          icon={createLeafletPin('L', '#7c3aed')}
-        />
-      ))}
     </LeafletMapContainer>
   );
 
@@ -957,6 +956,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
             animatedDriverPosition={animatedDriverPosition}
             driverHeading={driverHeading}
             routeSummary={routeSummary}
+            showReferenceMarkers={showReferenceMarkers}
             mapRef={mapRef}
             onMapLoad={fitMapToLocations}
             fallback={leafletMap}

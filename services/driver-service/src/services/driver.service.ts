@@ -1,9 +1,10 @@
 import Redis from 'ioredis';
-import { DriverStatus, AvailabilityStatus, VehicleType } from '../generated/prisma-client';
+import { DriverStatus, AvailabilityStatus, VehicleType, LicenseClass } from '../generated/prisma-client';
 import { config } from '../config';
 import { prisma } from '../config/db';
 import { EventPublisher } from '../events/publisher';
 import { logger } from '../utils/logger';
+import { isLicenseClassCompatible, normalizeLicenseClass, LicenseClass2026 } from '../utils/license-class';
 const GEO_KEY = 'drivers:geo:online';
 
 interface RegisterDriverInput {
@@ -15,8 +16,10 @@ interface RegisterDriverInput {
     plate: string;
     color: string;
     year: number;
+    imageUrl?: string;
   };
   license: {
+    class: LicenseClass2026;
     number: string;
     expiryDate: Date;
   };
@@ -51,6 +54,15 @@ export class DriverService {
       throw new Error('Driver already registered');
     }
 
+    const normalizedLicenseClass = normalizeLicenseClass(input.license.class);
+    if (!normalizedLicenseClass) {
+      throw new Error('License class is invalid');
+    }
+
+    if (!isLicenseClassCompatible(input.vehicle.type, normalizedLicenseClass)) {
+      throw new Error('Hạng GPLX không phù hợp với loại xe đăng ký');
+    }
+
     const driver = await prisma.driver.create({
       data: {
         userId: input.userId,
@@ -62,6 +74,8 @@ export class DriverService {
         vehiclePlate: input.vehicle.plate,
         vehicleColor: input.vehicle.color,
         vehicleYear: input.vehicle.year,
+        vehicleImageUrl: input.vehicle.imageUrl,
+        licenseClass: normalizedLicenseClass as LicenseClass,
         licenseNumber: input.license.number,
         licenseExpiryDate: input.license.expiryDate,
         licenseVerified: false,
@@ -246,16 +260,79 @@ export class DriverService {
   }
 
   async updateDriverProfile(driverId: string, data: any): Promise<any> {
-    const updateData: Record<string, any> = {};
+    const currentDriver = await prisma.driver.findUnique({
+      where: { id: driverId },
+    });
 
-    if (data.vehicleType !== undefined) updateData.vehicleType = data.vehicleType;
-    if (data.vehicleMake !== undefined) updateData.vehicleBrand = data.vehicleMake;
-    if (data.vehicleModel !== undefined) updateData.vehicleModel = data.vehicleModel;
-    if (data.vehicleColor !== undefined) updateData.vehicleColor = data.vehicleColor;
-    if (data.vehicleYear !== undefined) updateData.vehicleYear = data.vehicleYear;
-    if (data.licensePlate !== undefined) updateData.vehiclePlate = data.licensePlate;
-    if (data.licenseNumber !== undefined) updateData.licenseNumber = data.licenseNumber;
-    if (data.licenseExpiryDate !== undefined) updateData.licenseExpiryDate = new Date(data.licenseExpiryDate);
+    if (!currentDriver) {
+      throw new Error('Driver not found');
+    }
+
+    const nextVehicleType = String(data.vehicleType ?? currentDriver.vehicleType);
+    const nextLicenseClass = normalizeLicenseClass(data.licenseClass ?? currentDriver.licenseClass);
+
+    if (!nextLicenseClass) {
+      throw new Error('License class is invalid');
+    }
+
+    if (!isLicenseClassCompatible(nextVehicleType, nextLicenseClass)) {
+      throw new Error('Hạng GPLX không phù hợp với loại xe cập nhật');
+    }
+
+    const updateData: Record<string, any> = {};
+    let needsReapproval = false;
+
+    if (data.vehicleType !== undefined) {
+      updateData.vehicleType = data.vehicleType;
+      needsReapproval = true;
+    }
+    if (data.vehicleMake !== undefined) {
+      updateData.vehicleBrand = data.vehicleMake;
+      needsReapproval = true;
+    }
+    if (data.vehicleModel !== undefined) {
+      updateData.vehicleModel = data.vehicleModel;
+      needsReapproval = true;
+    }
+    if (data.vehicleColor !== undefined) {
+      updateData.vehicleColor = data.vehicleColor;
+      needsReapproval = true;
+    }
+    if (data.vehicleYear !== undefined) {
+      updateData.vehicleYear = data.vehicleYear;
+      needsReapproval = true;
+    }
+    if (data.licensePlate !== undefined) {
+      updateData.vehiclePlate = data.licensePlate;
+      needsReapproval = true;
+    }
+    if (data.vehicleImageUrl !== undefined) {
+      updateData.vehicleImageUrl = data.vehicleImageUrl;
+      needsReapproval = true;
+    }
+    if (data.licenseClass !== undefined) {
+      const normalizedLicenseClass = normalizeLicenseClass(data.licenseClass);
+      if (!normalizedLicenseClass) {
+        throw new Error('License class is invalid');
+      }
+      updateData.licenseClass = normalizedLicenseClass;
+      needsReapproval = true;
+    }
+    if (data.licenseNumber !== undefined) {
+      updateData.licenseNumber = data.licenseNumber;
+      needsReapproval = true;
+    }
+    if (data.licenseExpiryDate !== undefined) {
+      updateData.licenseExpiryDate = new Date(data.licenseExpiryDate);
+      needsReapproval = true;
+    }
+
+    if (needsReapproval) {
+      updateData.status = DriverStatus.PENDING;
+      updateData.availabilityStatus = AvailabilityStatus.OFFLINE;
+      updateData.licenseVerified = false;
+      updateData.currentRideId = null;
+    }
 
     return prisma.driver.update({
       where: { id: driverId },

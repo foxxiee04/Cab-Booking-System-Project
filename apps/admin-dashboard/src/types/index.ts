@@ -104,12 +104,14 @@ export interface Driver {
   id: string;
   userId: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
-  vehicleType: 'ECONOMY' | 'COMFORT' | 'PREMIUM';
+  vehicleType: 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
   vehicleMake: string;
   vehicleModel: string;
   vehicleColor: string;
   vehicleYear?: number;
+  vehicleImageUrl?: string;
   licensePlate: string;
+  licenseClass?: 'A1' | 'A' | 'B' | 'C1' | 'C' | 'D1' | 'D2' | 'D' | 'BE' | 'C1E' | 'CE' | 'D1E' | 'D2E' | 'DE';
   licenseNumber: string;
   licenseExpiryDate?: string;
   rating: number;

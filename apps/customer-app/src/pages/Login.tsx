@@ -32,7 +32,8 @@ const Login: React.FC = () => {
     e.preventDefault();
     setError('');
 
-    if (!/^0\d{9}$/.test(phone)) {
+    const normalizedPhone = phone.trim();
+    if (!/^0\d{9}$/.test(normalizedPhone)) {
       setError('Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0');
       return;
     }
@@ -43,7 +44,7 @@ const Login: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await authApi.login({ identifier: phone, password });
+      const response = await authApi.login({ identifier: normalizedPhone, password });
       if (response.success) {
         dispatch(setCredentials(response.data));
         navigate('/home');
@@ -85,11 +86,12 @@ const Login: React.FC = () => {
                 fullWidth
                 label="Số điện thoại"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                 required
                 autoFocus
                 inputMode="tel"
                 sx={{ mb: 2 }}
+                inputProps={{ maxLength: 10 }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">

@@ -11,6 +11,8 @@
   ],
   "scripts": {
     "db:seed": "tsx scripts/seed-database.ts",
+    "db:migrate:driver-license-2026": "tsx scripts/migrate-driver-license-classes-2026.ts",
+    "seed:vn-admin": "tsx scripts/import-vn-admin-data.ts",
     "dev:admin": "npm --prefix apps/admin-dashboard start",
     "dev:customer": "npm --prefix apps/customer-app start",
     "dev:driver-app": "npm --prefix apps/driver-app start",

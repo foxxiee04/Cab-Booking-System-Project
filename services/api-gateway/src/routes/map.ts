@@ -3,6 +3,7 @@ import axios from 'axios';
 import Redis from 'ioredis';
 import { config } from '../config';
 import { logger } from '../utils/logger';
+import { formatAddressFromOSM } from '../location/address-normalizer';
 
 const router = Router();
 
@@ -83,72 +84,10 @@ function formatVietnameseAddress(
   fallback: string,
   poiName?: string,
 ): string {
-  if (!addressObj) return fallback;
-
-  // Fine-grained road part
-  const road = addressObj.road || addressObj.pedestrian || addressObj.footway || '';
-  const houseNumber = addressObj.house_number || '';
-  const roadPart = road ? (houseNumber ? `${houseNumber} ${road}` : road) : '';
-
-  // Ward-level: suburb → quarter → neighbourhood
-  // Guard: Nominatim sometimes puts "Thành phố Thủ Đức" in suburb for Thu Duc locations.
-  // Filter those out — they are absorbed into "TP. HCM" at the city level.
-  const rawWard =
-    addressObj.suburb ||
-    addressObj.quarter ||
-    addressObj.neighbourhood ||
-    addressObj.village ||
-    '';
-  const ward = normalizeText(rawWard).includes('thu duc') ? '' : rawWard;
-
-  // Determine city / province
-  const cityField = addressObj.city || addressObj.town || addressObj.municipality || '';
-  const stateField = addressObj.state || addressObj.province || '';
-  // Nominatim can return HCMC at different admin levels depending on location.
-  // Sub-cities like "Thành phố Thủ Đức" live under county "Thành phố Hồ Chí Minh".
-  const countyField = addressObj.county || addressObj.county_code || '';
-  const stateDistrictField = addressObj.state_district || '';
-  const isHcmCity    = normalizeText(cityField).includes('ho chi minh');
-  const isHcmState   = normalizeText(stateField).includes('ho chi minh');
-  const isHcmCounty  = normalizeText(countyField).includes('ho chi minh');
-  const isHcmStateDist = normalizeText(stateDistrictField).includes('ho chi minh');
-  // "Thành phố Thủ Đức" is a sub-city of HCMC — treat it as HCMC context
-  // Check all relevant fields: city, town, municipality AND state_district
-  const isThuDucSubCity = normalizeText(cityField).includes('thu duc');
-  const isThuDucStateDist = normalizeText(stateDistrictField).includes('thu duc');
-
-  let city = '';
-  let district = '';
-
-  if (isHcmCity || isHcmState || isHcmCounty || isHcmStateDist || isThuDucSubCity || isThuDucStateDist) {
-    // Always collapse everything to "TP. HCM" — skip sub-city (Thủ Đức) and district
-    city = 'TP. HCM';
-  } else {
-    // Outside HCMC: include district level
-    let rawDistrict = addressObj.city_district || addressObj.district || addressObj.county || '';
-    // Guard: filter out misplaced "Thành phố Thủ Đức" in district field — it belongs to HCMC
-    if (rawDistrict && normalizeText(rawDistrict).includes('thu duc')) {
-      rawDistrict = '';
-    }
-    if (rawDistrict) {
-      district = rawDistrict
-        .replace(/^Thành phố\s+/i, 'TP. ')  // "Thành phố ..." → "TP. ..."
-        .replace(/^Quận\s+/i, 'Q.')          // "Quận 1" → "Q.1"
-        .replace(/^Huyện\s+/i, 'H.')         // "Huyện Bình Chánh" → "H.Bình Chánh"
-        .trim();
-    }
-    if (cityField) {
-      city = cityField.replace(/^Thành phố\s+/i, 'TP. ').replace(/^Tỉnh\s+/i, '').trim();
-    } else if (stateField) {
-      city = stateField.replace(/^Thành phố\s+/i, 'TP. ').replace(/^Tỉnh\s+/i, '').trim();
-    }
+  if (!addressObj) {
+    return fallback;
   }
-
-  // Prefer POI name as the leading part; fall back to road
-  const firstPart = poiName && poiName !== road ? poiName : roadPart;
-
-  const parts = [firstPart, ward, district, city].filter(Boolean);
-  return parts.length > 0 ? parts.join(', ') : fallback;
+  return formatAddressFromOSM(addressObj, fallback, poiName);
 }
 
 /**

@@ -16,6 +16,19 @@ export interface POIQueryParams {
   types?: string[];
 }
 
+export interface ResolvedLocation {
+  lat: number;
+  lng: number;
+  street: string;
+  ward: string;
+  province: string;
+  ward_id: number | null;
+  province_id: number | null;
+  display_address: string;
+  osm_place_id: string;
+  source: 'OSM';
+}
+
 export const mapApi = {
   /**
    * Fetch POIs from backend (proxied Overpass API with Redis cache)
@@ -50,5 +63,17 @@ export const mapApi = {
     return axiosInstance.get('/map/reverse', {
       params: { lat, lng },
     });
+  },
+
+  /**
+   * Resolve lat/lng to Vietnam-2026 normalized administrative address.
+   */
+  resolveLocation: (lat: number, lng: number, snapToRoad = true) => {
+    return axiosInstance.get<{ success: boolean; data: ResolvedLocation; meta?: { latency_ms: number } }>(
+      '/location/resolve-location',
+      {
+        params: { lat, lng, snapToRoad },
+      }
+    );
   },
 };

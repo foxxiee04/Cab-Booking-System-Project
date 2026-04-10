@@ -9,6 +9,49 @@ interface NearbyDriversApiResponse {
 const DRIVER_COMMISSION_RATE = 0.2;
 const EARNINGS_DAYS = 7;
 
+const normalizeDistance = (distance: unknown): number | undefined => {
+  if (typeof distance !== 'number' || Number.isNaN(distance) || distance <= 0) {
+    return undefined;
+  }
+
+  return distance > 100 ? distance : distance * 1000;
+};
+
+const normalizeDuration = (duration: unknown, estimatedDuration: unknown): number | undefined => {
+  const raw = typeof duration === 'number' && duration > 0
+    ? duration
+    : typeof estimatedDuration === 'number' && estimatedDuration > 0
+      ? estimatedDuration
+      : undefined;
+
+  if (raw == null) {
+    return undefined;
+  }
+
+  // Some endpoints still return minutes while others return seconds.
+  return raw <= 180 ? raw * 60 : raw;
+};
+
+const normalizeLocation = (rawLocation: any, fallbackLat: any, fallbackLng: any, fallbackAddress?: string) => {
+  const lat = rawLocation?.lat ?? rawLocation?.latitude ?? fallbackLat;
+  const lng = rawLocation?.lng ?? rawLocation?.longitude ?? fallbackLng;
+
+  return {
+    lat: typeof lat === 'number' ? lat : 0,
+    lng: typeof lng === 'number' ? lng : 0,
+    address: rawLocation?.address || fallbackAddress || '',
+  };
+};
+
+const normalizeRideHistoryItem = (ride: any) => ({
+  ...ride,
+  pickupLocation: normalizeLocation(ride.pickupLocation || ride.pickup, ride.pickupLat, ride.pickupLng, ride.pickupAddress),
+  dropoffLocation: normalizeLocation(ride.dropoffLocation || ride.dropoff, ride.dropoffLat, ride.dropoffLng, ride.dropoffAddress),
+  distance: normalizeDistance(ride.distance),
+  duration: normalizeDuration(ride.duration, ride.estimatedDuration),
+  estimatedDuration: normalizeDuration(ride.estimatedDuration, ride.duration),
+});
+
 const normalizeDriver = (driver: any): Driver => {
   const reviewCount = driver.reviewCount ?? driver.ratingCount ?? 0;
 
@@ -20,7 +63,9 @@ const normalizeDriver = (driver: any): Driver => {
     vehicleModel: driver.vehicleModel || '',
     vehicleColor: driver.vehicleColor || '',
     vehicleYear: driver.vehicleYear || undefined,
+    vehicleImageUrl: driver.vehicleImageUrl || undefined,
     licensePlate: driver.licensePlate || driver.vehiclePlate || '',
+    licenseClass: driver.licenseClass || undefined,
     licenseNumber: driver.licenseNumber || '',
     licenseExpiryDate: driver.licenseExpiryDate || undefined,
     status: driver.status,
@@ -54,8 +99,10 @@ export const driverApi = {
         color: data.vehicleColor,
         plate: data.licensePlate,
         year: data.vehicleYear || new Date().getFullYear(),
+        imageUrl: data.vehicleImageUrl,
       },
       license: {
+        class: data.licenseClass,
         number: data.licenseNumber,
         expiryDate: data.licenseExpiryDate,
       },
@@ -84,7 +131,9 @@ export const driverApi = {
       vehicleModel: data.vehicleModel,
       vehicleColor: data.vehicleColor,
       vehicleYear: data.vehicleYear,
+      vehicleImageUrl: data.vehicleImageUrl,
       licensePlate: data.licensePlate,
+      licenseClass: data.licenseClass,
       licenseNumber: data.licenseNumber,
       licenseExpiryDate: data.licenseExpiryDate,
     };
@@ -279,7 +328,7 @@ export const driverApi = {
     return {
       ...response.data,
       data: {
-        rides: ridesData.rides || [],
+        rides: (ridesData.rides || []).map(normalizeRideHistoryItem),
         total: ridesData.total || 0,
       }
     };

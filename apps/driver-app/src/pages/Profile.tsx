@@ -25,12 +25,67 @@ import {
   StarRounded,
   BadgeRounded,
   EditRounded,
+  AddPhotoAlternate,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { driverApi } from '../api/driver.api';
 import { setProfile } from '../store/driver.slice';
 import { getVehicleTypeLabel } from '../utils/format.utils';
+import type { LicenseClass, VehicleType } from '../types';
 import { useTranslation } from 'react-i18next';
+
+const LICENSE_CLASS_OPTIONS = ['A1', 'A', 'B', 'C1', 'C', 'D1', 'D2', 'D', 'BE', 'C1E', 'CE', 'D1E', 'D2E', 'DE'] as const;
+const LICENSE_CLASS_OPTIONS_BY_VEHICLE: Record<VehicleType, LicenseClass[]> = {
+  MOTORBIKE: ['A1', 'A'],
+  SCOOTER: ['A1', 'A'],
+  CAR_4: ['B', 'C1', 'C', 'D1', 'D2', 'D', 'BE', 'C1E', 'CE', 'D1E', 'D2E', 'DE'],
+  CAR_7: ['B', 'C1', 'C', 'D1', 'D2', 'D', 'BE', 'C1E', 'CE', 'D1E', 'D2E', 'DE'],
+};
+
+const API_ROOT = (process.env.REACT_APP_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+
+const resolveVehicleImageUrl = (rawUrl?: string) => {
+  if (!rawUrl) {
+    return '';
+  }
+
+  if (/^data:image\//i.test(rawUrl) || /^https?:\/\//i.test(rawUrl)) {
+    return rawUrl;
+  }
+
+  if (rawUrl.startsWith('/')) {
+    return `${API_ROOT}${rawUrl}`;
+  }
+
+  return `${API_ROOT}/${rawUrl}`;
+};
+
+const fileToDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        reject(new Error('Invalid image payload'));
+        return;
+      }
+      resolve(reader.result);
+    };
+    reader.onerror = () => reject(new Error('Cannot read image file'));
+    reader.readAsDataURL(file);
+  });
+
+type ProfileFormData = {
+  vehicleType: VehicleType;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehicleColor: string;
+  vehicleYear: number;
+  vehicleImageUrl: string;
+  licensePlate: string;
+  licenseClass: LicenseClass;
+  licenseNumber: string;
+  licenseExpiryDate: string;
+};
 
 const Profile: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -41,16 +96,19 @@ const Profile: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ProfileFormData>({
     vehicleType: 'CAR_4',
     vehicleMake: '',
     vehicleModel: '',
     vehicleColor: '',
     vehicleYear: new Date().getFullYear(),
+    vehicleImageUrl: '',
     licensePlate: '',
+    licenseClass: 'B',
     licenseNumber: '',
     licenseExpiryDate: '',
   });
+  const [imageUploading, setImageUploading] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     setLoading(true);
@@ -80,13 +138,16 @@ const Profile: React.FC = () => {
       vehicleModel: profile.vehicleModel || '',
       vehicleColor: profile.vehicleColor || '',
       vehicleYear: profile.vehicleYear || new Date().getFullYear(),
+      vehicleImageUrl: profile.vehicleImageUrl || '',
       licensePlate: profile.licensePlate || '',
+      licenseClass: profile.licenseClass || 'B',
       licenseNumber: profile.licenseNumber || '',
       licenseExpiryDate: profile.licenseExpiryDate ? profile.licenseExpiryDate.slice(0, 10) : '',
     });
   }, [profile]);
 
   const hasReviews = (profile?.reviewCount ?? 0) > 0;
+  const availableLicenseClasses = LICENSE_CLASS_OPTIONS_BY_VEHICLE[formData.vehicleType] || [...LICENSE_CLASS_OPTIONS];
   const approvalStatus = profile?.status || 'PENDING';
   const approvalTone = approvalStatus === 'APPROVED'
     ? { color: 'success' as const, label: t('profile.approved', 'Da duoc duyet') }
@@ -96,8 +157,19 @@ const Profile: React.FC = () => {
         ? { color: 'default' as const, label: t('profile.suspended', 'Tam khoa') }
         : { color: 'warning' as const, label: t('profile.pendingApproval', 'Cho duyet ho so') };
 
-  const handleChange = (field: keyof typeof formData) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = field === 'vehicleYear' ? Number(event.target.value) : event.target.value;
+  const handleChange = (field: keyof ProfileFormData) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    let value: ProfileFormData[keyof ProfileFormData];
+
+    if (field === 'vehicleYear') {
+      value = Number(event.target.value);
+    } else if (field === 'vehicleType') {
+      value = event.target.value as VehicleType;
+    } else if (field === 'licenseClass') {
+      value = event.target.value as LicenseClass;
+    } else {
+      value = event.target.value;
+    }
+
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -105,7 +177,7 @@ const Profile: React.FC = () => {
     setError('');
     setSuccess('');
 
-    if (!formData.vehicleMake.trim() || !formData.vehicleModel.trim() || !formData.vehicleColor.trim() || !formData.licensePlate.trim() || !formData.licenseNumber.trim() || !formData.licenseExpiryDate) {
+    if (!formData.vehicleMake.trim() || !formData.vehicleModel.trim() || !formData.vehicleColor.trim() || !formData.licensePlate.trim() || !formData.licenseNumber.trim() || !formData.licenseExpiryDate || !formData.licenseClass) {
       setError(t('profile.fillRequired', 'Vui lòng nhập đầy đủ các trường hồ sơ xe.'));
       return;
     }
@@ -123,7 +195,9 @@ const Profile: React.FC = () => {
         vehicleModel: formData.vehicleModel.trim(),
         vehicleColor: formData.vehicleColor.trim(),
         vehicleYear: formData.vehicleYear,
+        vehicleImageUrl: formData.vehicleImageUrl,
         licensePlate: formData.licensePlate.trim(),
+        licenseClass: formData.licenseClass,
         licenseNumber: formData.licenseNumber.trim(),
         licenseExpiryDate: formData.licenseExpiryDate,
       });
@@ -137,6 +211,44 @@ const Profile: React.FC = () => {
       setSaving(false);
     }
   };
+
+  const handleVehicleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(file.type)) {
+      setError('Chỉ hỗ trợ ảnh PNG/JPG/WEBP');
+      return;
+    }
+
+    if (file.size > 3 * 1024 * 1024) {
+      setError('Ảnh tối đa 3MB');
+      return;
+    }
+
+    setImageUploading(true);
+    setError('');
+    try {
+      const encoded = await fileToDataUrl(file);
+      setFormData((prev) => ({ ...prev, vehicleImageUrl: encoded }));
+    } catch (err: any) {
+      setError(err?.message || 'Không thể xử lý ảnh xe');
+    } finally {
+      setImageUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  useEffect(() => {
+    if (!availableLicenseClasses.includes(formData.licenseClass)) {
+      setFormData((prev) => ({
+        ...prev,
+        licenseClass: availableLicenseClasses[0],
+      }));
+    }
+  }, [availableLicenseClasses, formData.licenseClass]);
 
   return (
     <Container sx={{ py: 3, pb: { xs: 16, sm: 12 } }}>
@@ -199,6 +311,7 @@ const Profile: React.FC = () => {
             >
               <Box sx={{ position: 'relative' }}>
                 <Avatar
+                  src={resolveVehicleImageUrl(formData.vehicleImageUrl || profile.vehicleImageUrl)}
                   sx={{
                     width: 84,
                     height: 84,
@@ -212,7 +325,7 @@ const Profile: React.FC = () => {
                 >
                   {(profile.vehicleMake?.[0] || 'T').toUpperCase()}
                 </Avatar>
-                <Tooltip title="Cập nhật ảnh (sắp có)" placement="top">
+                <Tooltip title="Cập nhật ảnh xe" placement="top">
                   <IconButton
                     size="small"
                     sx={{
@@ -225,9 +338,10 @@ const Profile: React.FC = () => {
                       p: 0.5,
                       '&:hover': { bgcolor: 'primary.50' },
                     }}
-                    disabled
+                    component="label"
                   >
                     <CameraAltRounded sx={{ fontSize: 14, color: 'primary.main' }} />
+                    <input hidden accept="image/png,image/jpeg,image/webp" type="file" onChange={handleVehicleImageUpload} />
                   </IconButton>
                 </Tooltip>
               </Box>
@@ -281,6 +395,7 @@ const Profile: React.FC = () => {
                   { label: 'Dòng xe', value: profile.vehicleModel },
                   { label: 'Màu xe', value: profile.vehicleColor },
                   { label: 'Biển số', value: profile.licensePlate },
+                  { label: 'Hạng GPLX', value: profile.licenseClass },
                   { label: 'Năm SX', value: profile.vehicleYear?.toString() },
                   { label: 'Số GPLX', value: profile.licenseNumber },
                 ].map(({ label, value }) => (
@@ -327,10 +442,36 @@ const Profile: React.FC = () => {
                         <TextField fullWidth label={t('profile.plate')} value={formData.licensePlate} onChange={handleChange('licensePlate')} />
                       </Grid>
                       <Grid item xs={12} sm={6}>
+                        <TextField select fullWidth label="Hạng GPLX" value={formData.licenseClass} onChange={handleChange('licenseClass')}>
+                          {availableLicenseClasses.map((licenseClass) => (
+                            <MenuItem key={licenseClass} value={licenseClass}>{licenseClass}</MenuItem>
+                          ))}
+                        </TextField>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
                         <TextField fullWidth label={t('profile.licenseNumber', 'Số GPLX')} value={formData.licenseNumber} onChange={handleChange('licenseNumber')} inputProps={{ maxLength: 12, inputMode: 'numeric' }} />
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <TextField fullWidth label={t('profile.licenseExpiry', 'Ngày hết hạn GPLX')} type="date" value={formData.licenseExpiryDate} onChange={handleChange('licenseExpiryDate')} InputLabelProps={{ shrink: true }} />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Button
+                          component="label"
+                          variant="outlined"
+                          startIcon={<AddPhotoAlternate />}
+                          disabled={imageUploading}
+                        >
+                          {imageUploading ? 'Đang xử lý ảnh...' : 'Đổi ảnh xe'}
+                          <input hidden accept="image/png,image/jpeg,image/webp" type="file" onChange={handleVehicleImageUpload} />
+                        </Button>
+                        {formData.vehicleImageUrl && (
+                          <Box
+                            component="img"
+                            src={resolveVehicleImageUrl(formData.vehicleImageUrl)}
+                            alt="vehicle-preview"
+                            sx={{ mt: 1.25, width: '100%', maxWidth: 320, borderRadius: 2, border: '1px solid #e5e7eb' }}
+                          />
+                        )}
                       </Grid>
                     </Grid>
                     <Stack direction="row" spacing={1.25} sx={{ mt: 2.5 }}>

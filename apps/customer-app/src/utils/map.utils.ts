@@ -7,6 +7,11 @@ const geocodeCache = new Map<string, { results: Location[]; timestamp: number }>
 const reverseGeocodeCache = new Map<string, { address: string; timestamp: number }>();
 const routeCache = new Map<string, { route: RouteData; timestamp: number }>();
 
+const LAST_LOCATION_STORAGE_KEY = 'customer:lastKnownLocation';
+const GEO_HIGH_ACCURACY_TIMEOUT_MS = Number(process.env.REACT_APP_GEO_HIGH_ACCURACY_TIMEOUT_MS || 3500);
+const GEO_LOW_ACCURACY_TIMEOUT_MS = Number(process.env.REACT_APP_GEO_LOW_ACCURACY_TIMEOUT_MS || 5000);
+let hasLoggedGeoTimeout = false;
+
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
 const MAX_CACHE_SIZE = 100; // Limit cache size to prevent memory issues
 
@@ -81,7 +86,7 @@ export const geocodeAddress = async (
  * Attempts to extract proper ward/district/city names
  * NOW WITH CACHING to reduce external API calls
  */
-export const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+export const reverseGeocode = async (lat: number, lng: number, snapToRoad = false): Promise<string> => {
   const cacheKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
 
   // Check cache first
@@ -91,11 +96,11 @@ export const reverseGeocode = async (lat: number, lng: number): Promise<string> 
   }
 
   try {
-    const response = await axiosInstance.get('/map/reverse', {
-      params: { lat, lng },
+    const response = await axiosInstance.get('/location/resolve-location', {
+      params: { lat, lng, snapToRoad },
     });
 
-    const address = response.data?.data?.address || response.data?.data?.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    const address = response.data?.data?.display_address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 
     // Store in cache
     reverseGeocodeCache.set(cacheKey, { address, timestamp: Date.now() });
@@ -103,7 +108,18 @@ export const reverseGeocode = async (lat: number, lng: number): Promise<string> 
 
     return address;
   } catch (error) {
-    console.error('Reverse geocoding error:', error);
+    console.warn('Resolve-location failed, fallback to legacy reverse endpoint');
+    try {
+      const fallbackResponse = await axiosInstance.get('/map/reverse', {
+        params: { lat, lng },
+      });
+      const fallbackAddress = fallbackResponse.data?.data?.address || fallbackResponse.data?.data?.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      reverseGeocodeCache.set(cacheKey, { address: fallbackAddress, timestamp: Date.now() });
+      cleanCache(reverseGeocodeCache);
+      return fallbackAddress;
+    } catch (fallbackError) {
+      console.error('Reverse geocoding fallback error:', fallbackError);
+    }
     // Return cached result if available, even if expired
     return cached?.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   }
@@ -264,30 +280,77 @@ export const getCurrentLocation = (): Promise<Location> => {
         );
       }
 
+      try {
+        window.localStorage.setItem(
+          LAST_LOCATION_STORAGE_KEY,
+          JSON.stringify({ lat, lng, timestamp: Date.now() })
+        );
+      } catch {
+        // Ignore localStorage write failures.
+      }
+
       resolve({
         lat,
         lng,
       });
     };
 
+    const resolveFromLastKnownLocation = () => {
+      try {
+        const raw = window.localStorage.getItem(LAST_LOCATION_STORAGE_KEY);
+        if (!raw) {
+          return false;
+        }
+
+        const parsed = JSON.parse(raw) as { lat?: number; lng?: number; timestamp?: number };
+        if (typeof parsed?.lat !== 'number' || typeof parsed?.lng !== 'number') {
+          return false;
+        }
+
+        // Accept cached location within 15 minutes.
+        if (parsed.timestamp && Date.now() - parsed.timestamp > 15 * 60 * 1000) {
+          return false;
+        }
+
+        resolve({ lat: parsed.lat, lng: parsed.lng });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
     const handleError = (error: GeolocationPositionError, isHighAccuracy: boolean) => {
-      console.error(
-        `Geolocation error (highAccuracy=${isHighAccuracy}, code=${error.code}):`,
-        error.message
-      );
+      // Keep console output concise in development and avoid duplicate timeout spam.
+      if (error.code === error.TIMEOUT) {
+        if (!hasLoggedGeoTimeout) {
+          hasLoggedGeoTimeout = true;
+          console.warn('Geolocation timeout. Falling back to cached/manual location.');
+        }
+      } else {
+        console.warn(
+          `Geolocation error (highAccuracy=${isHighAccuracy}, code=${error.code}): ${error.message}`
+        );
+      }
+
+      if (resolveFromLastKnownLocation()) {
+        return;
+      }
 
       // If high accuracy failed, try lower accuracy
       if (isHighAccuracy && (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE)) {
-        console.log('High accuracy geolocation timed out, trying lower accuracy...');
+        console.log('High accuracy geolocation unavailable, trying lower accuracy...');
         navigator.geolocation.getCurrentPosition(
           resolvePosition,
           (fallbackError) => {
-            console.error('Low accuracy geolocation also failed:', fallbackError.message);
+            if (resolveFromLastKnownLocation()) {
+              return;
+            }
+            console.warn('Low accuracy geolocation also failed:', fallbackError.message);
             reject(fallbackError);
           },
           {
             enableHighAccuracy: false,
-            timeout: 15000,
+            timeout: GEO_LOW_ACCURACY_TIMEOUT_MS,
             maximumAge: 300000, // Allow location up to 5 minutes old
           }
         );
@@ -297,16 +360,37 @@ export const getCurrentLocation = (): Promise<Location> => {
       reject(error);
     };
 
-    // First attempt: High accuracy with reasonable timeout
-    navigator.geolocation.getCurrentPosition(
-      resolvePosition,
-      (error) => handleError(error, true),
-      {
-        enableHighAccuracy: true,
-        timeout: 8000, // 8 seconds timeout for high accuracy
-        maximumAge: 0, // Force fresh location
-      }
-    );
+    const runGeolocation = () => {
+      navigator.geolocation.getCurrentPosition(
+        resolvePosition,
+        (error) => handleError(error, true),
+        {
+          enableHighAccuracy: true,
+          timeout: GEO_HIGH_ACCURACY_TIMEOUT_MS,
+          maximumAge: 120000,
+        }
+      );
+    };
+
+    // Permission pre-check avoids long timeout loop when access is denied.
+    if (navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: 'geolocation' as PermissionName })
+        .then((result) => {
+          if (result.state === 'denied') {
+            if (resolveFromLastKnownLocation()) {
+              return;
+            }
+            reject({ code: 1, message: 'User denied Geolocation' } as GeolocationPositionError);
+            return;
+          }
+          runGeolocation();
+        })
+        .catch(() => runGeolocation());
+      return;
+    }
+
+    runGeolocation();
   });
 };
 

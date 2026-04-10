@@ -29,6 +29,23 @@ enum VehicleType {
   CAR_7
 }
 
+enum LicenseClass {
+  A1
+  A
+  B
+  C1
+  C
+  D1
+  D2
+  D
+  BE
+  C1E
+  CE
+  D1E
+  D2E
+  DE
+}
+
 model Driver {
   id                 String             @id @default(uuid())
   userId             String             @unique @map("user_id") @db.VarChar(255)
@@ -42,8 +59,10 @@ model Driver {
   vehiclePlate       String             @map("vehicle_plate") @db.VarChar(20)
   vehicleColor       String             @map("vehicle_color") @db.VarChar(50)
   vehicleYear        Int                @map("vehicle_year")
+  vehicleImageUrl    String?            @map("vehicle_image_url") @db.Text
   
   // License information
+  licenseClass       LicenseClass       @default(B) @map("license_class")
   licenseNumber      String             @map("license_number") @db.VarChar(50)
   licenseExpiryDate  DateTime           @map("license_expiry_date")
   licenseVerified    Boolean            @default(false) @map("license_verified")

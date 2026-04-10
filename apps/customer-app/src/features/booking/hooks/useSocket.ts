@@ -64,10 +64,13 @@ export function useSocket({
 
     const socket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
+      upgrade: true,
+      timeout: 12000,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 10,
+      autoConnect: true,
     });
 
     socketRef.current = socket;

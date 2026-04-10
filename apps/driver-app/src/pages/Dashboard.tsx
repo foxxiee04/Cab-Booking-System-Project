@@ -34,11 +34,11 @@ import { clearPendingRide, setCurrentRide, clearCurrentRide } from '../store/rid
 import { driverApi } from '../api/driver.api';
 import { rideApi } from '../api/ride.api';
 import { driverSocketService } from '../socket/driver.socket';
-import { watchPosition, clearWatch, formatDistance, formatDuration } from '../utils/map.utils';
+import { watchPosition, clearWatch, calculateDistance, formatDistance, formatDuration } from '../utils/map.utils';
 import { formatCurrency, getVehicleTypeLabel } from '../utils/format.utils';
 import DriverTripMap from '../features/trip/components/DriverTripMap';
 import RideRequestModal from '../components/ride-request/RideRequestModal';
-import { NearbyDriver, Ride } from '../types';
+import { Ride } from '../types';
 
 const getOptimisticCompletedRidesKey = (userId?: string) => `driver:completedRidesCount:${userId || 'anonymous'}`;
 
@@ -88,7 +88,48 @@ const pickBestRide = (rides: Ride[]): Ride | null => {
   return scored[0] || null;
 };
 
+const normalizeDistanceMeters = (distance?: number): number | undefined => {
+  if (!distance || Number.isNaN(distance) || distance <= 0) {
+    return undefined;
+  }
+
+  return distance > 100 ? distance : distance * 1000;
+};
+
+const normalizeDurationSeconds = (duration?: number, estimatedDuration?: number): number | undefined => {
+  const raw = duration && duration > 0 ? duration : estimatedDuration && estimatedDuration > 0 ? estimatedDuration : undefined;
+  if (!raw) {
+    return undefined;
+  }
+
+  return raw <= 180 ? raw * 60 : raw;
+};
+
+const getRideMetrics = (ride: Ride) => {
+  const distanceMeters = normalizeDistanceMeters(ride.distance);
+  const durationSeconds = normalizeDurationSeconds(ride.duration, ride.estimatedDuration);
+
+  if (distanceMeters && durationSeconds) {
+    return { distanceMeters, durationSeconds };
+  }
+
+  if (ride.pickupLocation?.lat && ride.pickupLocation?.lng && ride.dropoffLocation?.lat && ride.dropoffLocation?.lng) {
+    const directKm = calculateDistance(ride.pickupLocation, ride.dropoffLocation);
+    const routedKm = Math.max(directKm * 1.22, 0.2);
+    const estimatedDistanceMeters = Math.round(routedKm * 1000);
+    const estimatedDurationSeconds = Math.max(180, Math.round((routedKm / 24) * 3600));
+
+    return {
+      distanceMeters: distanceMeters || estimatedDistanceMeters,
+      durationSeconds: durationSeconds || estimatedDurationSeconds,
+    };
+  }
+
+  return { distanceMeters, durationSeconds };
+};
+
 const Dashboard: React.FC = () => {
+  const loggedGeoErrorCodesRef = useRef<Set<number>>(new Set());
   const ignoredRideIdsRef = useRef<Map<string, number>>(new Map());
   const seenRidePopupIdsRef = useRef<Set<string>>(new Set());
   const navigate = useNavigate();
@@ -110,7 +151,7 @@ const Dashboard: React.FC = () => {
   const [availableRides, setAvailableRides] = useState<Ride[]>([]);
   const [newRidePopup, setNewRidePopup] = useState<Ride | null>(null);
   const [isListLoading, setIsListLoading] = useState(false);
-  const [nearbyDrivers, setNearbyDrivers] = useState<NearbyDriver[]>([]);
+  const [showGpsWarning, setShowGpsWarning] = useState(true);
   const hasInitialPollRef = useRef(false);
 
   const notifyNewRide = (ride: Ride) => {
@@ -136,6 +177,18 @@ const Dashboard: React.FC = () => {
   };
 
   const browsingLocation = currentLocation || profile?.currentLocation || null;
+
+  useEffect(() => {
+    if (browsingLocation) {
+      setShowGpsWarning(false);
+      return;
+    }
+
+    if (isOnline) {
+      setShowGpsWarning(true);
+    }
+  }, [browsingLocation, isOnline]);
+
   const ridesToDisplay = useMemo(() => {
     const merged = new Map<string, Ride>();
 
@@ -237,7 +290,10 @@ const Dashboard: React.FC = () => {
           driverApi.updateLocation(location).catch(console.error);
         },
         (error) => {
-          console.error('Location error:', error);
+          if (error?.code !== 1 && !loggedGeoErrorCodesRef.current.has(error?.code)) {
+            loggedGeoErrorCodesRef.current.add(error.code);
+            console.error('Location error:', error);
+          }
           setError(t('dashboard.gpsError'));
         }
       );
@@ -271,42 +327,6 @@ const Dashboard: React.FC = () => {
 
     checkActiveRide();
   }, [dispatch, navigate]);
-
-  // Poll nearby drivers so the map shows other online drivers around current location
-  useEffect(() => {
-    if (!isOnline || !browsingLocation?.lat || !browsingLocation?.lng) {
-      setNearbyDrivers([]);
-      return;
-    }
-
-    let cancelled = false;
-    const fetchNearby = async () => {
-      try {
-        const res = await driverApi.getNearbyDrivers({
-          lat: browsingLocation.lat,
-          lng: browsingLocation.lng,
-          radius: 5,
-        });
-        if (!cancelled) {
-          // Drivers only see others with the same vehicle type (bikes see bikes, cars see cars)
-          setNearbyDrivers(
-            res.data.drivers.filter(
-              (d) => d.id !== profile?.id && (!d.vehicleType || d.vehicleType === profile?.vehicleType)
-            )
-          );
-        }
-      } catch {
-        // non-critical — silently ignore
-      }
-    };
-
-    void fetchNearby();
-    const intervalId = window.setInterval(() => void fetchNearby(), 15_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [isOnline, browsingLocation?.lat, browsingLocation?.lng, profile?.id]);
 
   // Fallback polling for available rides when realtime delivery is delayed.
   useEffect(() => {
@@ -472,7 +492,7 @@ const Dashboard: React.FC = () => {
       </Paper>
 
       <Box sx={{ position: 'relative', height: { xs: 300, sm: 360, md: 420 }, borderRadius: 6, overflow: 'hidden', background: 'linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)', boxShadow: '0 18px 48px rgba(15,23,42,0.12)', border: '1px solid rgba(59,130,246,0.12)' }}>
-        <DriverTripMap currentLocation={currentLocation || undefined} nearbyDrivers={nearbyDrivers} mode="request" height="100%" colorMode="light" />
+        <DriverTripMap currentLocation={currentLocation || undefined} mode="request" height="100%" colorMode="light" />
       </Box>
 
       <Paper
@@ -513,7 +533,6 @@ const Dashboard: React.FC = () => {
 
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
           {browsingLocation && <Chip icon={<MyLocationRounded />} label={`${browsingLocation.lat.toFixed(5)}, ${browsingLocation.lng.toFixed(5)}`} size="small" variant="outlined" />}
-          <Chip icon={<LocationOnRounded />} label={`Tài xế xung quanh: ${nearbyDrivers.length}`} size="small" variant="outlined" />
           <Chip icon={<AttachMoneyRounded />} label={t('dashboard.ridesCompleted', { count: completedRidesCount })} size="small" variant="outlined" />
         </Stack>
 
@@ -553,8 +572,8 @@ const Dashboard: React.FC = () => {
             </Alert>
           )}
 
-          {isOnline && !browsingLocation && (
-            <Alert severity="warning" sx={{ borderRadius: 2, mb: 1.5 }}>
+          {isOnline && !browsingLocation && showGpsWarning && (
+            <Alert severity="warning" sx={{ borderRadius: 2, mb: 1.5 }} onClose={() => setShowGpsWarning(false)}>
               Chưa lấy được GPS hiện tại. Hệ thống sẽ dùng vị trí gần nhất đã lưu khi có dữ liệu để lọc cuốc xe quanh bạn.
             </Alert>
           )}
@@ -568,8 +587,7 @@ const Dashboard: React.FC = () => {
           {isOnline && ridesToDisplay.length > 0 && (
             <Stack spacing={1.2}>
               {ridesToDisplay.map((ride) => {
-                const displayDuration = ride.duration || ride.estimatedDuration || 0;
-                const displayDistance = ride.distance || 0;
+                const metrics = getRideMetrics(ride);
                 const isFreshOffer = pendingRide?.id === ride.id;
                 const rawVehicleType = (ride as any).requestedVehicleType || ride.vehicleType;
                 const rideVehicleType = rawVehicleType ? getVehicleTypeLabel(rawVehicleType as any) : 'N/A';
@@ -615,8 +633,8 @@ const Dashboard: React.FC = () => {
                         ) : (
                           <Chip size="small" icon={<AttachMoneyRounded />} label="Giá đang tải..." variant="outlined" />
                         )}
-                        <Chip size="small" icon={<RouteRounded />} label={`${displayDistance > 0 ? formatDistance(displayDistance) : 'N/A'}`} />
-                        <Chip size="small" icon={<AccessTimeRounded />} label={`${displayDuration > 0 ? formatDuration(displayDuration) : 'N/A'}`} />
+                        <Chip size="small" icon={<RouteRounded />} label={`${metrics.distanceMeters ? formatDistance(metrics.distanceMeters) : 'Đang cập nhật'}`} />
+                        <Chip size="small" icon={<AccessTimeRounded />} label={`${metrics.durationSeconds ? formatDuration(metrics.durationSeconds) : 'Đang cập nhật'}`} />
                         <Chip size="small" label={rideVehicleType} />
                       </Stack>
 

@@ -382,7 +382,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
               {vehicleOptions.map((vehicle) => {
                 const estimate = priceEstimates[vehicle.type];
                 return (
-                  <Grid item xs={12} key={vehicle.type}>
+                  <Grid item xs={12} sm={6} key={vehicle.type}>
                     <Card
                       variant={selectedVehicle === vehicle.type ? 'elevation' : 'outlined'}
                       sx={{
@@ -392,6 +392,11 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                         borderColor: selectedVehicle === vehicle.type ? 'primary.main' : 'divider',
                         borderRadius: 4,
                         boxShadow: selectedVehicle === vehicle.type ? '0 10px 28px rgba(37,99,235,0.18)' : undefined,
+                        transition: 'border-color 160ms ease, box-shadow 180ms ease, transform 180ms ease',
+                        '&:hover': estimate ? {
+                          borderColor: selectedVehicle === vehicle.type ? 'primary.main' : 'primary.light',
+                          transform: 'translateY(-1px)',
+                        } : undefined,
                       }}
                       onClick={() => {
                         if (estimate) {
@@ -493,8 +498,15 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                 {paymentOptions.map((option) => (
                   <Card
                     key={option.method}
-                    variant="outlined"
-                    sx={{ mb: 2, cursor: 'pointer', borderRadius: 4 }}
+                    variant={selectedPayment === option.method ? 'elevation' : 'outlined'}
+                    sx={{
+                      mb: 2,
+                      cursor: 'pointer',
+                      borderRadius: 4,
+                      border: selectedPayment === option.method ? 2 : 1,
+                      borderColor: selectedPayment === option.method ? 'primary.main' : 'divider',
+                      bgcolor: selectedPayment === option.method ? 'rgba(37,99,235,0.06)' : undefined,
+                    }}
                     onClick={() => setSelectedPayment(option.method as any)}
                   >
                     <CardContent>
@@ -613,21 +625,30 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
         )}
         </Box>
       </DialogContent>
-      <DialogActions sx={{ px: presentation === 'inline' ? 0 : 3, pb: presentation === 'inline' ? 0 : 3, pt: 1.5 }}>
-        <Button onClick={onClose} disabled={creating}>
+      <DialogActions
+        sx={{
+          px: presentation === 'inline' ? 0 : 3,
+          pb: presentation === 'inline' ? 0 : 3,
+          pt: 1.5,
+          gap: 1,
+          flexWrap: 'wrap',
+          justifyContent: isMobile ? 'stretch' : 'flex-end',
+        }}
+      >
+        <Button onClick={onClose} disabled={creating} fullWidth={isMobile}>
           {presentation === 'inline' ? 'Đóng' : 'Hủy'}
         </Button>
         {activeStep > 0 && (
-          <Button onClick={handleBack} disabled={creating} data-testid="ride-booking-back">
+          <Button onClick={handleBack} disabled={creating} data-testid="ride-booking-back" fullWidth={isMobile}>
             Quay lại
           </Button>
         )}
         {activeStep < steps.length - 1 ? (
-          <Button onClick={handleNext} variant="contained" disabled={loading || !selectedEstimate} data-testid="ride-booking-next" sx={{ borderRadius: 3, minWidth: 132 }}>
+          <Button onClick={handleNext} variant="contained" disabled={loading || !selectedEstimate} data-testid="ride-booking-next" fullWidth={isMobile} sx={{ borderRadius: 3, minWidth: 132 }}>
             Tiếp tục
           </Button>
         ) : (
-          <Button onClick={handleConfirmBooking} variant="contained" disabled={creating || loading} data-testid="confirm-booking-button" sx={{ borderRadius: 3, minWidth: 182 }}>
+          <Button onClick={handleConfirmBooking} variant="contained" disabled={creating || loading} data-testid="confirm-booking-button" fullWidth={isMobile} sx={{ borderRadius: 3, minWidth: 182 }}>
             {creating ? <CircularProgress size={24} /> : 'Xác nhận và tìm tài xế'}
           </Button>
         )}

@@ -5,6 +5,7 @@ import { logger } from './utils/logger';
 import { SocketServer } from './socket/socket-server';
 import { EventConsumer } from './events/consumer';
 import { closeMapRedis } from './routes/map';
+import { closeLocationRedis } from './location/location.controller';
 import { createServiceHealthChecker } from './grpc/health';
 
 export async function start() {
@@ -38,6 +39,7 @@ export async function start() {
       await eventConsumer.close();
       await socketServer.close();
       await closeMapRedis();
+      await closeLocationRedis();
       await new Promise<void>((resolve, reject) => {
         httpServer.close((error) => {
           if (error) {

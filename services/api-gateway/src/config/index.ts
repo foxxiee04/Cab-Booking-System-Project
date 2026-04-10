@@ -87,4 +87,9 @@ export const config = {
   customer: {
     nearbyDriverMaxRadiusKm: readBoundedFloatEnv('CUSTOMER_NEARBY_DRIVER_MAX_RADIUS_KM', 3, 0.5, 10),
   },
+
+  location: {
+    databaseUrl: process.env.LOCATION_DATABASE_URL || '',
+    adminCatalogRefreshMs: readBoundedIntEnv('LOCATION_ADMIN_REFRESH_MS', 15 * 60 * 1000, 60 * 1000, 24 * 60 * 60 * 1000),
+  },
 };

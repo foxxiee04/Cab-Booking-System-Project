@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -40,7 +40,7 @@ const MAX_VISIBLE_NEARBY_RADIUS_KM = 3;
 const NEARBY_DRIVER_RADIUS_KM = Math.max(
   0.5,
   Math.min(
-    Number(import.meta.env.VITE_NEARBY_DRIVER_RADIUS_KM || MAX_VISIBLE_NEARBY_RADIUS_KM),
+    Number(process.env.REACT_APP_NEARBY_DRIVER_RADIUS_KM || MAX_VISIBLE_NEARBY_RADIUS_KM),
     MAX_VISIBLE_NEARBY_RADIUS_KM,
   ),
 );
@@ -59,8 +59,14 @@ const HomeMap: React.FC = () => {
   const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
   const [bootstrappingLocation, setBootstrappingLocation] = useState(false);
   const [nearbyDrivers, setNearbyDrivers] = useState<NearbyDriver[]>([]);
+  const locationBootstrappedRef = useRef(false);
 
   useEffect(() => {
+    if (locationBootstrappedRef.current) {
+      return;
+    }
+    locationBootstrappedRef.current = true;
+
     const fetchLocation = async () => {
       setBootstrappingLocation(true);
       try {
@@ -75,7 +81,7 @@ const HomeMap: React.FC = () => {
         if (fetchLocationError?.code === 1) {
           setLocationNotice('Trình duyệt đang chặn vị trí của bạn. Bạn vẫn có thể nhập điểm đón thủ công để tiếp tục đặt xe.');
         } else {
-          console.error('Failed to get location:', fetchLocationError);
+          console.warn('Failed to get location. Falling back to manual pickup mode.');
           setLocationNotice('Không lấy được vị trí hiện tại. Hãy nhập điểm đón thủ công để tiếp tục.');
         }
       } finally {

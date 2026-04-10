@@ -27,6 +27,7 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { clearRide, setCurrentRide, setDriver, updateRideStatus } from '../store/ride.slice';
 import { Payment } from '../types';
 import { formatCurrency, formatDate, getPaymentMethodLabel, getVehicleTypeLabel } from '../utils/format.utils';
+import { calculateDistance } from '../utils/map.utils';
 
 const STATUS_META: Record<string, { label: string; description: string; color: string; allowCancel: boolean }> = {
   PENDING: {
@@ -88,10 +89,11 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
 };
 
 const SEARCHING_DRIVER_STATUSES = new Set(['PENDING', 'CREATED', 'FINDING_DRIVER']);
+const MATCHING_MAX_WAIT_MINUTES = 3;
 
 const formatDistanceKm = (distance: number | null | undefined) => {
   if (!distance || Number.isNaN(distance)) {
-    return '0 km';
+    return 'Đang cập nhật';
   }
 
   return distance >= 1000 ? `${(distance / 1000).toFixed(1)} km` : `${distance.toFixed(1)} km`;
@@ -99,7 +101,7 @@ const formatDistanceKm = (distance: number | null | undefined) => {
 
 const formatDuration = (duration: number | null | undefined) => {
   if (!duration || Number.isNaN(duration)) {
-    return '0 phút';
+    return 'Đang cập nhật';
   }
 
   const minutes = duration > 180 ? Math.round(duration / 60) : Math.round(duration);
@@ -343,6 +345,78 @@ const RideTracking: React.FC = () => {
     return null;
   }, [driver, driverLocation]);
 
+  const pickupDistanceKmToDriver = useMemo(() => {
+    if (!effectiveDriverLocation || !currentRide?.pickup) {
+      return null;
+    }
+
+    return calculateDistance(
+      { lat: effectiveDriverLocation.lat, lng: effectiveDriverLocation.lng },
+      { lat: currentRide.pickup.lat, lng: currentRide.pickup.lng },
+    );
+  }, [currentRide?.pickup, effectiveDriverLocation]);
+
+  const driverSpeedKph = useMemo(() => {
+    const speed = driverLocation?.speedKph;
+    if (!speed || Number.isNaN(speed) || speed <= 0) {
+      return null;
+    }
+
+    return speed;
+  }, [driverLocation?.speedKph]);
+
+  const estimatedPickupEtaMinutes = useMemo(() => {
+    if (status === 'PICKING_UP') {
+      return 0;
+    }
+
+    if (!pickupDistanceKmToDriver || !['ASSIGNED', 'ACCEPTED'].includes(status)) {
+      return null;
+    }
+
+    const speed = driverSpeedKph && driverSpeedKph >= 5 ? driverSpeedKph : 28;
+    return Math.max(1, Math.round((pickupDistanceKmToDriver / speed) * 60));
+  }, [driverSpeedKph, pickupDistanceKmToDriver, status]);
+
+  const trackingEtaText = useMemo(() => {
+    if (isSearchingDriver) {
+      const requestedAt = currentRide?.requestedAt ? new Date(currentRide.requestedAt).getTime() : Date.now();
+      const elapsedMinutes = Math.max(0, Math.floor((Date.now() - requestedAt) / 60000));
+      const remaining = Math.max(1, MATCHING_MAX_WAIT_MINUTES - elapsedMinutes);
+      return `ETA ghép tài xế: khoảng ${remaining}-${Math.max(remaining + 1, 2)} phút`;
+    }
+
+    if (status === 'PICKING_UP') {
+      return 'ETA đón: Tài xế đã tới điểm đón';
+    }
+
+    if (estimatedPickupEtaMinutes == null) {
+      return 'ETA đón: Tài xế đang di chuyển tới bạn';
+    }
+
+    return `ETA đón: khoảng ${estimatedPickupEtaMinutes} phút`;
+  }, [currentRide?.requestedAt, estimatedPickupEtaMinutes, isSearchingDriver, status]);
+
+  const trackingDistanceText = useMemo(() => {
+    if (isSearchingDriver) {
+      return 'Bán kính tìm tài xế: trong 3 km quanh điểm đón';
+    }
+
+    if (!pickupDistanceKmToDriver || !['ASSIGNED', 'ACCEPTED', 'PICKING_UP'].includes(status)) {
+      return 'Khoảng cách tới bạn: tài xế đang được định vị';
+    }
+
+    return `Khoảng cách tới bạn: ${pickupDistanceKmToDriver.toFixed(1)} km`;
+  }, [isSearchingDriver, pickupDistanceKmToDriver, status]);
+
+  const trackingSpeedText = useMemo(() => {
+    if (!driverSpeedKph) {
+      return '';
+    }
+
+    return `Tốc độ hiện tại: ${Math.round(driverSpeedKph)} km/h`;
+  }, [driverSpeedKph]);
+
   if (loading && !currentRide) {
     return (
       <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', p: 2 }}>
@@ -388,6 +462,9 @@ const RideTracking: React.FC = () => {
           dropoff={currentRide?.dropoff || null}
           driverLocation={effectiveDriverLocation}
           mode="tracking"
+          trackingEtaText={trackingEtaText}
+          trackingDistanceText={trackingDistanceText}
+          trackingSpeedText={trackingSpeedText}
           onError={setError}
           height="100%"
         />
@@ -453,6 +530,11 @@ const RideTracking: React.FC = () => {
                     <Typography variant="body2" fontWeight={700}>{driver.licensePlate}</Typography>
                   </Box>
                   <Chip icon={<StarRate sx={{ color: '#f59e0b !important' }} />} label={(driver.rating || 5).toFixed(1)} variant="outlined" />
+                </Stack>
+                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1.5 }}>
+                  <Chip size="small" color="primary" label={trackingEtaText.replace('ETA đón: ', '')} />
+                  <Chip size="small" variant="outlined" label={trackingDistanceText.replace('Khoảng cách tới bạn: ', '')} />
+                  {effectiveDriverLocation ? <Chip size="small" color="success" label="Vị trí tài xế đang cập nhật realtime" /> : null}
                 </Stack>
                 <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
                   <Button variant="outlined" fullWidth startIcon={<Phone />} sx={{ borderRadius: 3, py: 1.2 }}>Gọi</Button>

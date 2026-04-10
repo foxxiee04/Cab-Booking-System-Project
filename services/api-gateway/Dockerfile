@@ -12,6 +12,7 @@ RUN npm install --prefix /workspace/shared --omit=dev
 # Copy service source and shared build artifacts
 COPY services/api-gateway .
 COPY shared/dist /workspace/shared/dist
+COPY assets/vehicle-images /workspace/assets/vehicle-images
 
 # Build TypeScript
 RUN npm run build

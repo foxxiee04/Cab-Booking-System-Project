@@ -1,4 +1,8 @@
 import Joi from 'joi';
+import { LICENSE_CLASS_2026_VALUES } from '../utils/license-class';
+
+const LEGACY_LICENSE_CLASS_VALUES = ['A2', 'B1', 'B2', 'E', 'FC'] as const;
+const SUPPORTED_LICENSE_CLASS_INPUTS = [...LICENSE_CLASS_2026_VALUES, ...LEGACY_LICENSE_CLASS_VALUES] as const;
 
 // Vehicle Info DTO
 export interface VehicleDto {
@@ -8,6 +12,7 @@ export interface VehicleDto {
   plate: string;
   color: string;
   year: number;
+  imageUrl?: string;
 }
 
 const vehicleSchema = Joi.object<VehicleDto>({
@@ -17,15 +22,18 @@ const vehicleSchema = Joi.object<VehicleDto>({
   plate: Joi.string().min(1).max(20).required(),
   color: Joi.string().min(1).max(30).required(),
   year: Joi.number().integer().min(2000).max(new Date().getFullYear() + 1).required(),
+  imageUrl: Joi.string().max(4096).optional(),
 });
 
 // License Info DTO
 export interface LicenseDto {
+  class: string;
   number: string;
   expiryDate: Date;
 }
 
 const licenseSchema = Joi.object<LicenseDto>({
+  class: Joi.string().valid(...SUPPORTED_LICENSE_CLASS_INPUTS).required(),
   number: Joi.string().min(1).max(50).required(),
   expiryDate: Joi.date().greater('now').required().messages({
     'date.greater': 'License must not be expired',
@@ -85,6 +93,7 @@ export interface DriverResponseDto {
   availabilityStatus: AvailabilityStatus;
   vehicle: VehicleDto;
   license: {
+    class: string;
     number: string;
     expiryDate: Date;
   };

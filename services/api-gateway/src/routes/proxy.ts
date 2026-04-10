@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { grpcBridgeClient, ForwardableRequestLike } from '../grpc/bridge.client';
+import { normalizeAddressPayloadDeep } from '../location/address-normalizer';
 
 const router = Router();
 
@@ -103,13 +104,16 @@ async function forwardOverHttp(
   const response = await fetch(url.toString(), {
     method: req.method,
     headers: getForwardHeaders(req),
-    body: ['GET', 'HEAD'].includes(req.method.toUpperCase()) ? undefined : JSON.stringify(req.body || {}),
+    body: ['GET', 'HEAD'].includes(req.method.toUpperCase())
+      ? undefined
+      : JSON.stringify(normalizeAddressPayloadDeep(req.body || {})),
   });
 
   const text = await response.text();
 
   try {
-    res.status(response.status).json(text ? JSON.parse(text) : {});
+    const parsed = text ? JSON.parse(text) : {};
+    res.status(response.status).json(normalizeAddressPayloadDeep(parsed));
   } catch {
     res.status(response.status).send(text);
   }
@@ -129,12 +133,12 @@ async function forward(service: keyof typeof import('../config').config.grpcServ
       method: req.method,
       originalUrl: normalizedPath,
       query: normalizedQuery,
-      body: req.body,
+      body: normalizeAddressPayloadDeep(req.body),
       headers: req.headers,
     };
 
     const response = await grpcBridgeClient.forward(service, forwardedRequest, normalizedPath);
-    res.status(response.statusCode).json(response.body);
+    res.status(response.statusCode).json(normalizeAddressPayloadDeep(response.body));
   } catch (error) {
     logger.error('gRPC proxy error', {
       service,

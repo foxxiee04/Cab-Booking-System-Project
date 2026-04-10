@@ -129,6 +129,7 @@ const DRIVERS = [
       year: 2022,
     },
     license: {
+      class: 'B',
       number: 'GP-123456',
       expiryDate: new Date('2027-12-31'),
     },
@@ -147,6 +148,7 @@ const DRIVERS = [
       year: 2023,
     },
     license: {
+      class: 'B',
       number: 'GP-654321',
       expiryDate: new Date('2028-06-30'),
     },
@@ -165,6 +167,7 @@ const DRIVERS = [
       year: 2023,
     },
     license: {
+      class: 'D2',
       number: 'GP-111111',
       expiryDate: new Date('2028-12-31'),
     },
@@ -183,6 +186,7 @@ const DRIVERS = [
       year: 2024,
     },
     license: {
+      class: 'A1',
       number: 'GP-246810',
       expiryDate: new Date('2029-03-31'),
     },
@@ -201,6 +205,7 @@ const DRIVERS = [
       year: 2022,
     },
     license: {
+      class: 'D2',
       number: 'GP-555555',
       expiryDate: new Date('2028-09-30'),
     },
@@ -219,6 +224,7 @@ const DRIVERS = [
       year: 2023,
     },
     license: {
+      class: 'D2',
       number: 'GP-666666',
       expiryDate: new Date('2027-06-30'),
     },
@@ -237,6 +243,7 @@ const DRIVERS = [
       year: 2023,
     },
     license: {
+      class: 'A1',
       number: 'GP-777777',
       expiryDate: new Date('2029-12-31'),
     },
@@ -255,6 +262,7 @@ const DRIVERS = [
       year: 2024,
     },
     license: {
+      class: 'B',
       number: 'GP-888888',
       expiryDate: new Date('2029-06-30'),
     },
@@ -273,6 +281,7 @@ const DRIVERS = [
       year: 2023,
     },
     license: {
+      class: 'D2',
       number: 'GP-999999',
       expiryDate: new Date('2028-03-31'),
     },
@@ -291,11 +300,54 @@ const DRIVERS = [
       year: 2022,
     },
     license: {
+      class: 'D2',
       number: 'GP-000000',
       expiryDate: new Date('2027-09-30'),
     },
   },
 ];
+
+const VEHICLE_IMAGE_BY_TYPE: Record<string, string> = {
+  MOTORBIKE: 'xe-may.jpg',
+  SCOOTER: 'xe-ga.jpg',
+  CAR_4: '4-cho.jpg',
+  CAR_7: '7-cho.jpg',
+};
+
+const VEHICLE_IMAGE_BY_MODEL: Record<string, string> = {
+  'Vios': 'vios.jpg',
+  'City': 'city.jpg',
+  'Accent': 'accent.jpg',
+  'Elantra': 'elantra.jpg',
+  'K3': 'k3.jpg',
+  'Civic': 'civic.jpg',
+  'Mazda2': 'mazda2.jpg',
+  'Mazda3': 'mazda3.jpg',
+  'Vision': 'vision.jpg',
+  'Air Blade': 'air-blade.jpg',
+  'Lead': 'lead.jpg',
+  'Corolla Altis': 'altis.jpg',
+  'Yaris Cross': 'yaris.jpg',
+  'VF e34': 'vin34.jpg',
+  'VF 6': 'vin6.jpg',
+};
+
+function resolveVehicleImagePath(vehicle: { type: string; model: string }) {
+  const fileName = VEHICLE_IMAGE_BY_MODEL[vehicle.model] || VEHICLE_IMAGE_BY_TYPE[vehicle.type] || '4-cho.jpg';
+  return `/vehicle-images/${fileName}`;
+}
+
+function getLicenseClassByVehicleType(vehicleType: string) {
+  if (vehicleType === 'MOTORBIKE' || vehicleType === 'SCOOTER') {
+    return 'A1';
+  }
+
+  if (vehicleType === 'CAR_7') {
+    return 'D2';
+  }
+
+  return 'B';
+}
 
 const EXTRA_DRIVER_COUNT = 30;
 const EXTRA_VEHICLE_TYPES = ['CAR_4', 'CAR_7', 'MOTORBIKE', 'SCOOTER'] as const;
@@ -322,6 +374,7 @@ for (let i = 0; i < EXTRA_DRIVER_COUNT; i += 1) {
       year: 2021 + (i % 4),
     },
     license: {
+      class: getLicenseClassByVehicleType(EXTRA_VEHICLE_TYPES[i % EXTRA_VEHICLE_TYPES.length]),
       number: `GP-EXTRA-${String(serial).padStart(4, '0')}`,
       expiryDate: new Date('2029-12-31'),
     },
@@ -767,6 +820,8 @@ async function seedDriverDB(driverUserIds: string[]) {
           vehiclePlate: d.vehicle.plate,
           vehicleColor: d.vehicle.color,
           vehicleYear: d.vehicle.year,
+          vehicleImageUrl: resolveVehicleImagePath(d.vehicle),
+          licenseClass: d.license.class || getLicenseClassByVehicleType(d.vehicle.type),
           licenseNumber: d.license.number,
           licenseExpiryDate: d.license.expiryDate,
           licenseVerified: true,
@@ -786,6 +841,8 @@ async function seedDriverDB(driverUserIds: string[]) {
           vehiclePlate: d.vehicle.plate,
           vehicleColor: d.vehicle.color,
           vehicleYear: d.vehicle.year,
+          vehicleImageUrl: resolveVehicleImagePath(d.vehicle),
+          licenseClass: d.license.class || getLicenseClassByVehicleType(d.vehicle.type),
           licenseNumber: d.license.number,
           licenseExpiryDate: d.license.expiryDate,
           licenseVerified: true,

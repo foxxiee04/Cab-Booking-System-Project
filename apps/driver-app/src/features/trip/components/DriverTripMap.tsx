@@ -11,19 +11,12 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { GoogleMap, MarkerF, PolylineF, useJsApiLoader } from '@react-google-maps/api';
 import { MapContainer as LeafletMapContainer, Marker as LeafletMarker, Polyline as LeafletPolyline, TileLayer as LeafletTileLayer, useMap } from 'react-leaflet';
-import { Location, NearbyDriver } from '../../../types';
+import { Location } from '../../../types';
 import { getRoute } from '../../../utils/map.utils';
 import '../../../styles/map.css';
 
 const libraries: ('geometry' | 'places')[] = ['geometry', 'places'];
 const defaultCenter = { lat: 10.7769, lng: 106.7009 };
-
-const MAJOR_CITY_POINTS = [
-  { id: 'benthanh', name: 'Cho Ben Thanh', lat: 10.7726, lng: 106.6980 },
-  { id: 'tsn', name: 'San bay Tan Son Nhat', lat: 10.8185, lng: 106.6588 },
-  { id: 'landmark81', name: 'Landmark 81', lat: 10.7949, lng: 106.7219 },
-  { id: 'thuduc', name: 'TP Thu Duc', lat: 10.8495, lng: 106.7718 },
-];
 
 const darkMapStyles: google.maps.MapTypeStyle[] = [
   { elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
@@ -82,8 +75,7 @@ const LeafletViewportController: React.FC<{
   currentLocation?: Location | null;
   pickupLocation?: Location | null;
   dropoffLocation?: Location | null;
-  nearbyDrivers: NearbyDriver[];
-}> = ({ currentLocation, pickupLocation, dropoffLocation, nearbyDrivers }) => {
+}> = ({ currentLocation, pickupLocation, dropoffLocation }) => {
   const map = useMap();
   const lat0 = currentLocation?.lat;
   const lng0 = currentLocation?.lng;
@@ -97,24 +89,20 @@ const LeafletViewportController: React.FC<{
     if (lat0 != null && lng0 != null) points.push([lat0, lng0]);
     if (lat1 != null && lng1 != null) points.push([lat1, lng1]);
     if (lat2 != null && lng2 != null) points.push([lat2, lng2]);
-    nearbyDrivers.slice(0, 120).forEach((driver) => {
-      points.push([driver.lat, driver.lng]);
-    });
-
     if (!points.length) {
       return;
     }
 
     if (points.length === 1) {
-      map.setView(points[0], 15, { animate: true });
+      map.setView(points[0], 15, { animate: false });
       return;
     }
 
     map.fitBounds(L.latLngBounds(points), {
       padding: [56, 56],
-      animate: true,
+      animate: false,
     });
-  }, [map, nearbyDrivers, lat0, lng0, lat1, lng1, lat2, lng2]);
+  }, [map, lat0, lng0, lat1, lng1, lat2, lng2]);
 
   return null;
 };
@@ -124,7 +112,6 @@ export interface DriverTripMapProps {
   currentLocation?: Location | null;
   pickupLocation?: Location | null;
   dropoffLocation?: Location | null;
-  nearbyDrivers?: NearbyDriver[];
   mode?: 'request' | 'pickup' | 'trip';
   height?: number | string;
   colorMode?: 'light' | 'dark' | 'system';
@@ -171,7 +158,6 @@ interface GoogleDriverTripMapCanvasProps {
   currentLocation?: Location | null;
   pickupLocation?: Location | null;
   dropoffLocation?: Location | null;
-  nearbyDrivers: NearbyDriver[];
   routeSummary: RouteSummary | null;
   mapRef: React.MutableRefObject<google.maps.Map | null>;
   onMapLoad: (points: google.maps.LatLngLiteral[]) => void;
@@ -186,7 +172,6 @@ const GoogleDriverTripMapCanvas: React.FC<GoogleDriverTripMapCanvasProps> = ({
   currentLocation,
   pickupLocation,
   dropoffLocation,
-  nearbyDrivers,
   routeSummary,
   mapRef,
   onMapLoad,
@@ -218,7 +203,6 @@ const GoogleDriverTripMapCanvas: React.FC<GoogleDriverTripMapCanvasProps> = ({
             currentLocation,
             pickupLocation,
             dropoffLocation,
-            ...nearbyDrivers.map((driver) => ({ lat: driver.lat, lng: driver.lng })),
           ].filter(Boolean) as google.maps.LatLngLiteral[]
         );
       }}
@@ -244,22 +228,6 @@ const GoogleDriverTripMapCanvas: React.FC<GoogleDriverTripMapCanvasProps> = ({
       {currentLocation && (
           <MarkerF position={currentLocation} icon={getCarSymbol(0, '#5a7fb8')} title="Vị trí của bạn" />
       )}
-      {nearbyDrivers.map((driver) => (
-        <MarkerF
-          key={driver.id}
-          position={{ lat: driver.lat, lng: driver.lng }}
-          icon={getCarSymbol(driver.heading || 0, '#94a3b8', 0.7)}
-          title="Tài xế gần bạn"
-        />
-      ))}
-      {MAJOR_CITY_POINTS.map((point) => (
-        <MarkerF
-          key={point.id}
-          position={{ lat: point.lat, lng: point.lng }}
-          icon={getMarkerIcon('#7c3aed')}
-          title={point.name}
-        />
-      ))}
       {routeSummary && (
         <>
           <PolylineF
@@ -291,7 +259,6 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
   currentLocation,
   pickupLocation,
   dropoffLocation,
-  nearbyDrivers = [],
   mode = 'request',
   height = 340,
   colorMode = 'light',
@@ -332,7 +299,7 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
 
       setRouteSummary({
         distanceText: route.distance >= 1000 ? `${(route.distance / 1000).toFixed(1)} km` : `${Math.round(route.distance)} m`,
-        durationText: `${Math.max(1, Math.round(route.duration / 60))} min`,
+        durationText: `${Math.max(1, Math.round(route.duration / 60))} phút`,
         polylinePath: route.coordinates.map(([lng, lat]) => ({ lat, lng })),
       });
     })();
@@ -348,7 +315,6 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
       currentLocation,
       pickupLocation,
       dropoffLocation,
-      ...nearbyDrivers.map((driver) => ({ lat: driver.lat, lng: driver.lng })),
     ].filter(Boolean) as google.maps.LatLngLiteral[];
 
     if (!map || points.length === 0 || !window.google) {
@@ -364,7 +330,7 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
     const bounds = new google.maps.LatLngBounds();
     points.forEach((point) => bounds.extend(point));
     map.fitBounds(bounds, 56);
-  }, [currentLocation, dropoffLocation, nearbyDrivers, pickupLocation, routeSummary]);
+  }, [currentLocation, dropoffLocation, pickupLocation, routeSummary]);
 
   const leafletTileUrl =
     themeMode === 'dark'
@@ -383,30 +349,19 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
       style={{ width: '100%', height: '100%' }}
       zoomControl
       scrollWheelZoom
+      zoomAnimation={false}
+      fadeAnimation={false}
+      markerZoomAnimation={false}
     >
       <LeafletTileLayer
         attribution={leafletAttribution}
         url={leafletTileUrl}
         maxZoom={20}
       />
-      <LeafletViewportController currentLocation={currentLocation} pickupLocation={pickupLocation} dropoffLocation={dropoffLocation} nearbyDrivers={nearbyDrivers} />
+      <LeafletViewportController currentLocation={currentLocation} pickupLocation={pickupLocation} dropoffLocation={dropoffLocation} />
       {pickupLocation && <LeafletMarker position={[pickupLocation.lat, pickupLocation.lng]} icon={createLeafletPin('#5ca38a')} />}
       {dropoffLocation && <LeafletMarker position={[dropoffLocation.lat, dropoffLocation.lng]} icon={createLeafletPin('#c48686')} />}
       {currentLocation && <LeafletMarker position={[currentLocation.lat, currentLocation.lng]} icon={createLeafletDriverIcon()} />}
-      {nearbyDrivers.map((driver) => (
-        <LeafletMarker
-          key={driver.id}
-          position={[driver.lat, driver.lng]}
-          icon={createLeafletPin('#94a3b8')}
-        />
-      ))}
-      {MAJOR_CITY_POINTS.map((point) => (
-        <LeafletMarker
-          key={point.id}
-          position={[point.lat, point.lng]}
-          icon={createLeafletPin('#7c3aed')}
-        />
-      ))}
       {routeSummary && (
         <>
           <LeafletPolyline
@@ -441,7 +396,6 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
           currentLocation={currentLocation}
           pickupLocation={pickupLocation}
           dropoffLocation={dropoffLocation}
-          nearbyDrivers={nearbyDrivers}
           routeSummary={routeSummary}
           mapRef={mapRef}
           onMapLoad={(points) => {

@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import swaggerUi from 'swagger-ui-express';
+import path from 'node:path';
+import fs from 'node:fs';
 import { createRequestContextMiddleware } from '../../../shared/dist';
 import { config } from './config';
 import { authMiddleware } from './middleware/auth';
@@ -10,6 +12,7 @@ import { generalLimiter } from './middleware/rate-limit';
 import proxyRoutes from './routes/proxy';
 import mapRoutes from './routes/map';
 import adminRoutes from './routes/admin';
+import locationRoutes from './location/location.controller';
 import { logger } from './utils/logger';
 import { swaggerSpec } from './swagger';
 import { collectMetricsText, getMetricsContentType } from './metrics/matching-ai.metrics';
@@ -34,6 +37,7 @@ export function createApp({
   app.use(createRequestContextMiddleware() as express.RequestHandler);
   app.use(helmet({
     contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
   }));
   app.use(cors({
     origin: '*',
@@ -47,6 +51,18 @@ export function createApp({
   if (enableRateLimit) {
     app.use(generalLimiter);
   }
+
+  const candidateImageDirs = [
+    path.resolve(process.cwd(), 'assets', 'vehicle-images'),
+    path.resolve(process.cwd(), '..', '..', 'assets', 'vehicle-images'),
+    path.resolve(__dirname, '..', '..', '..', '..', 'assets', 'vehicle-images'),
+    // Backward-compatible fallbacks for older workspace layouts.
+    path.resolve(process.cwd(), 'img'),
+    path.resolve(process.cwd(), '..', '..', 'img'),
+    path.resolve(__dirname, '..', '..', '..', '..', 'img'),
+  ];
+  const vehicleImageDir = candidateImageDirs.find((dirPath) => fs.existsSync(dirPath)) || candidateImageDirs[0];
+  app.use('/vehicle-images', express.static(vehicleImageDir));
 
   app.get('/health', (_req, res) => {
     res.json({
@@ -108,6 +124,7 @@ export function createApp({
     customSiteTitle: 'Cab Booking System API',
   }));
 
+  app.use('/api/location', locationRoutes);
   app.use('/api/map', mapRoutes);
   app.use(authMiddleware);
   app.use('/api/admin', adminRoutes);

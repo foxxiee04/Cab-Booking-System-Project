@@ -29,7 +29,9 @@ export interface Driver {
   vehicleModel: string;
   vehicleColor: string;
   vehicleYear?: number;
+  vehicleImageUrl?: string;
   licensePlate: string;
+  licenseClass?: LicenseClass;
   licenseNumber: string;
   licenseExpiryDate?: string;
   status?: DriverApprovalStatus;
@@ -44,6 +46,7 @@ export interface Driver {
 }
 
 export type DriverApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
+export type LicenseClass = 'A1' | 'A' | 'B' | 'C1' | 'C' | 'D1' | 'D2' | 'D' | 'BE' | 'C1E' | 'CE' | 'D1E' | 'D2E' | 'DE';
 
 export type VehicleType = 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
 
@@ -53,7 +56,9 @@ export interface DriverRegistration {
   vehicleModel: string;
   vehicleColor: string;
   vehicleYear: number;
+  vehicleImageUrl?: string;
   licensePlate: string;
+  licenseClass: LicenseClass;
   licenseNumber: string;
   licenseExpiryDate: string;
 }

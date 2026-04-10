@@ -29,6 +29,24 @@ const formatDateValue = (value?: string) => {
   return new Date(value).toLocaleString('vi-VN');
 };
 
+const API_ROOT = (process.env.REACT_APP_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+
+const resolveVehicleImageUrl = (rawUrl?: string) => {
+  if (!rawUrl) {
+    return '';
+  }
+
+  if (/^data:image\//i.test(rawUrl) || /^https?:\/\//i.test(rawUrl)) {
+    return rawUrl;
+  }
+
+  if (rawUrl.startsWith('/')) {
+    return `${API_ROOT}${rawUrl}`;
+  }
+
+  return `${API_ROOT}/${rawUrl}`;
+};
+
 const DriverApprovals: React.FC = () => {
   const { t } = useTranslation();
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -163,10 +181,19 @@ const DriverApprovals: React.FC = () => {
                     <Typography variant="body2">{driver.vehicleMake} {driver.vehicleModel}</Typography>
                     <Typography variant="body2">{driver.vehicleColor} • {t('approvals.vehicleYear')}: {driver.vehicleYear || t('labels.na')}</Typography>
                     <Typography variant="body2">Biển số: {driver.licensePlate}</Typography>
+                    {driver.vehicleImageUrl && (
+                      <Box
+                        component="img"
+                        src={resolveVehicleImageUrl(driver.vehicleImageUrl)}
+                        alt={`vehicle-${driver.id}`}
+                        sx={{ mt: 1, width: '100%', maxWidth: 280, borderRadius: 2, border: '1px solid #e5e7eb' }}
+                      />
+                    )}
                   </Box>
 
                   <Box>
                     <Typography variant="overline" color="text.secondary">{t('approvals.licenseInfo')}</Typography>
+                    <Typography variant="body2">Hạng GPLX: {driver.licenseClass || t('labels.na')}</Typography>
                     <Typography variant="body2">GPLX: {driver.licenseNumber}</Typography>
                     <Typography variant="body2">{t('approvals.licenseExpiry')}: {formatDateValue(driver.licenseExpiryDate)}</Typography>
                   </Box>

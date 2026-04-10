@@ -13,10 +13,11 @@ describe('Driver DTOs Validation', () => {
         year: 2022,
         color: 'White',
         plate: '51A-12345',
-        type: 'CAR',
+        type: 'CAR_4',
       },
       license: {
-        number: 'B2-123456789',
+        class: 'B',
+        number: '123456789012',
         expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
       },
     };
@@ -158,11 +159,11 @@ describe('Driver DTOs Validation', () => {
       const { error, value } = findNearbySchema.validate({
         lat: 10.8231,
         lng: 106.6297,
-        vehicleType: 'PREMIUM',
+        vehicleType: 'CAR_4',
       });
 
       expect(error).toBeUndefined();
-      expect(value.vehicleType).toBe('PREMIUM');
+      expect(value.vehicleType).toBe('CAR_4');
     });
   });
 });

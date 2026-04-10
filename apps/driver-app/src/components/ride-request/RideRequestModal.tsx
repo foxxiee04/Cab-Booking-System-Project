@@ -25,7 +25,7 @@ import {
 } from '@mui/icons-material';
 import { Ride } from '../../types';
 import { formatCurrency, getVehicleTypeLabel } from '../../utils/format.utils';
-import { formatDistance, formatDuration } from '../../utils/map.utils';
+import { calculateDistance, formatDistance, formatDuration } from '../../utils/map.utils';
 import CountdownTimer from './CountdownTimer';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '../../store/hooks';
@@ -34,6 +34,23 @@ import SwipeToConfirm from '../../features/trip/components/SwipeToConfirm';
 
 // Default driver commission share when rate not available from earnings
 const DEFAULT_DRIVER_SHARE = 0.85;
+
+const normalizeDistanceMeters = (distance?: number): number | undefined => {
+  if (!distance || Number.isNaN(distance) || distance <= 0) {
+    return undefined;
+  }
+
+  return distance > 100 ? distance : distance * 1000;
+};
+
+const normalizeDurationSeconds = (duration?: number, estimatedDuration?: number): number | undefined => {
+  const raw = duration && duration > 0 ? duration : estimatedDuration && estimatedDuration > 0 ? estimatedDuration : undefined;
+  if (!raw) {
+    return undefined;
+  }
+
+  return raw <= 180 ? raw * 60 : raw;
+};
 
 interface RideRequestModalProps {
   ride: Ride | null;
@@ -97,6 +114,13 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
   const hasFare = ride.fare != null && ride.fare > 0;
   const driverEarning = hasFare ? Math.round(ride.fare! * commissionRate) : null;
   const platformFee = hasFare ? Math.round(ride.fare! * (1 - commissionRate)) : null;
+  const distanceMeters = normalizeDistanceMeters(ride.distance);
+  const durationSeconds = normalizeDurationSeconds(ride.duration, ride.estimatedDuration);
+  const derivedDistanceMeters = (!distanceMeters && ride.pickupLocation?.lat && ride.pickupLocation?.lng && ride.dropoffLocation?.lat && ride.dropoffLocation?.lng)
+    ? Math.round(Math.max(calculateDistance(ride.pickupLocation, ride.dropoffLocation) * 1.22, 0.2) * 1000)
+    : undefined;
+  const finalDistanceMeters = distanceMeters || derivedDistanceMeters;
+  const finalDurationSeconds = durationSeconds || (finalDistanceMeters ? Math.max(180, Math.round(((finalDistanceMeters / 1000) / 24) * 3600)) : undefined);
 
   return (
     <Dialog
@@ -208,14 +232,14 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
               <RouteIcon sx={{ fontSize: 20, color: '#7c3aed', mb: 0.5 }} />
               <Typography variant="caption" color="text.secondary" display="block">Khoảng cách</Typography>
               <Typography variant="body2" fontWeight={700}>
-                {ride.distance ? formatDistance(ride.distance) : 'N/A'}
+                {finalDistanceMeters ? formatDistance(finalDistanceMeters) : 'Đang cập nhật'}
               </Typography>
             </Box>
             <Box sx={{ flex: 1, textAlign: 'center', bgcolor: '#f8fafc', borderRadius: 3, p: 1.5 }}>
               <AccessTime sx={{ fontSize: 20, color: '#d97706', mb: 0.5 }} />
               <Typography variant="caption" color="text.secondary" display="block">Thời gian</Typography>
               <Typography variant="body2" fontWeight={700}>
-                {(ride.duration || ride.estimatedDuration) ? formatDuration(ride.duration || ride.estimatedDuration || 0) : 'N/A'}
+                {finalDurationSeconds ? formatDuration(finalDurationSeconds) : 'Đang cập nhật'}
               </Typography>
             </Box>
           </Stack>

@@ -28,8 +28,12 @@ export type PaymentMethod = 'CASH' | 'CARD' | 'WALLET' | 'MOMO' | 'VNPAY';
 
 export type RideStatus = 
   | 'PENDING' 
+  | 'CREATED'
+  | 'FINDING_DRIVER'
+  | 'OFFERED'
   | 'ASSIGNED' 
   | 'ACCEPTED' 
+  | 'PICKING_UP'
   | 'IN_PROGRESS' 
   | 'COMPLETED' 
   | 'CANCELLED'
