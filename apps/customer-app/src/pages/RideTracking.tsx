@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -11,13 +11,14 @@ import {
   Chip,
   Divider,
   IconButton,
+  LinearProgress,
   Rating,
   Skeleton,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import { ArrowBack, AutorenewRounded, Cancel, Chat, PaymentRounded, Phone, StarRate } from '@mui/icons-material';
+import { ArrowBack, AutorenewRounded, Cancel, Chat, CheckCircleRounded, HourglassTopRounded, PaymentRounded, Phone, StarRate } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { BookingMap, useSocket } from '../features/booking';
 import { paymentApi } from '../api/payment.api';
@@ -30,6 +31,12 @@ import { formatCurrency, formatDate, getPaymentMethodLabel, getVehicleTypeLabel 
 import { calculateDistance } from '../utils/map.utils';
 
 const STATUS_META: Record<string, { label: string; description: string; color: string; allowCancel: boolean }> = {
+  CREATED: {
+    label: 'Chờ thanh toán',
+    description: 'Vui lòng hoàn tất thanh toán để hệ thống bắt đầu tìm tài xế.',
+    color: '#7c3aed',
+    allowCancel: true,
+  },
   PENDING: {
     label: 'Đang tìm tài xế phù hợp',
     description: 'Hệ thống đang ghép tài xế gần nhất cho chuyến đi của bạn.',
@@ -72,6 +79,12 @@ const STATUS_META: Record<string, { label: string; description: string; color: s
     color: '#dc2626',
     allowCancel: false,
   },
+  FINDING_DRIVER: {
+    label: 'Đang tìm tài xế phù hợp',
+    description: 'Hệ thống đang ghép tài xế gần nhất cho chuyến đi của bạn.',
+    color: '#f59e0b',
+    allowCancel: true,
+  },
   NO_DRIVER_AVAILABLE: {
     label: 'Không có tài xế phù hợp',
     description: 'Hãy thử lại sau ít phút hoặc đổi điểm đón.',
@@ -86,9 +99,12 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
   REQUIRES_ACTION: 'Chờ thanh toán',
   COMPLETED: 'Đã thanh toán',
   FAILED: 'Thất bại',
+  REFUNDED: 'Đã hoàn tiền',
 };
 
-const SEARCHING_DRIVER_STATUSES = new Set(['PENDING', 'CREATED', 'FINDING_DRIVER']);
+const AWAITING_PAYMENT_STATUSES = new Set(['CREATED']);
+const SEARCHING_DRIVER_STATUSES = new Set(['PENDING', 'FINDING_DRIVER']);
+const RECEIPT_READY_STATUSES = new Set(['COMPLETED', 'CANCELLED', 'NO_DRIVER_AVAILABLE']);
 const MATCHING_MAX_WAIT_MINUTES = 3;
 
 const formatDistanceKm = (distance: number | null | undefined) => {
@@ -106,6 +122,42 @@ const formatDuration = (duration: number | null | undefined) => {
 
   const minutes = duration > 180 ? Math.round(duration / 60) : Math.round(duration);
   return `${minutes} phút`;
+};
+
+const getRefundProviderLabel = (payment: Payment | null, paymentMethod?: string | null) => {
+  if (payment?.provider === 'MOMO' || payment?.method === 'MOMO' || paymentMethod === 'MOMO') {
+    return 'MoMo';
+  }
+
+  if (payment?.provider === 'VNPAY' || payment?.method === 'VNPAY' || paymentMethod === 'VNPAY') {
+    return 'VNPay';
+  }
+
+  return 'cổng thanh toán';
+};
+
+const getRefundDestinationLabel = (payment: Payment | null, paymentMethod?: string | null) => {
+  if (payment?.provider === 'MOMO' || payment?.method === 'MOMO' || paymentMethod === 'MOMO') {
+    return 'ví MoMo';
+  }
+
+  if (payment?.provider === 'VNPAY' || payment?.method === 'VNPAY' || paymentMethod === 'VNPAY') {
+    return 'tài khoản ngân hàng';
+  }
+
+  return 'ví thanh toán';
+};
+
+const getRefundTimeEstimate = (payment: Payment | null, paymentMethod?: string | null) => {
+  if (payment?.provider === 'MOMO' || payment?.method === 'MOMO' || paymentMethod === 'MOMO') {
+    return 'vài phút đến 1 giờ';
+  }
+
+  if (payment?.provider === 'VNPAY' || payment?.method === 'VNPAY' || paymentMethod === 'VNPAY') {
+    return '3–5 ngày làm việc (qua ngân hàng)';
+  }
+
+  return '1–3 ngày';
 };
 
 const RideTracking: React.FC = () => {
@@ -129,6 +181,8 @@ const RideTracking: React.FC = () => {
   const [comment, setComment] = useState('');
   const [retryMethod, setRetryMethod] = useState<'CASH' | 'MOMO' | 'VNPAY'>('CASH');
   const [retryingPayment, setRetryingPayment] = useState(false);
+  const [refundPollTimedOut, setRefundPollTimedOut] = useState(false);
+  const refundPollRef = useRef<number | null>(null);
 
   const retryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const retryPaymentRequired = retryParams.get('retryPayment') === '1';
@@ -225,7 +279,7 @@ const RideTracking: React.FC = () => {
   }, [dispatch, hydrateRide, lastRideStatus, rideId]);
 
   useEffect(() => {
-    if (currentRide?.status === 'COMPLETED') {
+    if (RECEIPT_READY_STATUSES.has(currentRide?.status || '')) {
       hydrateReceipt().catch((err) => {
         console.error(err);
         setError('Không thể tải hóa đơn chuyến đi.');
@@ -233,12 +287,26 @@ const RideTracking: React.FC = () => {
     }
   }, [currentRide?.status, hydrateReceipt]);
 
+  const isOnlinePayment =
+    payment?.method === 'MOMO' ||
+    payment?.method === 'VNPAY' ||
+    currentRide?.paymentMethod === 'MOMO' ||
+    currentRide?.paymentMethod === 'VNPAY';
+
   useEffect(() => {
-    if (currentRide?.status !== 'COMPLETED') {
+    if (!RECEIPT_READY_STATUSES.has(currentRide?.status || '')) {
       return;
     }
 
-    if (payment?.status === 'COMPLETED' || payment?.status === 'FAILED') {
+    if (payment?.status === 'FAILED' || payment?.status === 'REFUNDED') {
+      return;
+    }
+
+    if (currentRide?.status === 'COMPLETED' && payment?.status === 'COMPLETED') {
+      return;
+    }
+
+    if (!isOnlinePayment && currentRide?.status !== 'COMPLETED') {
       return;
     }
 
@@ -249,7 +317,7 @@ const RideTracking: React.FC = () => {
     }, 4000);
 
     return () => window.clearTimeout(timeoutId);
-  }, [currentRide?.status, hydrateReceipt, payment?.status]);
+  }, [currentRide?.status, hydrateReceipt, isOnlinePayment, payment?.status]);
 
   const handleCancel = useCallback(async () => {
     if (!currentRide) {
@@ -259,14 +327,55 @@ const RideTracking: React.FC = () => {
     setCancelling(true);
     try {
       await rideApi.cancelRide(currentRide.id, 'Khách hàng hủy chuyến');
-      dispatch(clearRide());
-      navigate('/home');
+      await Promise.allSettled([
+        hydrateRide(),
+        hydrateReceipt(),
+      ]);
+
+      // Poll payment status every 5s (up to 5 attempts) for online payments
+      // Backend triggers refund via ride.cancelled event asynchronously
+      if (currentRide.paymentMethod === 'MOMO' || currentRide.paymentMethod === 'VNPAY') {
+        setRefundPollTimedOut(false);
+        let attempts = 0;
+        const maxAttempts = 36; // ~3 minutes
+        refundPollRef.current = window.setInterval(async () => {
+          attempts += 1;
+          try {
+            await hydrateReceipt();
+          } catch {
+            // non-fatal
+          }
+          if (attempts >= maxAttempts) {
+            if (refundPollRef.current) window.clearInterval(refundPollRef.current);
+            refundPollRef.current = null;
+            setRefundPollTimedOut(true);
+          }
+        }, 5000);
+      }
     } catch (err: any) {
       setError(err.response?.data?.error?.message || t('errors.cancelRide'));
     } finally {
       setCancelling(false);
     }
-  }, [currentRide, dispatch, navigate, t]);
+  }, [currentRide, hydrateReceipt, hydrateRide, t]);
+
+  // Cleanup poll on unmount
+  useEffect(() => {
+    return () => {
+      if (refundPollRef.current) window.clearInterval(refundPollRef.current);
+    };
+  }, []);
+
+  // Stop polling once refund is confirmed
+  useEffect(() => {
+    if (payment?.status === 'REFUNDED' && refundPollRef.current) {
+      window.clearInterval(refundPollRef.current);
+      refundPollRef.current = null;
+    }
+    if (payment?.status === 'REFUNDED') {
+      setRefundPollTimedOut(false);
+    }
+  }, [payment?.status]);
 
   const handleSubmitReview = useCallback(async () => {
     if (!currentRide?.id || !currentRide.driverId || !rating) {
@@ -303,7 +412,9 @@ const RideTracking: React.FC = () => {
     }
 
     const amount = Math.round(payment?.amount || currentRide?.fare || 0);
-    const returnUrl = `${window.location.origin}/payment/callback?provider=${retryMethod}&rideId=${rideId}`;
+    const returnUrl = retryMethod === 'VNPAY'
+      ? `${window.location.origin}/payment/callback`
+      : `${window.location.origin}/payment/callback?provider=${retryMethod}&rideId=${rideId}`;
 
     setRetryingPayment(true);
     setError('');
@@ -328,6 +439,17 @@ const RideTracking: React.FC = () => {
   const status = currentRide?.status || 'PENDING';
   const statusMeta = STATUS_META[status] || STATUS_META.PENDING;
   const isSearchingDriver = SEARCHING_DRIVER_STATUSES.has(status);
+  const isAwaitingPayment = AWAITING_PAYMENT_STATUSES.has(status) &&
+    (currentRide?.paymentMethod === 'MOMO' || currentRide?.paymentMethod === 'VNPAY');
+  const showPaymentSummary = RECEIPT_READY_STATUSES.has(status) && Boolean(currentRide);
+  const refundProviderLabel = getRefundProviderLabel(payment, currentRide?.paymentMethod);
+  const refundDestinationLabel = getRefundDestinationLabel(payment, currentRide?.paymentMethod);
+  const refundTimeEstimate = getRefundTimeEstimate(payment, currentRide?.paymentMethod);
+  const refundInfo = payment?.refund || null;
+  const isRefundPending =
+    status === 'CANCELLED' &&
+    isOnlinePayment &&
+    (payment?.status === 'COMPLETED' || payment?.status === 'PROCESSING');
 
   const effectiveDriverLocation = useMemo(() => {
     if (driverLocation) {
@@ -515,7 +637,55 @@ const RideTracking: React.FC = () => {
             )}
           </Stack>
 
-
+          {/* Awaiting online payment banner */}
+          {isAwaitingPayment && currentRide && (
+            <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#f5f3ff', border: '1.5px solid #c4b5fd' }}>
+              <CardContent>
+                <Stack spacing={1.5}>
+                  <Stack direction="row" alignItems="center" spacing={1.5}>
+                    <Box sx={{ fontSize: 28 }}>💳</Box>
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight={800} color="#6d28d9">
+                        Chờ thanh toán để bắt đầu tìm tài xế
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Hệ thống sẽ tự động tìm tài xế sau khi thanh toán thành công.
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    onClick={() => {
+                      const fare = currentRide.fare || 0;
+                      const method = currentRide.paymentMethod as 'MOMO' | 'VNPAY';
+                      navigate(`/payment/online/${currentRide.id}?provider=${method}&amount=${Math.round(fare)}`);
+                    }}
+                    sx={{
+                      borderRadius: 3,
+                      fontWeight: 700,
+                      py: 1.2,
+                      background: 'linear-gradient(90deg, #7c3aed, #a855f7)',
+                      '&:hover': { background: 'linear-gradient(90deg, #6d28d9, #9333ea)' },
+                    }}
+                  >
+                    Tiếp tục thanh toán {currentRide.paymentMethod}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    fullWidth
+                    color="error"
+                    size="small"
+                    onClick={handleCancel}
+                    disabled={cancelling}
+                    sx={{ borderRadius: 3 }}
+                  >
+                    Hủy chuyến
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
 
           {driver && status !== 'CANCELLED' && status !== 'NO_DRIVER_AVAILABLE' && (
             <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#f8fafc' }}>
@@ -558,7 +728,7 @@ const RideTracking: React.FC = () => {
                   <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Cước phí</Typography><Typography variant="body2" fontWeight={800}>{formatCurrency(currentRide.fare || 0)}</Typography></Stack>
                 </Stack>
 
-                {statusMeta.allowCancel && (
+                {statusMeta.allowCancel && !isAwaitingPayment && (
                   <Button color="error" variant="outlined" startIcon={cancelling ? <CircularProgress size={16} /> : <Cancel />} fullWidth onClick={handleCancel} disabled={cancelling} sx={{ borderRadius: 3, py: 1.2, mt: 2.5 }}>
                     Hủy chuyến
                   </Button>
@@ -567,7 +737,7 @@ const RideTracking: React.FC = () => {
             </Card>
           )}
 
-          {status === 'COMPLETED' && currentRide && (
+          {showPaymentSummary && currentRide && (
             <>
               {retryPaymentRequired && (
                 <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#fff7ed', border: '1px solid rgba(245,158,11,0.24)' }}>
@@ -607,21 +777,174 @@ const RideTracking: React.FC = () => {
               <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#eff6ff' }}>
                 <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
-                    <Typography variant="subtitle1" fontWeight={800}>Hóa đơn chuyến đi</Typography>
+                    <Typography variant="subtitle1" fontWeight={800}>{status === 'COMPLETED' ? 'Hóa đơn chuyến đi' : 'Thông tin thanh toán và hoàn tiền'}</Typography>
                     {(paymentLoading || reviewLoading) && <CircularProgress size={18} />}
                   </Stack>
                   <Stack spacing={1.25}>
                     <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Mã chuyến</Typography><Typography variant="body2" fontWeight={600}>{currentRide.id.slice(0, 8).toUpperCase()}</Typography></Stack>
                     <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thời gian đặt</Typography><Typography variant="body2" fontWeight={600}>{formatDate(currentRide.requestedAt)}</Typography></Stack>
                     {currentRide.completedAt && <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Hoàn thành lúc</Typography><Typography variant="body2" fontWeight={600}>{formatDate(currentRide.completedAt)}</Typography></Stack>}
+                    {status === 'CANCELLED' && currentRide.updatedAt && <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Hủy lúc</Typography><Typography variant="body2" fontWeight={600}>{formatDate(currentRide.updatedAt)}</Typography></Stack>}
                     <Divider sx={{ my: 0.5 }} />
                     <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Số tiền</Typography><Typography variant="h6" fontWeight={900}>{formatCurrency(payment?.amount || currentRide.fare || 0)}</Typography></Stack>
                     <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Phương thức</Typography><Typography variant="body2" fontWeight={600}>{getPaymentMethodLabel(payment?.method || currentRide.paymentMethod || 'CASH')}</Typography></Stack>
-                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Trạng thái thanh toán</Typography><Chip size="small" icon={<PaymentRounded />} label={PAYMENT_STATUS_LABELS[payment?.status || 'PENDING'] || 'Đang chờ'} data-testid="payment-status-chip" color={payment?.status === 'COMPLETED' ? 'success' : payment?.status === 'FAILED' ? 'error' : 'warning'} /></Stack>
+                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Trạng thái thanh toán</Typography><Chip size="small" icon={<PaymentRounded />} label={PAYMENT_STATUS_LABELS[payment?.status || 'PENDING'] || 'Đang chờ'} data-testid="payment-status-chip" color={payment?.status === 'COMPLETED' || payment?.status === 'REFUNDED' ? 'success' : payment?.status === 'FAILED' ? 'error' : 'warning'} /></Stack>
                   </Stack>
+
+                  {isRefundPending && (
+                    <Box
+                      data-testid="refund-pending-alert"
+                      sx={{
+                        mt: 1.5,
+                        borderRadius: 3,
+                        bgcolor: '#fffbeb',
+                        border: '1.5px solid #fcd34d',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <LinearProgress
+                        sx={{
+                          height: 3,
+                          '& .MuiLinearProgress-bar': { bgcolor: '#f59e0b' },
+                          bgcolor: '#fef3c7',
+                        }}
+                      />
+                      <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ p: 1.75 }}>
+                        <HourglassTopRounded sx={{ color: '#d97706', mt: 0.25, fontSize: 20, flexShrink: 0 }} />
+                        <Box>
+                          <Typography variant="body2" fontWeight={800} color="#92400e" sx={{ mb: 0.5 }}>
+                            {refundPollTimedOut
+                              ? `Yêu cầu hoàn tiền đã gửi tới ${refundProviderLabel}, đang chờ đối soát.`
+                              : `Đang hoàn tiền về ${refundDestinationLabel} của bạn.`}
+                          </Typography>
+                          <Typography variant="caption" display="block" color="#78350f">
+                            {refundPollTimedOut
+                              ? (refundProviderLabel === 'MoMo'
+                                ? 'MoMo đã nhận yêu cầu hoàn. Thường tiền về ví trong vài phút đến 1 giờ, đôi khi có thể lâu hơn tùy đối soát.'
+                                : 'VNPay đã nhận yêu cầu hoàn. Tiền thường về tài khoản trong 3–5 ngày làm việc tùy ngân hàng.')
+                              : (refundProviderLabel === 'MoMo'
+                                ? 'Tiền sẽ về ví MoMo trong vài phút đến 1 giờ. Bạn có thể dùng mã giao dịch gốc để đối chiếu nếu cần.'
+                                : 'Tiền sẽ về tài khoản ngân hàng trong 3–5 ngày làm việc. VNPay xử lý qua ngân hàng liên kết.')}
+                          </Typography>
+                          {payment?.transactionId && (
+                            <Typography
+                              variant="caption"
+                              display="block"
+                              sx={{ mt: 0.75, fontFamily: 'monospace', bgcolor: '#fef3c7', px: 1, py: 0.5, borderRadius: 1, fontSize: '0.72rem' }}
+                            >
+                              Giao dịch gốc: {payment.transactionId}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Stack>
+                    </Box>
+                  )}
+
+                  {payment?.status === 'REFUNDED' && (
+                    <Box
+                      data-testid="refund-success-alert"
+                      sx={{
+                        mt: 1.5,
+                        borderRadius: 3,
+                        bgcolor: '#f0fdfa',
+                        border: '1.5px solid #5eead4',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <Box sx={{ height: 4, background: 'linear-gradient(90deg, #0d9488, #14b8a6)' }} />
+                      <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ p: 1.75 }}>
+                        <CheckCircleRounded sx={{ color: '#0d9488', mt: 0.25, fontSize: 20, flexShrink: 0 }} />
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="body2" fontWeight={800} color="#134e4a" sx={{ mb: 0.5 }}>
+                            {refundProviderLabel === 'MoMo'
+                              ? 'MoMo đã xác nhận hoàn tiền về ví của bạn.'
+                              : 'VNPay đã ghi nhận hoàn tiền về tài khoản ngân hàng.'}
+                          </Typography>
+                          <Typography variant="caption" display="block" color="#0f766e" sx={{ mb: 1 }}>
+                            {refundProviderLabel === 'MoMo'
+                              ? 'Số tiền sẽ về ví MoMo trong vài phút đến 1 giờ.'
+                              : 'Số tiền sẽ về tài khoản ngân hàng trong 3–5 ngày làm việc qua ngân hàng liên kết.'}
+                          </Typography>
+                          <Box sx={{ bgcolor: '#ccfbf1', borderRadius: 2, p: 1.25 }}>
+                            <Stack spacing={0.6}>
+                              <Stack direction="row" justifyContent="space-between">
+                                <Typography variant="caption" color="#0f766e">Số tiền hoàn</Typography>
+                                <Typography variant="caption" fontWeight={800} color="#134e4a">{formatCurrency(refundInfo?.amount || payment?.amount || currentRide.fare || 0)}</Typography>
+                              </Stack>
+                              <Stack direction="row" justifyContent="space-between">
+                                <Typography variant="caption" color="#0f766e">Hoàn về</Typography>
+                                <Typography variant="caption" fontWeight={700} color="#134e4a">{refundDestinationLabel}</Typography>
+                              </Stack>
+                              {payment?.refundedAt && (
+                                <Stack direction="row" justifyContent="space-between">
+                                  <Typography variant="caption" color="#0f766e">Ghi nhận lúc</Typography>
+                                  <Typography variant="caption" fontWeight={700} color="#134e4a">{formatDate(payment.refundedAt)}</Typography>
+                                </Stack>
+                              )}
+                              {/* MoMo-specific fields */}
+                              {refundInfo?.requestId && (
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                  <Typography variant="caption" color="#0f766e">Mã yêu cầu hoàn (MoMo)</Typography>
+                                  <Typography variant="caption" fontWeight={600} sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{refundInfo.requestId}</Typography>
+                                </Stack>
+                              )}
+                              {refundInfo?.refundOrderId && (
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                  <Typography variant="caption" color="#0f766e">Mã hoàn tiền MoMo</Typography>
+                                  <Typography variant="caption" fontWeight={600} sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{refundInfo.refundOrderId}</Typography>
+                                </Stack>
+                              )}
+                              {typeof refundInfo?.resultCode === 'number' && (
+                                <Stack direction="row" justifyContent="space-between">
+                                  <Typography variant="caption" color="#0f766e">Mã kết quả MoMo</Typography>
+                                  <Chip
+                                    label={refundInfo.resultCode === 0 ? `${refundInfo.resultCode} – Thành công` : `${refundInfo.resultCode}`}
+                                    size="small"
+                                    sx={{ height: 18, fontSize: '0.65rem', bgcolor: refundInfo.resultCode === 0 ? '#0d9488' : '#f59e0b', color: '#fff' }}
+                                  />
+                                </Stack>
+                              )}
+                              {/* VNPay-specific fields */}
+                              {refundInfo?.txnRef && (
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                  <Typography variant="caption" color="#0f766e">Mã giao dịch VNPay</Typography>
+                                  <Typography variant="caption" fontWeight={600} sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{refundInfo.txnRef}</Typography>
+                                </Stack>
+                              )}
+                              {refundInfo?.responseCode && (
+                                <Stack direction="row" justifyContent="space-between">
+                                  <Typography variant="caption" color="#0f766e">Mã phản hồi VNPay</Typography>
+                                  <Chip
+                                    label={refundInfo.responseCode === '00' ? `${refundInfo.responseCode} – Thành công` : refundInfo.responseCode}
+                                    size="small"
+                                    sx={{ height: 18, fontSize: '0.65rem', bgcolor: refundInfo.responseCode === '00' ? '#0d9488' : '#f59e0b', color: '#fff' }}
+                                  />
+                                </Stack>
+                              )}
+                              {/* Common: refundTransactionId */}
+                              {refundInfo?.refundTransactionId && (
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                  <Typography variant="caption" color="#0f766e">Mã giao dịch hoàn</Typography>
+                                  <Typography variant="caption" fontWeight={600} sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{refundInfo.refundTransactionId}</Typography>
+                                </Stack>
+                              )}
+                              <Stack direction="row" justifyContent="space-between">
+                                <Typography variant="caption" color="#0f766e">Thời gian hoàn dự kiến</Typography>
+                                <Typography variant="caption" fontWeight={600} color="#134e4a">{refundTimeEstimate}</Typography>
+                              </Stack>
+                              {refundInfo?.description && (
+                                <Typography variant="caption" display="block" color="#0f766e">Lý do: {refundInfo.description}</Typography>
+                              )}
+                            </Stack>
+                          </Box>
+                        </Box>
+                      </Stack>
+                    </Box>
+                  )}
                 </CardContent>
               </Card>
 
+              {status === 'COMPLETED' && (
               <Card sx={{ borderRadius: 4 }}>
                 <CardContent>
                   <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>{existingReview ? 'Đánh giá của bạn' : 'Đánh giá tài xế'}</Typography>
@@ -641,11 +964,12 @@ const RideTracking: React.FC = () => {
                   </Stack>
                 </CardContent>
               </Card>
+              )}
             </>
           )}
 
           {(status === 'CANCELLED' || status === 'NO_DRIVER_AVAILABLE') && (
-            <Button variant="contained" fullWidth onClick={() => { dispatch(clearRide()); navigate('/home'); }} sx={{ borderRadius: 3, py: 1.4, fontWeight: 700 }}>
+            <Button variant="contained" fullWidth data-testid="back-to-home-btn" onClick={() => { dispatch(clearRide()); navigate('/home'); }} sx={{ borderRadius: 3, py: 1.4, fontWeight: 700 }}>
               Quay về trang chủ
             </Button>
           )}

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -113,7 +113,6 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
   const rideCode = ride.id.slice(0, 8).toUpperCase();
   const hasFare = ride.fare != null && ride.fare > 0;
   const driverEarning = hasFare ? Math.round(ride.fare! * commissionRate) : null;
-  const platformFee = hasFare ? Math.round(ride.fare! * (1 - commissionRate)) : null;
   const distanceMeters = normalizeDistanceMeters(ride.distance);
   const durationSeconds = normalizeDurationSeconds(ride.duration, ride.estimatedDuration);
   const derivedDistanceMeters = (!distanceMeters && ride.pickupLocation?.lat && ride.pickupLocation?.lng && ride.dropoffLocation?.lat && ride.dropoffLocation?.lng)

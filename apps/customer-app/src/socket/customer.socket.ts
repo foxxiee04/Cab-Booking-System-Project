@@ -35,7 +35,7 @@ const getRideStatusNotification = (status: string, message?: string) => {
       };
     case 'CANCELLED':
       return {
-        type: 'warning' as const,
+        type: 'error' as const,
         title: 'Chuyến đi đã bị hủy',
         message: message || 'Bạn có thể quay lại trang chủ để đặt chuyến mới.',
       };
@@ -211,7 +211,7 @@ class SocketService {
       store.dispatch(updateRideStatus({ rideId: data.rideId, status: 'CANCELLED' }));
       store.dispatch(
         showNotification({
-          type: 'warning',
+          type: 'error',
           title: 'Chuyến đi đã bị hủy',
           message: `Chuyến đi đã bị hủy: ${data.reason}`,
           rideId: data.rideId,

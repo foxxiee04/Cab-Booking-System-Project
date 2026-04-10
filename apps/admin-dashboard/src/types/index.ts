@@ -148,11 +148,25 @@ export interface Payment {
   id: string;
   rideId: string;
   amount: number;
-  method: 'CASH' | 'CARD' | 'WALLET';
-  status: 'PENDING' | 'COMPLETED' | 'FAILED';
+  method: 'CASH' | 'CARD' | 'WALLET' | 'MOMO' | 'VNPAY';
+  provider?: 'MOCK' | 'STRIPE' | 'MOMO' | 'VNPAY' | 'ZALOPAY';
+  status: 'PENDING' | 'PROCESSING' | 'REQUIRES_ACTION' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
   transactionId?: string;
   createdAt: string;
   updatedAt: string;
+  refundedAt?: string;
+  refund?: {
+    provider?: string;
+    amount?: number;
+    description?: string;
+    initiatedAt?: string;
+    status?: string;
+    requestId?: string;
+    refundOrderId?: string;
+    refundTransactionId?: string;
+    resultCode?: number;
+    message?: string;
+  } | null;
   ride?: Ride;
 }
 

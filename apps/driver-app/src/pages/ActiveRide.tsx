@@ -195,7 +195,7 @@ const ActiveRide: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentRide, dispatch, t]);
+  }, [currentRide, dispatch]);
 
   const handleCompleteRide = useCallback(async () => {
     if (!currentRide) return;

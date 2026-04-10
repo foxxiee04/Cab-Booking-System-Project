@@ -7,6 +7,7 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Collapse,
   Divider,
   Stack,
   Tab,
@@ -16,13 +17,16 @@ import {
 import {
   AccessTimeRounded,
   DirectionsCarFilledRounded,
+  ExpandLessRounded,
+  ExpandMoreRounded,
   LocalAtmRounded,
   RouteRounded,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { rideApi } from '../api/ride.api';
-import { Ride } from '../types';
+import { paymentApi } from '../api/payment.api';
+import { Payment, Ride } from '../types';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { setCurrentRide } from '../store/ride.slice';
 import {
@@ -33,6 +37,72 @@ import {
   getVehicleTypeLabel,
 } from '../utils/format.utils';
 
+const ONLINE_METHODS = new Set(['MOMO', 'VNPAY', 'CARD', 'WALLET']);
+
+function RefundBadge({ payment }: { payment: Payment }) {
+  const [open, setOpen] = useState(false);
+  const isRefunded = payment.status === 'REFUNDED';
+  const isPending = payment.status === 'COMPLETED' || payment.status === 'PROCESSING';
+
+  if (!isRefunded && !isPending) return null;
+
+  return (
+    <Box sx={{ mt: 1 }}>
+      <Stack direction="row" spacing={1} alignItems="center">
+        {isRefunded ? (
+          <Chip
+            label="Đã hoàn tiền"
+            size="small"
+            data-testid="refund-badge-refunded"
+            sx={{ bgcolor: '#0d9488', color: '#fff', fontWeight: 700, fontSize: 11 }}
+          />
+        ) : (
+          <Chip
+            label="Đang hoàn tiền"
+            size="small"
+            data-testid="refund-badge-pending"
+            sx={{ bgcolor: '#f59e0b', color: '#fff', fontWeight: 700, fontSize: 11 }}
+          />
+        )}
+        {isRefunded && payment.refund && (
+          <Button
+            size="small"
+            variant="text"
+            endIcon={open ? <ExpandLessRounded /> : <ExpandMoreRounded />}
+            onClick={() => setOpen((v) => !v)}
+            sx={{ fontSize: 11, px: 0.5, minWidth: 0 }}
+          >
+            Chi tiết
+          </Button>
+        )}
+      </Stack>
+      {isRefunded && payment.refund && (
+        <Collapse in={open}>
+          <Box sx={{ mt: 0.75, p: 1, borderRadius: 2, bgcolor: '#f0fdfa', border: '1px solid #99f6e4' }}>
+            <Stack spacing={0.25}>
+              {payment.refund.amount != null && (
+                <Typography variant="caption" display="block">
+                  Hoàn: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(payment.refund.amount)}</strong>
+                </Typography>
+              )}
+              {payment.refundedAt && (
+                <Typography variant="caption" display="block" color="text.secondary">
+                  {new Date(payment.refundedAt).toLocaleString('vi-VN')}
+                </Typography>
+              )}
+              {payment.refund.refundOrderId && (
+                <Typography variant="caption" display="block" data-testid="refund-order-id">
+                  Mã: <strong>{payment.refund.refundOrderId}</strong>
+                </Typography>
+              )}
+            </Stack>
+          </Box>
+        </Collapse>
+      )}
+    </Box>
+  );
+}
+
 const Activity: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -40,6 +110,7 @@ const Activity: React.FC = () => {
   const currentRide = useAppSelector((state) => state.ride.currentRide);
 
   const [rides, setRides] = useState<Ride[]>([]);
+  const [paymentMap, setPaymentMap] = useState<Map<string, Payment>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<'ongoing' | 'history'>('ongoing');
@@ -49,16 +120,29 @@ const Activity: React.FC = () => {
       setLoading(true);
       setError('');
       try {
-        const [activeRideResponse, historyResponse] = await Promise.all([
+        const [activeRideResponse, historyResponse, paymentResponse] = await Promise.allSettled([
           rideApi.getActiveRide(),
           rideApi.getRideHistory(1, 8),
+          paymentApi.getCustomerPaymentHistory(1, 50),
         ]);
 
-        if (activeRideResponse?.data?.ride) {
-          dispatch(setCurrentRide(activeRideResponse.data.ride));
+        if (activeRideResponse.status === 'fulfilled' && activeRideResponse.value?.data?.ride) {
+          dispatch(setCurrentRide(activeRideResponse.value.data.ride));
         }
 
-        setRides(historyResponse.data.rides || []);
+        if (historyResponse.status === 'fulfilled') {
+          setRides(historyResponse.value.data.rides || []);
+        } else {
+          throw (historyResponse as PromiseRejectedResult).reason;
+        }
+
+        if (paymentResponse.status === 'fulfilled') {
+          const map = new Map<string, Payment>();
+          for (const p of paymentResponse.value.data.payments) {
+            map.set(p.rideId, p);
+          }
+          setPaymentMap(map);
+        }
       } catch (err: any) {
         setError(err.response?.data?.error?.message || t('errors.loadRideHistory'));
       } finally {
@@ -213,6 +297,12 @@ const Activity: React.FC = () => {
                       {t('rideHistory.viewRide')}
                     </Button>
                   </Stack>
+
+                  {ride.status === 'CANCELLED' &&
+                    ONLINE_METHODS.has(ride.paymentMethod) &&
+                    paymentMap.get(ride.id) && (
+                      <RefundBadge payment={paymentMap.get(ride.id)!} />
+                    )}
                 </CardContent>
               </Card>
             ))}

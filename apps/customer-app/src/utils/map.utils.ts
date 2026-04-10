@@ -8,8 +8,8 @@ const reverseGeocodeCache = new Map<string, { address: string; timestamp: number
 const routeCache = new Map<string, { route: RouteData; timestamp: number }>();
 
 const LAST_LOCATION_STORAGE_KEY = 'customer:lastKnownLocation';
-const GEO_HIGH_ACCURACY_TIMEOUT_MS = Number(process.env.REACT_APP_GEO_HIGH_ACCURACY_TIMEOUT_MS || 3500);
-const GEO_LOW_ACCURACY_TIMEOUT_MS = Number(process.env.REACT_APP_GEO_LOW_ACCURACY_TIMEOUT_MS || 5000);
+const GEO_HIGH_ACCURACY_TIMEOUT_MS = Number(process.env.REACT_APP_GEO_HIGH_ACCURACY_TIMEOUT_MS || 8000);
+const GEO_LOW_ACCURACY_TIMEOUT_MS = Number(process.env.REACT_APP_GEO_LOW_ACCURACY_TIMEOUT_MS || 15000);
 let hasLoggedGeoTimeout = false;
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache

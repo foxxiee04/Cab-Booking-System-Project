@@ -383,14 +383,17 @@ export class PaymentController {
         });
       }
 
+      // VNPay signing is sensitive to encoded separators. Avoid query params in vnp_ReturnUrl.
+      const resolvedReturnUrl = this.normalizeVnpayReturnUrl(returnUrl);
+
       // Build VNPay redirect URL (orderId must be unique, use rideId)
       const { paymentUrl, txnRef } = vnpayGateway.createPaymentUrl({
         amount,
         orderId: rideId.replace(/-/g, '').slice(0, 8), // VNPay max 8 chars
-        orderInfo: `Thanh toan chuyen xe ${rideId}`,
+        orderInfo: `PAY_RIDE_${rideId}`,
         ipAddress: req.ip || '127.0.0.1',
         bankCode,
-        returnUrl,
+        returnUrl: resolvedReturnUrl,
       });
 
       res.status(201).json({
@@ -574,5 +577,20 @@ export class PaymentController {
 
     const uuidMatch = orderInfo.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
     return uuidMatch?.[0] || '';
+  }
+
+  private normalizeVnpayReturnUrl(rawReturnUrl?: string): string | undefined {
+    if (!rawReturnUrl) {
+      return undefined;
+    }
+
+    try {
+      const parsed = new URL(rawReturnUrl);
+      // Keep only origin + path for VNPay checksum stability.
+      return `${parsed.origin}${parsed.pathname}`;
+    } catch {
+      // If invalid URL, let downstream validation handle it.
+      return rawReturnUrl;
+    }
   }
 }

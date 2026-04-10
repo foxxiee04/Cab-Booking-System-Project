@@ -188,7 +188,7 @@ describe('PaymentService - Simple Test Suite', () => {
   });
 
   describe('REFUND PAYMENT', () => {
-    it('should refund payment successfully', async () => {
+    it('should refund payment successfully (MOCK provider)', async () => {
       mockPrisma.payment.findUnique.mockResolvedValue({
         id: 'payment-123',
         rideId: 'ride-123',
@@ -196,6 +196,8 @@ describe('PaymentService - Simple Test Suite', () => {
         amount: 50000,
         customerId: 'customer-123',
         driverId: 'driver-456',
+        provider: 'MOCK',
+        gatewayResponse: null,
       });
 
       mockPrisma.payment.update.mockResolvedValue({
@@ -203,7 +205,7 @@ describe('PaymentService - Simple Test Suite', () => {
         status: 'REFUNDED',
       });
 
-      await paymentService.refundPayment('payment-123', 'Customer requested');
+      await paymentService.refundPayment('ride-123', 'Customer requested');
 
       expect(mockPrisma.payment.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -215,8 +217,60 @@ describe('PaymentService - Simple Test Suite', () => {
       expect(mockEventPublisher.publish).toHaveBeenCalledWith(
         'refund.completed',
         expect.any(Object),
-        expect.any(String)
+        expect.any(String),
       );
+    });
+
+    it('should store refundMetadata with RECORDED status when provider is MOCK (MoMo disabled)', async () => {
+      mockPrisma.payment.findUnique.mockResolvedValue({
+        id: 'payment-123',
+        rideId: 'ride-123',
+        status: 'COMPLETED',
+        amount: 75000,
+        customerId: 'customer-123',
+        driverId: null,
+        provider: 'MOCK',
+        gatewayResponse: null,
+        transactionId: null,
+      });
+
+      let capturedGatewayResponse: string | undefined;
+      mockPrisma.payment.update.mockImplementation(({ data }: any) => {
+        capturedGatewayResponse = data.gatewayResponse;
+        return Promise.resolve({ id: 'payment-123', status: 'REFUNDED' });
+      });
+
+      await paymentService.refundPayment('ride-123', 'Ride cancelled by customer');
+
+      expect(capturedGatewayResponse).toBeDefined();
+      const parsed = JSON.parse(capturedGatewayResponse!);
+      expect(parsed.refund).toBeDefined();
+      expect(parsed.refund.status).toBe('RECORDED');
+      expect(parsed.refund.amount).toBe(75000);
+      expect(parsed.refund.description).toBe('Ride cancelled by customer');
+    });
+
+    it('should throw error when trying to refund non-COMPLETED payment', async () => {
+      mockPrisma.payment.findUnique.mockResolvedValue({
+        id: 'payment-123',
+        rideId: 'ride-123',
+        status: 'PENDING',
+        amount: 50000,
+        customerId: 'customer-123',
+        provider: 'MOCK',
+      });
+
+      await expect(
+        paymentService.refundPayment('ride-123', 'Test')
+      ).rejects.toThrow('Can only refund completed payments');
+    });
+
+    it('should throw error when payment not found for refund', async () => {
+      mockPrisma.payment.findUnique.mockResolvedValue(null);
+
+      await expect(
+        paymentService.refundPayment('non-existent-ride', 'Test')
+      ).rejects.toThrow('Payment not found');
     });
   });
 
@@ -226,12 +280,26 @@ describe('PaymentService - Simple Test Suite', () => {
         id: 'payment-123',
         rideId: 'ride-123',
         status: 'COMPLETED',
+        gatewayResponse: JSON.stringify({
+          refund: {
+            requestId: 'refund-123',
+            refundOrderId: 'ro-123',
+            resultCode: 0,
+          },
+        }),
       });
+      mockPrisma.fare.findUnique.mockResolvedValue(null);
 
       const result = await paymentService.getPaymentByRideId('ride-123');
 
       expect(result).toBeDefined();
       expect(result!.id).toBe('payment-123');
+      expect(result!.refund).toEqual(
+        expect.objectContaining({
+          requestId: 'refund-123',
+          refundOrderId: 'ro-123',
+        })
+      );
     });
 
     it('should get customer payments', async () => {

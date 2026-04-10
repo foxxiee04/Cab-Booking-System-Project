@@ -111,6 +111,23 @@ export const paymentApi = {
     };
   },
 
+  getCustomerPaymentHistory: async (
+    page = 1,
+    limit = 50,
+  ): Promise<{ success: boolean; data: { payments: Payment[]; total: number } }> => {
+    const response = await axiosInstance.get('/payments/customer/history', {
+      params: { page, limit },
+    });
+    const payload = response.data?.data || response.data;
+    return {
+      success: Boolean(response.data?.success),
+      data: {
+        payments: payload?.payments || [],
+        total: payload?.total || 0,
+      },
+    };
+  },
+
   // Payment retry - NOT IMPLEMENTED IN BACKEND
   // Backend limitation: POST /payments/:paymentId/retry endpoint does not exist
   // For production, either implement in backend or remove retry button from UI

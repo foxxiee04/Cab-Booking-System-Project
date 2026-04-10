@@ -484,7 +484,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
         setPredictionLoading((prev) => ({ ...prev, [field]: false }));
       }
     }
-  }, [searchContextLabel]);
+  }, [searchContextLabel, pickup?.lat, pickup?.lng]);
 
   const queuePredictionFetch = useCallback((field: SearchField, value: string) => {
     if (predictionDebounceRef.current[field]) {

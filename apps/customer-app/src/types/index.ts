@@ -59,6 +59,7 @@ export interface Ride {
   completedAt: string | null;
   cancelledAt: string | null;
   cancelReason: string | null;
+  updatedAt?: string | null;
 }
 
 export interface Driver {
@@ -97,8 +98,34 @@ export interface Payment {
   rideId: string;
   amount: number;
   method: PaymentMethod;
-  status: 'PENDING' | 'PROCESSING' | 'REQUIRES_ACTION' | 'COMPLETED' | 'FAILED';
+  provider?: 'MOCK' | 'STRIPE' | 'MOMO' | 'VNPAY' | 'ZALOPAY';
+  status: 'PENDING' | 'PROCESSING' | 'REQUIRES_ACTION' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
   transactionId?: string;
+  refundedAt?: string;
+  updatedAt?: string;
+  refund?: {
+    provider?: string;
+    amount?: number;
+    description?: string;
+    initiatedAt?: string;
+    status?: string;
+    /** MoMo: request ID gửi đến MoMo */
+    requestId?: string;
+    /** MoMo: orderId hoàn tiền (ro_...) */
+    refundOrderId?: string;
+    /** MoMo / VNPay: transactionId của giao dịch hoàn */
+    refundTransactionId?: string;
+    /** MoMo: result code (0 = thành công) */
+    resultCode?: number;
+    /** MoMo: message phản hồi */
+    message?: string;
+    /** VNPay: txnRef gốc (vnp_TxnRef) */
+    txnRef?: string;
+    /** VNPay: mã phản hồi hoàn tiền ('00' = thành công) */
+    responseCode?: string;
+    queryData?: Record<string, any> | null;
+    providerResponse?: Record<string, any> | null;
+  } | null;
   createdAt: string;
 }
 

@@ -388,7 +388,7 @@ const Dashboard: React.FC = () => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [browsingLocation, currentRide, isOnline]);
+  }, [browsingLocation, currentRide, isOnline, profile?.vehicleType]);
 
   // Handle go online/offline
   const handleToggleOnline = async () => {

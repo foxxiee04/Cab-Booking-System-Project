@@ -56,6 +56,11 @@ const OnlinePaymentPage: React.FC = () => {
   };
 
   const buildReturnUrl = (provider: 'MOMO' | 'VNPAY') => {
+    if (provider === 'VNPAY') {
+      // VNPay signature is sensitive to returnUrl query separators.
+      return `${window.location.origin}/payment/callback`;
+    }
+
     const callbackParams = new URLSearchParams({
       provider,
       rideId: rideId || '',

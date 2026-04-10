@@ -49,7 +49,10 @@ export const getRideStatusColor = (status: string): 'default' | 'primary' | 'sec
 export const getPaymentStatusColor = (status: string): 'default' | 'success' | 'error' | 'warning' => {
   const colors: Record<string, any> = {
     PENDING: 'warning',
+    PROCESSING: 'warning',
+    REQUIRES_ACTION: 'warning',
     COMPLETED: 'success',
+    REFUNDED: 'success',
     FAILED: 'error',
   };
   return colors[status] || 'default';

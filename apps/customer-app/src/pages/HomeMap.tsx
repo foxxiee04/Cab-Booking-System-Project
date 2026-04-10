@@ -51,7 +51,18 @@ const HomeMap: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAppSelector((state) => state.auth);
   const { isAuthenticated, accessToken } = useAppSelector((state) => state.auth);
-  const { pickupLocation, dropoffLocation } = useAppSelector((state) => state.ride);
+  const { pickupLocation, dropoffLocation, currentRide } = useAppSelector((state) => state.ride);
+
+  const pendingOnlinePaymentRide = useMemo(() => {
+    if (
+      currentRide?.status === 'CREATED' &&
+      (currentRide.paymentMethod === 'MOMO' || currentRide.paymentMethod === 'VNPAY')
+    ) {
+      return currentRide;
+    }
+
+    return null;
+  }, [currentRide]);
 
   const [error, setErrorMessage] = useState('');
   const [locationNotice, setLocationNotice] = useState('');
@@ -96,9 +107,16 @@ const HomeMap: React.FC = () => {
     const checkActiveRide = async () => {
       try {
         const activeRide = await rideApi.getActiveRide();
-        if (activeRide?.data?.ride) {
-          dispatch(setCurrentRide(activeRide.data.ride));
-          navigate(`/ride/${activeRide.data.ride.id}`);
+        const ride = activeRide?.data?.ride;
+        if (ride) {
+          dispatch(setCurrentRide(ride));
+          // CREATED + online payment = awaiting payment, do NOT redirect (user can resume from home)
+          const isAwaitingOnlinePayment =
+            ride.status === 'CREATED' &&
+            (ride.paymentMethod === 'MOMO' || ride.paymentMethod === 'VNPAY');
+          if (!isAwaitingOnlinePayment) {
+            navigate(`/ride/${ride.id}`);
+          }
         } else {
           dispatch(clearRide());
         }
@@ -309,6 +327,61 @@ const HomeMap: React.FC = () => {
       >
         {locationNotice && <Alert severity="info" sx={{ mb: error ? 1.5 : 2, borderRadius: 2 }} onClose={() => setLocationNotice('')}>{locationNotice}</Alert>}
         {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setErrorMessage('')}>{error}</Alert>}
+
+        {/* Pending online payment banner */}
+        {pendingOnlinePaymentRide && (
+          <Box
+            sx={{
+              mb: 2,
+              p: 1.5,
+              borderRadius: 3,
+              bgcolor: '#f5f3ff',
+              border: '1.5px solid #c4b5fd',
+            }}
+          >
+            <Typography variant="subtitle2" fontWeight={800} color="#6d28d9" gutterBottom>
+              💳 Chuyến đi đang chờ thanh toán
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              Bạn có một chuyến đang chờ thanh toán {pendingOnlinePaymentRide.paymentMethod}. Hoàn tất thanh toán để bắt đầu tìm tài xế.
+            </Typography>
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() => {
+                  const fare = pendingOnlinePaymentRide.fare || 0;
+                  const method = pendingOnlinePaymentRide.paymentMethod as 'MOMO' | 'VNPAY';
+                  navigate(`/payment/online/${pendingOnlinePaymentRide.id}?provider=${method}&amount=${Math.round(fare)}`);
+                }}
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: 700,
+                  background: 'linear-gradient(90deg, #7c3aed, #a855f7)',
+                  '&:hover': { background: 'linear-gradient(90deg, #6d28d9, #9333ea)' },
+                }}
+              >
+                Tiếp tục thanh toán
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                color="error"
+                onClick={async () => {
+                  try {
+                    await rideApi.cancelRide(pendingOnlinePaymentRide.id, 'Khách hàng hủy trước khi thanh toán');
+                    dispatch(clearRide());
+                  } catch {
+                    dispatch(clearRide());
+                  }
+                }}
+                sx={{ borderRadius: 2 }}
+              >
+                Hủy chuyến
+              </Button>
+            </Stack>
+          </Box>
+        )}
 
         {!bookingFlowOpen ? (
           <>

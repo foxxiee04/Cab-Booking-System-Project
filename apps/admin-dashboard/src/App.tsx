@@ -17,7 +17,6 @@ import {
   Divider,
   Badge,
   Popover,
-  Paper,
   Stack,
   Chip,
 } from '@mui/material';

@@ -115,10 +115,12 @@ export class VNPayGateway {
       vnpParams.vnp_BankCode = params.bankCode;
     }
 
-    const encodedParams = this.sortAndEncodeParams(vnpParams);
-    const signData = this.buildSignData(encodedParams);
+    // VNPay signs over raw (non-URL-encoded) values — see official NodeJS demo: encode: false
+    const signData = this.buildRawSignData(vnpParams);
     const secureHash = this.hmacSha512(config.vnpay.hashSecret, signData);
 
+    // Build URL with URL-encoded values for safe transmission
+    const encodedParams = this.sortAndEncodeParams(vnpParams);
     const queryString = `${this.buildSignData(encodedParams)}&vnp_SecureHash=${secureHash}`;
     const paymentUrl = `${config.vnpay.url}?${queryString}`;
 
@@ -153,10 +155,9 @@ export class VNPayGateway {
     delete paramsCopy.vnp_SecureHash;
     delete paramsCopy.vnp_SecureHashType;
 
-    // VNPay signs over URL-encoded values (space as '+').
-    // Express decodes query params, so we must re-encode before verifying.
-    const encodedParamsCopy = this.sortAndEncodeParams(paramsCopy);
-    const signData = this.buildSignData(encodedParamsCopy);
+    // VNPay signs over raw (decoded) values — Express has already decoded the query params.
+    // Do NOT re-encode; use values as-is (matching VNPay official demo: encode: false).
+    const signData = this.buildRawSignData(paramsCopy);
     const expectedHash = this.hmacSha512(config.vnpay.hashSecret, signData);
 
     // Timing-safe comparison to prevent timing attacks
@@ -180,10 +181,19 @@ export class VNPayGateway {
     };
   }
 
-  /** Build the alphabetically sorted query string for signing */
+  /** Build the alphabetically sorted query string for signing (URL-encoded values for build) */
   private buildSignData(params: Record<string, string>): string {
     return Object.keys(params)
       .filter((k) => params[k])
+      .sort()
+      .map((k) => `${k}=${params[k]}`)
+      .join('&');
+  }
+
+  /** Build alphabetically sorted sign string using raw (non-encoded) values — per VNPay spec */
+  private buildRawSignData(params: Record<string, string>): string {
+    return Object.keys(params)
+      .filter((k) => params[k] !== undefined && params[k] !== null && params[k] !== '')
       .sort()
       .map((k) => `${k}=${params[k]}`)
       .join('&');
@@ -206,6 +216,111 @@ export class VNPayGateway {
   /** HMAC-SHA512 hash */
   private hmacSha512(secret: string, data: string): string {
     return crypto.createHmac('sha512', secret).update(data, 'utf-8').digest('hex');
+  }
+
+  /**
+   * Create a refund for a completed VNPay transaction.
+   *
+   * API: POST https://sandbox.vnpayment.vn/merchant_webapi/api/transaction
+   * Signature: pipe-separated raw string (NOT URL-encoded) of these fields in order:
+   *   vnp_RequestId|vnp_Version|vnp_Command|vnp_TmnCode|vnp_TransactionType|
+   *   vnp_TxnRef|vnp_Amount|vnp_TransactionNo|vnp_TransactionDate|
+   *   vnp_CreateBy|vnp_CreateDate|vnp_IpAddr|vnp_OrderInfo
+   *
+   * @param params.txnRef         Original vnp_TxnRef from completed payment
+   * @param params.transactionNo  Original vnp_TransactionNo (use "0" if unknown)
+   * @param params.transactionDate Original vnp_PayDate (yyyyMMddHHmmss, VN timezone)
+   * @param params.amount         Refund amount in VND (integer)
+   * @param params.reason         Human-readable refund reason
+   * @param params.createBy       Operator identifier (defaults to "admin")
+   */
+  async createRefund(params: {
+    txnRef: string;
+    transactionNo: string;
+    transactionDate: string;
+    amount: number;
+    reason: string;
+    createBy?: string;
+  }): Promise<{ responseCode: string; message: string; transactionNo?: string }> {
+    if (!config.vnpay.tmnCode || !config.vnpay.hashSecret) {
+      throw new Error('VNPay is not configured. Set VNPAY_TMN_CODE and VNPAY_HASH_SECRET.');
+    }
+
+    const requestId = `${Date.now()}`;
+    const createBy = params.createBy || 'admin';
+    const createDate = this.formatVNPayDate(new Date());
+    const vnpAmount = Math.round(params.amount * 100);
+
+    const rawSignData = [
+      requestId,
+      '2.1.0',
+      'refund',
+      config.vnpay.tmnCode,
+      '02', // full refund type
+      params.txnRef,
+      String(vnpAmount),
+      params.transactionNo,
+      params.transactionDate,
+      createBy,
+      createDate,
+      '127.0.0.1',
+      params.reason,
+    ].join('|');
+
+    const secureHash = this.hmacSha512(config.vnpay.hashSecret, rawSignData);
+
+    const requestBody = {
+      vnp_RequestId: requestId,
+      vnp_Version: '2.1.0',
+      vnp_Command: 'refund',
+      vnp_TmnCode: config.vnpay.tmnCode,
+      vnp_TransactionType: '02',
+      vnp_TxnRef: params.txnRef,
+      vnp_Amount: vnpAmount,
+      vnp_TransactionNo: params.transactionNo,
+      vnp_TransactionDate: params.transactionDate,
+      vnp_CreateBy: createBy,
+      vnp_CreateDate: createDate,
+      vnp_IpAddr: '127.0.0.1',
+      vnp_OrderInfo: params.reason,
+      vnp_SecureHash: secureHash,
+    };
+
+    const axios = await import('axios');
+    const response = await axios.default.post(
+      config.vnpay.apiUrl,
+      requestBody,
+      { headers: { 'Content-Type': 'application/json' } },
+    );
+
+    const data = response.data as Record<string, any>;
+    logger.info('VNPay refund API response', {
+      txnRef: params.txnRef,
+      responseCode: data.vnp_ResponseCode,
+      message: data.vnp_Message,
+    });
+
+    return {
+      responseCode: String(data.vnp_ResponseCode || '99'),
+      message: String(data.vnp_Message || 'Unknown'),
+      transactionNo: data.vnp_TransactionNo ? String(data.vnp_TransactionNo) : undefined,
+    };
+  }
+
+  /** Format a Date to yyyyMMddHHmmss in Asia/Ho_Chi_Minh timezone */
+  private formatVNPayDate(d: Date): string {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(d);
+    const pick = (type: string) => parts.find((p) => p.type === type)?.value || '';
+    return `${pick('year')}${pick('month')}${pick('day')}${pick('hour')}${pick('minute')}${pick('second')}`;
   }
 
   /** Timing-safe string comparison */

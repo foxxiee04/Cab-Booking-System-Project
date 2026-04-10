@@ -1,12 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Chip, Paper, Stack, Typography } from '@mui/material';
-import {
-  AccessTimeRounded,
-  DirectionsCarFilledRounded,
-  FlagRounded,
-  PlaceRounded,
-  RouteRounded,
-} from '@mui/icons-material';
+import { Box } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { GoogleMap, MarkerF, PolylineF, useJsApiLoader } from '@react-google-maps/api';
@@ -73,36 +66,59 @@ function createLeafletDriverIcon() {
 
 const LeafletViewportController: React.FC<{
   currentLocation?: Location | null;
-  pickupLocation?: Location | null;
-  dropoffLocation?: Location | null;
-}> = ({ currentLocation, pickupLocation, dropoffLocation }) => {
+  destinationLocation?: Location | null;
+  viewportLockedRef: React.MutableRefObject<boolean>;
+  programmaticViewportRef: React.MutableRefObject<boolean>;
+  autoFitKey: string;
+}> = ({ currentLocation, destinationLocation, viewportLockedRef, programmaticViewportRef, autoFitKey }) => {
   const map = useMap();
   const lat0 = currentLocation?.lat;
   const lng0 = currentLocation?.lng;
-  const lat1 = pickupLocation?.lat;
-  const lng1 = pickupLocation?.lng;
-  const lat2 = dropoffLocation?.lat;
-  const lng2 = dropoffLocation?.lng;
+  const lat1 = destinationLocation?.lat;
+  const lng1 = destinationLocation?.lng;
+
+  useEffect(() => {
+    const lockViewport = () => {
+      if (!programmaticViewportRef.current) {
+        viewportLockedRef.current = true;
+      }
+    };
+
+    map.on('dragstart', lockViewport);
+    map.on('zoomstart', lockViewport);
+
+    return () => {
+      map.off('dragstart', lockViewport);
+      map.off('zoomstart', lockViewport);
+    };
+  }, [map, programmaticViewportRef, viewportLockedRef]);
 
   useEffect(() => {
     const points: [number, number][] = [];
     if (lat0 != null && lng0 != null) points.push([lat0, lng0]);
     if (lat1 != null && lng1 != null) points.push([lat1, lng1]);
-    if (lat2 != null && lng2 != null) points.push([lat2, lng2]);
-    if (!points.length) {
+    if (!points.length || viewportLockedRef.current) {
       return;
     }
 
+    programmaticViewportRef.current = true;
+
     if (points.length === 1) {
-      map.setView(points[0], 15, { animate: false });
+      map.setView(points[0], 15, { animate: true });
+      window.setTimeout(() => {
+        programmaticViewportRef.current = false;
+      }, 0);
       return;
     }
 
     map.fitBounds(L.latLngBounds(points), {
       padding: [56, 56],
-      animate: false,
+      animate: true,
     });
-  }, [map, lat0, lng0, lat1, lng1, lat2, lng2]);
+    window.setTimeout(() => {
+      programmaticViewportRef.current = false;
+    }, 0);
+  }, [autoFitKey, map, lat0, lng0, lat1, lng1, programmaticViewportRef, viewportLockedRef]);
 
   return null;
 };
@@ -152,12 +168,11 @@ function getMarkerIcon(color: string): google.maps.Symbol {
 
 interface GoogleDriverTripMapCanvasProps {
   googleMapsApiKey: string;
-  center: google.maps.LatLngLiteral;
+  initialCenter: google.maps.LatLngLiteral;
   themeMode: 'light' | 'dark';
   mode: 'request' | 'pickup' | 'trip';
   currentLocation?: Location | null;
-  pickupLocation?: Location | null;
-  dropoffLocation?: Location | null;
+  destinationLocation?: Location | null;
   routeSummary: RouteSummary | null;
   mapRef: React.MutableRefObject<google.maps.Map | null>;
   onMapLoad: (points: google.maps.LatLngLiteral[]) => void;
@@ -166,12 +181,11 @@ interface GoogleDriverTripMapCanvasProps {
 
 const GoogleDriverTripMapCanvas: React.FC<GoogleDriverTripMapCanvasProps> = ({
   googleMapsApiKey,
-  center,
+  initialCenter,
   themeMode,
   mode,
   currentLocation,
-  pickupLocation,
-  dropoffLocation,
+  destinationLocation,
   routeSummary,
   mapRef,
   onMapLoad,
@@ -194,15 +208,14 @@ const GoogleDriverTripMapCanvas: React.FC<GoogleDriverTripMapCanvasProps> = ({
   return (
     <GoogleMap
       mapContainerStyle={{ width: '100%', height: '100%' }}
-      center={center}
+      center={initialCenter}
       zoom={14}
       onLoad={(map) => {
         mapRef.current = map;
         onMapLoad(
           [
             currentLocation,
-            pickupLocation,
-            dropoffLocation,
+            destinationLocation,
           ].filter(Boolean) as google.maps.LatLngLiteral[]
         );
       }}
@@ -219,11 +232,8 @@ const GoogleDriverTripMapCanvas: React.FC<GoogleDriverTripMapCanvasProps> = ({
         styles: themeMode === 'dark' ? darkMapStyles : undefined,
       }}
     >
-      {pickupLocation && (
-          <MarkerF position={pickupLocation} icon={getMarkerIcon('#5ca38a')} title="Điểm đón" />
-      )}
-      {dropoffLocation && (
-          <MarkerF position={dropoffLocation} icon={getMarkerIcon('#c48686')} title="Điểm đến" />
+        {destinationLocation && (
+          <MarkerF position={destinationLocation} icon={getMarkerIcon(mode === 'trip' ? '#c48686' : '#5ca38a')} title={mode === 'trip' ? 'Điểm đến' : 'Điểm đón'} />
       )}
       {currentLocation && (
           <MarkerF position={currentLocation} icon={getCarSymbol(0, '#5a7fb8')} title="Vị trí của bạn" />
@@ -265,20 +275,38 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
 }) => {
   const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
+  const viewportLockedRef = useRef(false);
+  const programmaticViewportRef = useRef(false);
+  const lastAutoFitKeyRef = useRef('');
   const themeMode = resolveColorMode(colorMode);
   const hasGoogleMapsApiKey = googleMapsApiKey.trim().length > 0;
+
+  const destination = mode === 'trip' ? dropoffLocation : pickupLocation;
 
   const center = useMemo(() => {
     if (currentLocation) {
       return currentLocation;
     }
-    if (pickupLocation) {
-      return pickupLocation;
+    if (destination) {
+      return destination;
     }
     return defaultCenter;
-  }, [currentLocation, pickupLocation]);
+  }, [currentLocation, destination]);
+  const initialCenterRef = useRef(center);
+  const autoFitKey = useMemo(
+    () => [
+      mode,
+      destination?.lat ?? 'x',
+      destination?.lng ?? 'x',
+      currentLocation ? 'driver-present' : 'driver-missing',
+    ].join('|'),
+    [currentLocation, destination?.lat, destination?.lng, mode],
+  );
 
-  const destination = mode === 'trip' ? dropoffLocation : pickupLocation;
+  useEffect(() => {
+    viewportLockedRef.current = false;
+    lastAutoFitKeyRef.current = '';
+  }, [mode, destination?.lat, destination?.lng]);
 
   useEffect(() => {
     let cancelled = false;
@@ -313,24 +341,41 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
     const map = mapRef.current;
     const points = [
       currentLocation,
-      pickupLocation,
-      dropoffLocation,
+      destination,
     ].filter(Boolean) as google.maps.LatLngLiteral[];
 
-    if (!map || points.length === 0 || !window.google) {
+    if (
+      !map ||
+      points.length === 0 ||
+      !window.google ||
+      viewportLockedRef.current ||
+      lastAutoFitKeyRef.current === autoFitKey
+    ) {
       return;
     }
 
+    programmaticViewportRef.current = true;
+    lastAutoFitKeyRef.current = autoFitKey;
+
     if (points.length === 1) {
       map.panTo(points[0]);
-      map.setZoom(15);
+      const currentZoom = map.getZoom() ?? 0;
+      if (currentZoom < 15) {
+        map.setZoom(15);
+      }
+      google.maps.event.addListenerOnce(map, 'idle', () => {
+        programmaticViewportRef.current = false;
+      });
       return;
     }
 
     const bounds = new google.maps.LatLngBounds();
     points.forEach((point) => bounds.extend(point));
     map.fitBounds(bounds, 56);
-  }, [currentLocation, dropoffLocation, pickupLocation, routeSummary]);
+    google.maps.event.addListenerOnce(map, 'idle', () => {
+      programmaticViewportRef.current = false;
+    });
+  }, [autoFitKey, currentLocation, destination]);
 
   const leafletTileUrl =
     themeMode === 'dark'
@@ -349,18 +394,20 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
       style={{ width: '100%', height: '100%' }}
       zoomControl
       scrollWheelZoom
-      zoomAnimation={false}
-      fadeAnimation={false}
-      markerZoomAnimation={false}
     >
       <LeafletTileLayer
         attribution={leafletAttribution}
         url={leafletTileUrl}
         maxZoom={20}
       />
-      <LeafletViewportController currentLocation={currentLocation} pickupLocation={pickupLocation} dropoffLocation={dropoffLocation} />
-      {pickupLocation && <LeafletMarker position={[pickupLocation.lat, pickupLocation.lng]} icon={createLeafletPin('#5ca38a')} />}
-      {dropoffLocation && <LeafletMarker position={[dropoffLocation.lat, dropoffLocation.lng]} icon={createLeafletPin('#c48686')} />}
+      <LeafletViewportController
+        currentLocation={currentLocation}
+        destinationLocation={destination}
+        viewportLockedRef={viewportLockedRef}
+        programmaticViewportRef={programmaticViewportRef}
+        autoFitKey={autoFitKey}
+      />
+      {destination && <LeafletMarker position={[destination.lat, destination.lng]} icon={createLeafletPin(mode === 'trip' ? '#c48686' : '#5ca38a')} />}
       {currentLocation && <LeafletMarker position={[currentLocation.lat, currentLocation.lng]} icon={createLeafletDriverIcon()} />}
       {routeSummary && (
         <>
@@ -390,12 +437,11 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
       {hasGoogleMapsApiKey ? (
         <GoogleDriverTripMapCanvas
           googleMapsApiKey={googleMapsApiKey}
-          center={center}
+          initialCenter={initialCenterRef.current}
           themeMode={themeMode}
           mode={mode}
           currentLocation={currentLocation}
-          pickupLocation={pickupLocation}
-          dropoffLocation={dropoffLocation}
+          destinationLocation={destination}
           routeSummary={routeSummary}
           mapRef={mapRef}
           onMapLoad={(points) => {
@@ -404,84 +450,44 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
               return;
             }
 
+            map.addListener('dragstart', () => {
+              viewportLockedRef.current = true;
+            });
+            map.addListener('zoom_changed', () => {
+              if (!programmaticViewportRef.current) {
+                viewportLockedRef.current = true;
+              }
+            });
+
+            if (lastAutoFitKeyRef.current === autoFitKey) {
+              return;
+            }
+
+            programmaticViewportRef.current = true;
+            lastAutoFitKeyRef.current = autoFitKey;
+
             if (points.length === 1) {
               map.panTo(points[0]);
-              map.setZoom(15);
+              const currentZoom = map.getZoom() ?? 0;
+              if (currentZoom < 15) {
+                map.setZoom(15);
+              }
+              google.maps.event.addListenerOnce(map, 'idle', () => {
+                programmaticViewportRef.current = false;
+              });
               return;
             }
 
             const bounds = new google.maps.LatLngBounds();
             points.forEach((point) => bounds.extend(point));
             map.fitBounds(bounds, 56);
+            google.maps.event.addListenerOnce(map, 'idle', () => {
+              programmaticViewportRef.current = false;
+            });
           }}
           fallback={leafletMap}
         />
       ) : leafletMap}
-
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          pointerEvents: 'none',
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 36%, rgba(148,163,184,0.08) 100%)',
-        }}
-      />
-
-      <Paper
-        elevation={0}
-        sx={{
-          position: 'absolute',
-          top: 12,
-          left: 12,
-          zIndex: 2,
-          px: 1.25,
-          py: 0.85,
-          borderRadius: 999,
-          backgroundColor: themeMode === 'dark' ? 'rgba(17,24,39,0.86)' : 'rgba(255,255,255,0.92)',
-          border: '1px solid rgba(148,163,184,0.18)',
-          backdropFilter: 'blur(10px)',
-        }}
-      >
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-          <Chip size="small" label="Điểm đón" sx={{ bgcolor: 'rgba(92,163,138,0.14)', color: '#3f7f6a' }} />
-          <Chip size="small" label="Tuyến đường" sx={{ bgcolor: 'rgba(90,127,184,0.14)', color: '#4f6ea1' }} />
-          <Chip size="small" label="Điểm đến" sx={{ bgcolor: 'rgba(196,134,134,0.14)', color: '#9b6363' }} />
-        </Stack>
-      </Paper>
-
-      <Paper
-        elevation={8}
-        sx={{
-          position: 'absolute',
-          left: 12,
-          right: 12,
-          bottom: 12,
-          p: 1.5,
-          borderRadius: 4,
-          backgroundColor: themeMode === 'dark' ? 'rgba(17, 24, 39, 0.88)' : 'rgba(255,255,255,0.92)',
-          backdropFilter: 'blur(12px)',
-        }}
-      >
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1 }}>
-          <Chip icon={<DirectionsCarFilledRounded />} label={mode === 'trip' ? 'Đang dẫn tới điểm đến' : 'Đang dẫn tới điểm đón'} size="small" color="primary" />
-          {routeSummary && <Chip icon={<RouteRounded />} label={routeSummary.distanceText} size="small" variant="outlined" />}
-          {routeSummary && <Chip icon={<AccessTimeRounded />} label={routeSummary.durationText} size="small" variant="outlined" />}
-        </Stack>
-        <Stack direction="row" spacing={1.5}>
-          <PlaceRounded sx={{ color: '#5ca38a', mt: 0.2 }} fontSize="small" />
-          <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
-            {pickupLocation?.address || 'Điểm đón'}
-          </Typography>
-        </Stack>
-        {dropoffLocation && (
-          <Stack direction="row" spacing={1.5} sx={{ mt: 0.75 }}>
-            <FlagRounded sx={{ color: '#c48686', mt: 0.2 }} fontSize="small" />
-            <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
-              {dropoffLocation.address || 'Điểm đến'}
-            </Typography>
-          </Stack>
-        )}
-      </Paper>
     </Box>
   );
 };

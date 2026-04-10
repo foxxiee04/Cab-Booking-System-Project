@@ -51,6 +51,28 @@ Kỳ vọng:
 - `resultCode=0` -> payment `COMPLETED`, ride được phép tìm tài xế.
 - mã khác `0` -> payment `FAILED`, ride không chuyển sang tìm tài xế.
 
+### 4.3 Hủy chuyến sau khi đã thanh toán online
+Áp dụng khi customer đã thanh toán `MOMO` xong rồi hủy chuyến.
+
+Kỳ vọng nghiệp vụ:
+1. Ride chuyển `CANCELLED`.
+2. Payment không nên báo ngay kiểu chung chung là "tiền đã về ví" nếu hệ thống mới chỉ vừa gửi refund request.
+3. Với `MOMO`, backend phải tạo refund request riêng và lưu lại thông tin đối soát như `requestId`, `refund orderId`, `resultCode`, `transId`, thời điểm ghi nhận.
+4. UI customer nên hiển thị theo 2 bước:
+   - Khi ride vừa hủy nhưng payment còn `COMPLETED`: "Hệ thống đang gửi yêu cầu hoàn tiền tới MoMo".
+   - Khi payment đã thành `REFUNDED`: "MoMo đã ghi nhận hoàn tiền cho chuyến bị hủy".
+5. Thông tin nên hiển thị gồm:
+   - số tiền hoàn
+   - thời điểm ghi nhận hoàn tiền
+   - mã yêu cầu hoàn (`requestId`)
+   - mã hoàn tiền nội bộ gửi MoMo (`refund orderId`)
+   - mã phản hồi từ MoMo (`resultCode`)
+   - lý do hoàn tiền
+
+Lưu ý về câu chữ:
+- Nên dùng các cụm như `MoMo đã ghi nhận hoàn tiền` hoặc `hệ thống đang gửi yêu cầu hoàn tiền tới MoMo`.
+- Không nên luôn mặc định hiển thị `tiền đã về ví` vì sandbox và thời gian đối soát có thể khác với lúc app nhận callback.
+
 ## 5. Tài khoản test MoMo (nếu dùng app test)
 Thông tin chung:
 - Mật khẩu: `000000`

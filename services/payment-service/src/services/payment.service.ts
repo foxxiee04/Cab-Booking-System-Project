@@ -422,13 +422,15 @@ export class PaymentService {
     } = payload;
 
     try {
-      // Idempotency check: Check if fare already processed (prevent duplicates)
-      const existingFare = await this.prisma.fare.findFirst({
-        where: { rideId }
-      });
+      // Idempotency snapshot: the same ride.completed event may be delivered multiple times.
+      const [existingFare, existingPayment, existingDriverEarnings] = await Promise.all([
+        this.prisma.fare.findUnique({ where: { rideId } }),
+        this.prisma.payment.findUnique({ where: { rideId } }),
+        this.prisma.driverEarnings.findUnique({ where: { rideId } }),
+      ]);
 
-      if (existingFare) {
-        logger.warn(`Fare already processed for ride ${rideId}, skipping duplicate`);
+      if (existingFare && existingPayment && existingDriverEarnings) {
+        logger.warn(`Ride ${rideId} already processed, skipping duplicate ride.completed`);
         return;
       }
 
@@ -458,11 +460,22 @@ export class PaymentService {
       const mappedMethod = this.mapPaymentMethod(paymentMethod);
       const mappedProvider = this.mapPaymentProvider(paymentMethod);
 
-      // Create fare, payment, and driver earnings in a single transaction
+      // Upsert fare, payment, and driver earnings in a single transaction for idempotency safety.
       const createdPayment = await this.prisma.$transaction(async (tx) => {
-        // Create fare record
-        await tx.fare.create({
-          data: {
+        // Upsert fare record
+        await tx.fare.upsert({
+          where: { rideId },
+          update: {
+            baseFare: fareDetails.baseFare,
+            distanceFare: fareDetails.distanceFare,
+            timeFare: fareDetails.timeFare,
+            surgeMultiplier,
+            totalFare: fareDetails.totalFare,
+            distanceKm: distance || 0,
+            durationMinutes: Math.ceil((duration || 0) / 60),
+            currency: 'VND',
+          },
+          create: {
             rideId,
             baseFare: fareDetails.baseFare,
             distanceFare: fareDetails.distanceFare,
@@ -475,9 +488,24 @@ export class PaymentService {
           },
         });
 
-        // Create driver earnings record
-        await tx.driverEarnings.create({
-          data: {
+        // Upsert driver earnings record
+        await tx.driverEarnings.upsert({
+          where: { rideId },
+          update: {
+            driverId,
+            grossFare: earnings.grossFare,
+            commissionRate: earnings.commissionRate,
+            platformFee: earnings.platformFee,
+            bonus: earnings.bonus,
+            penalty: earnings.penalty,
+            netEarnings: earnings.netEarnings,
+            paymentMethod: mappedMethod,
+            driverCollected: earnings.driverCollected,
+            cashDebt: earnings.cashDebt,
+            bonusBreakdown: earnings.breakdown.bonuses as any,
+            penaltyBreakdown: earnings.breakdown.penalties as any,
+          },
+          create: {
             rideId,
             driverId,
             grossFare:       earnings.grossFare,
@@ -494,9 +522,18 @@ export class PaymentService {
           },
         });
 
-        // Create payment record with idempotency key
-        const payment = await tx.payment.create({
-          data: {
+        // Upsert payment record. Do not overwrite status for existing records.
+        const payment = await tx.payment.upsert({
+          where: { rideId },
+          update: {
+            customerId,
+            driverId,
+            amount: fareDetails.totalFare,
+            currency: 'VND',
+            method: mappedMethod,
+            provider: mappedProvider,
+          },
+          create: {
             rideId,
             customerId,
             driverId,
@@ -539,13 +576,15 @@ export class PaymentService {
         return payment;
       });
 
-      // Process payment asynchronously based on method
-      if (mappedMethod === PaymentMethod.CASH) {
-        // Cash payment: mark as completed immediately (COD)
-        await this.processPaymentRecord(createdPayment);
-      } else {
-        // Electronic payment (MOMO/VISA): process with gateway mock
-        await this.processElectronicPaymentRecord(createdPayment);
+      // Process payment only when it is still pending.
+      if (createdPayment.status === PaymentStatus.PENDING) {
+        if (mappedMethod === PaymentMethod.CASH) {
+          // Cash payment: mark as completed immediately (COD)
+          await this.processPaymentRecord(createdPayment);
+        } else {
+          // Electronic payment (MOMO/VISA): process with gateway mock
+          await this.processElectronicPaymentRecord(createdPayment);
+        }
       }
     } catch (error) {
       logger.error(`Error processing ride completed for ${rideId}:`, error);
@@ -850,7 +889,7 @@ export class PaymentService {
     }
 
     const fare = await this.prisma.fare.findUnique({ where: { rideId: payment.rideId } });
-    return { ...payment, fare };
+    return this.serializePaymentRecord(payment, fare);
   }
 
   async getCustomerPayments(customerId: string, page = 1, limit = 20) {
@@ -871,7 +910,7 @@ export class PaymentService {
     const fareByRideId = new Map(fares.map((fare) => [fare.rideId, fare]));
 
     return {
-      payments: payments.map((payment) => ({ ...payment, fare: fareByRideId.get(payment.rideId) || null })),
+      payments: payments.map((payment) => this.serializePaymentRecord(payment, fareByRideId.get(payment.rideId) || null)),
       total,
     };
   }
@@ -922,41 +961,149 @@ export class PaymentService {
       throw new Error('Can only refund completed payments');
     }
 
+    const refundInitiatedAt = new Date();
+    let refundMetadata: Record<string, any> = {
+      provider: payment.provider,
+      amount: Math.round(payment.amount),
+      description: reason,
+      initiatedAt: refundInitiatedAt.toISOString(),
+      status: 'RECORDED',
+    };
+
     if (payment.provider === PaymentProvider.STRIPE && payment.paymentIntentId) {
-      await paymentGatewayManager.createRefund({
+      const refundResponse = await paymentGatewayManager.createRefund({
         provider: PaymentGatewayType.STRIPE,
         paymentIntentId: payment.paymentIntentId,
         amount: payment.amount,
         reason,
       });
+
+      refundMetadata = {
+        ...refundMetadata,
+        status: 'ACCEPTED',
+        refundTransactionId: refundResponse?.id,
+        providerResponse: refundResponse,
+      };
     }
 
-    if (payment.provider === PaymentProvider.MOMO && payment.transactionId && config.momo.enabled) {
-      await momoGateway.createRefund({
-        orderId: payment.rideId,
-        requestId: `refund_${uuidv4()}`,
+    if (payment.provider === PaymentProvider.MOMO) {
+      if (!config.momo.enabled) {
+        throw new Error('MoMo refund is not available because the gateway is disabled');
+      }
+
+      if (!payment.transactionId) {
+        throw new Error('MoMo payment is missing transactionId for refund');
+      }
+
+      const requestId = `refund_${uuidv4()}`;
+      const refundOrderId = `ro_${uuidv4()}`;
+      const refundResponse = await momoGateway.createRefund({
+        orderId: refundOrderId,
+        requestId,
         amount: Math.round(payment.amount),
         transId: payment.transactionId,
         description: reason,
       });
+
+      const resultCode = Number(refundResponse?.resultCode ?? -1);
+      if (![0, 43].includes(resultCode)) {
+        throw new Error(refundResponse?.message || `MoMo refund failed with resultCode ${resultCode}`);
+      }
+
+      let queryData: Record<string, any> | null = null;
+      try {
+        queryData = await momoGateway.queryPaymentStatus({
+          orderId: payment.rideId,
+          requestId: `query_${uuidv4()}`,
+        });
+      } catch (error) {
+        logger.warn('MoMo refund query failed after refund request was accepted', {
+          rideId: payment.rideId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      refundMetadata = {
+        ...refundMetadata,
+        status: 'ACCEPTED',
+        requestId,
+        refundOrderId,
+        resultCode,
+        message: refundResponse?.message,
+        refundTransactionId: refundResponse?.transId ? String(refundResponse.transId) : undefined,
+        providerResponse: refundResponse,
+        queryData,
+      };
+    }
+
+    if (payment.provider === PaymentProvider.VNPAY) {
+      if (!config.vnpay.enabled) {
+        throw new Error('VNPay refund is not available because the gateway is disabled');
+      }
+
+      // Parse stored IPN/return params for txnRef, transactionNo, payDate
+      const gw = this.buildGatewayResponseEnvelope(payment.gatewayResponse);
+      const vnpTxnRef: string = String(gw.vnp_TxnRef || '');
+      const vnpTransactionNo: string = String(gw.vnp_TransactionNo || payment.transactionId || '0');
+      const vnpPayDate: string = String(gw.vnp_PayDate || '');
+
+      if (!vnpTxnRef) {
+        throw new Error('VNPay payment is missing vnp_TxnRef for refund – ensure IPN was processed');
+      }
+
+      const { vnpayGateway: vg } = await import('./vnpay.gateway');
+      const refundResponse = await vg.createRefund({
+        txnRef: vnpTxnRef,
+        transactionNo: vnpTransactionNo,
+        transactionDate: vnpPayDate,
+        amount: Math.round(payment.amount),
+        reason,
+      });
+
+      if (refundResponse.responseCode !== '00') {
+        throw new Error(`VNPay refund failed: ${refundResponse.message} (code ${refundResponse.responseCode})`);
+      }
+
+      refundMetadata = {
+        ...refundMetadata,
+        status: 'ACCEPTED',
+        txnRef: vnpTxnRef,
+        refundTransactionId: refundResponse.transactionNo,
+        responseCode: refundResponse.responseCode,
+        message: refundResponse.message,
+        providerResponse: refundResponse,
+      };
     }
 
     if (payment.provider === PaymentProvider.ZALOPAY && payment.transactionId && config.zalopay.enabled) {
-      await zaloPayGateway.createRefund({
+      const refundResponse = await zaloPayGateway.createRefund({
         zpTransId: payment.transactionId,
         amount: Math.round(payment.amount),
         description: reason,
         refundId: uuidv4(),
       });
+
+      refundMetadata = {
+        ...refundMetadata,
+        status: 'ACCEPTED',
+        refundTransactionId: refundResponse?.refund_id || refundResponse?.m_refund_id,
+        providerResponse: refundResponse,
+      };
     }
+
+    const gatewayResponse = this.buildGatewayResponseEnvelope(payment.gatewayResponse);
+    const nextGatewayResponse = JSON.stringify({
+      ...gatewayResponse,
+      refund: refundMetadata,
+    });
 
     await this.prisma.$transaction(async (tx) => {
       await tx.payment.update({
         where: { id: payment.id },
         data: {
           status: PaymentStatus.REFUNDED,
-          refundedAt: new Date(),
-          gatewayResponse: reason,
+          refundedAt: refundInitiatedAt,
+          gatewayResponse: nextGatewayResponse,
         },
       });
 
@@ -969,6 +1116,7 @@ export class PaymentService {
             customerId: payment.customerId,
             amount: payment.amount,
             reason,
+            refund: refundMetadata,
           }),
           correlationId: payment.rideId,
         },
@@ -981,6 +1129,7 @@ export class PaymentService {
       customerId: payment.customerId,
       amount: payment.amount,
       reason,
+      refund: refundMetadata,
     }, payment.rideId);
 
     logger.info(`Refund completed for ride ${rideId}`);
@@ -1000,7 +1149,7 @@ export class PaymentService {
       this.prisma.payment.count({ where }),
     ]);
 
-    return { payments, total };
+    return { payments: payments.map((payment) => this.serializePaymentRecord(payment)), total };
   }
 
   async getAdminStats() {
@@ -1196,6 +1345,28 @@ export class PaymentService {
     } catch {
       return null;
     }
+  }
+
+  private buildGatewayResponseEnvelope(raw: string | null): Record<string, any> {
+    const parsed = this.parseGatewayResponse(raw);
+    if (!parsed || Array.isArray(parsed)) {
+      return {};
+    }
+
+    return parsed;
+  }
+
+  private serializePaymentRecord(payment: any, fare: any = null) {
+    const gatewayResponse = this.buildGatewayResponseEnvelope(payment.gatewayResponse);
+    const refund = gatewayResponse.refund && typeof gatewayResponse.refund === 'object'
+      ? gatewayResponse.refund
+      : null;
+
+    return {
+      ...payment,
+      fare,
+      refund,
+    };
   }
 
   private async synchronizePaymentByIntentId(input: {

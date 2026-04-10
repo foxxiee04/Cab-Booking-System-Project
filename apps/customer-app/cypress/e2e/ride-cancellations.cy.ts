@@ -120,7 +120,7 @@ describe('Browser smoke ride cancellations', () => {
     cancelActiveRide(CUSTOMER_PHONE, SEED_PASSWORD);
   });
 
-  it('lets the customer cancel an unassigned ride and shows it in admin', () => {
+  it('lets the customer cancel an unassigned CASH ride and shows it in admin', () => {
     loginWithPassword(CUSTOMER_PHONE, '/home');
     loginAdmin();
 
@@ -132,6 +132,10 @@ describe('Browser smoke ride cancellations', () => {
 
       cy.visit(`/ride/${rideId}`);
       cy.contains('button', 'Hủy chuyến', { timeout: 30000 }).click();
+
+      // After cancel, page stays on ride screen showing CANCELLED receipt
+      cy.location('pathname', { timeout: 30000 }).should('match', /^\/ride\//);
+      cy.get('[data-testid="back-to-home-btn"]', { timeout: 30000 }).should('be.visible').click();
       cy.location('pathname', { timeout: 30000 }).should('eq', '/home');
 
       cy.visit('/activity');
@@ -142,6 +146,216 @@ describe('Browser smoke ride cancellations', () => {
         cy.visit('/rides');
         cy.contains('[role="row"]', rideId, { timeout: 30000 }).should('contain.text', 'Đã hủy');
       });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────
+  // MoMo refund UX tests (use cy.intercept to mock payment states)
+  // ────────────────────────────────────────────────────────────────
+
+  describe('MoMo refund UI states', () => {
+    /** Builds a minimal mock Payment object returned by GET /api/payments/ride/:rideId */
+    const mockPayment = (rideId: string, overrides: Record<string, unknown> = {}) => ({
+      success: true,
+      data: {
+        payment: {
+          id: 'pay-mock-001',
+          rideId,
+          customerId: 'cust-mock-001',
+          amount: 85000,
+          method: 'MOMO',
+          provider: 'MOMO',
+          status: 'COMPLETED',
+          transactionId: 'TX_MOMO_12345',
+          createdAt: new Date().toISOString(),
+          refundedAt: null,
+          refund: null,
+          ...overrides,
+        },
+      },
+    });
+
+    /** Builds a mock ride response for GET /api/rides/:rideId */
+    const mockRide = (rideId: string, status: string, paymentMethod = 'MOMO') => ({
+      success: true,
+      data: {
+        ride: {
+          id: rideId,
+          customerId: 'cust-mock-001',
+          driverId: null,
+          status,
+          paymentMethod,
+          vehicleType: 'CAR_4',
+          pickup: { lat: 10.7769, lng: 106.7009, address: 'Bến Thành, Quận 1, TP.HCM' },
+          dropoff: { lat: 10.8189, lng: 106.6592, address: 'Tân Sơn Nhất, Tân Bình, TP.HCM' },
+          fare: 85000,
+          distance: 7.2,
+          duration: 900,
+          surgeMultiplier: 1,
+          requestedAt: new Date().toISOString(),
+          cancelledAt: status === 'CANCELLED' ? new Date().toISOString() : null,
+          cancelReason: status === 'CANCELLED' ? 'Khách hàng hủy chuyến' : null,
+          assignedAt: null,
+          acceptedAt: null,
+          startedAt: null,
+          completedAt: null,
+        },
+      },
+    });
+
+    it('shows pending-refund alert when MoMo ride is CANCELLED but payment still COMPLETED', () => {
+      const FAKE_RIDE_ID = 'mock-ride-momo-pending-001';
+
+      // Mock ride endpoint — CANCELLED
+      cy.intercept('GET', `**/rides/${FAKE_RIDE_ID}`, mockRide(FAKE_RIDE_ID, 'CANCELLED')).as('getRide');
+      // Mock payment endpoint — still COMPLETED (refund in-flight)
+      cy.intercept('GET', `**/payments/ride/${FAKE_RIDE_ID}`, mockPayment(FAKE_RIDE_ID, { status: 'COMPLETED' })).as('getPayment');
+      // Stub any driver endpoint
+      cy.intercept('GET', `**/drivers/*`, { statusCode: 404, body: { success: false } });
+
+      loginWithPassword(CUSTOMER_PHONE, '/home');
+
+      cy.visit(`/ride/${FAKE_RIDE_ID}`);
+
+      // Pending refund alert should be visible
+      cy.get('[data-testid="refund-pending-alert"]', { timeout: 15000 }).should('be.visible');
+      cy.get('[data-testid="refund-pending-alert"]').should('contain.text', 'Hệ thống đang gửi yêu cầu hoàn tiền tới MoMo');
+
+      // Should NOT navigate away — still on ride screen
+      cy.location('pathname').should('eq', `/ride/${FAKE_RIDE_ID}`);
+
+      // Success alert should NOT be present
+      cy.get('[data-testid="refund-success-alert"]').should('not.exist');
+
+      // "Quay về trang chủ" button should be visible (CANCELLED state)
+      cy.get('[data-testid="back-to-home-btn"]').should('be.visible');
+    });
+
+    it('shows refunded-success alert with full details when payment status is REFUNDED', () => {
+      const FAKE_RIDE_ID = 'mock-ride-momo-refunded-002';
+      const refundedAt = new Date().toISOString();
+
+      // Mock ride — CANCELLED
+      cy.intercept('GET', `**/rides/${FAKE_RIDE_ID}`, mockRide(FAKE_RIDE_ID, 'CANCELLED')).as('getRide');
+
+      // Mock payment — REFUNDED with full metadata
+      cy.intercept('GET', `**/payments/ride/${FAKE_RIDE_ID}`, mockPayment(FAKE_RIDE_ID, {
+        status: 'REFUNDED',
+        refundedAt,
+        refund: {
+          provider: 'MOMO',
+          amount: 85000,
+          description: 'Hoàn tiền do khách hủy chuyến',
+          initiatedAt: refundedAt,
+          status: 'success',
+          requestId: 'refund_abc123',
+          refundOrderId: 'ro_xyz789',
+          refundTransactionId: 'MOMO_REFUND_TX_999',
+          resultCode: 0,
+          message: 'Successful.',
+        },
+      })).as('getPayment');
+
+      cy.intercept('GET', `**/drivers/*`, { statusCode: 404, body: { success: false } });
+
+      loginWithPassword(CUSTOMER_PHONE, '/home');
+      cy.visit(`/ride/${FAKE_RIDE_ID}`);
+
+      // Refund success alert must be visible
+      cy.get('[data-testid="refund-success-alert"]', { timeout: 15000 }).should('be.visible');
+      cy.get('[data-testid="refund-success-alert"]').should('contain.text', 'đã ghi nhận hoàn tiền');
+
+      // Payment status chip shows "Đã hoàn tiền"
+      cy.get('[data-testid="payment-status-chip"]', { timeout: 10000 })
+        .should('be.visible')
+        .should('contain.text', 'Đã hoàn tiền');
+
+      // Pending alert must NOT appear
+      cy.get('[data-testid="refund-pending-alert"]').should('not.exist');
+
+      // Should still be on ride page (not auto-redirected)
+      cy.location('pathname').should('eq', `/ride/${FAKE_RIDE_ID}`);
+    });
+
+    it('shows refund badge "Đã hoàn tiền" on cancelled MoMo ride in ride history page', () => {
+      const FAKE_RIDE_ID = 'mock-ride-momo-history-003';
+      const refundedAt = new Date().toISOString();
+
+      // Mock rides history endpoint
+      cy.intercept('GET', '**/rides/customer/history*', {
+        success: true,
+        data: {
+          rides: [
+            {
+              id: FAKE_RIDE_ID,
+              customerId: 'cust-mock-001',
+              driverId: null,
+              status: 'CANCELLED',
+              paymentMethod: 'MOMO',
+              vehicleType: 'CAR_4',
+              pickup: { lat: 10.7769, lng: 106.7009, address: 'Bến Thành' },
+              dropoff: { lat: 10.8189, lng: 106.6592, address: 'Tân Sơn Nhất' },
+              fare: 85000,
+              distance: 7.2,
+              duration: 900,
+              surgeMultiplier: 1,
+              requestedAt: new Date(Date.now() - 3600000).toISOString(),
+              cancelledAt: refundedAt,
+              cancelReason: 'Khách hàng hủy chuyến',
+              assignedAt: null,
+              acceptedAt: null,
+              startedAt: null,
+              completedAt: null,
+            },
+          ],
+          total: 1,
+        },
+      }).as('getRidesHistory');
+
+      // Mock payments history endpoint — REFUNDED
+      cy.intercept('GET', '**/payments/customer/history*', {
+        success: true,
+        data: {
+          payments: [
+            {
+              id: 'pay-mock-hist-001',
+              rideId: FAKE_RIDE_ID,
+              customerId: 'cust-mock-001',
+              amount: 85000,
+              method: 'MOMO',
+              provider: 'MOMO',
+              status: 'REFUNDED',
+              transactionId: 'TX_MOMO_12345',
+              createdAt: new Date(Date.now() - 3600000).toISOString(),
+              refundedAt,
+              refund: {
+                provider: 'MOMO',
+                amount: 85000,
+                description: 'Hoàn tiền do khách hủy chuyến',
+                requestId: 'refund_abc123',
+                refundOrderId: 'ro_xyz789',
+                refundTransactionId: 'MOMO_REFUND_TX_999',
+                resultCode: 0,
+              },
+            },
+          ],
+          total: 1,
+        },
+      }).as('getPaymentsHistory');
+
+      loginWithPassword(CUSTOMER_PHONE, '/home');
+      cy.visit('/history');
+
+      cy.wait('@getRidesHistory');
+      cy.wait('@getPaymentsHistory');
+
+      // Refunded badge should appear on the cancelled-MOMO ride card
+      cy.get('[data-testid="refund-badge-refunded"]', { timeout: 15000 })
+        .should('be.visible')
+        .should('contain.text', 'Đã hoàn tiền');
+
+      // Pending badge should NOT be visible for this ride
+      cy.get('[data-testid="refund-badge-pending"]').should('not.exist');
     });
   });
 
