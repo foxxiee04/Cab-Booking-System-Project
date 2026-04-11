@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import { ArrowBack as BackIcon } from '@mui/icons-material';
 import { paymentApi } from '../api/payment.api';
+import { rideApi } from '../api/ride.api';
 import { QRCodePayment } from '../components/payment/QRCodePayment';
 
 export type PaymentMethod = 'CASH' | 'MOMO' | 'VNPAY';
@@ -68,14 +69,75 @@ const OnlinePaymentPage: React.FC = () => {
     return `${window.location.origin}/payment/callback?${callbackParams.toString()}`;
   };
 
-  // Get data from query params (passed from booking)
+  // Resolve amount from query first; fallback to ride/payment data for retry/resume flows.
   useEffect(() => {
-    const amountParam = searchParams.get('amount');
-    if (amountParam) {
-      setAmount(Math.round(Number(amountParam)));
-    }
-    setLoading(false);
-  }, [searchParams]);
+    let cancelled = false;
+
+    const resolveAmount = async () => {
+      if (!rideId) {
+        setLoading(false);
+        return;
+      }
+
+      const amountParam = Number(searchParams.get('amount') || 0);
+      if (Number.isFinite(amountParam) && amountParam > 0) {
+        if (!cancelled) {
+          setAmount(Math.round(amountParam));
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const [rideResult, paymentResult] = await Promise.allSettled([
+          rideApi.getRide(rideId),
+          paymentApi.getPaymentByRide(rideId),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        const rideData = rideResult.status === 'fulfilled' ? (rideResult.value?.data?.ride || {}) as Record<string, any> : {};
+        const paymentData = paymentResult.status === 'fulfilled' ? (paymentResult.value?.data?.payment || {}) as Record<string, any> : {};
+
+        const rideFare = Number(
+          rideData.fare
+          || rideData.estimatedFare
+          || rideData.totalFare
+          || rideData.finalFare
+          || 0
+        );
+        const paymentAmount = Number(
+          paymentData.amount
+          || paymentData.totalAmount
+          || paymentData.finalAmount
+          || 0
+        );
+        const resolvedAmount = rideFare > 0 ? rideFare : paymentAmount;
+
+        if (resolvedAmount > 0) {
+          setAmount(Math.round(resolvedAmount));
+        } else {
+          setError('Không thể xác định số tiền thanh toán cho chuyến đi này.');
+        }
+      } catch {
+        if (!cancelled) {
+          setError('Không thể tải thông tin thanh toán. Vui lòng thử lại.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void resolveAmount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rideId, searchParams]);
 
   // Create payment intent when method changes
   useEffect(() => {
@@ -164,13 +226,13 @@ const OnlinePaymentPage: React.FC = () => {
     );
   }
 
-  if (!rideId || !amount) {
+  if (!rideId || !amount || amount <= 0) {
     return (
       <Container maxWidth="sm" sx={{ py: 4 }}>
         <Alert severity="error">
           Thiếu thông tin chuyến đi hoặc số tiền thanh toán
         </Alert>
-        <Button onClick={() => navigate('/home')} sx={{ mt: 2 }}>
+        <Button onClick={() => (rideId ? navigate(`/ride/${rideId}`) : navigate('/home'))} sx={{ mt: 2 }}>
           Quay lại
         </Button>
       </Container>

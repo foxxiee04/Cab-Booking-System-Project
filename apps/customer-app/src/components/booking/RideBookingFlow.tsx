@@ -397,11 +397,11 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                 Đang tải thêm giá cho các loại xe còn lại. Bạn vẫn có thể tiếp tục với lựa chọn hiện tại.
               </Alert>
             )}
-            <Grid container spacing={2}>
+            <Grid container spacing={1.4}>
               {vehicleOptions.map((vehicle) => {
                 const estimate = priceEstimates[vehicle.type];
                 return (
-                  <Grid item xs={12} sm={6} key={vehicle.type}>
+                  <Grid item xs={12} key={vehicle.type}>
                     <Card
                       variant={selectedVehicle === vehicle.type ? 'elevation' : 'outlined'}
                       sx={{

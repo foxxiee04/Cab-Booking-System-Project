@@ -225,10 +225,38 @@ export function formatAddressFromOSM(address: OSMAddressLike, fallback: string, 
     ? 'TP. HCM'
     : normalizeProvinceName(provinceRaw || cityRaw);
 
-  const subCity = resolveHcmSubCity(address);
-  const firstPart = poiName && poiName !== (address.road || '') ? poiName : street;
+  const normalizeAddressPartForHcm = (part: string): string => {
+    if (!part) {
+      return part;
+    }
 
-  const parts = [firstPart, ward, subCity, province].filter(Boolean);
+    const chunks = part.split(',').map((item) => item.trim()).filter(Boolean);
+    const hasHcmChunk = chunks.some((item) => {
+      const key = normalizeText(item);
+      return key.includes('ho chi minh') || key.includes('tp hcm');
+    });
+
+    const filtered = chunks.filter((item) => {
+      const key = normalizeText(item);
+      if (!key) {
+        return false;
+      }
+
+      if ((isHcmContextFromAddress(address) || hasHcmChunk) && (key === 'thanh pho thu duc' || key === 'thu duc')) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return filtered.join(', ');
+  };
+
+  const firstPartRaw = poiName && poiName !== (address.road || '') ? poiName : street;
+  const firstPart = normalizeAddressPartForHcm(firstPartRaw);
+
+  // Keep address concise and stable for HCMC; avoid forcing sub-city labels.
+  const parts = [firstPart, ward, province].filter(Boolean);
   const deduped: string[] = [];
   for (const part of parts) {
     const key = normalizeText(part);
@@ -246,21 +274,46 @@ export function normalizeAddressText(input: string): string {
     return value;
   }
 
-  const normalized = normalizeText(value);
-  if (normalized.includes('ho chi minh') || normalized.includes('tp hcm')) {
-    value = value.replace(/\b(thanh pho|tp\.?|tinh)\s*ho\s*chi\s*minh\b/gi, 'TP. HCM');
+  const parts = value
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => part.replace(/\b(thành phố|thanh pho|tp\.?|tỉnh|tinh)\s*ho\s*chi\s*minh\b/gi, 'TP. HCM'));
+
+  const hasHcm = parts.some((part) => {
+    const key = normalizeText(part);
+    return key.includes('ho chi minh') || key.includes('tp hcm');
+  });
+
+  const normalizedParts = parts
+    .map((part) => part.replace(/\b(thành phố|thanh pho|tp\.?)\s*thu\s*duc\b/gi, '').replace(/\s{2,}/g, ' ').trim())
+    .filter(Boolean);
+
+  const filteredParts = normalizedParts.filter((part) => {
+    const key = normalizeText(part);
+    if (!key) {
+      return false;
+    }
+
+    if ((hasHcm && key === 'thu duc') || key === 'thanh pho thu duc') {
+      return false;
+    }
+
+    return true;
+  });
+
+  const dedupedParts: string[] = [];
+  for (const part of filteredParts) {
+    const key = normalizeText(part);
+    if (!dedupedParts.some((existing) => normalizeText(existing) === key)) {
+      dedupedParts.push(part);
+    }
   }
 
-  // Keep Thu Duc as sub-city, never as province tail.
-  value = value.replace(/\bthanh pho\s+thu\s+duc\b/gi, 'Thành phố Thủ Đức');
+  value = dedupedParts.join(', ');
 
   // Collapse repetitive commas/spaces.
   value = value.replace(/\s*,\s*/g, ', ').replace(/,+/g, ',').replace(/\s{2,}/g, ' ').trim();
-
-  // If ending with only Thu Duc (without HCM), append HCM context.
-  if (/thanh pho thu duc$/i.test(normalizeText(value))) {
-    value = `${value}, TP. HCM`;
-  }
 
   return value;
 }

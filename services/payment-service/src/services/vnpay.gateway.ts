@@ -115,12 +115,11 @@ export class VNPayGateway {
       vnpParams.vnp_BankCode = params.bankCode;
     }
 
-    // VNPay signs over raw (non-URL-encoded) values — see official NodeJS demo: encode: false
-    const signData = this.buildRawSignData(vnpParams);
+    // VNPay checksum for this merchant requires signing URL-encoded sorted params.
+    const encodedParams = this.sortAndEncodeParams(vnpParams);
+    const signData = this.buildSignData(encodedParams);
     const secureHash = this.hmacSha512(config.vnpay.hashSecret, signData);
 
-    // Build URL with URL-encoded values for safe transmission
-    const encodedParams = this.sortAndEncodeParams(vnpParams);
     const queryString = `${this.buildSignData(encodedParams)}&vnp_SecureHash=${secureHash}`;
     const paymentUrl = `${config.vnpay.url}?${queryString}`;
 
@@ -155,9 +154,9 @@ export class VNPayGateway {
     delete paramsCopy.vnp_SecureHash;
     delete paramsCopy.vnp_SecureHashType;
 
-    // VNPay signs over raw (decoded) values — Express has already decoded the query params.
-    // Do NOT re-encode; use values as-is (matching VNPay official demo: encode: false).
-    const signData = this.buildRawSignData(paramsCopy);
+    // Re-encode sorted params to reconstruct VNPay's signed payload.
+    const encodedParamsCopy = this.sortAndEncodeParams(paramsCopy);
+    const signData = this.buildSignData(encodedParamsCopy);
     const expectedHash = this.hmacSha512(config.vnpay.hashSecret, signData);
 
     // Timing-safe comparison to prevent timing attacks

@@ -1046,6 +1046,20 @@ export class PaymentService {
       const vnpTxnRef: string = String(gw.vnp_TxnRef || '');
       const vnpTransactionNo: string = String(gw.vnp_TransactionNo || payment.transactionId || '0');
       const vnpPayDate: string = String(gw.vnp_PayDate || '');
+      const vnpBankCode: string = String(gw.vnp_BankCode || '');
+      const vnpBankTranNo: string = String(gw.vnp_BankTranNo || '');
+      const vnpCardType: string = String(gw.vnp_CardType || '');
+      const vnpCardNo: string = String(gw.vnp_CardNo || gw.vnp_CardNumber || '');
+
+      const vnpQueryData = {
+        vnp_TxnRef: vnpTxnRef || undefined,
+        vnp_TransactionNo: vnpTransactionNo || undefined,
+        vnp_BankCode: vnpBankCode || undefined,
+        vnp_BankTranNo: vnpBankTranNo || undefined,
+        vnp_CardType: vnpCardType || undefined,
+        vnp_CardNo: vnpCardNo || undefined,
+        vnp_PayDate: vnpPayDate || undefined,
+      };
 
       if (!vnpTxnRef) {
         throw new Error('VNPay payment is missing vnp_TxnRef for refund – ensure IPN was processed');
@@ -1069,8 +1083,13 @@ export class PaymentService {
         status: 'ACCEPTED',
         txnRef: vnpTxnRef,
         refundTransactionId: refundResponse.transactionNo,
+        bankCode: vnpBankCode || undefined,
+        bankTransactionNo: vnpBankTranNo || undefined,
+        cardType: vnpCardType || undefined,
+        bankAccount: vnpCardNo || undefined,
         responseCode: refundResponse.responseCode,
         message: refundResponse.message,
+        queryData: vnpQueryData,
         providerResponse: refundResponse,
       };
     }
@@ -1358,9 +1377,33 @@ export class PaymentService {
 
   private serializePaymentRecord(payment: any, fare: any = null) {
     const gatewayResponse = this.buildGatewayResponseEnvelope(payment.gatewayResponse);
-    const refund = gatewayResponse.refund && typeof gatewayResponse.refund === 'object'
-      ? gatewayResponse.refund
+    const rawRefund = gatewayResponse.refund && typeof gatewayResponse.refund === 'object'
+      ? { ...(gatewayResponse.refund as Record<string, any>) }
       : null;
+
+    let refund = rawRefund;
+    if (refund && payment.provider === PaymentProvider.VNPAY) {
+      const existingQueryData = refund.queryData && typeof refund.queryData === 'object'
+        ? { ...(refund.queryData as Record<string, any>) }
+        : {};
+
+      const enrichedQueryData = {
+        ...existingQueryData,
+        vnp_BankCode: existingQueryData.vnp_BankCode || gatewayResponse.vnp_BankCode,
+        vnp_BankTranNo: existingQueryData.vnp_BankTranNo || gatewayResponse.vnp_BankTranNo,
+        vnp_CardType: existingQueryData.vnp_CardType || gatewayResponse.vnp_CardType,
+        vnp_CardNo: existingQueryData.vnp_CardNo || gatewayResponse.vnp_CardNo || gatewayResponse.vnp_CardNumber,
+      };
+
+      refund = {
+        ...refund,
+        bankCode: refund.bankCode || gatewayResponse.vnp_BankCode,
+        bankTransactionNo: refund.bankTransactionNo || gatewayResponse.vnp_BankTranNo,
+        bankAccount: refund.bankAccount || gatewayResponse.vnp_CardNo || gatewayResponse.vnp_CardNumber,
+        cardType: refund.cardType || gatewayResponse.vnp_CardType,
+        queryData: enrichedQueryData,
+      };
+    }
 
     return {
       ...payment,

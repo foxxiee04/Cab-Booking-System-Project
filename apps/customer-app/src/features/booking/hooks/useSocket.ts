@@ -26,12 +26,30 @@ export interface UseSocketResult {
 }
 
 function normalizeDriverLocation(payload: DriverLocationSocketPayload): DriverLocationUpdate | null {
-  const lat = payload.lat ?? payload.location?.lat ?? payload.coordinates?.lat;
-  const lng = payload.lng ?? payload.location?.lng ?? payload.coordinates?.lng;
+  const latRaw =
+    payload.lat ??
+    payload.location?.lat ??
+    payload.coordinates?.lat ??
+    (payload as any).latitude ??
+    (payload as any).location?.latitude ??
+    (payload as any).coordinates?.latitude;
+  const lngRaw =
+    payload.lng ??
+    payload.location?.lng ??
+    payload.coordinates?.lng ??
+    (payload as any).longitude ??
+    (payload as any).location?.longitude ??
+    (payload as any).coordinates?.longitude;
 
-  if (typeof lat !== 'number' || typeof lng !== 'number') {
+  const lat = typeof latRaw === 'string' ? Number(latRaw) : latRaw;
+  const lng = typeof lngRaw === 'string' ? Number(lngRaw) : lngRaw;
+
+  if (typeof lat !== 'number' || Number.isNaN(lat) || typeof lng !== 'number' || Number.isNaN(lng)) {
     return null;
   }
+
+  const speedRaw = (payload as any).speedKph ?? (payload as any).speed ?? (payload.location as any)?.speed;
+  const normalizedSpeed = typeof speedRaw === 'string' ? Number(speedRaw) : speedRaw;
 
   return {
     driverId: payload.driverId,
@@ -39,6 +57,7 @@ function normalizeDriverLocation(payload: DriverLocationSocketPayload): DriverLo
     lat,
     lng,
     heading: payload.heading ?? payload.location?.heading,
+    speedKph: typeof normalizedSpeed === 'number' && !Number.isNaN(normalizedSpeed) ? normalizedSpeed : undefined,
     timestamp: payload.timestamp ?? Date.now(),
   };
 }

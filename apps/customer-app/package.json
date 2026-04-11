@@ -43,7 +43,7 @@
     "cypress": "^13.6.1"
   },
   "scripts": {
-    "start": "node --no-warnings ./node_modules/react-scripts/bin/react-scripts.js start",
+    "start": "node -e \"const fs=require('fs');fs.mkdirSync('./node_modules/.cache',{recursive:true});const p='./node_modules/.cache/tsconfig.tsbuildinfo';if(!fs.existsSync(p))fs.writeFileSync(p,'{}');\" && node --no-warnings ./node_modules/react-scripts/bin/react-scripts.js start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",

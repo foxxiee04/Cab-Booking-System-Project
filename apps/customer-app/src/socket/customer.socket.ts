@@ -7,37 +7,82 @@ import { refreshAuthSession } from '../api/axios.config';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
 
+const normalizeCancelledMessage = (message?: string) => {
+  const raw = (message || '').trim();
+  if (!raw) {
+    return 'Bạn có thể quay lại trang chủ để đặt chuyến mới.';
+  }
+
+  if (/ride has been cancelled|cancelled/i.test(raw)) {
+    return 'Chuyến đi đã bị hủy. Bạn có thể quay lại trang chủ để đặt chuyến mới.';
+  }
+
+  return raw;
+};
+
+const toVietnameseMessage = (message: string | undefined, fallback: string): string => {
+  const raw = (message || '').trim();
+  if (!raw) {
+    return fallback;
+  }
+
+  const normalized = raw.toLowerCase();
+
+  if (/ride has been cancelled|trip has been cancelled|cancelled/i.test(raw)) {
+    return 'Chuyến đi đã bị hủy. Bạn có thể quay lại trang chủ để đặt chuyến mới.';
+  }
+  if (/driver assigned|driver accepted|driver is on the way|heading to pickup/i.test(raw)) {
+    return 'Tài xế đã nhận chuyến và đang tới điểm đón của bạn.';
+  }
+  if (/driver arrived|arrived at pickup/i.test(raw)) {
+    return 'Tài xế đã tới điểm đón. Hãy chuẩn bị lên xe.';
+  }
+  if (/ride completed|trip completed|payment completed/i.test(raw)) {
+    return 'Chuyến đi đã hoàn tất thành công.';
+  }
+  if (/timeout|no driver|no available driver|searching for driver/i.test(raw)) {
+    return 'Chưa có tài xế nhận chuyến, hệ thống đang tiếp tục tìm tài xế khác.';
+  }
+
+  const isAsciiOnly = /^[\x00-\x7F]+$/.test(raw);
+  if (isAsciiOnly) {
+    return fallback;
+  }
+
+  return raw;
+};
+
 const getRideStatusNotification = (status: string, message?: string) => {
   switch (status) {
     case 'ASSIGNED':
       return {
         type: 'success' as const,
         title: 'Đã có tài xế nhận chuyến',
-        message: message || 'Tài xế đã nhận chuyến và đang chuẩn bị tới điểm đón của bạn.',
+        message: toVietnameseMessage(message, 'Tài xế đã nhận chuyến và đang chuẩn bị tới điểm đón của bạn.'),
       };
     case 'ACCEPTED':
       return {
         type: 'success' as const,
         title: 'Tài xế đang tới đón',
-        message: message || 'Bạn có thể theo dõi vị trí tài xế theo thời gian thực.',
+        message: toVietnameseMessage(message, 'Bạn có thể theo dõi vị trí tài xế theo thời gian thực.'),
       };
     case 'PICKING_UP':
       return {
         type: 'info' as const,
         title: 'Tài xế đã tới điểm đón',
-        message: message || 'Hãy chuẩn bị lên xe để bắt đầu chuyến đi.',
+        message: toVietnameseMessage(message, 'Hãy chuẩn bị lên xe để bắt đầu chuyến đi.'),
       };
     case 'COMPLETED':
       return {
         type: 'success' as const,
         title: 'Chuyến đi đã hoàn tất',
-        message: message || 'Bạn có thể xem hóa đơn và đánh giá tài xế ngay bây giờ.',
+        message: toVietnameseMessage(message, 'Bạn có thể xem hóa đơn và đánh giá tài xế ngay bây giờ.'),
       };
     case 'CANCELLED':
       return {
-        type: 'error' as const,
+        type: 'warning' as const,
         title: 'Chuyến đi đã bị hủy',
-        message: message || 'Bạn có thể quay lại trang chủ để đặt chuyến mới.',
+        message: normalizeCancelledMessage(toVietnameseMessage(message, 'Bạn có thể quay lại trang chủ để đặt chuyến mới.')),
       };
     default:
       if (!message) {
@@ -47,7 +92,7 @@ const getRideStatusNotification = (status: string, message?: string) => {
       return {
         type: 'info' as const,
         title: 'Cập nhật chuyến đi',
-        message,
+        message: toVietnameseMessage(message, 'Trạng thái chuyến đi đã được cập nhật.'),
       };
   }
 };
@@ -181,7 +226,7 @@ class SocketService {
         showNotification({
           type: 'success',
           title: 'Chuyến đi đã hoàn tất',
-          message: data.message || 'Chuyến đi đã hoàn tất thành công.',
+          message: toVietnameseMessage(data.message, 'Chuyến đi đã hoàn tất thành công.'),
           rideId: data.rideId,
         })
       );
@@ -211,9 +256,11 @@ class SocketService {
       store.dispatch(updateRideStatus({ rideId: data.rideId, status: 'CANCELLED' }));
       store.dispatch(
         showNotification({
-          type: 'error',
+          type: 'warning',
           title: 'Chuyến đi đã bị hủy',
-          message: `Chuyến đi đã bị hủy: ${data.reason}`,
+          message: data.reason
+            ? `Lý do: ${toVietnameseMessage(data.reason, 'Chuyến đi đã bị hủy bởi hệ thống.')}`
+            : 'Bạn có thể quay lại trang chủ để đặt chuyến mới.',
           rideId: data.rideId,
         })
       );

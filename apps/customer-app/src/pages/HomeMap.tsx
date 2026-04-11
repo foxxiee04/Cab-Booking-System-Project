@@ -27,6 +27,8 @@ import { driverApi } from '../api/driver.api';
 import { rideApi } from '../api/ride.api';
 import { BookingMap, BookingMapLocation, NearbyDriver, RouteSummary } from '../features/booking';
 
+declare const process: { env: Record<string, string | undefined> };
+
 // Module-level helper — never recreated between renders.
 const normalizeLocation = (location: BookingMapLocation | null) => {
   if (!location) {
@@ -71,6 +73,73 @@ const HomeMap: React.FC = () => {
   const [bootstrappingLocation, setBootstrappingLocation] = useState(false);
   const [nearbyDrivers, setNearbyDrivers] = useState<NearbyDriver[]>([]);
   const locationBootstrappedRef = useRef(false);
+  const lastAutoReverseGeoRef = useRef(0);
+  const pickupAddressRef = useRef('');
+  const lastResolvedLocationRef = useRef<{ lat: number; lng: number } | null>(null);
+  const reverseRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    pickupAddressRef.current = pickupLocation?.address || '';
+  }, [pickupLocation?.address]);
+
+  const shouldRefreshAddress = (lat: number, lng: number, force = false) => {
+    if (force || !pickupAddressRef.current || !lastResolvedLocationRef.current) {
+      return true;
+    }
+
+    const { lat: prevLat, lng: prevLng } = lastResolvedLocationRef.current;
+    const latDiff = lat - prevLat;
+    const lngDiff = lng - prevLng;
+    const movedMeters = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff) * 111000;
+
+    return movedMeters > 35 || Date.now() - lastAutoReverseGeoRef.current > 45000;
+  };
+
+  const syncCurrentLocation = useCallback(async (preferFresh = false, showSkeleton = false) => {
+    if (showSkeleton) {
+      setBootstrappingLocation(true);
+    }
+
+    try {
+      const location = await getCurrentLocation({ preferFresh });
+      setLocationNotice('');
+      dispatch(setCurrentLocation(location));
+      dispatch(setPickupLocation({
+        ...location,
+        address: pickupAddressRef.current || pickupLocation?.address || 'Đang xác định điểm đón...',
+      }));
+
+      const shouldResolveAddress = shouldRefreshAddress(location.lat, location.lng, showSkeleton);
+      if (shouldResolveAddress) {
+        const requestId = reverseRequestIdRef.current + 1;
+        reverseRequestIdRef.current = requestId;
+
+        void reverseGeocode(location.lat, location.lng)
+          .then((address) => {
+            if (!address || requestId !== reverseRequestIdRef.current) {
+              return;
+            }
+
+            pickupAddressRef.current = address;
+            lastResolvedLocationRef.current = { lat: location.lat, lng: location.lng };
+            lastAutoReverseGeoRef.current = Date.now();
+            dispatch(setPickupLocation({ ...location, address }));
+          })
+          .catch(() => undefined);
+      }
+    } catch (fetchLocationError: any) {
+      if (fetchLocationError?.code === 1) {
+        setLocationNotice('Trình duyệt đang chặn vị trí của bạn. Bạn vẫn có thể nhập điểm đón thủ công để tiếp tục đặt xe.');
+      } else {
+        console.warn('Failed to get location. Falling back to manual pickup mode.');
+        setLocationNotice('Không lấy được vị trí hiện tại. Hãy nhập điểm đón thủ công để tiếp tục.');
+      }
+    } finally {
+      if (showSkeleton) {
+        setBootstrappingLocation(false);
+      }
+    }
+  }, [dispatch, pickupLocation?.address]);
 
   useEffect(() => {
     if (locationBootstrappedRef.current) {
@@ -78,30 +147,35 @@ const HomeMap: React.FC = () => {
     }
     locationBootstrappedRef.current = true;
 
-    const fetchLocation = async () => {
-      setBootstrappingLocation(true);
-      try {
-        const location = await getCurrentLocation();
-        setLocationNotice('');
-        dispatch(setCurrentLocation(location));
-        dispatch(setPickupLocation(location));
+    void syncCurrentLocation(false, true);
+  }, [syncCurrentLocation]);
 
-        const address = await reverseGeocode(location.lat, location.lng);
-        dispatch(setPickupLocation({ ...location, address }));
-      } catch (fetchLocationError: any) {
-        if (fetchLocationError?.code === 1) {
-          setLocationNotice('Trình duyệt đang chặn vị trí của bạn. Bạn vẫn có thể nhập điểm đón thủ công để tiếp tục đặt xe.');
-        } else {
-          console.warn('Failed to get location. Falling back to manual pickup mode.');
-          setLocationNotice('Không lấy được vị trí hiện tại. Hãy nhập điểm đón thủ công để tiếp tục.');
-        }
-      } finally {
-        setBootstrappingLocation(false);
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void syncCurrentLocation(true, false);
       }
     };
 
-    fetchLocation();
-  }, [dispatch]);
+    const refreshWhenFocused = () => {
+      void syncCurrentLocation(true, false);
+    };
+
+    const autoGpsInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void syncCurrentLocation(true, false);
+      }
+    }, 7000);
+
+    window.addEventListener('focus', refreshWhenFocused);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(autoGpsInterval);
+      window.removeEventListener('focus', refreshWhenFocused);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [syncCurrentLocation]);
 
   useEffect(() => {
     const checkActiveRide = async () => {
@@ -350,9 +424,18 @@ const HomeMap: React.FC = () => {
                 variant="contained"
                 size="small"
                 onClick={() => {
-                  const fare = pendingOnlinePaymentRide.fare || 0;
                   const method = pendingOnlinePaymentRide.paymentMethod as 'MOMO' | 'VNPAY';
-                  navigate(`/payment/online/${pendingOnlinePaymentRide.id}?provider=${method}&amount=${Math.round(fare)}`);
+                  const params = new URLSearchParams({ provider: method });
+                  const amountCandidate = Number(
+                    pendingOnlinePaymentRide.fare
+                    || (pendingOnlinePaymentRide as any).estimatedFare
+                    || (pendingOnlinePaymentRide as any).totalFare
+                    || 0
+                  );
+                  if (Number.isFinite(amountCandidate) && amountCandidate > 0) {
+                    params.set('amount', String(Math.round(amountCandidate)));
+                  }
+                  navigate(`/payment/online/${pendingOnlinePaymentRide.id}?${params.toString()}`);
                 }}
                 sx={{
                   borderRadius: 2,

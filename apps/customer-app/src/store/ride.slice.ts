@@ -57,9 +57,23 @@ const rideSlice = createSlice({
       }
     },
     updateDriverLocation: (state, action: PayloadAction<Location>) => {
-      if (state.driver) {
-        state.driver.currentLocation = action.payload;
+      if (!state.driver) {
+        state.driver = {
+          id: state.currentRide?.driverId || 'unknown-driver',
+          firstName: 'Tài xế',
+          lastName: '',
+          vehicleMake: '',
+          vehicleModel: '',
+          vehicleColor: '',
+          licensePlate: '',
+          rating: 5,
+          totalRides: 0,
+          currentLocation: action.payload,
+        };
+        return;
       }
+
+      state.driver.currentLocation = action.payload;
     },
     clearRide: (state) => {
       state.currentRide = null;

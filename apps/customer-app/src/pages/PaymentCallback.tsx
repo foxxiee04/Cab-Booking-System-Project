@@ -81,7 +81,7 @@ const PaymentCallback: React.FC = () => {
 
         if (response.data?.paid) {
           setState('success');
-          setMessage('Thanh toán thành công! Hệ thống đang tìm tài xế cho bạn...');
+          setMessage('Thanh toán thành công. Hệ thống đang tìm tài xế cho bạn...');
         } else {
           setState('failed');
           setMessage(response.data?.message || 'Thanh toán chưa thành công hoặc đã bị hủy.');
@@ -217,7 +217,16 @@ const PaymentCallback: React.FC = () => {
                 {state === 'success' && 'Thanh toán thành công!'}
                 {state === 'failed' && 'Thanh toán thất bại'}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  lineHeight: 1.6,
+                  whiteSpace: state === 'success' ? 'nowrap' : 'normal',
+                  overflow: state === 'success' ? 'hidden' : 'visible',
+                  textOverflow: state === 'success' ? 'ellipsis' : 'clip',
+                }}
+              >
                 {message}
               </Typography>
             </Box>

@@ -12,6 +12,64 @@ const GEO_HIGH_ACCURACY_TIMEOUT_MS = Number(process.env.REACT_APP_GEO_HIGH_ACCUR
 const GEO_LOW_ACCURACY_TIMEOUT_MS = Number(process.env.REACT_APP_GEO_LOW_ACCURACY_TIMEOUT_MS || 15000);
 let hasLoggedGeoTimeout = false;
 
+export const sanitizeDisplayAddress = (value: string): string => {
+  if (!value) {
+    return value;
+  }
+
+  const normalizeText = (input: string) =>
+    input
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(/[đĐ]/g, 'd')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const parts = value
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => part.replace(/\b(thành phố|thanh pho|tp\.?|tỉnh|tinh)\s*ho\s*chi\s*minh\b/gi, 'TP. HCM'));
+
+  const hasHcm = parts.some((part) => {
+    const key = normalizeText(part);
+    return key.includes('ho chi minh') || key.includes('tp hcm');
+  });
+
+  const normalizedParts = parts
+    .map((part) => part.replace(/\b(thành phố|thanh pho|tp\.?)\s*thu\s*duc\b/gi, '').replace(/\s{2,}/g, ' ').trim())
+    .filter(Boolean);
+
+  const filteredParts = normalizedParts.filter((part) => {
+    const key = normalizeText(part);
+    if (!key) {
+      return false;
+    }
+
+    if ((hasHcm && key === 'thu duc') || key === 'thanh pho thu duc') {
+      return false;
+    }
+
+    return true;
+  });
+
+  const deduped: string[] = [];
+  for (const part of filteredParts) {
+    const key = normalizeText(part);
+    if (!deduped.some((existing) => normalizeText(existing) === key)) {
+      deduped.push(part);
+    }
+  }
+
+  return deduped
+    .join(', ')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/,+/g, ',')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+};
+
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
 const MAX_CACHE_SIZE = 100; // Limit cache size to prevent memory issues
 
@@ -67,7 +125,10 @@ export const geocodeAddress = async (
       signal: options?.signal,
     });
 
-    const results = response.data?.data?.results || [];
+    const results = (response.data?.data?.results || []).map((item: Location) => ({
+      ...item,
+      address: sanitizeDisplayAddress(item.address || ''),
+    }));
 
     // Store in cache
     geocodeCache.set(cacheKey, { results, timestamp: Date.now() });
@@ -92,7 +153,7 @@ export const reverseGeocode = async (lat: number, lng: number, snapToRoad = fals
   // Check cache first
   const cached = reverseGeocodeCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.address;
+    return sanitizeDisplayAddress(cached.address);
   }
 
   try {
@@ -100,7 +161,7 @@ export const reverseGeocode = async (lat: number, lng: number, snapToRoad = fals
       params: { lat, lng, snapToRoad },
     });
 
-    const address = response.data?.data?.display_address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    const address = sanitizeDisplayAddress(response.data?.data?.display_address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
 
     // Store in cache
     reverseGeocodeCache.set(cacheKey, { address, timestamp: Date.now() });
@@ -113,7 +174,9 @@ export const reverseGeocode = async (lat: number, lng: number, snapToRoad = fals
       const fallbackResponse = await axiosInstance.get('/map/reverse', {
         params: { lat, lng },
       });
-      const fallbackAddress = fallbackResponse.data?.data?.address || fallbackResponse.data?.data?.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      const fallbackAddress = sanitizeDisplayAddress(
+        fallbackResponse.data?.data?.address || fallbackResponse.data?.data?.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+      );
       reverseGeocodeCache.set(cacheKey, { address: fallbackAddress, timestamp: Date.now() });
       cleanCache(reverseGeocodeCache);
       return fallbackAddress;
@@ -121,7 +184,7 @@ export const reverseGeocode = async (lat: number, lng: number, snapToRoad = fals
       console.error('Reverse geocoding fallback error:', fallbackError);
     }
     // Return cached result if available, even if expired
-    return cached?.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    return sanitizeDisplayAddress(cached?.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
   }
 };
 
@@ -260,7 +323,7 @@ export const parseVietnameseAddress = (address: string): {
  * Get current location from browser with multi-strategy fallback
  * Tries high-accuracy geolocation with timeout, then falls back to lower accuracy
  */
-export const getCurrentLocation = (): Promise<Location> => {
+export const getCurrentLocation = (options?: { preferFresh?: boolean }): Promise<Location> => {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error('Geolocation is not supported'));
@@ -339,6 +402,7 @@ export const getCurrentLocation = (): Promise<Location> => {
       // If high accuracy failed, try lower accuracy
       if (isHighAccuracy && (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE)) {
         console.log('High accuracy geolocation unavailable, trying lower accuracy...');
+        const useFreshLocation = Boolean(options?.preferFresh);
         navigator.geolocation.getCurrentPosition(
           resolvePosition,
           (fallbackError) => {
@@ -351,7 +415,7 @@ export const getCurrentLocation = (): Promise<Location> => {
           {
             enableHighAccuracy: false,
             timeout: GEO_LOW_ACCURACY_TIMEOUT_MS,
-            maximumAge: 300000, // Allow location up to 5 minutes old
+            maximumAge: useFreshLocation ? 0 : 300000, // Allow older location only when not explicitly refreshing
           }
         );
         return;
@@ -361,13 +425,14 @@ export const getCurrentLocation = (): Promise<Location> => {
     };
 
     const runGeolocation = () => {
+      const useFreshLocation = Boolean(options?.preferFresh);
       navigator.geolocation.getCurrentPosition(
         resolvePosition,
         (error) => handleError(error, true),
         {
           enableHighAccuracy: true,
           timeout: GEO_HIGH_ACCURACY_TIMEOUT_MS,
-          maximumAge: 120000,
+          maximumAge: useFreshLocation ? 0 : 120000,
         }
       );
     };
@@ -381,7 +446,7 @@ export const getCurrentLocation = (): Promise<Location> => {
             if (resolveFromLastKnownLocation()) {
               return;
             }
-            reject({ code: 1, message: 'User denied Geolocation' } as GeolocationPositionError);
+            reject({ code: 1, message: 'Bạn đã từ chối quyền truy cập vị trí' } as GeolocationPositionError);
             return;
           }
           runGeolocation();

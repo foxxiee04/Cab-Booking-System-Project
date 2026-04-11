@@ -25,7 +25,7 @@ const PaymentMockGateway: React.FC = () => {
       rideId,
       mock: '1',
       paid: String(paid),
-      message: paid ? 'Sandbox payment success' : 'Sandbox payment failed',
+      message: paid ? 'Thanh toán sandbox thành công' : 'Thanh toán sandbox thất bại',
     });
 
     if (provider === 'MOMO') {
@@ -50,7 +50,7 @@ const PaymentMockGateway: React.FC = () => {
         <CardContent>
           <Stack spacing={2}>
             <Typography variant="h5" fontWeight={800} textAlign="center">
-              {provider === 'MOMO' ? '💰 MoMo' : provider === 'VNPAY' ? '🏧 VNPay' : '💳'} Sandbox Gateway
+              {provider === 'MOMO' ? '💰 MoMo' : provider === 'VNPAY' ? '🏧 VNPay' : '💳'} Cổng Sandbox
             </Typography>
             <Typography variant="body2" color="text.secondary" textAlign="center">
               Cổng sandbox nội bộ để kiểm thử luồng callback.
@@ -63,7 +63,7 @@ const PaymentMockGateway: React.FC = () => {
                     Cổng thanh toán
                   </Typography>
                   <Typography variant="body2" fontWeight={700}>
-                    {provider || 'Unknown'} Sandbox
+                    {provider || 'Không xác định'} Sandbox
                   </Typography>
                 </Box>
                 <Box>
@@ -75,7 +75,7 @@ const PaymentMockGateway: React.FC = () => {
                     fontFamily="monospace"
                     sx={{ wordBreak: 'break-all', bgcolor: 'action.hover', px: 1, py: 0.5, borderRadius: 1 }}
                   >
-                    {rideId || 'N/A'}
+                    {rideId || 'Không có'}
                   </Typography>
                 </Box>
                 <Box>

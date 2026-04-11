@@ -2,7 +2,7 @@ import axios from 'axios';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { locationRepository } from './location.repository';
-import { formatAddressFromOSM, isHcmContextFromAddress, normalizeProvinceName, normalizeStreetName, normalizeText, normalizeWardName, resolveHcmSubCity } from './address-normalizer';
+import { formatAddressFromOSM, isHcmContextFromAddress, normalizeAddressText, normalizeProvinceName, normalizeStreetName, normalizeText, normalizeWardName } from './address-normalizer';
 import { OSMReverseResponse, ResolveLocationInput, ResolvedLocation } from './types';
 
 const NOMINATIM_HEADERS = {
@@ -24,10 +24,6 @@ const NOMINATIM_LIMIT_PER_MIN = Number(process.env.NOMINATIM_LIMIT_PER_MIN || 12
 
 function buildDisplayAddress(street: string, ward: string, province: string): string {
   return [street, ward, province].filter(Boolean).join(', ');
-}
-
-function buildDisplayAddressWithSubCity(street: string, ward: string, subCity: string, province: string): string {
-  return [street, ward, subCity, province].filter(Boolean).join(', ');
 }
 
 async function snapToNearestRoad(lat: number, lng: number): Promise<{ lat: number; lng: number }> {
@@ -88,8 +84,7 @@ async function toResolvedLocation(
 
   const cityRaw = address.city || address.town || address.municipality || '';
   const stateRaw = address.state || '';
-  const subCity = resolveHcmSubCity(address);
-  const provinceRaw = subCity && stateRaw ? stateRaw : (cityRaw || stateRaw);
+  const provinceRaw = cityRaw || stateRaw;
 
   const street = normalizeStreetName(address.road, address.house_number);
   const ward = normalizeWardName(wardRaw, wardSourceType);
@@ -104,7 +99,7 @@ async function toResolvedLocation(
   const provinceId = province ? await locationRepository.matchProvinceId(province) : null;
   const wardId = canonicalWard ? await locationRepository.matchWardId(canonicalWard, provinceId) : null;
 
-  const displayAddress = buildDisplayAddressWithSubCity(street, canonicalWard || ward, subCity, province)
+  const displayAddress = canonicalAddress
     || buildDisplayAddress(street, ward, province)
     || nominatimData.display_name
     || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
@@ -124,12 +119,22 @@ async function toResolvedLocation(
 }
 
 export class LocationService {
+  private sanitizeResolvedLocation(location: ResolvedLocation): ResolvedLocation {
+    return {
+      ...location,
+      display_address: normalizeAddressText(location.display_address || ''),
+      street: normalizeAddressText(location.street || ''),
+      ward: normalizeAddressText(location.ward || ''),
+      province: normalizeAddressText(location.province || ''),
+    };
+  }
+
   public async resolveLocation(input: ResolveLocationInput): Promise<ResolvedLocation> {
     const shouldSnapToRoad = input.snapToRoad !== false;
     const cacheKey = locationRepository.buildGridKey(input.lat, input.lng, shouldSnapToRoad);
     const cached = await locationRepository.getCachedLocation(cacheKey);
     if (cached) {
-      return cached;
+      return this.sanitizeResolvedLocation(cached);
     }
 
     const snapped = shouldSnapToRoad
@@ -141,14 +146,14 @@ export class LocationService {
     if (!canCallNominatim) {
       const stale = await locationRepository.getCachedLocation(cacheKey);
       if (stale) {
-        return stale;
+        return this.sanitizeResolvedLocation(stale);
       }
       throw new Error('NOMINATIM_RATE_LIMITED');
     }
 
     try {
       const primary = await reverseFromNominatim(config.map.nominatimUrl, snapped.lat, snapped.lng);
-      const resolved = await toResolvedLocation(snapped.lat, snapped.lng, primary);
+      const resolved = this.sanitizeResolvedLocation(await toResolvedLocation(snapped.lat, snapped.lng, primary));
       await locationRepository.setCachedLocation(cacheKey, resolved);
       return resolved;
     } catch (primaryError) {
@@ -159,7 +164,7 @@ export class LocationService {
       }
 
       const fallback = await reverseFromNominatim(NOMINATIM_FALLBACK_URL, snapped.lat, snapped.lng);
-      const resolved = await toResolvedLocation(snapped.lat, snapped.lng, fallback);
+      const resolved = this.sanitizeResolvedLocation(await toResolvedLocation(snapped.lat, snapped.lng, fallback));
       await locationRepository.setCachedLocation(cacheKey, resolved);
       return resolved;
     }

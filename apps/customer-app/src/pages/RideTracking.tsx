@@ -446,6 +446,68 @@ const RideTracking: React.FC = () => {
   const refundDestinationLabel = getRefundDestinationLabel(payment, currentRide?.paymentMethod);
   const refundTimeEstimate = getRefundTimeEstimate(payment, currentRide?.paymentMethod);
   const refundInfo = payment?.refund || null;
+  const refundQueryData = (refundInfo?.queryData || null) as Record<string, any> | null;
+  const refundProviderResponse = (refundInfo?.providerResponse || null) as Record<string, any> | null;
+  const isVnpayRefund = refundProviderLabel === 'VNPay';
+  const isMomoRefund = refundProviderLabel === 'MoMo';
+  const vnpayBankNameMap: Record<string, string> = {
+    NCB: 'NCB',
+    VNPAYQR: 'VNPAY QR',
+    VNBANK: 'Ngân hàng nội địa',
+    INTCARD: 'Thẻ quốc tế',
+    BIDV: 'BIDV',
+    AGRIBANK: 'Agribank',
+    SCB: 'SCB',
+    SACOMBANK: 'Sacombank',
+    EXIMBANK: 'Eximbank',
+    MSBANK: 'MSB',
+    NAMABANK: 'Nam A Bank',
+    VNMART: 'VnMart',
+    VIETINBANK: 'VietinBank',
+    VIETCOMBANK: 'Vietcombank',
+    HDBANK: 'HDBank',
+    DONGABANK: 'DongA Bank',
+    TPBANK: 'TPBank',
+    OJB: 'OceanBank',
+    NAVIBANK: 'NaviBank',
+    BABANK: 'Bac A Bank',
+    GPBANK: 'GPBank',
+    OCB: 'OCB',
+    SHB: 'SHB',
+    IVB: 'IVB',
+  };
+  const refundBankCode =
+    refundQueryData?.vnp_BankCode ||
+    refundProviderResponse?.vnp_BankCode ||
+    refundProviderResponse?.bankCode ||
+    null;
+  const refundBankName = refundBankCode ? (vnpayBankNameMap[String(refundBankCode)] || String(refundBankCode)) : null;
+  const refundVnpayAccount =
+    refundQueryData?.vnp_CardNo ||
+    refundProviderResponse?.vnp_CardNo ||
+    refundProviderResponse?.bankAccount ||
+    refundProviderResponse?.accountNumber ||
+    refundProviderResponse?.bankAccountNo ||
+    null;
+  const refundVnpayCardType =
+    refundQueryData?.vnp_CardType ||
+    refundProviderResponse?.vnp_CardType ||
+    refundProviderResponse?.cardType ||
+    null;
+  const refundMomoWallet =
+    refundProviderResponse?.walletId ||
+    refundProviderResponse?.partnerClientId ||
+    refundProviderResponse?.phoneNumber ||
+    refundQueryData?.walletId ||
+    null;
+  const refundBankTransactionNo =
+    refundQueryData?.vnp_BankTranNo ||
+    refundProviderResponse?.vnp_BankTranNo ||
+    refundProviderResponse?.bankTransactionNo ||
+    null;
+  const hasVnpayDestinationDetails = Boolean(
+    refundVnpayAccount || refundVnpayCardType || refundBankName || refundBankCode || refundBankTransactionNo
+  );
   const isRefundPending =
     status === 'CANCELLED' &&
     isOnlinePayment &&
@@ -657,9 +719,19 @@ const RideTracking: React.FC = () => {
                     variant="contained"
                     fullWidth
                     onClick={() => {
-                      const fare = currentRide.fare || 0;
                       const method = currentRide.paymentMethod as 'MOMO' | 'VNPAY';
-                      navigate(`/payment/online/${currentRide.id}?provider=${method}&amount=${Math.round(fare)}`);
+                      const params = new URLSearchParams({ provider: method });
+                      const amountCandidate = Number(
+                        currentRide.fare
+                        || payment?.amount
+                        || (currentRide as any).estimatedFare
+                        || (currentRide as any).totalFare
+                        || 0
+                      );
+                      if (Number.isFinite(amountCandidate) && amountCandidate > 0) {
+                        params.set('amount', String(Math.round(amountCandidate)));
+                      }
+                      navigate(`/payment/online/${currentRide.id}?${params.toString()}`);
                     }}
                     sx={{
                       borderRadius: 3,
@@ -746,7 +818,7 @@ const RideTracking: React.FC = () => {
                       Thanh toán online thất bại. Vui lòng chọn phương thức khác.
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      Cổng thất bại: {failedProvider || 'UNKNOWN'}
+                      Cổng thất bại: {failedProvider || 'Không xác định'}
                     </Typography>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ mb: 2 }}>
                       {(['CASH', 'MOMO', 'VNPAY'] as const).map((method) => (
@@ -856,46 +928,85 @@ const RideTracking: React.FC = () => {
                         <CheckCircleRounded sx={{ color: '#0d9488', mt: 0.25, fontSize: 20, flexShrink: 0 }} />
                         <Box sx={{ flex: 1 }}>
                           <Typography variant="body2" fontWeight={800} color="#134e4a" sx={{ mb: 0.5 }}>
-                            {refundProviderLabel === 'MoMo'
+                            {isMomoRefund
                               ? 'MoMo đã xác nhận hoàn tiền về ví của bạn.'
                               : 'VNPay đã ghi nhận hoàn tiền về tài khoản ngân hàng.'}
                           </Typography>
-                          <Typography variant="caption" display="block" color="#0f766e" sx={{ mb: 1 }}>
-                            {refundProviderLabel === 'MoMo'
+                          <Typography variant="caption" display="block" color="#0f766e" sx={{ mb: 1.25 }}>
+                            {isMomoRefund
                               ? 'Số tiền sẽ về ví MoMo trong vài phút đến 1 giờ.'
                               : 'Số tiền sẽ về tài khoản ngân hàng trong 3–5 ngày làm việc qua ngân hàng liên kết.'}
                           </Typography>
-                          <Box sx={{ bgcolor: '#ccfbf1', borderRadius: 2, p: 1.25 }}>
-                            <Stack spacing={0.6}>
-                              <Stack direction="row" justifyContent="space-between">
-                                <Typography variant="caption" color="#0f766e">Số tiền hoàn</Typography>
-                                <Typography variant="caption" fontWeight={800} color="#134e4a">{formatCurrency(refundInfo?.amount || payment?.amount || currentRide.fare || 0)}</Typography>
+                          <Box
+                            sx={{
+                              bgcolor: '#ccfbf1',
+                              borderRadius: 2,
+                              p: 1.25,
+                              '& .refund-label': { color: '#0f766e', fontSize: '0.82rem', lineHeight: 1.4 },
+                              '& .refund-value': { color: '#134e4a', fontSize: '0.82rem', lineHeight: 1.4, fontWeight: 700 },
+                            }}
+                          >
+                            <Stack spacing={0.8}>
+                              <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                <Typography className="refund-label">Số tiền hoàn</Typography>
+                                <Typography className="refund-value" sx={{ fontWeight: 800 }} textAlign="right">{formatCurrency(refundInfo?.amount || payment?.amount || currentRide.fare || 0)}</Typography>
                               </Stack>
-                              <Stack direction="row" justifyContent="space-between">
-                                <Typography variant="caption" color="#0f766e">Hoàn về</Typography>
-                                <Typography variant="caption" fontWeight={700} color="#134e4a">{refundDestinationLabel}</Typography>
+                              <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                <Typography className="refund-label">Hoàn về</Typography>
+                                <Typography className="refund-value" textAlign="right">{isMomoRefund ? 'Ví MoMo' : 'Tài khoản ngân hàng'}</Typography>
                               </Stack>
-                              {payment?.refundedAt && (
-                                <Stack direction="row" justifyContent="space-between">
-                                  <Typography variant="caption" color="#0f766e">Ghi nhận lúc</Typography>
-                                  <Typography variant="caption" fontWeight={700} color="#134e4a">{formatDate(payment.refundedAt)}</Typography>
+                              {isVnpayRefund && refundVnpayAccount && (
+                                <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                  <Typography className="refund-label">STK nhận hoàn</Typography>
+                                  <Typography className="refund-value" textAlign="right" sx={{ maxWidth: '62%', wordBreak: 'break-word' }}>
+                                    {String(refundVnpayAccount)}
+                                  </Typography>
                                 </Stack>
                               )}
-                              {/* MoMo-specific fields */}
+                              {isVnpayRefund && refundVnpayCardType && (
+                                <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                  <Typography className="refund-label">Nguồn tiền thanh toán</Typography>
+                                  <Typography className="refund-value" textAlign="right" sx={{ maxWidth: '62%', wordBreak: 'break-word' }}>
+                                    {String(refundVnpayCardType)}
+                                  </Typography>
+                                </Stack>
+                              )}
+                              {isVnpayRefund && refundBankName && (
+                                <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                  <Typography className="refund-label">Ngân hàng nhận hoàn</Typography>
+                                  <Typography className="refund-value" textAlign="right" sx={{ maxWidth: '62%', wordBreak: 'break-word' }}>
+                                    {refundBankName}
+                                  </Typography>
+                                </Stack>
+                              )}
+                              {isMomoRefund && refundMomoWallet && (
+                                <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                  <Typography className="refund-label">Ví MoMo nhận hoàn</Typography>
+                                  <Typography className="refund-value" textAlign="right" sx={{ maxWidth: '62%', wordBreak: 'break-word' }}>
+                                    {String(refundMomoWallet)}
+                                  </Typography>
+                                </Stack>
+                              )}
+                              {payment?.refundedAt && (
+                                <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                  <Typography className="refund-label">Ghi nhận lúc</Typography>
+                                  <Typography className="refund-value" textAlign="right">{formatDate(payment.refundedAt)}</Typography>
+                                </Stack>
+                              )}
                               {refundInfo?.requestId && (
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                  <Typography variant="caption" color="#0f766e">Mã yêu cầu hoàn (MoMo)</Typography>
-                                  <Typography variant="caption" fontWeight={600} sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{refundInfo.requestId}</Typography>
+                                <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                  <Typography className="refund-label">Mã yêu cầu hoàn (MoMo)</Typography>
+                                  <Typography className="refund-value" sx={{ fontFamily: 'monospace', fontSize: '0.74rem', wordBreak: 'break-all' }} textAlign="right">{refundInfo.requestId}</Typography>
                                 </Stack>
                               )}
                               {refundInfo?.refundOrderId && (
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                  <Typography variant="caption" color="#0f766e">Mã hoàn tiền MoMo</Typography>
-                                  <Typography variant="caption" fontWeight={600} sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{refundInfo.refundOrderId}</Typography>
+                                <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                  <Typography className="refund-label">Mã hoàn tiền MoMo</Typography>
+                                  <Typography className="refund-value" sx={{ fontFamily: 'monospace', fontSize: '0.74rem', wordBreak: 'break-all' }} textAlign="right">{refundInfo.refundOrderId}</Typography>
                                 </Stack>
                               )}
                               {typeof refundInfo?.resultCode === 'number' && (
-                                <Stack direction="row" justifyContent="space-between">
+                                <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="center">
                                   <Typography variant="caption" color="#0f766e">Mã kết quả MoMo</Typography>
                                   <Chip
                                     label={refundInfo.resultCode === 0 ? `${refundInfo.resultCode} – Thành công` : `${refundInfo.resultCode}`}
@@ -904,15 +1015,14 @@ const RideTracking: React.FC = () => {
                                   />
                                 </Stack>
                               )}
-                              {/* VNPay-specific fields */}
                               {refundInfo?.txnRef && (
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                  <Typography variant="caption" color="#0f766e">Mã giao dịch VNPay</Typography>
-                                  <Typography variant="caption" fontWeight={600} sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{refundInfo.txnRef}</Typography>
+                                <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                  <Typography className="refund-label">Mã giao dịch VNPay</Typography>
+                                  <Typography className="refund-value" textAlign="right" sx={{ fontFamily: 'monospace', fontSize: '0.74rem', wordBreak: 'break-all' }}>{refundInfo.txnRef}</Typography>
                                 </Stack>
                               )}
                               {refundInfo?.responseCode && (
-                                <Stack direction="row" justifyContent="space-between">
+                                <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="center">
                                   <Typography variant="caption" color="#0f766e">Mã phản hồi VNPay</Typography>
                                   <Chip
                                     label={refundInfo.responseCode === '00' ? `${refundInfo.responseCode} – Thành công` : refundInfo.responseCode}
@@ -921,19 +1031,37 @@ const RideTracking: React.FC = () => {
                                   />
                                 </Stack>
                               )}
-                              {/* Common: refundTransactionId */}
-                              {refundInfo?.refundTransactionId && (
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                  <Typography variant="caption" color="#0f766e">Mã giao dịch hoàn</Typography>
-                                  <Typography variant="caption" fontWeight={600} sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{refundInfo.refundTransactionId}</Typography>
+                              {refundBankCode && (
+                                <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                  <Typography className="refund-label">Ngân hàng xử lý</Typography>
+                                  <Typography className="refund-value" textAlign="right">{String(refundBankCode)}</Typography>
                                 </Stack>
                               )}
-                              <Stack direction="row" justifyContent="space-between">
-                                <Typography variant="caption" color="#0f766e">Thời gian hoàn dự kiến</Typography>
-                                <Typography variant="caption" fontWeight={600} color="#134e4a">{refundTimeEstimate}</Typography>
+                              {refundBankTransactionNo && (
+                                <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                  <Typography className="refund-label">Mã giao dịch ngân hàng</Typography>
+                                  <Typography className="refund-value" textAlign="right" sx={{ fontFamily: 'monospace', fontSize: '0.74rem', wordBreak: 'break-all' }}>{String(refundBankTransactionNo)}</Typography>
+                                </Stack>
+                              )}
+                              {refundInfo?.refundTransactionId && (
+                                <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                  <Typography className="refund-label">Mã giao dịch hoàn</Typography>
+                                  <Typography className="refund-value" textAlign="right" sx={{ fontFamily: 'monospace', fontSize: '0.74rem', wordBreak: 'break-all' }}>{refundInfo.refundTransactionId}</Typography>
+                                </Stack>
+                              )}
+                              <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                <Typography className="refund-label">Thời gian hoàn dự kiến</Typography>
+                                <Typography className="refund-value" textAlign="right">{refundTimeEstimate}</Typography>
                               </Stack>
+                              {isVnpayRefund && !hasVnpayDestinationDetails && (
+                                <Alert severity="info" sx={{ mt: 0.5, borderRadius: 1.5, py: 0.25 }}>
+                                  <Typography sx={{ fontSize: '0.8rem' }} color="text.secondary">
+                                    Hệ thống chưa nhận được dữ liệu chi tiết tài khoản nhận hoàn từ VNPay. Khi cổng thanh toán cung cấp, thông tin sẽ tự động hiển thị tại đây.
+                                  </Typography>
+                                </Alert>
+                              )}
                               {refundInfo?.description && (
-                                <Typography variant="caption" display="block" color="#0f766e">Lý do: {refundInfo.description}</Typography>
+                                <Typography className="refund-label" display="block">Lý do: {refundInfo.description}</Typography>
                               )}
                             </Stack>
                           </Box>
