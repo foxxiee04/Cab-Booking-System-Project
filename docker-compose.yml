@@ -224,6 +224,7 @@ services:
       - PRICING_GRPC_ADDRESS=pricing-service:50057
       - DRIVER_SERVICE_URL=http://driver-service:3003
       - DRIVER_GRPC_ADDRESS=driver-service:50055
+      - PAYMENT_SERVICE_URL=http://payment-service:3004
       - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
       - RIDE_SEARCH_TIMEOUT_MS=${RIDE_SEARCH_TIMEOUT_MS:-120000}
@@ -284,6 +285,8 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/payment_db?schema=public
       - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
+      - DRIVER_SERVICE_URL=http://driver-service:3003
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-change-me}
     depends_on:
       postgres:
         condition: service_healthy

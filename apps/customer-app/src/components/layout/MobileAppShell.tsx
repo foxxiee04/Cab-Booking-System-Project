@@ -16,8 +16,8 @@ import {
   Typography,
 } from '@mui/material';
 import {
-  ChatBubbleOutlineRounded,
   HomeRounded,
+  LocalOfferRounded,
   LogoutRounded,
   PersonRounded,
   ReceiptLongRounded,
@@ -35,12 +35,13 @@ interface MobileAppShellProps {
 const tabs = [
   { value: '/home', icon: <HomeRounded />, labelKey: 'shell.home', fallback: 'Trang chủ' },
   { value: '/activity', icon: <ReceiptLongRounded />, labelKey: 'shell.activity', fallback: 'Hoạt động' },
-  { value: '/messages', icon: <ChatBubbleOutlineRounded />, labelKey: 'shell.messages', fallback: 'Tin nhắn' },
+  { value: '/vouchers', icon: <LocalOfferRounded />, labelKey: 'shell.vouchers', fallback: 'Ưu đãi' },
   { value: '/profile', icon: <PersonRounded />, labelKey: 'shell.profile', fallback: 'Tài khoản' },
 ];
 
 const secondaryViews = [
   { value: '/history', tab: '/activity', labelKey: 'rideHistory.title', fallback: 'Lịch sử chuyến đi' },
+  { value: '/ride', tab: '/home', labelKey: 'rideTracking.title', fallback: 'Theo dõi chuyến' },
 ];
 
 const resolveTab = (pathname: string) => {

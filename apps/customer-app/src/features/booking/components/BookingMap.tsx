@@ -13,12 +13,9 @@ import {
   TextField,
 } from '@mui/material';
 import {
-  AccessTimeRounded,
   MyLocationRounded,
   NearMeRounded,
   PlaceRounded,
-  RouteRounded,
-  SpeedRounded,
 } from '@mui/icons-material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -163,6 +160,35 @@ const LeafletViewportController: React.FC<{
   const pickupLng = pickup?.lng;
   const dropoffLat = dropoff?.lat;
   const dropoffLng = dropoff?.lng;
+
+  // Fix: invalidate map size after mount/resize so tiles render correctly in flex/animated containers
+  useEffect(() => {
+    const container = map.getContainer();
+    map.invalidateSize();
+
+    if (container && typeof window !== 'undefined' && window.ResizeObserver) {
+      let lastW = 0; let lastH = 0;
+      const ro = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const { width, height } = entry.contentRect;
+        if (width !== lastW || height !== lastH) {
+          lastW = width; lastH = height;
+          map.invalidateSize({ animate: false });
+        }
+      });
+      ro.observe(container);
+      return () => ro.disconnect();
+    }
+
+    // Fallback for environments without ResizeObserver
+    const timer = setTimeout(() => { map.invalidateSize(); }, 200);
+    const resizeTimer = setTimeout(() => { map.invalidateSize(); }, 600);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(resizeTimer);
+    };
+  }, [map]);
 
   useEffect(() => {
     if (!pickupLat || !pickupLng) {
@@ -843,44 +869,8 @@ export const BookingMap: React.FC<BookingMapProps> = ({
     </Paper>
   );
 
-  const summaryPanel = mode === 'tracking' ? (
-    <Paper
-      elevation={10}
-      sx={{
-        position: 'absolute',
-        left: 16,
-        right: 16,
-        bottom: 16,
-        p: 2,
-        borderRadius: 5,
-        backgroundColor: themeMode === 'dark' ? 'rgba(17, 24, 39, 0.88)' : 'rgba(255, 255, 255, 0.94)',
-        backdropFilter: 'blur(14px)',
-        zIndex: 2,
-      }}
-    >
-      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1 }}>
-        <Chip
-          size="small"
-          color={animatedDriverPosition ? 'success' : 'warning'}
-          label={animatedDriverPosition ? 'Đang theo dõi vị trí tài xế realtime' : 'Đang đồng bộ vị trí tài xế'}
-        />
-      </Stack>
-      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 0 }}>
-        <Chip
-          icon={<AccessTimeRounded />}
-          label={trackingEtaText || 'ETA đón: Đang cập nhật'}
-          variant="outlined"
-        />
-        <Chip
-          icon={<RouteRounded />}
-          label={trackingDistanceText || routeSummary?.distanceText || 'Khoảng cách: Đang cập nhật'}
-          variant="outlined"
-        />
-        {trackingSpeedText ? <Chip icon={<SpeedRounded />} label={trackingSpeedText} variant="outlined" /> : null}
-      </Stack>
-
-    </Paper>
-  ) : null;
+  // Tracking info is now displayed in the bottom card (RideTracking.tsx), not overlaid on map
+  const summaryPanel = null;
 
   const leafletTileUrl =
     themeMode === 'dark'

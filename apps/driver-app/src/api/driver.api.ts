@@ -1,12 +1,11 @@
 import axiosInstance from './axios.config';
-import { ApiResponse, Driver, DriverRegistration, Location, Earnings, NearbyDriver } from '../types';
+import { ApiResponse, Driver, DriverRegistration, Location, Earnings, NearbyDriver, EarningsTripBreakdown, EarningsDailyPoint } from '../types';
 
 interface NearbyDriversApiResponse {
   success: boolean;
   data: { drivers: NearbyDriver[] };
 }
 
-const DRIVER_COMMISSION_RATE = 0.2;
 const EARNINGS_DAYS = 7;
 
 const normalizeDistance = (distance: unknown): number | undefined => {
@@ -197,18 +196,26 @@ export const driverApi = {
     return response.data;
   },
 
-  // Get earnings - Using alternative endpoint since /drivers/me/earnings doesn't exist
+  // Get earnings - Using real backend DriverEarnings with per-vehicle commission rates
   getEarnings: async (): Promise<ApiResponse<{ earnings: Earnings }>> => {
     try {
-      const ridesResponse = await axiosInstance.get('/rides/driver/history', { 
-        params: { status: 'COMPLETED', limit: 1000 } 
+      // Fetch real earnings from the backend (DriverEarnings records)
+      const earningsResponse = await axiosInstance.get('/payments/driver/earnings', {
+        params: { page: 1, limit: 200 },
       });
-      
-      const completedRides = [...(ridesResponse.data.data?.rides || [])].sort((left: any, right: any) => {
-        const leftTime = new Date(left.completedAt || left.updatedAt || left.createdAt || 0).getTime();
-        const rightTime = new Date(right.completedAt || right.updatedAt || right.createdAt || 0).getTime();
-        return rightTime - leftTime;
-      });
+      const { earnings: earningsRows, summary } = earningsResponse.data.data;
+
+      // Also fetch ride history for pickup/dropoff addresses (not stored in DriverEarnings)
+      let ridesMap: Record<string, any> = {};
+      try {
+        const ridesResponse = await axiosInstance.get('/rides/driver/history', {
+          params: { status: 'COMPLETED', limit: 200 },
+        });
+        const rides = ridesResponse.data.data?.rides || [];
+        ridesMap = Object.fromEntries(rides.map((r: any) => [r.id, r]));
+      } catch {
+        // If rides endpoint fails, we still have earnings data
+      }
 
       const now = new Date();
       const startOfToday = new Date(now);
@@ -220,74 +227,81 @@ export const driverApi = {
 
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      const toNet = (amount: number) => Math.round(amount * (1 - DRIVER_COMMISSION_RATE));
-      const toCommission = (amount: number) => Math.round(amount * DRIVER_COMMISSION_RATE);
+      // Map earnings rows to trip breakdowns
+      const recentTrips: EarningsTripBreakdown[] = (earningsRows || []).map((row: any) => {
+        const ride = ridesMap[row.rideId] || {};
+        return {
+          rideId: row.rideId,
+          completedAt: row.createdAt,
+          pickupAddress: ride.pickupLocation?.address || ride.pickupAddress || 'Điểm đón',
+          dropoffAddress: ride.dropoffLocation?.address || ride.dropoffAddress || 'Điểm đến',
+          gross: row.grossFare,
+          commissionRate: row.commissionRate,
+          commission: row.platformFee,
+          bonus: row.bonus || 0,
+          penalty: row.penalty || 0,
+          net: row.netEarnings,
+          paymentMethod: row.paymentMethod,
+          vehicleType: ride.vehicleType,
+          driverCollected: row.driverCollected,
+          cashDebt: row.cashDebt || 0,
+          bonusBreakdown: row.bonusBreakdown || undefined,
+          penaltyBreakdown: row.penaltyBreakdown || undefined,
+        };
+      });
 
-      const grossTotal = completedRides.reduce((sum: number, ride: any) => sum + (ride.fare || 0), 0);
-      const commissionTotal = completedRides.reduce((sum: number, ride: any) => sum + toCommission(ride.fare || 0), 0);
-      const netTotal = grossTotal - commissionTotal;
+      // Calculate period totals from rows
+      const filterByDate = (boundary: Date) =>
+        recentTrips.filter((t) => new Date(t.completedAt) >= boundary);
+      const todayTrips = filterByDate(startOfToday);
+      const weekTrips = filterByDate(startOfWeek);
+      const monthTrips = filterByDate(startOfMonth);
 
-      const filterByDate = (boundary: Date) => completedRides.filter((ride: any) => new Date(ride.completedAt || ride.updatedAt || ride.createdAt) >= boundary);
-      const todayRides = filterByDate(startOfToday);
-      const weekRides = filterByDate(startOfWeek);
-      const monthRides = filterByDate(startOfMonth);
+      const sumNet = (trips: EarningsTripBreakdown[]) =>
+        trips.reduce((s, t) => s + t.net, 0);
 
-      const buildDayLabel = (date: Date) => `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+      // Build daily breakdown
+      const buildDayLabel = (date: Date) =>
+        `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
 
-      const daily = Array.from({ length: EARNINGS_DAYS }, (_, index) => {
+      const daily: EarningsDailyPoint[] = Array.from({ length: EARNINGS_DAYS }, (_, index) => {
         const date = new Date(startOfWeek);
         date.setDate(startOfWeek.getDate() + index);
 
-        const dayRides = completedRides.filter((ride: any) => {
-          const rideDate = new Date(ride.completedAt || ride.updatedAt || ride.createdAt);
-          return rideDate.toDateString() === date.toDateString();
+        const dayTrips = recentTrips.filter((t) => {
+          const tripDate = new Date(t.completedAt);
+          return tripDate.toDateString() === date.toDateString();
         });
-
-        const gross = dayRides.reduce((sum: number, ride: any) => sum + (ride.fare || 0), 0);
-        const commission = dayRides.reduce((sum: number, ride: any) => sum + toCommission(ride.fare || 0), 0);
 
         return {
           label: buildDayLabel(date),
-          gross,
-          commission,
-          net: gross - commission,
-          rides: dayRides.length,
+          gross: dayTrips.reduce((s, t) => s + t.gross, 0),
+          commission: dayTrips.reduce((s, t) => s + t.commission, 0),
+          bonus: dayTrips.reduce((s, t) => s + t.bonus, 0),
+          penalty: dayTrips.reduce((s, t) => s + t.penalty, 0),
+          net: dayTrips.reduce((s, t) => s + t.net, 0),
+          rides: dayTrips.length,
         };
       });
 
-      const recentTrips = completedRides.slice(0, 8).map((ride: any) => {
-        const gross = ride.fare || 0;
-        const commission = toCommission(gross);
-
-        return {
-          rideId: ride.id,
-          completedAt: ride.completedAt || ride.updatedAt || ride.createdAt,
-          pickupAddress: ride.pickupLocation?.address || ride.pickupAddress || 'Điểm đón',
-          dropoffAddress: ride.dropoffLocation?.address || ride.dropoffAddress || 'Điểm đến',
-          gross,
-          commission,
-          net: gross - commission,
-          paymentMethod: ride.paymentMethod,
-          vehicleType: ride.vehicleType,
-        };
-      });
-      
       return {
         success: true,
         data: {
           earnings: {
-            today: todayRides.reduce((sum: number, ride: any) => sum + toNet(ride.fare || 0), 0),
-            week: weekRides.reduce((sum: number, ride: any) => sum + toNet(ride.fare || 0), 0),
-            month: monthRides.reduce((sum: number, ride: any) => sum + toNet(ride.fare || 0), 0),
-            totalRides: completedRides.length,
-            grossTotal,
-            commissionTotal,
-            netTotal,
-            commissionRate: DRIVER_COMMISSION_RATE,
+            today: sumNet(todayTrips),
+            week: sumNet(weekTrips),
+            month: sumNet(monthTrips),
+            totalRides: recentTrips.length,
+            grossTotal: summary?.totalGrossFare || 0,
+            commissionTotal: summary?.totalPlatformFee || 0,
+            bonusTotal: summary?.totalBonus || 0,
+            penaltyTotal: summary?.totalPenalty || 0,
+            netTotal: summary?.totalNetEarnings || 0,
+            unpaidCashDebt: summary?.unpaidCashDebt || 0,
             daily,
-            recentTrips,
-          }
-        }
+            recentTrips: recentTrips.slice(0, 50),
+          },
+        },
       };
     } catch (error) {
       return {
@@ -300,12 +314,14 @@ export const driverApi = {
             totalRides: 0,
             grossTotal: 0,
             commissionTotal: 0,
+            bonusTotal: 0,
+            penaltyTotal: 0,
             netTotal: 0,
-            commissionRate: DRIVER_COMMISSION_RATE,
+            unpaidCashDebt: 0,
             daily: [],
             recentTrips: [],
-          }
-        }
+          },
+        },
       };
     }
   },

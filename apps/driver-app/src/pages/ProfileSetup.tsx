@@ -14,6 +14,12 @@ import {
   MenuItem,
   InputAdornment,
   Snackbar,
+  Checkbox,
+  FormControlLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   DirectionsCar,
@@ -254,28 +260,27 @@ const ProfileSetup: React.FC = () => {
     }
   };
 
+  const [showTermsDialog, setShowTermsDialog] = useState(false);
+  const [termsChecked, setTermsChecked] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    if (!validateForm()) return;
+    setShowTermsDialog(true);
+  };
+
+  const handleAcceptTermsAndSubmit = async () => {
+    setShowTermsDialog(false);
     setLoading(true);
     setError('');
-
-    if (!validateForm()) {
-      setLoading(false);
-      return;
-    }
-
     try {
-      if (!user) {
-        throw new Error(t('errors.authRequired'));
-      }
-
+      if (!user) throw new Error(t('errors.authRequired'));
       const payload: DriverRegistration = {
         ...formData,
         licenseNumber: formData.licenseNumber.replace(/\s+/g, ''),
       };
-
       const response = await driverApi.registerDriver(payload);
-
       if (response.success) {
         dispatch(setProfile(response.data.driver));
         setSnackbarOpen(true);
@@ -295,7 +300,7 @@ const ProfileSetup: React.FC = () => {
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
-        background: 'linear-gradient(135deg, #1976D2 0%, #2E7D32 100%)',
+        background: 'linear-gradient(135deg, #4a6fa5 0%, #5a9f8a 100%)',
         py: 4,
       }}
     >
@@ -519,7 +524,7 @@ const ProfileSetup: React.FC = () => {
                   />
                 </Grid>
 
-                <Grid item xs={12}>
+                <Grid item xs={12} sx={{ textAlign: 'center' }}>
                   <Button
                     component="label"
                     variant="outlined"
@@ -535,7 +540,7 @@ const ProfileSetup: React.FC = () => {
                     </Typography>
                   )}
                   {formData.vehicleImageUrl && (
-                    <Box sx={{ mt: 1.25 }}>
+                    <Box sx={{ mt: 1.25, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <Typography variant="caption" color="text.secondary">Ảnh xe đã chọn</Typography>
                       <Box
                         component="img"
@@ -560,7 +565,7 @@ const ProfileSetup: React.FC = () => {
                 variant="contained"
                 size="large"
                 disabled={loading}
-                sx={{ py: 1.5, mt: 3 }}
+                sx={{ py: 1.5, mt: 2 }}
               >
                 {loading ? <CircularProgress size={24} /> : t('profileSetup.submit')}
               </Button>
@@ -585,6 +590,119 @@ const ProfileSetup: React.FC = () => {
         {t('profileSetup.successMessage')}
       </Alert>
     </Snackbar>
+
+    {/* Terms dialog — shows after submitting vehicle info */}
+    <Dialog
+      open={showTermsDialog}
+      onClose={() => setShowTermsDialog(false)}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{ sx: { borderRadius: 3, maxHeight: '90vh' } }}
+    >
+      <DialogTitle sx={{ fontWeight: 800, pb: 0 }}>
+        ĐIỀU KHOẢN DỊCH VỤ DÀNH CHO TÀI XẾ CABDRIVER
+      </DialogTitle>
+      <DialogContent dividers sx={{ overflowY: 'auto' }}>
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          1. Thông tin đăng ký
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          Tài xế cam kết cung cấp thông tin cá nhân, giấy phép lái xe và phương tiện chính xác, trung thực. Mọi thông tin giả mạo dẫn đến từ chối hồ sơ và có thể bị xử lý theo pháp luật.
+        </Typography>
+
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          2. Xét duyệt tài khoản
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          Hồ sơ sẽ được đội ngũ CabDriver xem xét trong vòng 1–3 ngày làm việc. CabDriver có quyền từ chối hồ sơ không đủ tiêu chuẩn mà không cần nêu lý do.
+        </Typography>
+
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          3. Kích hoạt tài khoản & Ví CabDriver
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          Sau khi hồ sơ được duyệt, tài xế cần nạp tối thiểu <strong>300.000 ₫</strong> vào Ví CabDriver để kích hoạt tài khoản và bắt đầu nhận cuốc xe.
+        </Typography>
+
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          4. Phí nền tảng (hoa hồng)
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          CabDriver thu <strong>20%</strong> trên giá trị mỗi chuyến hoàn tất, khấu trừ tự động từ Ví CabDriver. Với chuyến thanh toán tiền mặt, tài xế nhận đủ tiền từ khách; phần hoa hồng được ghi nợ vào ví sau chuyến.
+        </Typography>
+
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          5. Quy tắc số dư ví
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          Số dư ví không được xuống dưới ngưỡng nợ tối đa <strong>–200.000 ₫</strong>. Khi dự báo sau chuyến vượt ngưỡng này, tài xế không được nhận cuốc tiền mặt đó cho đến khi nạp bổ sung.
+        </Typography>
+
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          6. Rút tiền
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          Tài xế có thể rút số dư khả dụng (tối thiểu <strong>50.000 ₫</strong>) về tài khoản ngân hàng đã đăng ký. Thời gian xử lý 1–3 ngày làm việc.
+        </Typography>
+
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          7. Hành vi vi phạm
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          Mọi hành vi gian lận chuyến đi, hủy chuyến quá mức, vi phạm quy tắc ứng xử hoặc vi phạm pháp luật sẽ bị trừ điểm uy tín và có thể dẫn đến khóa tài khoản vĩnh viễn.
+        </Typography>
+
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          8. Tạm ngưng tài khoản
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          CabDriver có quyền tạm ngưng tài khoản tài xế khi phát hiện vi phạm hoặc khiếu nại từ khách hàng để tiến hành điều tra. Tài xế sẽ được thông báo và có 7 ngày làm việc để phản hồi.
+        </Typography>
+
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          9. Thay đổi điều khoản
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          CabDriver có quyền cập nhật điều khoản bất cứ lúc nào và sẽ thông báo trước 7 ngày. Việc tiếp tục sử dụng dịch vụ sau thời điểm có hiệu lực đồng nghĩa với việc chấp thuận điều khoản mới.
+        </Typography>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2.5, flexDirection: 'column', alignItems: 'stretch', gap: 1 }}>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={termsChecked}
+              onChange={(e) => setTermsChecked(e.target.checked)}
+              color="primary"
+            />
+          }
+          label={
+            <Typography variant="body2" fontWeight={600}>
+              Tôi đã đọc và đồng ý với tất cả các điều khoản trên
+            </Typography>
+          }
+          sx={{ mr: 0 }}
+        />
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            onClick={() => { setShowTermsDialog(false); setTermsChecked(false); }}
+            variant="outlined"
+            fullWidth
+            sx={{ borderRadius: 2 }}
+          >
+            Huỷ
+          </Button>
+          <Button
+            onClick={handleAcceptTermsAndSubmit}
+            variant="contained"
+            fullWidth
+            disabled={!termsChecked}
+            sx={{ borderRadius: 2 }}
+          >
+            Đồng ý &amp; Tiếp tục
+          </Button>
+        </Box>
+      </DialogActions>
+    </Dialog>
     </>
   );
 };

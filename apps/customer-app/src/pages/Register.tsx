@@ -243,8 +243,6 @@ const Register: React.FC = () => {
                   <Stack spacing={0}>
                     <Alert severity="info" sx={{ mb: 2 }}>{success || 'Mã OTP đã được gửi.'}</Alert>
 
-                    <TextField fullWidth label="Số điện thoại" value={phone} disabled sx={{ mb: 2 }} />
-
                     <TextField
                       fullWidth
                       label="Mã OTP"
@@ -291,6 +289,7 @@ const Register: React.FC = () => {
                       value={formData.lastName}
                       onChange={(event) => setFormData({ ...formData, lastName: event.target.value })}
                       required
+                      autoFocus
                       sx={{ mb: 2 }}
                       InputProps={{
                         startAdornment: (
@@ -307,7 +306,6 @@ const Register: React.FC = () => {
                       value={formData.firstName}
                       onChange={(event) => setFormData({ ...formData, firstName: event.target.value })}
                       required
-                      autoFocus
                       sx={{ mb: 2 }}
                     />
 

@@ -1,5 +1,6 @@
 import axiosInstance from './axios.config';
 import { NearbyDriver } from '../features/booking';
+import { Driver } from '../types';
 
 interface NearbyDriversResponse {
   success: boolean;
@@ -30,5 +31,14 @@ export const driverApi = {
       ...response.data,
       data: { drivers },
     };
+  },
+
+  getDriverPublicProfile: async (driverId: string): Promise<Driver | null> => {
+    try {
+      const response = await axiosInstance.get(`/drivers/${driverId}/profile`);
+      return response.data?.data?.driver ?? null;
+    } catch {
+      return null;
+    }
   },
 };

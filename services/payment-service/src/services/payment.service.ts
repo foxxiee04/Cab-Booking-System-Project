@@ -6,9 +6,10 @@ import { EventPublisher } from '../events/publisher';
 import { logger } from '../utils/logger';
 import { momoGateway } from './momo.gateway';
 import { paymentGatewayManager, PaymentGatewayType } from './payment-gateway.manager';
-import { stripeGateway } from './stripe.gateway';
-import { zaloPayGateway } from './zalopay.gateway';
 import { commissionService, TripContext, DriverStats } from './commission.service';
+import { WalletService } from './wallet.service';
+import { IncentiveService } from './incentive.service';
+import { VoucherService } from './voucher.service';
 
 interface RideCompletedPayload {
   rideId: string;
@@ -22,6 +23,8 @@ interface RideCompletedPayload {
   paymentMethod?: string; // CASH, MOMO, VISA, CARD, WALLET
   /** Optional driver stats forwarded by driver-service for incentive/penalty calc */
   driverStats?: DriverStats;
+  /** Optional voucher code applied by the customer */
+  voucherCode?: string;
 }
 
 interface CreateExternalPaymentInput {
@@ -38,10 +41,16 @@ interface CreateExternalPaymentInput {
 export class PaymentService {
   private prisma: PrismaClient;
   private eventPublisher: EventPublisher;
+  private walletService: WalletService;
+  private incentiveService: IncentiveService;
+  private voucherService: VoucherService;
 
   constructor(prisma: PrismaClient, eventPublisher: EventPublisher) {
     this.prisma = prisma;
     this.eventPublisher = eventPublisher;
+    this.walletService = new WalletService(prisma);
+    this.incentiveService = new IncentiveService(prisma, this.walletService);
+    this.voucherService = new VoucherService(prisma);
   }
 
   async createExternalPayment(input: CreateExternalPaymentInput): Promise<{ paymentId: string; payUrl: string }> {
@@ -109,52 +118,6 @@ export class PaymentService {
       created_at: payment.createdAt,
       updated_at: payment.updatedAt,
     };
-  }
-
-  async handleStripeWebhook(payload: Buffer | string, signature: string): Promise<void> {
-    const event = stripeGateway.constructWebhookEvent(payload, signature);
-    const intent = event.data as Record<string, any>;
-    const paymentIntentId = String(intent.id || '');
-
-    if (!paymentIntentId) {
-      throw new Error('Stripe webhook missing payment intent ID');
-    }
-
-    switch (event.type) {
-      case 'payment_intent.succeeded':
-        await this.synchronizePaymentByIntentId({
-          paymentIntentId,
-          nextStatus: PaymentStatus.COMPLETED,
-          transactionId: String(intent.latest_charge || intent.id),
-          gatewayMetadata: intent,
-        });
-        return;
-      case 'payment_intent.processing':
-        await this.synchronizePaymentByIntentId({
-          paymentIntentId,
-          nextStatus: PaymentStatus.PROCESSING,
-          gatewayMetadata: intent,
-        });
-        return;
-      case 'payment_intent.requires_action':
-        await this.synchronizePaymentByIntentId({
-          paymentIntentId,
-          nextStatus: PaymentStatus.REQUIRES_ACTION,
-          gatewayMetadata: intent,
-        });
-        return;
-      case 'payment_intent.payment_failed':
-      case 'payment_intent.canceled':
-        await this.synchronizePaymentByIntentId({
-          paymentIntentId,
-          nextStatus: PaymentStatus.FAILED,
-          failureReason: String(intent.last_payment_error?.message || intent.cancellation_reason || 'Stripe reported failure'),
-          gatewayMetadata: intent,
-        });
-        return;
-      default:
-        logger.info(`Ignoring unsupported Stripe webhook event: ${event.type}`);
-    }
   }
 
   async handleMomoWebhook(payload: Record<string, any>): Promise<void> {
@@ -419,6 +382,7 @@ export class PaymentService {
       vehicleType = 'ECONOMY',
       paymentMethod = 'CASH',
       driverStats,
+      voucherCode,
     } = payload;
 
     try {
@@ -452,6 +416,25 @@ export class PaymentService {
         driverStats,
       };
       const earnings = commissionService.calculateCommission(fareDetails.totalFare, tripCtx);
+
+      // Apply voucher discount (discount absorbs cost, driver unaffected)
+      let discountAmount = 0;
+      let voucherId: string | null = null;
+      if (voucherCode) {
+        try {
+          const voucherResult = await this.voucherService.applyVoucher(
+            customerId,
+            voucherCode,
+            fareDetails.totalFare,
+          );
+          discountAmount = voucherResult.discountAmount;
+          voucherId = voucherResult.voucherId;
+        } catch (voucherError) {
+          // Non-critical: log but continue without discount
+          logger.warn(`Voucher apply failed for ride ${rideId}:`, voucherError);
+        }
+      }
+      const finalAmount = fareDetails.totalFare - discountAmount;
 
       // Generate idempotency key for payment
       const idempotencyKey = `ride_${rideId}_${Date.now()}`;
@@ -532,6 +515,9 @@ export class PaymentService {
             currency: 'VND',
             method: mappedMethod,
             provider: mappedProvider,
+            discountAmount,
+            finalAmount,
+            voucherId,
           },
           create: {
             rideId,
@@ -542,7 +528,10 @@ export class PaymentService {
             method: mappedMethod,
             provider: mappedProvider,
             status: PaymentStatus.PENDING,
-            idempotencyKey, // For deduplication
+            idempotencyKey,
+            discountAmount,
+            finalAmount,
+            voucherId,
           },
         });
 
@@ -576,14 +565,54 @@ export class PaymentService {
         return payment;
       });
 
+      // Redeem voucher now that payment record is created
+      if (voucherId && voucherCode) {
+        try {
+          await this.voucherService.redeemVoucher(customerId, voucherId);
+        } catch (voucherError) {
+          logger.error(`Voucher redemption failed for ride ${rideId}:`, voucherError);
+        }
+      }
+
       // Process payment only when it is still pending.
       if (createdPayment.status === PaymentStatus.PENDING) {
         if (mappedMethod === PaymentMethod.CASH) {
           // Cash payment: mark as completed immediately (COD)
           await this.processPaymentRecord(createdPayment);
+          // CASH: driver already has the full fare in hand; platform takes its cut from wallet
+          // Commission is always based on gross fare regardless of customer voucher
+          if (driverId) {
+            await this.walletService.debitCommission(driverId, earnings.platformFee, rideId);
+          }
         } else {
           // Electronic payment (MOMO/VISA): process with gateway mock
           await this.processElectronicPaymentRecord(createdPayment);
+          // ONLINE: platform collected → credit driver's net earnings to wallet
+          // Driver earnings are always from gross fare; voucher is the platform's cost
+          if (driverId) {
+            await this.walletService.creditEarning(driverId, earnings.netEarnings, rideId);
+          }
+        }
+      } else if (createdPayment.status === PaymentStatus.COMPLETED) {
+        // Payment already COMPLETED (online) — credit wallet if not already done
+        // (idempotency: only credit when DriverEarnings was just created)
+        if (mappedMethod !== PaymentMethod.CASH && driverId && !existingDriverEarnings) {
+          await this.walletService.creditEarning(driverId, earnings.netEarnings, rideId);
+        }
+      }
+
+      // Evaluate incentives for every completed ride
+      if (driverId) {
+        try {
+          await this.incentiveService.evaluateAfterRide({
+            rideId,
+            driverId,
+            distanceKm: distance || 0,
+            completedAt: new Date(),
+          });
+        } catch (incentiveError) {
+          // Non-critical: log but do not fail the ride completion
+          logger.error(`Incentive evaluation failed for ride ${rideId}:`, incentiveError);
         }
       }
     } catch (error) {
@@ -971,19 +1000,8 @@ export class PaymentService {
     };
 
     if (payment.provider === PaymentProvider.STRIPE && payment.paymentIntentId) {
-      const refundResponse = await paymentGatewayManager.createRefund({
-        provider: PaymentGatewayType.STRIPE,
-        paymentIntentId: payment.paymentIntentId,
-        amount: payment.amount,
-        reason,
-      });
-
-      refundMetadata = {
-        ...refundMetadata,
-        status: 'ACCEPTED',
-        refundTransactionId: refundResponse?.id,
-        providerResponse: refundResponse,
-      };
+      // Stripe removed — no refund action
+      logger.warn(`Stripe refund attempted for payment ${payment.id} — Stripe integration removed`);
     }
 
     if (payment.provider === PaymentProvider.MOMO) {
@@ -1094,20 +1112,9 @@ export class PaymentService {
       };
     }
 
-    if (payment.provider === PaymentProvider.ZALOPAY && payment.transactionId && config.zalopay.enabled) {
-      const refundResponse = await zaloPayGateway.createRefund({
-        zpTransId: payment.transactionId,
-        amount: Math.round(payment.amount),
-        description: reason,
-        refundId: uuidv4(),
-      });
-
-      refundMetadata = {
-        ...refundMetadata,
-        status: 'ACCEPTED',
-        refundTransactionId: refundResponse?.refund_id || refundResponse?.m_refund_id,
-        providerResponse: refundResponse,
-      };
+    if (payment.provider === PaymentProvider.ZALOPAY && payment.transactionId) {
+      // ZaloPay removed — no refund action
+      logger.warn(`ZaloPay refund attempted for payment ${payment.id} — ZaloPay integration removed`);
     }
 
     const gatewayResponse = this.buildGatewayResponseEnvelope(payment.gatewayResponse);
@@ -1150,6 +1157,35 @@ export class PaymentService {
       reason,
       refund: refundMetadata,
     }, payment.rideId);
+
+    // Reverse wallet entry for the driver
+    if (payment.driverId) {
+      try {
+        const driverEarnings = await this.prisma.driverEarnings.findUnique({
+          where: { rideId: payment.rideId },
+        });
+        if (driverEarnings) {
+          if (payment.method === PaymentMethod.CASH) {
+            // For cash rides: reverse the commission deduction → credit commission back
+            await this.walletService.creditBonus(
+              payment.driverId,
+              driverEarnings.platformFee,
+              `Hoàn hoa hồng (huỷ chuyến cash)`,
+              payment.rideId,
+            );
+          } else {
+            // For online rides: reverse the net-earnings credit → debit netEarnings
+            await this.walletService.reverseEarning(
+              payment.driverId,
+              driverEarnings.netEarnings,
+              payment.rideId,
+            );
+          }
+        }
+      } catch (walletError) {
+        logger.error(`Wallet reversal failed for refund on ride ${rideId}:`, walletError);
+      }
+    }
 
     logger.info(`Refund completed for ride ${rideId}`);
   }
@@ -1322,16 +1358,11 @@ export class PaymentService {
       case PaymentMethod.VNPAY:
         return config.vnpay.enabled ? PaymentGatewayType.VNPAY : PaymentGatewayType.MOCK;
       case PaymentMethod.WALLET:
-        if (config.momo.enabled) {
-          return PaymentGatewayType.MOMO;
-        }
-        if (config.zalopay.enabled) {
-          return PaymentGatewayType.ZALOPAY;
-        }
-        return PaymentGatewayType.MOCK;
+        return config.momo.enabled ? PaymentGatewayType.MOMO : PaymentGatewayType.MOCK;
       case PaymentMethod.VISA:
       case PaymentMethod.CARD:
-        return config.stripe.enabled ? PaymentGatewayType.STRIPE : PaymentGatewayType.MOCK;
+        // Stripe removed — treat card as mock
+        return PaymentGatewayType.MOCK;
       case PaymentMethod.CASH:
       default:
         return PaymentGatewayType.MOCK;
@@ -1340,14 +1371,10 @@ export class PaymentService {
 
   private mapPaymentProviderFromGateway(provider: PaymentGatewayType): PaymentProvider {
     switch (provider) {
-      case PaymentGatewayType.STRIPE:
-        return PaymentProvider.STRIPE;
       case PaymentGatewayType.MOMO:
         return PaymentProvider.MOMO;
       case PaymentGatewayType.VNPAY:
         return PaymentProvider.VNPAY;
-      case PaymentGatewayType.ZALOPAY:
-        return PaymentProvider.ZALOPAY;
       case PaymentGatewayType.MOCK:
       default:
         return PaymentProvider.MOCK;

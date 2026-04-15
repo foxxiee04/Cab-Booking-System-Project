@@ -5,6 +5,7 @@ import { PaymentStatus } from '../generated/prisma-client';
 import { config } from '../config';
 import { vnpayGateway } from '../services/vnpay.gateway';
 import { logger } from '../utils/logger';
+import { resolveDriverId } from '../utils/resolve-driver-id';
 
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
@@ -114,24 +115,6 @@ export class PaymentController {
     }
   };
 
-  handleStripeWebhook = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    try {
-      const signature = req.header('stripe-signature');
-
-      if (!signature) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'stripe-signature header is required' },
-        });
-      }
-
-      await this.paymentService.handleStripeWebhook(req.body, signature);
-      res.json({ success: true });
-    } catch (error) {
-      next(error);
-    }
-  };
-
   handleMomoWebhook = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       await this.paymentService.handleMomoWebhook(req.body);
@@ -176,7 +159,8 @@ export class PaymentController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
 
-      const result = await this.paymentService.getDriverEarnings(req.user!.userId, page, limit);
+      const driverId = await resolveDriverId(req.user!.userId);
+      const result = await this.paymentService.getDriverEarnings(driverId, page, limit);
       
       res.json({ success: true, data: result });
     } catch (error) {

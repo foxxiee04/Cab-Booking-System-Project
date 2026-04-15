@@ -4,6 +4,7 @@ import { logout } from '../store/auth.slice';
 import { setCurrentRide, setDriver, updateRideStatus, updateDriverLocation } from '../store/ride.slice';
 import { showNotification } from '../store/ui.slice';
 import { refreshAuthSession } from '../api/axios.config';
+import { driverApi } from '../api/driver.api';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
 
@@ -28,7 +29,7 @@ const toVietnameseMessage = (message: string | undefined, fallback: string): str
 
   const normalized = raw.toLowerCase();
 
-  if (/ride has been cancelled|trip has been cancelled|cancelled/i.test(raw)) {
+  if (/ride has been cancelled|trip has been cancelled|cancelled/i.test(normalized)) {
     return 'Chuyến đi đã bị hủy. Bạn có thể quay lại trang chủ để đặt chuyến mới.';
   }
   if (/driver assigned|driver accepted|driver is on the way|heading to pickup/i.test(raw)) {
@@ -44,7 +45,7 @@ const toVietnameseMessage = (message: string | undefined, fallback: string): str
     return 'Chưa có tài xế nhận chuyến, hệ thống đang tiếp tục tìm tài xế khác.';
   }
 
-  const isAsciiOnly = /^[\x00-\x7F]+$/.test(raw);
+  const isAsciiOnly = !/[^\u0020-\u007E]/.test(raw);
   if (isAsciiOnly) {
     return fallback;
   }
@@ -80,7 +81,7 @@ const getRideStatusNotification = (status: string, message?: string) => {
       };
     case 'CANCELLED':
       return {
-        type: 'warning' as const,
+        type: 'error' as const,
         title: 'Chuyến đi đã bị hủy',
         message: normalizeCancelledMessage(toVietnameseMessage(message, 'Bạn có thể quay lại trang chủ để đặt chuyến mới.')),
       };
@@ -101,6 +102,7 @@ class SocketService {
   private socket: Socket | null = null;
   private isConnected = false;
   private authFailureHandled = false;
+  private pingInterval: ReturnType<typeof setInterval> | null = null;
 
   private isAuthError(error: unknown) {
     const message = typeof error === 'string'
@@ -183,6 +185,10 @@ class SocketService {
     this.socket.on('connect', () => {
       this.isConnected = true;
       this.authFailureHandled = false;
+      if (this.pingInterval) clearInterval(this.pingInterval);
+      this.pingInterval = setInterval(() => {
+        if (this.socket?.connected) this.socket.emit('ping');
+      }, 30_000);
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -208,6 +214,16 @@ class SocketService {
     // Ride events - matching backend event names
     this.socket.on('RIDE_STATUS_UPDATE', (data: { rideId: string; status: string; message?: string; driverId?: string }) => {
       store.dispatch(updateRideStatus({ rideId: data.rideId, status: data.status }));
+
+      // When driver is assigned/accepted, fetch driver profile if not already in store
+      if ((data.status === 'ASSIGNED' || data.status === 'ACCEPTED') && data.driverId) {
+        const currentDriver = store.getState().ride.driver;
+        if (!currentDriver) {
+          driverApi.getDriverPublicProfile(data.driverId).then((driver) => {
+            if (driver) store.dispatch(setDriver(driver));
+          }).catch(() => {});
+        }
+      }
 
       const notification = getRideStatusNotification(data.status, data.message);
       if (notification) {
@@ -256,7 +272,7 @@ class SocketService {
       store.dispatch(updateRideStatus({ rideId: data.rideId, status: 'CANCELLED' }));
       store.dispatch(
         showNotification({
-          type: 'warning',
+          type: 'error',
           title: 'Chuyến đi đã bị hủy',
           message: data.reason
             ? `Lý do: ${toVietnameseMessage(data.reason, 'Chuyến đi đã bị hủy bởi hệ thống.')}`
@@ -282,6 +298,10 @@ class SocketService {
    * Disconnect from socket server
    */
   disconnect() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;

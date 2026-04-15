@@ -83,7 +83,14 @@ model Payment {
   refundedAt      DateTime?
   
   failureReason   String?
-  
+
+  // Voucher / discount applied to this payment
+  voucherId       String?
+  discountAmount  Float         @default(0)   // VND discount granted to customer
+  finalAmount     Float?                      // amount actually charged (amount - discountAmount)
+
+  voucher         Voucher?      @relation("PaymentVoucher", fields: [voucherId], references: [id])
+
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   
@@ -145,4 +152,173 @@ model OutboxEvent {
   publishedAt   DateTime?
   
   @@index([publishedAt])
+}
+
+// ─── Driver Wallet ──────────────────────────────────────────────────────────
+
+enum WalletTransactionType {
+  EARN        // Net income credited from an online ride
+  COMMISSION  // Platform fee debited for a cash ride
+  BONUS       // Incentive reward credited
+  WITHDRAW    // Driver withdrawal debited
+  REFUND      // Reversal of a previous EARN (online-ride refund)
+  TOP_UP      // Driver deposits money into wallet via MoMo/VNPay
+}
+
+enum IncentiveRuleType {
+  TRIP_COUNT  // Total trips in a calendar day (≥ conditionValue → rewardAmount)
+  DISTANCE_KM // Total km driven in a calendar day (≥ conditionValue → rewardAmount)
+  PEAK_HOUR   // Per-trip bonus; conditionValue unused (0); always applies during peak
+}
+
+// The driver's real-time financial balance.
+// balance CAN go negative (cash rides create debt).
+// Debt limit check: balance < -200_000 VND → driver cannot accept new rides.
+model DriverWallet {
+  id        String   @id @default(uuid())
+  driverId  String   @unique
+  balance   Float    @default(0)   // current balance in VND
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions WalletTransaction[]
+
+  @@index([driverId])
+  @@map("driver_wallets")
+}
+
+// Immutable ledger entry for every change to a driver's wallet.
+model WalletTransaction {
+  id           String                @id @default(uuid())
+  driverId     String
+  type         WalletTransactionType
+  amount       Float                 // always a positive number; direction encoded in type
+  balanceAfter Float                 // wallet balance snapshot after this transaction
+  description  String?
+  rideId       String?               // links back to the originating ride (nullable for WITHDRAW/BONUS)
+
+  createdAt    DateTime @default(now())
+
+  wallet DriverWallet @relation(fields: [driverId], references: [driverId])
+
+  @@index([driverId, createdAt(sort: Desc)])
+  @@index([rideId])
+  @@map("wallet_transactions")
+}
+
+// Configurable incentive rules stored in DB (editable by admin).
+model IncentiveRule {
+  id             String            @id @default(uuid())
+  type           IncentiveRuleType
+  conditionValue Float             // 10 → 10 trips; 100 → 100 km; 0 → peak-hour (per-trip)
+  rewardAmount   Float             // VND bonus
+  isActive       Boolean           @default(true)
+  description    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("incentive_rules")
+}
+
+// Running totals per driver per calendar day for incentive evaluation.
+model DriverDailyStats {
+  id             String   @id @default(uuid())
+  driverId       String
+  date           DateTime @db.Date  // calendar date (UTC)
+  tripsCompleted Int      @default(0)
+  distanceKm     Float    @default(0)
+  peakTrips      Int      @default(0)
+  bonusAwarded   Float    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([driverId, date])
+  @@index([driverId, date(sort: Desc)])
+  @@map("driver_daily_stats")
+}
+
+// ─── Wallet Top-Up via MoMo / VNPay ──────────────────────────────────────
+
+enum TopUpStatus {
+  PENDING    // Payment initiated, waiting for gateway IPN
+  COMPLETED  // IPN confirmed success, wallet credited
+  FAILED     // IPN confirmed failure or timed out
+}
+
+// One record per top-up attempt.  Created when driver initiates payment.
+// Confirmed (or failed) by the gateway IPN webhook.
+model WalletTopUpOrder {
+  id              String      @id @default(uuid())
+  driverId        String
+
+  amount          Float                       // VND requested by driver
+  provider        String                      // 'MOMO' | 'VNPAY'
+  status          TopUpStatus @default(PENDING)
+
+  // IDs sent to / returned by the payment gateway
+  orderId         String      @unique         // gateway order ref (used in IPN lookup)
+  gatewayTxnId    String?                     // transaction ID from gateway on success
+  gatewayResponse String?                     // raw IPN body (JSON string, for audit)
+
+  createdAt       DateTime    @default(now())
+  completedAt     DateTime?
+  failedAt        DateTime?
+
+  @@index([driverId, createdAt(sort: Desc)])
+  @@index([orderId])
+  @@map("wallet_topup_orders")
+}
+
+// ─── Voucher / Promo System ───────────────────────────────────────────────
+
+enum DiscountType {
+  PERCENT // discount_value is a percentage (e.g. 20 = 20 %)
+  FIXED   // discount_value is a fixed VND amount
+}
+
+// Master voucher catalogue.
+model Voucher {
+  id            String       @id @default(uuid())
+  code          String       @unique
+  description   String?
+
+  discountType  DiscountType
+  discountValue Float                          // percent (0-100) or flat VND amount
+  maxDiscount   Float?                         // cap for PERCENT vouchers (VND)
+  minFare       Float        @default(0)       // minimum trip fare to use voucher
+
+  startTime     DateTime
+  endTime       DateTime
+  usageLimit    Int?                           // total redemptions allowed (null = unlimited)
+  perUserLimit  Int          @default(1)       // max times one user can use it
+
+  isActive      Boolean      @default(true)
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  userVouchers  UserVoucher[]
+  payments      Payment[]    @relation("PaymentVoucher")
+
+  @@index([code])
+  @@index([endTime])
+  @@map("vouchers")
+}
+
+// Junction: which vouchers a customer has collected and how many times used.
+model UserVoucher {
+  id        String   @id @default(uuid())
+  userId    String
+  voucherId String
+  usedCount Int      @default(0)
+  savedAt   DateTime @default(now())
+
+  voucher   Voucher  @relation(fields: [voucherId], references: [id])
+
+  @@unique([userId, voucherId])
+  @@index([userId])
+  @@map("user_vouchers")
 }

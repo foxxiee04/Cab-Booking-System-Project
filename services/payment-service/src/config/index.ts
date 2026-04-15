@@ -30,6 +30,12 @@ export const config = {
   
   serviceName: process.env.SERVICE_NAME || 'payment-service',
 
+  services: {
+    driver: process.env.DRIVER_SERVICE_URL || 'http://localhost:3003',
+  },
+
+  internalServiceToken: process.env.INTERNAL_SERVICE_TOKEN || 'change-me',
+
   booking: {
     callbackUrl: process.env.BOOKING_PAYMENT_CALLBACK_URL || '',
   },
@@ -64,14 +70,8 @@ export const config = {
     lowAcceptancePenalty:     parseFloat(process.env.PENALTY_LOW_ACCEPTANCE_RATE         || '0.05'),
   },
   
-  // Stripe Configuration
-  stripe: {
-    enabled: process.env.STRIPE_ENABLED === 'true',
-    secretKey: process.env.STRIPE_SECRET_KEY || '',
-    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '',
-    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
-  },
-  
+  // Stripe removed — not used in this project (Vietnamese market: MoMo + VNPay only)
+
   // MoMo Configuration
   momo: {
     enabled: process.env.MOMO_ENABLED === 'true',
@@ -88,14 +88,7 @@ export const config = {
     returnUrl: process.env.MOMO_RETURN_URL || '',
   },
   
-  // ZaloPay Configuration
-  zalopay: {
-    enabled: process.env.ZALOPAY_ENABLED === 'true',
-    appId: process.env.ZALOPAY_APP_ID || '',
-    key1: process.env.ZALOPAY_KEY1 || '',
-    key2: process.env.ZALOPAY_KEY2 || '',
-    endpoint: process.env.ZALOPAY_ENDPOINT || 'https://sb-openapi.zalopay.vn',
-  },
+  // ZaloPay removed — not used in this project (Vietnamese market: MoMo + VNPay only)
 
   // VNPay Configuration
   vnpay: {

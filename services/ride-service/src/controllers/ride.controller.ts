@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import axios from 'axios';
 import { config } from '../config';
 import { RideStatus as PrismaRideStatus } from '../generated/prisma-client';
 import { RideService } from '../services/ride.service';
@@ -410,6 +411,35 @@ export class RideController {
             message: 'Loại xe của tài xế không phù hợp với chuyến đi này',
           },
         });
+      }
+
+      // Wallet balance check for CASH rides
+      if (requestedRide.paymentMethod === 'CASH') {
+        try {
+          const COMMISSION_RATE = 0.20;
+          const commission = Math.round((requestedRide.fare ?? 0) * COMMISSION_RATE);
+          const walletResp = await axios.get(
+            `${config.services.payment}/api/wallet/driver/${driver.id}/can-accept-cash`,
+            {
+              params: { commission },
+              headers: { 'x-internal-token': config.internalServiceToken },
+              timeout: 3000,
+            },
+          );
+          const { allowed, reason } = walletResp.data?.data ?? {};
+          if (!allowed) {
+            return res.status(400).json({
+              success: false,
+              error: {
+                code: 'INSUFFICIENT_WALLET_BALANCE',
+                message: reason || 'Số dư ví không đủ để nhận cuốc tiền mặt này. Vui lòng nạp thêm tiền vào ví.',
+              },
+            });
+          }
+        } catch (walletErr) {
+          // Non-blocking: if payment service is unreachable, allow the ride to proceed
+          logger.warn('Wallet check skipped (payment service unavailable):', walletErr);
+        }
       }
 
       const ride = await this.rideService.driverAcceptRide(req.params.rideId, driver.id);

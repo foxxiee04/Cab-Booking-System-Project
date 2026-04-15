@@ -6,6 +6,8 @@ import { config } from './config';
 import { EventPublisher } from './events/publisher';
 import { PaymentController } from './controllers/payment.controller';
 import { createPaymentRoutes } from './routes/payment.routes';
+import { createWalletRoutes } from './routes/wallet.routes';
+import { createVoucherRoutes } from './routes/voucher.routes';
 import { PaymentService } from './services/payment.service';
 import { logger } from './utils/logger';
 
@@ -22,13 +24,6 @@ export function createApp({ prisma, eventPublisher, getReadiness }: PaymentAppOp
 
   app.use(helmet());
   app.use(cors());
-
-  // Stripe requires the raw payload for signature verification.
-  app.post(
-    '/api/payments/webhooks/stripe',
-    express.raw({ type: 'application/json' }),
-    paymentController.handleStripeWebhook,
-  );
 
   app.use(express.json());
 
@@ -48,6 +43,8 @@ export function createApp({ prisma, eventPublisher, getReadiness }: PaymentAppOp
   });
 
   app.use('/api/payments', createPaymentRoutes(paymentService));
+  app.use('/api/wallet', createWalletRoutes(prisma));
+  app.use('/api/voucher', createVoucherRoutes(prisma));
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     logger.error('Unhandled error:', err);

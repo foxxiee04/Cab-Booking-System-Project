@@ -22,6 +22,7 @@ import {
 import {
   ArrowBack,
   Phone,
+  Chat,
   Navigation,
   FiberManualRecord,
   PlayArrow,
@@ -39,6 +40,9 @@ import { useTranslation } from 'react-i18next';
 import DriverTripMap from '../features/trip/components/DriverTripMap';
 import { driverSocketService } from '../socket/driver.socket';
 import { watchPosition, clearWatch } from '../utils/map.utils';
+import RideChat from '../components/RideChat';
+import RideCall from '../components/RideCall';
+import { useWebRTCCall } from '../hooks/useWebRTCCall';
 
 const getOptimisticCompletedRidesKey = (userId?: string) => `driver:completedRidesCount:${userId || 'anonymous'}`;
 
@@ -89,7 +93,13 @@ const ActiveRide: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCancelDialog, setShowCancelDialog] = useState(false);
-  const [watchId, setWatchId] = useState<number | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const watchIdRef = useRef<number | null>(null);
+
+  const { callState, callError, startCall, acceptCall, hangUp } = useWebRTCCall(
+    accessToken,
+    currentRide?.id,
+  );
 
   useEffect(() => {
     if (isOnline && accessToken) {
@@ -104,7 +114,7 @@ const ActiveRide: React.FC = () => {
   }, [accessToken, isOnline]);
 
   useEffect(() => {
-    if (!isOnline || !currentRide || watchId) {
+    if (!isOnline || !currentRide || watchIdRef.current !== null) {
       return;
     }
 
@@ -123,13 +133,13 @@ const ActiveRide: React.FC = () => {
       }
     );
 
-    setWatchId(id);
+    watchIdRef.current = id;
 
     return () => {
       clearWatch(id);
-      setWatchId(null);
+      watchIdRef.current = null;
     };
-  }, [currentRide, dispatch, isOnline, t, watchId]);
+  }, [currentRide, dispatch, isOnline, t]);
 
   useEffect(() => {
     if (currentRide) {
@@ -257,33 +267,17 @@ const ActiveRide: React.FC = () => {
   const phase = PHASE_CONFIG[status] || PHASE_CONFIG.ACCEPTED;
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: '#f5f5f5' }}>
+    <Box sx={{ minHeight: '100%', display: 'flex', flexDirection: 'column', gap: 1.5, pb: 1.5 }}>
+      {/* Map section with explicit height so Leaflet tiles render correctly */}
       <Box sx={{
-        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1100,
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.4) 0%, transparent 100%)',
-        p: 1, pt: 2,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+        position: 'relative',
+        height: { xs: 300, sm: 380, md: 440 },
+        borderRadius: { xs: 3, md: 4 },
+        overflow: 'hidden',
+        background: 'linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)',
+        boxShadow: '0 18px 48px rgba(15,23,42,0.12)',
+        border: '1px solid rgba(59,130,246,0.12)',
       }}>
-        <IconButton
-          onClick={() => navigate('/dashboard')}
-          sx={{ bgcolor: 'white', boxShadow: 2, '&:hover': { bgcolor: 'grey.100' } }}
-        >
-          <ArrowBack />
-        </IconButton>
-
-        {/* Phase pill */}
-        <Chip
-          icon={phase.icon as React.ReactElement}
-          label={phase.label}
-          sx={{
-            bgcolor: phase.bgColor, color: phase.color,
-            fontWeight: 700, fontSize: 14,
-            '& .MuiChip-icon': { color: phase.color },
-          }}
-        />
-      </Box>
-
-      <Box sx={{ flexGrow: 1, position: 'relative' }}>
         <DriverTripMap
           currentLocation={mapCenter}
           pickupLocation={currentRide.pickupLocation}
@@ -293,28 +287,49 @@ const ActiveRide: React.FC = () => {
           colorMode="light"
         />
 
-        {error && (
-          <Alert
-            severity="error"
-            onClose={() => setError('')}
-            sx={{ position: 'absolute', top: 60, left: 16, right: 16, zIndex: 1100 }}
+        {/* Floating back button + phase chip overlay on the map */}
+        <Box sx={{
+          position: 'absolute', top: 12, left: 12, right: 12, zIndex: 1000,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <IconButton
+            onClick={() => navigate('/dashboard')}
+            sx={{ bgcolor: 'rgba(255,255,255,0.92)', boxShadow: 2, backdropFilter: 'blur(8px)', '&:hover': { bgcolor: 'white' } }}
           >
-            {error}
-          </Alert>
-        )}
+            <ArrowBack />
+          </IconButton>
+          <Chip
+            icon={phase.icon as React.ReactElement}
+            label={phase.label}
+            sx={{
+              bgcolor: 'rgba(255,255,255,0.92)',
+              color: phase.color,
+              fontWeight: 700,
+              fontSize: 14,
+              backdropFilter: 'blur(8px)',
+              boxShadow: 2,
+              '& .MuiChip-icon': { color: phase.color },
+            }}
+          />
+        </Box>
       </Box>
 
-      <Card sx={{
-        borderRadius: '20px 20px 0 0',
-        boxShadow: '0 -4px 20px rgba(0,0,0,0.12)',
-        maxHeight: '40vh',
-        overflow: 'auto',
-      }}>
+      {/* Ride info card */}
+      <Card sx={{ borderRadius: 5, boxShadow: '0 18px 45px rgba(15,23,42,0.12)', backgroundColor: 'rgba(255,255,255,0.96)', border: '1px solid rgba(148,163,184,0.14)' }}>
         <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1.5, pb: 0.5 }}>
           <Box sx={{ width: 40, height: 4, borderRadius: 2, bgcolor: 'grey.300' }} />
         </Box>
 
         <CardContent sx={{ pt: 1 }}>
+          {error && (
+            <Alert
+              severity="error"
+              onClose={() => setError('')}
+              sx={{ mb: 1.5 }}
+            >
+              {error}
+            </Alert>
+          )}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
             <Avatar sx={{ width: 50, height: 50, bgcolor: 'primary.main', fontSize: 20 }}>
               {currentRide.customer?.firstName?.[0]}{currentRide.customer?.lastName?.[0]}
@@ -331,6 +346,11 @@ const ActiveRide: React.FC = () => {
                   </Typography>
                 </Box>
               )}
+              {currentRide.customer?.phoneNumber && (
+                <Typography variant="caption" color="text.secondary">
+                  SĐT: {currentRide.customer.phoneNumber}
+                </Typography>
+              )}
             </Box>
 
             {currentRide.customer?.phoneNumber && (
@@ -339,6 +359,28 @@ const ActiveRide: React.FC = () => {
               </IconButton>
             )}
           </Box>
+
+          {/* Voice call + Chat buttons */}
+          <Stack direction="row" spacing={1.5} sx={{ mb: 1.5 }}>
+            <RideCall
+              callState={callState}
+              callError={callError}
+              driverName={`${currentRide.customer?.firstName || ''} ${currentRide.customer?.lastName || ''}`.trim() || 'Khách hàng'}
+              onStart={startCall}
+              onAccept={acceptCall}
+              onHangUp={hangUp}
+              onClose={() => {}}
+            />
+            <Button
+              variant="outlined"
+              fullWidth
+              startIcon={<Chat />}
+              sx={{ borderRadius: 3, py: 1.2 }}
+              onClick={() => setChatOpen(true)}
+            >
+              Nhắn tin
+            </Button>
+          </Stack>
 
           <Stack spacing={1} sx={{ mb: 2 }}>
             <Typography variant="body2"><strong>Điểm đón:</strong> {currentRide.pickupLocation?.address || `${currentRide.pickupLocation.lat.toFixed(5)}, ${currentRide.pickupLocation.lng.toFixed(5)}`}</Typography>
@@ -443,6 +485,16 @@ const ActiveRide: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* In-ride chat dialog */}
+      <RideChat
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        token={accessToken}
+        rideId={currentRide?.id}
+        myUserId={user?.id}
+        driverName={`${currentRide?.customer?.firstName || ''} ${currentRide?.customer?.lastName || ''}`.trim() || 'Khách hàng'}
+      />
     </Box>
   );
 };

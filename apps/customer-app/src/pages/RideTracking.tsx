@@ -9,21 +9,33 @@ import {
   Card,
   CardContent,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
+  FormControl,
+  FormControlLabel,
   IconButton,
   LinearProgress,
+  Radio,
+  RadioGroup,
   Rating,
   Skeleton,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import { ArrowBack, AutorenewRounded, Cancel, Chat, CheckCircleRounded, HourglassTopRounded, PaymentRounded, Phone, StarRate } from '@mui/icons-material';
+import { ArrowBack, AutorenewRounded, Cancel, Chat, CheckCircleRounded, HourglassTopRounded, PaymentRounded, StarRate, AccessTime, Route, Speed, FiberManualRecord } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { BookingMap, useSocket } from '../features/booking';
+import RideChat from '../components/RideChat';
+import RideCall from '../components/RideCall';
+import { useWebRTCCall } from '../hooks/useWebRTCCall';
 import { paymentApi } from '../api/payment.api';
 import { reviewApi, RideReview } from '../api/review.api';
 import { rideApi } from '../api/ride.api';
+import { driverApi } from '../api/driver.api';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { clearRide, setCurrentRide, setDriver, updateRideStatus } from '../store/ride.slice';
 import { Payment } from '../types';
@@ -95,6 +107,7 @@ const STATUS_META: Record<string, { label: string; description: string; color: s
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
   PENDING: 'Đang chờ',
+  NOT_PAID: 'Chưa thanh toán',
   PROCESSING: 'Đang xử lý',
   REQUIRES_ACTION: 'Chờ thanh toán',
   COMPLETED: 'Đã thanh toán',
@@ -106,6 +119,15 @@ const AWAITING_PAYMENT_STATUSES = new Set(['CREATED']);
 const SEARCHING_DRIVER_STATUSES = new Set(['PENDING', 'FINDING_DRIVER']);
 const RECEIPT_READY_STATUSES = new Set(['COMPLETED', 'CANCELLED', 'NO_DRIVER_AVAILABLE']);
 const MATCHING_MAX_WAIT_MINUTES = 3;
+
+const CANCEL_REASONS = [
+  'Đợi tài xế quá lâu',
+  'Đổi điểm đón / điểm đến',
+  'Đặt nhầm chuyến',
+  'Tìm được phương tiện khác',
+  'Thay đổi kế hoạch',
+  'Khác',
+];
 
 const formatDistanceKm = (distance: number | null | undefined) => {
   if (!distance || Number.isNaN(distance)) {
@@ -184,6 +206,19 @@ const RideTracking: React.FC = () => {
   const [refundPollTimedOut, setRefundPollTimedOut] = useState(false);
   const refundPollRef = useRef<number | null>(null);
 
+  // Cancel reason dialog state
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [customCancelReason, setCustomCancelReason] = useState('');
+
+  // Chat & Call state
+  const [chatOpen, setChatOpen] = useState(false);
+  const { user } = useAppSelector((state) => state.auth);
+  const { callState, callError, startCall, acceptCall, hangUp } = useWebRTCCall(
+    accessToken,
+    rideId,
+  );
+
   const retryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const retryPaymentRequired = retryParams.get('retryPayment') === '1';
   const failedProvider = (retryParams.get('failedProvider') || '').toUpperCase();
@@ -198,6 +233,10 @@ const RideTracking: React.FC = () => {
     dispatch(setCurrentRide(ride));
     if ((ride as any).driver) {
       dispatch(setDriver((ride as any).driver));
+    } else if (ride.driverId) {
+      // API doesn't return nested driver — fetch separately so the driver card renders
+      const profile = await driverApi.getDriverPublicProfile(ride.driverId);
+      if (profile) dispatch(setDriver(profile));
     }
   }, [dispatch, rideId]);
 
@@ -319,14 +358,14 @@ const RideTracking: React.FC = () => {
     return () => window.clearTimeout(timeoutId);
   }, [currentRide?.status, hydrateReceipt, isOnlinePayment, payment?.status]);
 
-  const handleCancel = useCallback(async () => {
+  const handleCancel = useCallback(async (reason: string) => {
     if (!currentRide) {
       return;
     }
 
     setCancelling(true);
     try {
-      await rideApi.cancelRide(currentRide.id, 'Khách hàng hủy chuyến');
+      await rideApi.cancelRide(currentRide.id, reason || 'Khách hàng hủy chuyến');
       await Promise.allSettled([
         hydrateRide(),
         hydrateReceipt(),
@@ -358,6 +397,18 @@ const RideTracking: React.FC = () => {
       setCancelling(false);
     }
   }, [currentRide, hydrateReceipt, hydrateRide, t]);
+
+  const openCancelDialog = useCallback(() => {
+    setCancelReason('');
+    setCustomCancelReason('');
+    setCancelDialogOpen(true);
+  }, []);
+
+  const confirmCancel = useCallback(() => {
+    const reason = cancelReason === 'Khác' ? (customCancelReason.trim() || 'Khác') : cancelReason;
+    setCancelDialogOpen(false);
+    handleCancel(reason);
+  }, [cancelReason, customCancelReason, handleCancel]);
 
   // Cleanup poll on unmount
   useEffect(() => {
@@ -603,7 +654,7 @@ const RideTracking: React.FC = () => {
 
   if (loading && !currentRide) {
     return (
-      <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', p: 2 }}>
+      <Box sx={{ minHeight: '100%', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
         <Skeleton variant="rectangular" height={320} sx={{ borderRadius: 4 }} />
         <Skeleton variant="text" sx={{ mt: 2, fontSize: 32 }} />
         <Skeleton variant="text" sx={{ fontSize: 18 }} />
@@ -613,34 +664,8 @@ const RideTracking: React.FC = () => {
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: '#e5eefb' }}>
-      <Box
-        sx={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 1100,
-          background: 'transparent',
-          p: 1,
-          pt: 2,
-          pointerEvents: 'none',
-        }}
-      >
-        <IconButton
-          onClick={() => {
-            if (status === 'COMPLETED' || status === 'CANCELLED' || status === 'NO_DRIVER_AVAILABLE') {
-              dispatch(clearRide());
-              navigate('/home');
-            }
-          }}
-          sx={{ bgcolor: 'white', boxShadow: 2, '&:hover': { bgcolor: 'grey.100' }, pointerEvents: 'auto' }}
-        >
-          <ArrowBack />
-        </IconButton>
-      </Box>
-
-      <Box sx={{ flex: currentRide?.status === 'COMPLETED' ? '0 0 44vh' : 1, position: 'relative' }}>
+    <Box sx={{ minHeight: '100%', display: 'flex', flexDirection: 'column', gap: 1.5, pb: 1.5, background: '#f8fafc' }}>
+      <Box sx={{ position: 'relative', height: { xs: 320, sm: 380, md: 460 }, borderRadius: 6, overflow: 'hidden', background: '#e2e8f0', boxShadow: '0 18px 48px rgba(15,23,42,0.12)', border: '1px solid rgba(148,163,184,0.2)' }}>
         <BookingMap
           pickup={currentRide?.pickup || null}
           dropoff={currentRide?.dropoff || null}
@@ -653,6 +678,31 @@ const RideTracking: React.FC = () => {
           height="100%"
         />
 
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 12,
+            left: 12,
+            right: 12,
+            zIndex: 1100,
+            pointerEvents: 'none',
+          }}
+        >
+          <IconButton
+            onClick={() => {
+              if (status === 'COMPLETED' || status === 'CANCELLED' || status === 'NO_DRIVER_AVAILABLE') {
+                dispatch(clearRide());
+                navigate('/home');
+                return;
+              }
+              navigate('/home');
+            }}
+            sx={{ bgcolor: 'rgba(255,255,255,0.92)', boxShadow: 2, backdropFilter: 'blur(8px)', '&:hover': { bgcolor: 'white' }, pointerEvents: 'auto' }}
+          >
+            <ArrowBack />
+          </IconButton>
+        </Box>
+
         {error && (
           <Alert severity="error" onClose={() => setError('')} sx={{ position: 'absolute', top: 72, left: 16, right: 16, zIndex: 1200, borderRadius: 3 }}>
             {error}
@@ -660,8 +710,8 @@ const RideTracking: React.FC = () => {
         )}
       </Box>
 
-      <Card sx={{ borderRadius: '24px 24px 0 0', boxShadow: '0 -20px 45px rgba(15,23,42,0.14)', overflow: 'auto', minHeight: currentRide?.status === 'COMPLETED' ? '56vh' : '34vh' }}>
-        <CardContent sx={{ p: 3 }}>
+      <Card sx={{ borderRadius: 5, boxShadow: '0 18px 45px rgba(15,23,42,0.12)', backgroundColor: 'rgba(255,255,255,0.96)', border: '1px solid rgba(148,163,184,0.14)' }}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.75 } }}>
           <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2.5 }}>
             {isSearchingDriver ? (
               <Box
@@ -685,6 +735,19 @@ const RideTracking: React.FC = () => {
                   }}
                 />
               </Box>
+            ) : (status === 'CANCELLED' || status === 'NO_DRIVER_AVAILABLE') ? (
+              <Box
+                sx={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: '50%',
+                  display: 'grid',
+                  placeItems: 'center',
+                  bgcolor: 'rgba(220, 38, 38, 0.1)',
+                }}
+              >
+                <Cancel sx={{ color: '#dc2626', fontSize: 20 }} />
+              </Box>
             ) : (
               <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: statusMeta.color }} />
             )}
@@ -698,6 +761,25 @@ const RideTracking: React.FC = () => {
               <Chip label={statusMeta.label} size="small" sx={{ bgcolor: `${statusMeta.color}18`, color: statusMeta.color, fontWeight: 700 }} />
             )}
           </Stack>
+
+          {/* Cancelled/refunding styled card */}
+          {(status === 'CANCELLED' || status === 'NO_DRIVER_AVAILABLE') && isRefundPending && (
+            <Card sx={{ borderRadius: 3, mb: 2.5, bgcolor: '#fef2f2', border: '1.5px solid #fca5a5' }}>
+              <CardContent sx={{ py: 2, px: 2.5 }}>
+                <Stack direction="row" alignItems="center" spacing={1.5}>
+                  <HourglassTopRounded sx={{ color: '#dc2626', fontSize: 24 }} />
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={800} color="#991b1b">
+                      Đang xử lý hoàn tiền
+                    </Typography>
+                    <Typography variant="body2" color="#7f1d1d">
+                      Số tiền sẽ được hoàn về {refundDestinationLabel} trong {refundTimeEstimate}.
+                    </Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Awaiting online payment banner */}
           {isAwaitingPayment && currentRide && (
@@ -748,7 +830,7 @@ const RideTracking: React.FC = () => {
                     fullWidth
                     color="error"
                     size="small"
-                    onClick={handleCancel}
+                    onClick={openCancelDialog}
                     disabled={cancelling}
                     sx={{ borderRadius: 3 }}
                   >
@@ -773,14 +855,50 @@ const RideTracking: React.FC = () => {
                   </Box>
                   <Chip icon={<StarRate sx={{ color: '#f59e0b !important' }} />} label={(driver.rating || 5).toFixed(1)} variant="outlined" />
                 </Stack>
-                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1.5 }}>
-                  <Chip size="small" color="primary" label={trackingEtaText.replace('ETA đón: ', '')} />
-                  <Chip size="small" variant="outlined" label={trackingDistanceText.replace('Khoảng cách tới bạn: ', '')} />
-                  {effectiveDriverLocation ? <Chip size="small" color="success" label="Vị trí tài xế đang cập nhật realtime" /> : null}
-                </Stack>
-                <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
-                  <Button variant="outlined" fullWidth startIcon={<Phone />} sx={{ borderRadius: 3, py: 1.2 }}>Gọi</Button>
-                  <Button variant="outlined" fullWidth startIcon={<Chat />} sx={{ borderRadius: 3, py: 1.2 }}>Nhắn tin</Button>
+                {/* Live tracking info panel */}
+                <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#f0f9ff', borderRadius: 3, border: '1px solid #bae6fd' }}>
+                  <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1.25 }}>
+                    <FiberManualRecord sx={{ fontSize: 10, color: effectiveDriverLocation ? '#16a34a' : '#f59e0b' }} />
+                    <Typography variant="caption" fontWeight={700} color={effectiveDriverLocation ? 'success.dark' : 'warning.dark'} sx={{ lineHeight: 1 }}>
+                      {effectiveDriverLocation ? 'Đang theo dõi vị trí tài xế trực tiếp' : 'Đang đồng bộ vị trí tài xế...'}
+                    </Typography>
+                  </Stack>
+                  <Stack direction="row" spacing={1}>
+                    <Box sx={{ flex: 1, textAlign: 'center', py: 0.5 }}>
+                      <AccessTime sx={{ fontSize: 22, color: '#0284c7', mb: 0.25 }} />
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.2, mb: 0.25 }}>ETA đón</Typography>
+                      <Typography variant="body2" fontWeight={800} color="#0284c7">
+                        {trackingEtaText.replace('ETA đón: ', '') || '—'}
+                      </Typography>
+                    </Box>
+                    <Divider orientation="vertical" flexItem />
+                    <Box sx={{ flex: 1, textAlign: 'center', py: 0.5 }}>
+                      <Route sx={{ fontSize: 22, color: '#0284c7', mb: 0.25 }} />
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.2, mb: 0.25 }}>Khoảng cách</Typography>
+                      <Typography variant="body2" fontWeight={800} color="#0284c7">
+                        {trackingDistanceText.replace('Khoảng cách tới bạn: ', '') || '—'}
+                      </Typography>
+                    </Box>
+                    {trackingSpeedText ? (<>
+                      <Divider orientation="vertical" flexItem />
+                      <Box sx={{ flex: 1, textAlign: 'center', py: 0.5 }}>
+                        <Speed sx={{ fontSize: 22, color: '#0284c7', mb: 0.25 }} />
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.2, mb: 0.25 }}>Vận tốc</Typography>
+                        <Typography variant="body2" fontWeight={800} color="#0284c7">{trackingSpeedText}</Typography>
+                      </Box>
+                    </>) : null}
+                  </Stack>
+                </Box>                <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
+                  <RideCall
+                    callState={callState}
+                    callError={callError}
+                    driverName={driver ? `${driver.firstName || ''} ${driver.lastName || ''}`.trim() : undefined}
+                    onStart={startCall}
+                    onAccept={acceptCall}
+                    onHangUp={hangUp}
+                    onClose={() => {}}
+                  />
+                  <Button variant="outlined" fullWidth startIcon={<Chat />} sx={{ borderRadius: 3, py: 1.2 }} onClick={() => setChatOpen(true)}>Nhắn tin</Button>
                 </Stack>
               </CardContent>
             </Card>
@@ -801,7 +919,7 @@ const RideTracking: React.FC = () => {
                 </Stack>
 
                 {statusMeta.allowCancel && !isAwaitingPayment && (
-                  <Button color="error" variant="outlined" startIcon={cancelling ? <CircularProgress size={16} /> : <Cancel />} fullWidth onClick={handleCancel} disabled={cancelling} sx={{ borderRadius: 3, py: 1.2, mt: 2.5 }}>
+                  <Button color="error" variant="outlined" startIcon={cancelling ? <CircularProgress size={16} /> : <Cancel />} fullWidth onClick={openCancelDialog} disabled={cancelling} sx={{ borderRadius: 3, py: 1.2, mt: 2.5 }}>
                     Hủy chuyến
                   </Button>
                 )}
@@ -852,16 +970,57 @@ const RideTracking: React.FC = () => {
                     <Typography variant="subtitle1" fontWeight={800}>{status === 'COMPLETED' ? 'Hóa đơn chuyến đi' : 'Thông tin thanh toán và hoàn tiền'}</Typography>
                     {(paymentLoading || reviewLoading) && <CircularProgress size={18} />}
                   </Stack>
-                  <Stack spacing={1.25}>
-                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Mã chuyến</Typography><Typography variant="body2" fontWeight={600}>{currentRide.id.slice(0, 8).toUpperCase()}</Typography></Stack>
-                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thời gian đặt</Typography><Typography variant="body2" fontWeight={600}>{formatDate(currentRide.requestedAt)}</Typography></Stack>
-                    {currentRide.completedAt && <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Hoàn thành lúc</Typography><Typography variant="body2" fontWeight={600}>{formatDate(currentRide.completedAt)}</Typography></Stack>}
-                    {status === 'CANCELLED' && currentRide.updatedAt && <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Hủy lúc</Typography><Typography variant="body2" fontWeight={600}>{formatDate(currentRide.updatedAt)}</Typography></Stack>}
-                    <Divider sx={{ my: 0.5 }} />
-                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Số tiền</Typography><Typography variant="h6" fontWeight={900}>{formatCurrency(payment?.amount || currentRide.fare || 0)}</Typography></Stack>
-                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Phương thức</Typography><Typography variant="body2" fontWeight={600}>{getPaymentMethodLabel(payment?.method || currentRide.paymentMethod || 'CASH')}</Typography></Stack>
-                    <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Trạng thái thanh toán</Typography><Chip size="small" icon={<PaymentRounded />} label={PAYMENT_STATUS_LABELS[payment?.status || 'PENDING'] || 'Đang chờ'} data-testid="payment-status-chip" color={payment?.status === 'COMPLETED' || payment?.status === 'REFUNDED' ? 'success' : payment?.status === 'FAILED' ? 'error' : 'warning'} /></Stack>
-                  </Stack>
+                  <Box
+                    sx={{
+                      bgcolor: '#dbeafe',
+                      borderRadius: 2,
+                      p: 1.25,
+                      '& .info-label': { color: '#1e40af', fontSize: '0.82rem', lineHeight: 1.4 },
+                      '& .info-value': { color: '#1e3a5f', fontSize: '0.82rem', lineHeight: 1.4, fontWeight: 700 },
+                    }}
+                  >
+                    <Stack spacing={0.8}>
+                      <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                        <Typography className="info-label">Mã chuyến</Typography>
+                        <Typography className="info-value" textAlign="right">{currentRide.id.slice(0, 8).toUpperCase()}</Typography>
+                      </Stack>
+                      <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                        <Typography className="info-label">Thời gian đặt</Typography>
+                        <Typography className="info-value" textAlign="right">{formatDate(currentRide.requestedAt)}</Typography>
+                      </Stack>
+                      {currentRide.completedAt && (
+                        <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                          <Typography className="info-label">Hoàn thành lúc</Typography>
+                          <Typography className="info-value" textAlign="right">{formatDate(currentRide.completedAt)}</Typography>
+                        </Stack>
+                      )}
+                      {status === 'CANCELLED' && currentRide.updatedAt && (
+                        <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                          <Typography className="info-label">Hủy lúc</Typography>
+                          <Typography className="info-value" textAlign="right">{formatDate(currentRide.updatedAt)}</Typography>
+                        </Stack>
+                      )}
+                      <Divider sx={{ my: 0.5, borderColor: '#93c5fd' }} />
+                      <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                        <Typography className="info-label">Số tiền</Typography>
+                        <Typography className="info-value" sx={{ fontWeight: 800, fontSize: '0.92rem' }} textAlign="right">{formatCurrency(payment?.amount || currentRide.fare || 0)}</Typography>
+                      </Stack>
+                      <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                        <Typography className="info-label">Phương thức</Typography>
+                        <Typography className="info-value" textAlign="right">{getPaymentMethodLabel(payment?.method || currentRide.paymentMethod || 'CASH')}</Typography>
+                      </Stack>
+                      <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="center">
+                        <Typography className="info-label">Trạng thái thanh toán</Typography>
+                        <Chip size="small" icon={<PaymentRounded />} label={(() => { const isCashCancelled = status === 'CANCELLED' && !isOnlinePayment; if (isCashCancelled) return PAYMENT_STATUS_LABELS['NOT_PAID']; return PAYMENT_STATUS_LABELS[payment?.status || 'PENDING'] || 'Đang chờ'; })()} data-testid="payment-status-chip" color={(() => { const isCashCancelled = status === 'CANCELLED' && !isOnlinePayment; if (isCashCancelled) return 'default'; if (payment?.status === 'COMPLETED' || payment?.status === 'REFUNDED') return 'success'; if (payment?.status === 'FAILED') return 'error'; return 'warning'; })()} sx={{ height: 22, fontSize: '0.75rem' }} />
+                      </Stack>
+                      {payment?.transactionId && (
+                        <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                          <Typography className="info-label">Mã giao dịch</Typography>
+                          <Typography className="info-value" textAlign="right" sx={{ fontFamily: 'monospace', fontSize: '0.74rem', wordBreak: 'break-all' }}>{payment.transactionId}</Typography>
+                        </Stack>
+                      )}
+                    </Stack>
+                  </Box>
 
                   {isRefundPending && (
                     <Box
@@ -869,27 +1028,27 @@ const RideTracking: React.FC = () => {
                       sx={{
                         mt: 1.5,
                         borderRadius: 3,
-                        bgcolor: '#fffbeb',
-                        border: '1.5px solid #fcd34d',
+                        bgcolor: '#fef2f2',
+                        border: '1.5px solid #fca5a5',
                         overflow: 'hidden',
                       }}
                     >
                       <LinearProgress
                         sx={{
                           height: 3,
-                          '& .MuiLinearProgress-bar': { bgcolor: '#f59e0b' },
-                          bgcolor: '#fef3c7',
+                          '& .MuiLinearProgress-bar': { bgcolor: '#dc2626' },
+                          bgcolor: '#fee2e2',
                         }}
                       />
                       <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ p: 1.75 }}>
-                        <HourglassTopRounded sx={{ color: '#d97706', mt: 0.25, fontSize: 20, flexShrink: 0 }} />
+                        <HourglassTopRounded sx={{ color: '#dc2626', mt: 0.25, fontSize: 20, flexShrink: 0 }} />
                         <Box>
-                          <Typography variant="body2" fontWeight={800} color="#92400e" sx={{ mb: 0.5 }}>
+                          <Typography variant="body2" fontWeight={800} color="#991b1b" sx={{ mb: 0.5 }}>
                             {refundPollTimedOut
                               ? `Yêu cầu hoàn tiền đã gửi tới ${refundProviderLabel}, đang chờ đối soát.`
                               : `Đang hoàn tiền về ${refundDestinationLabel} của bạn.`}
                           </Typography>
-                          <Typography variant="caption" display="block" color="#78350f">
+                          <Typography variant="caption" display="block" color="#7f1d1d" sx={{ fontSize: '0.8rem' }}>
                             {refundPollTimedOut
                               ? (refundProviderLabel === 'MoMo'
                                 ? 'MoMo đã nhận yêu cầu hoàn. Thường tiền về ví trong vài phút đến 1 giờ, đôi khi có thể lâu hơn tùy đối soát.'
@@ -898,15 +1057,6 @@ const RideTracking: React.FC = () => {
                                 ? 'Tiền sẽ về ví MoMo trong vài phút đến 1 giờ. Bạn có thể dùng mã giao dịch gốc để đối chiếu nếu cần.'
                                 : 'Tiền sẽ về tài khoản ngân hàng trong 3–5 ngày làm việc. VNPay xử lý qua ngân hàng liên kết.')}
                           </Typography>
-                          {payment?.transactionId && (
-                            <Typography
-                              variant="caption"
-                              display="block"
-                              sx={{ mt: 0.75, fontFamily: 'monospace', bgcolor: '#fef3c7', px: 1, py: 0.5, borderRadius: 1, fontSize: '0.72rem' }}
-                            >
-                              Giao dịch gốc: {payment.transactionId}
-                            </Typography>
-                          )}
                         </Box>
                       </Stack>
                     </Box>
@@ -1103,6 +1253,72 @@ const RideTracking: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* In-ride chat dialog */}
+      <RideChat
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        token={accessToken}
+        rideId={rideId}
+        myUserId={user?.id}
+        driverName={driver ? `${driver.firstName || ''} ${driver.lastName || ''}`.trim() : undefined}
+      />
+
+      {/* Cancel reason dialog */}
+      <Dialog
+        open={cancelDialogOpen}
+        onClose={() => setCancelDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 4, mx: 2 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, pb: 0.5 }}>Lý do hủy chuyến</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Vui lòng chọn lý do hủy chuyến để chúng tôi cải thiện dịch vụ.
+          </Typography>
+          <FormControl component="fieldset" fullWidth>
+            <RadioGroup value={cancelReason} onChange={(e) => setCancelReason(e.target.value)}>
+              {CANCEL_REASONS.map((reason) => (
+                <FormControlLabel
+                  key={reason}
+                  value={reason}
+                  control={<Radio size="small" />}
+                  label={<Typography variant="body2">{reason}</Typography>}
+                  sx={{ mb: 0.25 }}
+                />
+              ))}
+            </RadioGroup>
+          </FormControl>
+          {cancelReason === 'Khác' && (
+            <TextField
+              autoFocus
+              fullWidth
+              multiline
+              minRows={2}
+              placeholder="Nhập lý do cụ thể..."
+              value={customCancelReason}
+              onChange={(e) => setCustomCancelReason(e.target.value)}
+              sx={{ mt: 1 }}
+              inputProps={{ maxLength: 200 }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setCancelDialogOpen(false)} sx={{ borderRadius: 3 }}>
+            Quay lại
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={!cancelReason || (cancelReason === 'Khác' && !customCancelReason.trim()) || cancelling}
+            onClick={confirmCancel}
+            sx={{ borderRadius: 3, fontWeight: 700 }}
+          >
+            {cancelling ? 'Đang hủy...' : 'Xác nhận hủy'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

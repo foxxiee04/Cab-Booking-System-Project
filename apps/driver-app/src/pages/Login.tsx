@@ -42,6 +42,11 @@ const Login: React.FC = () => {
     try {
       const response = await authApi.login({ identifier: normalizedPhone, password });
       if (response.success) {
+        const role = response.data?.user?.role;
+        if (role && role !== 'DRIVER') {
+          setError('Tài khoản này không phải tài xế. Vui lòng đăng nhập bằng tài khoản tài xế.');
+          return;
+        }
         dispatch(setCredentials(response.data));
         navigate('/dashboard');
       }

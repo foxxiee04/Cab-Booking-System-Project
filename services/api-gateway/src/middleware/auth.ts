@@ -29,12 +29,15 @@ const PUBLIC_PATHS = [
   '/api/auth/forgot-password', // send OTP for password reset
   '/api/auth/reset-password',  // verify OTP and set new password
   '/api/auth/refresh',
-  '/api/payments/momo/return',  // MoMo redirect return (browser redirect)
-  '/api/payments/vnpay/return', // VNPay redirect return (browser redirect)
+  '/api/payments/momo/return',      // MoMo redirect return (browser redirect)
+  '/api/payments/vnpay/return',     // VNPay redirect return (browser redirect)
+  '/api/wallet/top-up/momo-ipn',    // MoMo wallet top-up IPN (called by MoMo servers)
+  '/api/wallet/top-up/vnpay-ipn',   // VNPay wallet top-up IPN (called by VNPay servers)
   '/api/map',
   '/health',
   '/api/ai/ride/estimate',
   '/api/geo',
+  '/api/voucher/public',  // public discovery — no auth required
 ];
 
 // Check if path is public

@@ -78,6 +78,37 @@ const LeafletViewportController: React.FC<{
   const lng1 = destinationLocation?.lng;
 
   useEffect(() => {
+    // Fix: Leaflet may not detect container size when rendered inside flex/absolute containers,
+    // MUI Dialogs (225ms fade-in), or any dynamically-resized parent.
+    // Use ResizeObserver as the primary mechanism so invalidateSize fires whenever the
+    // container actually gains its dimensions, with a short-lived timer fallback.
+    const container = map.getContainer();
+
+    map.invalidateSize({ animate: false, pan: false });
+
+    if (container && typeof window !== 'undefined' && window.ResizeObserver) {
+      let lastW = 0; let lastH = 0;
+      const ro = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const { width, height } = entry.contentRect;
+        if (width !== lastW || height !== lastH) {
+          lastW = width; lastH = height;
+          map.invalidateSize({ animate: false, pan: false });
+        }
+      });
+      ro.observe(container);
+      return () => ro.disconnect();
+    }
+
+    // Fallback for environments without ResizeObserver
+    const timers = [100, 300, 600, 900, 1200, 1800, 2500].map((delay) =>
+      window.setTimeout(() => { map.invalidateSize({ animate: false, pan: false }); }, delay),
+    );
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, [map]);
+
+  useEffect(() => {
     const lockViewport = () => {
       if (!programmaticViewportRef.current) {
         viewportLockedRef.current = true;
@@ -104,7 +135,7 @@ const LeafletViewportController: React.FC<{
     programmaticViewportRef.current = true;
 
     if (points.length === 1) {
-      map.setView(points[0], 15, { animate: true });
+      map.setView(points[0], 15, { animate: false });
       window.setTimeout(() => {
         programmaticViewportRef.current = false;
       }, 0);
@@ -113,7 +144,7 @@ const LeafletViewportController: React.FC<{
 
     map.fitBounds(L.latLngBounds(points), {
       padding: [56, 56],
-      animate: true,
+      animate: false,
     });
     window.setTimeout(() => {
       programmaticViewportRef.current = false;
@@ -394,6 +425,9 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
       style={{ width: '100%', height: '100%' }}
       zoomControl
       scrollWheelZoom
+      zoomAnimation={false}
+      fadeAnimation={false}
+      markerZoomAnimation={false}
     >
       <LeafletTileLayer
         attribution={leafletAttribution}

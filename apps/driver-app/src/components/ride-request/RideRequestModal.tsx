@@ -32,9 +32,6 @@ import { useAppSelector } from '../../store/hooks';
 import DriverTripMap from '../../features/trip/components/DriverTripMap';
 import SwipeToConfirm from '../../features/trip/components/SwipeToConfirm';
 
-// Default driver commission share when rate not available from earnings
-const DEFAULT_DRIVER_SHARE = 0.85;
-
 const normalizeDistanceMeters = (distance?: number): number | undefined => {
   if (!distance || Number.isNaN(distance) || distance <= 0) {
     return undefined;
@@ -74,14 +71,19 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
   const { t } = useTranslation();
   const { currentLocation, earnings } = useAppSelector((state) => state.driver);
   const [timeLeft, setTimeLeft] = useState(timeoutSeconds);
+  const [mapKey, setMapKey] = useState(0);
   const timeoutHandledForRideRef = useRef<string | null>(null);
 
-  // Derive driver share from actual earning rate if available
-  const commissionRate = earnings?.commissionRate != null ? 1 - earnings.commissionRate : DEFAULT_DRIVER_SHARE;
+  // Derive driver share from average commission rate of recent trips
+  const avgCommissionRate = earnings?.recentTrips?.length
+    ? earnings.recentTrips.reduce((s, t) => s + (t.commissionRate || 0.2), 0) / earnings.recentTrips.length
+    : 0.2;
+  const driverShare = 1 - avgCommissionRate;
 
   useEffect(() => {
     if (open && ride) {
       setTimeLeft(timeoutSeconds);
+      setMapKey((k) => k + 1);
       timeoutHandledForRideRef.current = null;
     }
   }, [open, ride, timeoutSeconds]);
@@ -112,7 +114,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
   const progressColor = progress > 50 ? 'success' : progress > 25 ? 'warning' : 'error';
   const rideCode = ride.id.slice(0, 8).toUpperCase();
   const hasFare = ride.fare != null && ride.fare > 0;
-  const driverEarning = hasFare ? Math.round(ride.fare! * commissionRate) : null;
+  const driverEarning = hasFare ? Math.round(ride.fare! * driverShare) : null;
   const distanceMeters = normalizeDistanceMeters(ride.distance);
   const durationSeconds = normalizeDurationSeconds(ride.duration, ride.estimatedDuration);
   const derivedDistanceMeters = (!distanceMeters && ride.pickupLocation?.lat && ride.pickupLocation?.lng && ride.dropoffLocation?.lat && ride.dropoffLocation?.lng)
@@ -172,7 +174,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
         {/* Scrollable content */}
         <Box sx={{ overflowY: 'auto', flex: 1, px: 2.5, py: 2 }}>
           {/* Map with route */}
-          <Box sx={{ borderRadius: 3, overflow: 'hidden', mb: 2.5, height: 200, border: '1px solid', borderColor: 'divider' }}>
+          <Box key={mapKey} sx={{ borderRadius: 3, overflow: 'hidden', mb: 2.5, height: 200, border: '1px solid', borderColor: 'divider' }}>
             <DriverTripMap
               currentLocation={currentLocation}
               pickupLocation={ride.pickupLocation}
@@ -273,7 +275,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
                       Hoa hồng bạn nhận
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {Math.round(commissionRate * 100)}% sau phí nền tảng
+                      {Math.round(driverShare * 100)}% sau phí nền tảng
                     </Typography>
                   </Box>
                 </Stack>
@@ -287,8 +289,11 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
           {/* Customer info */}
           {ride.customer && (
             <Box sx={{ bgcolor: '#f8fafc', borderRadius: 3, p: 2, mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6, mb: 1, display: 'block' }}>
+                Thông tin khách hàng
+              </Typography>
               <Stack direction="row" spacing={2} alignItems="center">
-                <Avatar sx={{ bgcolor: '#dbeafe', color: '#1d4ed8', fontWeight: 700 }}>
+                <Avatar sx={{ bgcolor: '#dbeafe', color: '#1d4ed8', fontWeight: 700, width: 44, height: 44 }}>
                   {ride.customer.firstName?.[0]}
                 </Avatar>
                 <Box sx={{ flex: 1 }}>
@@ -302,6 +307,11 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
                         {ride.customer.rating.toFixed(1)}
                       </Typography>
                     </Stack>
+                  )}
+                  {ride.customer.phoneNumber && (
+                    <Typography variant="caption" color="text.secondary">
+                      SĐT: {ride.customer.phoneNumber}
+                    </Typography>
                   )}
                 </Box>
                 {ride.customer.phoneNumber && (

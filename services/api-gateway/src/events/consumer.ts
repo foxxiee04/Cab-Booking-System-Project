@@ -924,7 +924,10 @@ export class EventConsumer {
 
       const driver = await driverGrpcClient.getDriverById(driverId).catch(() => null);
       if (!driver?.userId) continue;
-      if (!this.socketServer.isUserOnline(driver.userId)) continue;
+      // Check in-memory first (fast), fall back to Redis presence for reconnecting sockets
+      const online = this.socketServer.isUserOnline(driver.userId)
+        || await this.socketServer.isUserOnlineRedis(driver.userId);
+      if (!online) continue;
 
       // Cache userId
       this.driverUserCache.set(driverId, driver.userId);
@@ -991,6 +994,28 @@ export class EventConsumer {
 
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
 
+    // Emit legacy ride:assigned event with driver profile for the tracking page
+    if (payload.driverId) {
+      const rawDriver = await driverGrpcClient.getDriverFullProfile(payload.driverId);
+      if (rawDriver) {
+        const driverProfile = {
+          id: rawDriver.id,
+          firstName: '',
+          lastName: '',
+          vehicleMake: rawDriver.vehicleBrand || '',
+          vehicleModel: rawDriver.vehicleModel || '',
+          vehicleColor: rawDriver.vehicleColor || '',
+          licensePlate: rawDriver.vehiclePlate || '',
+          rating: rawDriver.ratingAverage ?? 5,
+          totalRides: rawDriver.ratingCount ?? 0,
+        };
+        this.socketServer.emitToCustomer(payload.customerId, 'ride:assigned', {
+          ride: { id: payload.rideId, status: 'ASSIGNED', driverId: payload.driverId },
+          driver: driverProfile,
+        });
+      }
+    }
+
     const driverUserId = await this.resolveDriverUserId(payload.driverId);
     if (driverUserId) {
       this.socketServer.emitToDriver(driverUserId, 'ride:status', {
@@ -1033,6 +1058,28 @@ export class EventConsumer {
 
     // Notify customer
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
+
+    // Emit legacy ride:assigned event with driver profile so the tracking page can show driver card
+    if (payload.driverId) {
+      const rawDriver = await driverGrpcClient.getDriverFullProfile(payload.driverId);
+      if (rawDriver) {
+        const driverProfile = {
+          id: rawDriver.id,
+          firstName: '',
+          lastName: '',
+          vehicleMake: rawDriver.vehicleBrand || '',
+          vehicleModel: rawDriver.vehicleModel || '',
+          vehicleColor: rawDriver.vehicleColor || '',
+          licensePlate: rawDriver.vehiclePlate || '',
+          rating: rawDriver.ratingAverage ?? 5,
+          totalRides: rawDriver.ratingCount ?? 0,
+        };
+        this.socketServer.emitToCustomer(payload.customerId, 'ride:assigned', {
+          ride: { id: payload.rideId, status: 'ACCEPTED', driverId: payload.driverId },
+          driver: driverProfile,
+        });
+      }
+    }
 
     const driverUserId = await this.resolveDriverUserId(payload.driverId);
     if (driverUserId) {

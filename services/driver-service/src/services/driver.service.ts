@@ -118,6 +118,11 @@ export class DriverService {
       data: { availabilityStatus: AvailabilityStatus.ONLINE },
     });
 
+    // Register in geo-index using last known location so driver is discoverable immediately
+    if (updatedDriver.lastLocationLat != null && updatedDriver.lastLocationLng != null) {
+      await this.redis.geoadd(GEO_KEY, updatedDriver.lastLocationLng, updatedDriver.lastLocationLat, updatedDriver.id);
+    }
+
     return updatedDriver;
   }
 

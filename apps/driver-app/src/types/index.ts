@@ -122,6 +122,8 @@ export interface EarningsDailyPoint {
   label: string;
   gross: number;
   commission: number;
+  bonus: number;
+  penalty: number;
   net: number;
   rides: number;
 }
@@ -132,10 +134,17 @@ export interface EarningsTripBreakdown {
   pickupAddress: string;
   dropoffAddress: string;
   gross: number;
+  commissionRate: number;
   commission: number;
+  bonus: number;
+  penalty: number;
   net: number;
   paymentMethod?: PaymentMethod;
   vehicleType?: VehicleType;
+  driverCollected?: boolean;
+  cashDebt?: number;
+  bonusBreakdown?: Record<string, number>;
+  penaltyBreakdown?: Record<string, number>;
 }
 
 export interface Earnings {
@@ -145,8 +154,10 @@ export interface Earnings {
   totalRides: number;
   grossTotal: number;
   commissionTotal: number;
+  bonusTotal: number;
+  penaltyTotal: number;
   netTotal: number;
-  commissionRate: number;
+  unpaidCashDebt: number;
   daily: EarningsDailyPoint[];
   recentTrips: EarningsTripBreakdown[];
 }
@@ -198,4 +209,6 @@ export interface Notification {
   id: string;
   type: 'success' | 'error' | 'warning' | 'info';
   message: string;
+  title?: string;
+  persistMs?: number;
 }

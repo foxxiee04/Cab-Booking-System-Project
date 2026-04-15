@@ -13,6 +13,7 @@ class DriverSocketService {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private authFailureHandled = false;
+  private pingInterval: ReturnType<typeof setInterval> | null = null;
 
   private isAuthError(error: unknown) {
     const message = typeof error === 'string'
@@ -100,6 +101,11 @@ class DriverSocketService {
       console.log('✅ Driver socket connected:', this.socket?.id);
       this.reconnectAttempts = 0;
       this.authFailureHandled = false;
+      // Renew Redis presence every 30 seconds
+      if (this.pingInterval) clearInterval(this.pingInterval);
+      this.pingInterval = setInterval(() => {
+        if (this.socket?.connected) this.socket.emit('ping');
+      }, 30_000);
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -208,7 +214,7 @@ class DriverSocketService {
       
       store.dispatch(
         showNotification({
-          type: 'warning',
+          type: 'error',
           message: `Chuyến đi đã bị hủy: ${data.reason}`,
         })
       );
@@ -240,6 +246,10 @@ class DriverSocketService {
   }
 
   disconnect() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;

@@ -50,3 +50,25 @@ export const authMiddleware = (
     res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
 };
+
+/** Same as authMiddleware but never rejects — attaches user if valid token present. */
+export const optionalAuthMiddleware = (
+  req: AuthenticatedRequest,
+  _res: Response,
+  next: NextFunction
+): void => {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      const decoded = jwt.verify(token, config.jwt.secret) as jwt.JwtPayload & {
+        userId?: string; sub?: string; email?: string; role?: string;
+      };
+      const userId = decoded.userId ?? (typeof decoded.sub === 'string' ? decoded.sub : undefined);
+      if (userId) {
+        req.user = { userId, email: decoded.email ?? '', role: decoded.role ?? '' };
+      }
+    } catch { /* ignore invalid token */ }
+  }
+  next();
+};

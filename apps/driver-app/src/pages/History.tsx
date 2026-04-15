@@ -1,16 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Container,
   Box,
   Typography,
   Card,
   CardContent,
   Chip,
   Button,
-  CircularProgress,
   Alert,
   InputAdornment,
   MenuItem,
+  Paper,
   TextField,
   Dialog,
   DialogTitle,
@@ -19,6 +18,7 @@ import {
   Divider,
   Stack,
   IconButton,
+  Skeleton,
 } from '@mui/material';
 import {
   SearchRounded,
@@ -31,6 +31,7 @@ import {
   DirectionsBikeRounded,
   EventRounded,
   TagRounded,
+  DriveEtaRounded,
 } from '@mui/icons-material';
 import { driverApi } from '../api/driver.api';
 import { Ride } from '../types';
@@ -160,15 +161,42 @@ const History: React.FC = () => {
   }, [rides, searchQuery, statusFilter]);
 
   return (
-    <Container sx={{ py: 4, pb: { xs: 16, sm: 12 } }}>
-      <Typography variant="h4" fontWeight="bold">
-        {t('history.title')}
-      </Typography>
-
-      <Box sx={{ mt: 2, display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', sm: '1fr 180px' } }}>
+    <Box
+      sx={{
+        minHeight: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1.5,
+        pb: 2,
+        background: 'radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 28%), linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%)',
+      }}
+    >
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2,
+          borderRadius: 5,
+          background: 'linear-gradient(135deg, rgba(14,165,233,0.10), rgba(37,99,235,0.18))',
+          border: '1px solid rgba(59,130,246,0.12)',
+        }}
+      >
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
+          <Box sx={{ p: 1.25, borderRadius: 3, bgcolor: 'rgba(37,99,235,0.10)', display: 'flex' }}>
+            <DriveEtaRounded sx={{ color: '#2563eb', fontSize: 26 }} />
+          </Box>
+          <Box>
+            <Typography variant="h6" fontWeight={800}>Chuyến đi</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {total > 0 ? `${total} chuyến` : 'Lịch sử hành trình'}
+            </Typography>
+          </Box>
+        </Stack>
+        {/* Search + Filter row */}
+      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
         <TextField
           size="small"
-          placeholder="Tìm theo mã chuyến hoặc địa chỉ"
+          fullWidth
+          placeholder="Tìm theo mã hoặc địa chỉ"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           InputProps={{
@@ -178,118 +206,135 @@ const History: React.FC = () => {
               </InputAdornment>
             ),
           }}
+          sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
         />
         <TextField
           select
           size="small"
-          label="Trạng thái"
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value)}
+          sx={{ minWidth: 130, '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
         >
           <MenuItem value="ALL">Tất cả</MenuItem>
-          <MenuItem value="PENDING">Đang chờ</MenuItem>
-          <MenuItem value="ACCEPTED">Đã nhận</MenuItem>
-          <MenuItem value="IN_PROGRESS">Đang chạy</MenuItem>
           <MenuItem value="COMPLETED">Hoàn tất</MenuItem>
           <MenuItem value="CANCELLED">Đã hủy</MenuItem>
+          <MenuItem value="IN_PROGRESS">Đang chạy</MenuItem>
+          <MenuItem value="ACCEPTED">Đã nhận</MenuItem>
+          <MenuItem value="PENDING">Đang chờ</MenuItem>
         </TextField>
-      </Box>
+        </Stack>
+      </Paper>
 
-      {error && (
-        <Alert severity="error" sx={{ mt: 2 }}>
-          {error}
-        </Alert>
-      )}
+      {error && <Alert severity="error" sx={{ borderRadius: 2 }}>{error}</Alert>}
 
       {loading && (
-        <Box sx={{ mt: 2 }}>
-          <CircularProgress size={24} />
-        </Box>
+        <Stack spacing={1.5}>
+          {[1, 2, 3].map((k) => <Skeleton key={k} variant="rounded" height={90} sx={{ borderRadius: 3 }} />)}
+        </Stack>
       )}
 
       {!loading && filteredRides.length === 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          {t('history.noRides')}
-        </Typography>
+        <Box sx={{ py: 6, textAlign: 'center' }}>
+          <DriveEtaRounded sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
+          <Typography variant="body2" color="text.secondary">{t('history.noRides')}</Typography>
+        </Box>
       )}
 
-      <Box sx={{ mt: 2, display: 'grid', gap: 2 }}>
-        {filteredRides.map((ride) => (
-          (() => {
-            const metrics = getRideDistanceAndDuration(ride);
-            return (
-          <Card
-            key={ride.id}
+      <Stack spacing={1.5}>
+        {filteredRides.map((ride) => {
+          const metrics = getRideDistanceAndDuration(ride);
+          return (
+            <Card
+              key={ride.id}
+              variant="outlined"
+              onClick={() => setSelectedRide(ride)}
+              sx={{
+                cursor: 'pointer',
+                borderRadius: 3,
+                transition: 'box-shadow 0.15s',
+                '&:hover': { boxShadow: 4, borderColor: 'primary.main' },
+              }}
+            >
+              <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+                <Stack direction="row" alignItems="flex-start" justifyContent="space-between" mb={0.75}>
+                  <Box>
+                    <Typography variant="body2" fontWeight={700}>{getVehicleTypeLabel(ride.vehicleType)}</Typography>
+                    <Typography variant="caption" color="text.disabled" sx={{ fontFamily: 'monospace' }}>
+                      #{ride.id.slice(0, 8).toUpperCase()}
+                    </Typography>
+                  </Box>
+                  <Stack alignItems="flex-end" spacing={0.5}>
+                    <Chip label={getRideStatusLabel(ride.status)} color={getRideStatusColor(ride.status)} size="small" />
+                    <Typography variant="caption" color="text.secondary">
+                      {ride.createdAt ? formatDate(ride.createdAt) : ''}
+                    </Typography>
+                  </Stack>
+                </Stack>
+
+                {/* Locations */}
+                <Stack spacing={0.25} mb={0.75}>
+                  {ride.pickupLocation?.address && (
+                    <Stack direction="row" spacing={0.75} alignItems="flex-start">
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'success.main', mt: '5px', flexShrink: 0 }} />
+                      <Typography variant="caption" color="text.secondary" noWrap>{ride.pickupLocation.address}</Typography>
+                    </Stack>
+                  )}
+                  {ride.dropoffLocation?.address && (
+                    <Stack direction="row" spacing={0.75} alignItems="flex-start">
+                      <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: 'error.main', mt: '5px', flexShrink: 0 }} />
+                      <Typography variant="caption" color="text.secondary" noWrap>{ride.dropoffLocation.address}</Typography>
+                    </Stack>
+                  )}
+                </Stack>
+
+                {/* Metrics row */}
+                <Stack direction="row" spacing={1.5} flexWrap="wrap">
+                  <Typography variant="caption" fontWeight={700} color="primary.main">
+                    {ride.fare ? formatCurrency(ride.fare) : '—'}
+                  </Typography>
+                  {metrics.distanceMeters && (
+                    <Typography variant="caption" color="text.secondary">{formatDistance(metrics.distanceMeters)}</Typography>
+                  )}
+                  {metrics.durationSeconds && (
+                    <Typography variant="caption" color="text.secondary">{formatDuration(metrics.durationSeconds)}</Typography>
+                  )}
+                  {ride.paymentMethod && (
+                    <Typography variant="caption" color="text.secondary">{getPaymentMethodLabel(ride.paymentMethod)}</Typography>
+                  )}
+                </Stack>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </Stack>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <Stack direction="row" spacing={1} justifyContent="center" alignItems="center" sx={{ mt: 3 }}>
+          <Button
             variant="outlined"
-            onClick={() => setSelectedRide(ride)}
-            sx={{
-              cursor: 'pointer',
-              transition: 'box-shadow 0.18s, border-color 0.18s',
-              '&:hover': { boxShadow: 3, borderColor: 'primary.main' },
-            }}
+            size="small"
+            disabled={page <= 0}
+            onClick={() => setPage((prev) => Math.max(0, prev - 1))}
+            sx={{ borderRadius: 3 }}
           >
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    {getVehicleTypeLabel(ride.vehicleType)}
-                  </Typography>
-                  <Typography variant="caption" color="text.disabled" sx={{ fontFamily: 'monospace' }}>
-                    #{ride.id.slice(0, 8).toUpperCase()}
-                  </Typography>
-                </Box>
-                <Chip
-                  label={getRideStatusLabel(ride.status)}
-                  color={getRideStatusColor(ride.status)}
-                  size="small"
-                />
-              </Box>
+            {t('history.previous')}
+          </Button>
+          <Typography variant="body2" color="text.secondary">
+            {page + 1} / {totalPages}
+          </Typography>
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={page >= totalPages - 1}
+            onClick={() => setPage((prev) => Math.min(totalPages - 1, prev + 1))}
+            sx={{ borderRadius: 3 }}
+          >
+            {t('history.next')}
+          </Button>
+        </Stack>
+      )}
 
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                {ride.createdAt ? formatDate(ride.createdAt) : 'N/A'}
-              </Typography>
-
-              {ride.pickupLocation?.address && (
-                <Typography variant="body2" sx={{ mt: 0.75 }} noWrap>
-                  <Box component="span" sx={{ color: 'success.main', fontWeight: 700 }}>↑ </Box>
-                  {ride.pickupLocation.address}
-                </Typography>
-              )}
-              {ride.dropoffLocation?.address && (
-                <Typography variant="body2" sx={{ mt: 0.25 }} noWrap>
-                  <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}>↓ </Box>
-                  {ride.dropoffLocation.address}
-                </Typography>
-              )}
-
-              <Box sx={{ display: 'flex', gap: 1.5, mt: 1, flexWrap: 'wrap' }}>
-                <Typography variant="body2">
-                  💰 {ride.fare ? formatCurrency(ride.fare) : 'Tính sau'}
-                </Typography>
-                {metrics.distanceMeters && (
-                  <Typography variant="body2" color="text.secondary">
-                    📍 {formatDistance(metrics.distanceMeters)}
-                  </Typography>
-                )}
-                {metrics.durationSeconds && (
-                  <Typography variant="body2" color="text.secondary">
-                    ⏱ {formatDuration(metrics.durationSeconds)}
-                  </Typography>
-                )}
-                {ride.paymentMethod && (
-                  <Typography variant="body2" color="text.secondary">
-                    {getPaymentMethodLabel(ride.paymentMethod)}
-                  </Typography>
-                )}
-              </Box>
-            </CardContent>
-          </Card>
-            );
-          })()
-        ))}
-      </Box>
-
-      {/* Ride Detail Dialog */}
       <Dialog
         open={Boolean(selectedRide)}
         onClose={() => setSelectedRide(null)}
@@ -485,27 +530,7 @@ const History: React.FC = () => {
           })()
         )}
       </Dialog>
-
-      <Box sx={{ mt: 3, display: 'flex', gap: 1, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
-        <Button
-          variant="outlined"
-          disabled={page <= 0}
-          onClick={() => setPage((prev) => Math.max(0, prev - 1))}
-        >
-          {t('history.previous')}
-        </Button>
-        <Typography variant="body2" color="text.secondary" sx={{ minWidth: 92, textAlign: 'center' }}>
-          {t('history.page', { page: page + 1, total: totalPages })}
-        </Typography>
-        <Button
-          variant="outlined"
-          disabled={page >= totalPages - 1}
-          onClick={() => setPage((prev) => Math.min(totalPages - 1, prev + 1))}
-        >
-          {t('history.next')}
-        </Button>
-      </Box>
-    </Container>
+    </Box>
   );
 };
 

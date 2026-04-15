@@ -57,5 +57,8 @@ export const createDriverRouter = (driverService: DriverService): Router => {
   // Get driver profile by userId (for internal service call)
   router.get('/user/:userId', controller.getDriverByUserId);
 
+  // Get public driver profile by driver record ID (for customer tracking page)
+  router.get('/:driverId/profile', controller.getDriverPublicProfile);
+
   return router;
 };

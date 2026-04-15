@@ -12,6 +12,8 @@ import Earnings from './pages/Earnings';
 import History from './pages/History';
 import Profile from './pages/Profile';
 import DriverMobileShell from './components/layout/DriverMobileShell';
+import Wallet from './pages/Wallet';
+import WalletTopUpReturn from './pages/WalletTopUpReturn';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -81,21 +83,15 @@ const App: React.FC = () => {
         >
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="active-ride" element={<ActiveRide />} />
           <Route path="earnings" element={<Earnings />} />
           <Route path="history" element={<History />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="wallet" element={<Wallet />} />
         </Route>
 
-        <Route
-          path="/active-ride"
-          element={
-            <ProtectedRoute>
-              <ActiveRide />
-            </ProtectedRoute>
-          }
-        />
-
         <Route path="/demo" element={<RideDemoPage />} />
+        <Route path="/wallet/topup/return" element={<WalletTopUpReturn />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>

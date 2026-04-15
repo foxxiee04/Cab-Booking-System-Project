@@ -180,7 +180,7 @@ const Register: React.FC = () => {
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: 'linear-gradient(135deg, #4a6fa5 0%, #5a9f8a 100%)',
       }}
     >
       <Container maxWidth="sm">
@@ -243,8 +243,6 @@ const Register: React.FC = () => {
                   <Stack spacing={0}>
                     <Alert severity="info" sx={{ mb: 2 }}>{success || 'Mã OTP đã được gửi.'}</Alert>
 
-                    <TextField fullWidth label="Số điện thoại" value={phone} disabled sx={{ mb: 2 }} />
-
                     <TextField
                       fullWidth
                       label="Mã OTP"
@@ -291,6 +289,7 @@ const Register: React.FC = () => {
                       value={formData.lastName}
                       onChange={(event) => setFormData({ ...formData, lastName: event.target.value })}
                       required
+                      autoFocus
                       sx={{ mb: 2 }}
                       InputProps={{
                         startAdornment: (
@@ -307,7 +306,6 @@ const Register: React.FC = () => {
                       value={formData.firstName}
                       onChange={(event) => setFormData({ ...formData, firstName: event.target.value })}
                       required
-                      autoFocus
                       sx={{ mb: 2 }}
                     />
 
@@ -347,7 +345,16 @@ const Register: React.FC = () => {
                       }}
                     />
 
-                    <Button fullWidth type="submit" variant="contained" size="large" disabled={loading} sx={{ py: 1.5 }}>
+                    {/* Terms & Conditions are shown during ProfileSetup step */}
+
+                    <Button
+                      fullWidth
+                      type="submit"
+                      variant="contained"
+                      size="large"
+                      disabled={loading}
+                      sx={{ py: 1.5 }}
+                    >
                       {loading ? <CircularProgress size={24} /> : 'Tạo tài khoản'}
                     </Button>
 

@@ -19,7 +19,7 @@ import OnlinePaymentPage from './pages/OnlinePaymentPage';
 import RideHistory from './pages/RideHistory';
 import Profile from './pages/Profile';
 import Activity from './pages/Activity';
-import Messages from './pages/Messages';
+import Vouchers from './pages/Vouchers';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -192,19 +192,12 @@ function App() {
           <Route index element={<Navigate to="home" replace />} />
           <Route path="home" element={<HomeMap />} />
           <Route path="activity" element={<Activity />} />
-          <Route path="messages" element={<Messages />} />
+          <Route path="messages" element={<Navigate to="/vouchers" replace />} />
           <Route path="profile" element={<Profile />} />
           <Route path="history" element={<RideHistory />} />
+          <Route path="vouchers" element={<Vouchers />} />
+          <Route path="ride/:rideId" element={<RideTracking />} />
         </Route>
-
-        <Route
-          path="/ride/:rideId"
-          element={
-            <ProtectedRoute>
-              <RideTracking />
-            </ProtectedRoute>
-          }
-        />
 
         <Route path="/payment/callback" element={<PaymentCallback />} />
         <Route

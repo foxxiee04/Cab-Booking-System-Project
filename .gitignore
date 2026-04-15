@@ -1,28 +1,32 @@
 # =====================================================
 # CAB BOOKING SYSTEM - GITIGNORE
 # =====================================================
-# Updated: 2026-03-27
-# =====================================================
 
 # =====================================================
-# !! SENSITIVE — NEVER COMMIT THESE !!
+# SENSITIVE — NEVER COMMIT THESE
 # =====================================================
 
-# Service environment configs (DB passwords, JWT secrets, API keys)
-# The /env/ folder at project root holds all service .env files
+# Root .env (docker-compose vars: DB passwords, JWT secrets)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Service env files (DB creds, MoMo/VNPay keys, JWT secrets)
 env/
 !env/*.example
 !env/README.md
-
-# All .env files everywhere (catch-all)
-.env
-.env.*
-!.env.example
-!**/.env.example
-services/**/.env*
+services/**/.env
+services/**/.env.local
+services/**/.env.*.local
 !services/**/.env.example
-apps/**/.env*
+
+# App-level .env overrides (only .env.development is safe to commit)
+apps/**/.env
+apps/**/.env.local
+apps/**/.env.*.local
 !apps/**/.env.example
+!apps/**/.env.development
 
 # Private keys & certificates
 *.pem
@@ -34,48 +38,30 @@ apps/**/.env*
 *.pfx
 *.jks
 *.keystore
-
-# Named secret/token files
 *.secret
 *.token
 secrets/
 .secrets/
-
-# GCP / Firebase / OAuth credential files
 *credentials*.json
 *service-account*.json
 *-key.json
-google-credentials.json
-firebase-adminsdk*.json
 serviceAccountKey.json
-
-# Payment gateway key dumps (in case saved locally)
-stripe-keys.txt
-momo-keys.txt
-vnpay-keys.txt
-
-# Redis / Sentinel auth configs (may contain passwords)
-sentinel.conf
-redis.conf
 
 # =====================================================
 # Dependencies
 # =====================================================
 node_modules/
 jspm_packages/
-
-# Keep package-lock.json; ignore other lock files
 yarn.lock
 pnpm-lock.yaml
 .pnpm-store/
 
-# Python dependencies / virtual envs
+# Python
 __pycache__/
 *.py[cod]
 *.so
 *.egg
 *.egg-info/
-dist-python/
 .eggs/
 .pytest_cache/
 .mypy_cache/
@@ -133,8 +119,9 @@ playwright/.cache/
 # IDE & Editors
 # =====================================================
 
-# VS Code — settings.json excluded (may store API tokens / paths)
+# VS Code — commit project-level settings (typescript.tsdk, etc.)
 .vscode/*
+!.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
@@ -225,9 +212,12 @@ schema.prisma.client/
 # Temporary Files
 # =====================================================
 *.tmp
+*.tmp[0-9]*
 *.temp
 *.bak
 *.backup
+# Prisma engine temp files leaked on Windows (e.g. query_engine-windows.dll.node.tmp12345)
+**/*.dll.node.tmp*
 .cache/
 .temp/
 tmp/

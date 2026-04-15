@@ -98,7 +98,7 @@
     "totalRides": "Total Rides"
   },
   "history": {
-    "title": "Ride History",
+    "title": "Trips",
     "noRides": "No rides found.",
     "fare": "Fare",
     "payment": "Payment",

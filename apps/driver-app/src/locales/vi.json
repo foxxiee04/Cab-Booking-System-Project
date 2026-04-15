@@ -98,7 +98,7 @@
     "totalRides": "Tổng chuyến"
   },
   "history": {
-    "title": "Lịch sử chuyến đi",
+    "title": "Chuyến đi",
     "noRides": "Chưa có chuyến đi nào.",
     "fare": "Cước",
     "payment": "Thanh toán",

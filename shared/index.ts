@@ -1,18 +1,4 @@
-/**
- * Shared Library - Main Entry Point
- * 
- * Exports all types, utilities, and API client for use in frontend apps
- */
-
-// Export API Client
-export { ApiClient, default as default } from './api-client';
-export type { ApiResponse, User, AuthTokens } from './api-client';
-
-// Export Types & Events
-export * from './types';
-
-// Export Utilities
-export * from './utils';
+/**\n * Shared Library - Main Entry Point\n *\n * Exports all types and utilities for use across services and apps\n */\n\n// Export Types & Events\nexport * from './types';\n\n// Export Utilities\nexport * from './utils';\n
 
 // Export gRPC helpers
 export * from './grpc';

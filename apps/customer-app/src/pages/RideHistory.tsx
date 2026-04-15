@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Collapse,
-  Container,
   Typography,
   Chip,
   Button,
@@ -12,10 +11,11 @@ import {
   Alert,
   InputAdornment,
   MenuItem,
+  Paper,
   Stack,
   TextField,
 } from '@mui/material';
-import { ExpandMoreRounded, ExpandLessRounded, SearchRounded } from '@mui/icons-material';
+import { ExpandMoreRounded, ExpandLessRounded, SearchRounded, ReceiptLongRounded, LocationOnRounded, FlagRounded } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { rideApi } from '../api/ride.api';
 import { paymentApi } from '../api/payment.api';
@@ -254,60 +254,91 @@ const RideHistory: React.FC = () => {
   }, [rides, searchQuery, statusFilter]);
 
   return (
-    <Container sx={{ py: 4 }}>
-      <Typography variant="h4" fontWeight="bold">
-        {t('rideHistory.title')}
-      </Typography>
-
-      <Box sx={{ mt: 2, display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', sm: '1fr 180px' } }}>
-        <TextField
-          size="small"
-          placeholder="Tìm theo mã chuyến, điểm đón, điểm đến"
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchRounded fontSize="small" />
-              </InputAdornment>
-            ),
-          }}
-        />
-        <TextField
-          select
-          size="small"
-          label="Trạng thái"
-          value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value)}
-        >
-          <MenuItem value="ALL">Tất cả</MenuItem>
-          <MenuItem value="PENDING">Đang chờ</MenuItem>
-          <MenuItem value="ASSIGNED">Đã gán tài xế</MenuItem>
-          <MenuItem value="IN_PROGRESS">Đang chạy</MenuItem>
-          <MenuItem value="COMPLETED">Hoàn tất</MenuItem>
-          <MenuItem value="CANCELLED">Đã hủy</MenuItem>
-        </TextField>
-      </Box>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1.5,
+        pb: 2,
+        background: 'radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 28%), linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%)',
+      }}
+    >
+      {/* Header card */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2,
+          borderRadius: 5,
+          background: 'linear-gradient(135deg, rgba(14,165,233,0.10), rgba(37,99,235,0.18))',
+          border: '1px solid rgba(59,130,246,0.12)',
+        }}
+      >
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
+          <Box sx={{ p: 1.25, borderRadius: 3, bgcolor: 'rgba(37,99,235,0.10)', display: 'flex' }}>
+            <ReceiptLongRounded sx={{ color: '#2563eb', fontSize: 26 }} />
+          </Box>
+          <Box>
+            <Typography variant="h6" fontWeight={800}>{t('rideHistory.title')}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {total > 0 ? `${total} chuyến đã đặt` : 'Lịch sử chuyến đi'}
+            </Typography>
+          </Box>
+        </Stack>
+        <Stack direction="row" spacing={1}>
+          <TextField
+            size="small"
+            fullWidth
+            placeholder="Tìm theo mã chuyến, điểm đón, điểm đến"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchRounded fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+          />
+          <TextField
+            select
+            size="small"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            sx={{ minWidth: 130, '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+          >
+            <MenuItem value="ALL">Tất cả</MenuItem>
+            <MenuItem value="PENDING">Đang chờ</MenuItem>
+            <MenuItem value="ASSIGNED">Đã gán tài xế</MenuItem>
+            <MenuItem value="IN_PROGRESS">Đang chạy</MenuItem>
+            <MenuItem value="COMPLETED">Hoàn tất</MenuItem>
+            <MenuItem value="CANCELLED">Đã hủy</MenuItem>
+          </TextField>
+        </Stack>
+      </Paper>
 
       {error && (
-        <Alert severity="error" sx={{ mt: 2 }}>
+        <Alert severity="error" sx={{ borderRadius: 3 }}>
           {error}
         </Alert>
       )}
 
       {loading && (
-        <Box sx={{ mt: 2 }}>
-          <CircularProgress size={24} />
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+          <CircularProgress size={28} />
         </Box>
       )}
 
       {!loading && filteredRides.length === 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          {t('rideHistory.noRides')}
-        </Typography>
+        <Box sx={{ textAlign: 'center', py: 6 }}>
+          <ReceiptLongRounded sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+          <Typography variant="body2" color="text.secondary">
+            {t('rideHistory.noRides')}
+          </Typography>
+        </Box>
       )}
 
-      <Box sx={{ mt: 2, display: 'grid', gap: 2 }}>
+      <Box sx={{ display: 'grid', gap: 1.5 }}>
         {filteredRides.map((ride) => {
           const payment = paymentMap.get(ride.id);
           const showRefundBadge =
@@ -316,71 +347,84 @@ const RideHistory: React.FC = () => {
             ONLINE_METHODS.has(ride.paymentMethod);
 
           return (
-            <Card key={ride.id} variant="outlined">
+            <Card key={ride.id} variant="outlined" sx={{ borderRadius: 4 }}>
               <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    {getVehicleTypeLabel(ride.vehicleType)}
-                  </Typography>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1 }}>
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={800}>
+                      {getVehicleTypeLabel(ride.vehicleType)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {formatDate(ride.requestedAt)}
+                    </Typography>
+                  </Box>
                   <Chip
                     label={getRideStatusLabel(ride.status)}
-                    sx={{ bgcolor: getRideStatusColor(ride.status), color: '#fff' }}
+                    sx={{ bgcolor: getRideStatusColor(ride.status), color: '#fff', fontWeight: 700 }}
                     size="small"
                   />
-                </Box>
+                </Stack>
 
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  {formatDate(ride.requestedAt)}
-                </Typography>
+                <Stack spacing={0.5} sx={{ mb: 1 }}>
+                  <Stack direction="row" spacing={1} alignItems="flex-start">
+                    <LocationOnRounded sx={{ fontSize: 16, color: '#16a34a', mt: 0.25, flexShrink: 0 }} />
+                    <Typography variant="body2">{ride.pickup?.address || (ride.pickup?.lat ? `${ride.pickup.lat.toFixed(5)}, ${ride.pickup.lng.toFixed(5)}` : t('common.na'))}</Typography>
+                  </Stack>
+                  <Stack direction="row" spacing={1} alignItems="flex-start">
+                    <FlagRounded sx={{ fontSize: 16, color: '#dc2626', mt: 0.25, flexShrink: 0 }} />
+                    <Typography variant="body2">{ride.dropoff?.address || (ride.dropoff?.lat ? `${ride.dropoff.lat.toFixed(5)}, ${ride.dropoff.lng.toFixed(5)}` : t('common.na'))}</Typography>
+                  </Stack>
+                </Stack>
 
-                <Typography variant="body2" sx={{ mt: 1 }}>
-                  {t('rideHistory.pickup')}: {ride.pickup?.address || (ride.pickup?.lat ? `${ride.pickup.lat.toFixed(5)}, ${ride.pickup.lng.toFixed(5)}` : t('common.na'))}
-                </Typography>
-                <Typography variant="body2" sx={{ mt: 0.5 }}>
-                  {t('rideHistory.dropoff')}: {ride.dropoff?.address || (ride.dropoff?.lat ? `${ride.dropoff.lat.toFixed(5)}, ${ride.dropoff.lng.toFixed(5)}` : t('common.na'))}
-                </Typography>
-
-                <Typography variant="body2" sx={{ mt: 1 }}>
-                  {t('rideHistory.fare')}: {ride.fare ? formatCurrency(ride.fare) : t('common.na')}
-                </Typography>
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Typography variant="subtitle2" fontWeight={800} color="primary.main">
+                    {ride.fare ? formatCurrency(ride.fare) : t('common.na')}
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    sx={{ borderRadius: 2 }}
+                    onClick={() => navigate(`/ride/${ride.id}`)}
+                  >
+                    {t('rideHistory.viewRide')}
+                  </Button>
+                </Stack>
 
                 {showRefundBadge && payment && (
                   <RefundTimeline payment={payment} />
                 )}
-
-                <Button
-                  size="small"
-                  sx={{ mt: 1 }}
-                  onClick={() => navigate(`/ride/${ride.id}`)}
-                >
-                  {t('rideHistory.viewRide')}
-                </Button>
               </CardContent>
             </Card>
           );
         })}
       </Box>
 
-      <Box sx={{ mt: 3, display: 'flex', gap: 1 }}>
-        <Button
-          variant="outlined"
-          disabled={page <= 1}
-          onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-        >
-          {t('common.previous')}
-        </Button>
-        <Button
-          variant="outlined"
-          disabled={page >= totalPages}
-          onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-        >
-          {t('common.next')}
-        </Button>
-        <Typography variant="body2" color="text.secondary" sx={{ alignSelf: 'center' }}>
-          {t('rideHistory.page', { page, total: totalPages })}
-        </Typography>
-      </Box>
-    </Container>
+      {totalPages > 1 && (
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ pt: 1 }}>
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={page <= 1}
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            sx={{ borderRadius: 3 }}
+          >
+            {t('common.previous')}
+          </Button>
+          <Typography variant="body2" color="text.secondary" sx={{ flex: 1, textAlign: 'center' }}>
+            {t('rideHistory.page', { page, total: totalPages })}
+          </Typography>
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={page >= totalPages}
+            onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+            sx={{ borderRadius: 3 }}
+          >
+            {t('common.next')}
+          </Button>
+        </Stack>
+      )}
+    </Box>
   );
 };
 

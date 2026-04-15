@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   AppBar,
   Avatar,
   BottomNavigation,
@@ -11,12 +12,16 @@ import {
   Menu,
   MenuItem,
   Paper,
+  Slide,
+  Snackbar,
   Stack,
   Toolbar,
   Typography,
 } from '@mui/material';
+import type { SlideProps } from '@mui/material';
 import {
   AttachMoneyRounded,
+  AccountBalanceWalletRounded,
   DriveEtaRounded,
   HistoryRounded,
   LogoutRounded,
@@ -27,8 +32,15 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { logout } from '../../store/auth.slice';
+import { hideNotification } from '../../store/ui.slice';
 import { driverApi } from '../../api/driver.api';
+import { rideApi } from '../../api/ride.api';
 import { setProfile } from '../../store/driver.slice';
+import { clearPendingRide, setCurrentRide } from '../../store/ride.slice';
+import { driverSocketService } from '../../socket/driver.socket';
+import { formatCurrency } from '../../utils/format.utils';
+import RideRequestModal from '../ride-request/RideRequestModal';
+import { Ride } from '../../types';
 
 interface DriverMobileShellProps {
   children: React.ReactNode;
@@ -38,8 +50,9 @@ const NAV_HEIGHT = 72;
 
 const tabs = [
   { value: '/dashboard', icon: <DriveEtaRounded />, labelKey: 'dashboard.title', fallback: 'Tổng quan' },
-  { value: '/history', icon: <HistoryRounded />, labelKey: 'history.title', fallback: 'Lịch sử' },
+  { value: '/history', icon: <HistoryRounded />, labelKey: 'history.title', fallback: 'Chuyến đi' },
   { value: '/earnings', icon: <AttachMoneyRounded />, labelKey: 'earnings.title', fallback: 'Thu nhập' },
+  { value: '/wallet', icon: <AccountBalanceWalletRounded />, labelKey: 'wallet.title', fallback: 'Ví tiền' },
   { value: '/profile', icon: <PersonRounded />, labelKey: 'profile.title', fallback: 'Tài khoản' },
 ];
 
@@ -47,6 +60,15 @@ const resolveTab = (pathname: string) => {
   const match = tabs.find((tab) => pathname === tab.value || pathname.startsWith(`${tab.value}/`));
   return match?.value || '/dashboard';
 };
+
+const NOTIFICATION_STYLES = {
+  success: { bg: '#ecfdf3', border: '#22c55e', title: '#166534', text: '#14532d', icon: '#16a34a' },
+  info:    { bg: '#eff6ff', border: '#3b82f6', title: '#1d4ed8', text: '#1e3a8a', icon: '#2563eb' },
+  warning: { bg: '#fff7ed', border: '#f59e0b', title: '#b45309', text: '#7c2d12', icon: '#d97706' },
+  error:   { bg: '#fef2f2', border: '#ef4444', title: '#b91c1c', text: '#7f1d1d', icon: '#dc2626' },
+};
+const NOTIFICATION_TITLES = { success: 'Thành công', error: 'Có lỗi xảy ra', warning: 'Lưu ý', info: 'Thông báo' };
+const NotifTransition = (props: SlideProps) => <Slide {...props} direction="down" />;
 
 const getApprovalStatusTone = (status?: string) => {
   switch (status) {
@@ -67,15 +89,89 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
   const location = useLocation();
   const dispatch = useAppDispatch();
   const { t, i18n } = useTranslation();
-  const { user } = useAppSelector((state) => state.auth);
-  const { currentRide } = useAppSelector((state) => state.ride);
+  const { user, accessToken } = useAppSelector((state) => state.auth);
+  const { currentRide, pendingRide } = useAppSelector((state) => state.ride);
   const { isOnline, profile } = useAppSelector((state) => state.driver);
+  const notification = useAppSelector((state) => state.ui.notification);
 
   const currentTab = resolveTab(location.pathname);
-  const currentTabConfig = tabs.find((tab) => tab.value === currentTab) || tabs[0];
 
   const [profileAnchorEl, setProfileAnchorEl] = React.useState<null | HTMLElement>(null);
   const [langAnchorEl, setLangAnchorEl] = React.useState<null | HTMLElement>(null);
+
+  // ── Global ride request popup ──────────────────────────────────────────
+  const [newRidePopup, setNewRidePopup] = useState<Ride | null>(null);
+  const [rideLoading, setRideLoading] = useState(false);
+  const seenRidePopupIdsRef = useRef<Set<string>>(new Set());
+
+  // Connect/disconnect socket based on online status (global, not per page)
+  useEffect(() => {
+    if (isOnline && accessToken) {
+      driverSocketService.connect(accessToken);
+    } else {
+      driverSocketService.disconnect();
+    }
+
+    return () => {
+      driverSocketService.disconnect();
+    };
+  }, [isOnline, accessToken]);
+
+  // Show popup when a new pending ride arrives (regardless of current tab)
+  useEffect(() => {
+    if (newRidePopup || !isOnline || currentRide) {
+      return;
+    }
+
+    if (pendingRide && !seenRidePopupIdsRef.current.has(pendingRide.id)) {
+      seenRidePopupIdsRef.current.add(pendingRide.id);
+      setNewRidePopup(pendingRide);
+
+      // Browser notification
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        const fareText = pendingRide.fare ? formatCurrency(pendingRide.fare) : '';
+        const pickupText = pendingRide.pickupLocation?.address || 'Điểm đón gần bạn';
+        const notification = new Notification('Có cuốc mới', { body: `${fareText} - ${pickupText}` });
+        window.setTimeout(() => notification.close(), 7000);
+      }
+    }
+  }, [currentRide, isOnline, newRidePopup, pendingRide]);
+
+  const handleAcceptPopupRide = async () => {
+    if (!newRidePopup) return;
+    setRideLoading(true);
+    try {
+      const response = await rideApi.acceptRide(newRidePopup.id);
+      const acceptedRide = response.data.ride;
+      if (!acceptedRide?.pickupLocation?.lat || !acceptedRide?.dropoffLocation?.lat) {
+        try {
+          const fullRideRes = await rideApi.getRide(newRidePopup.id);
+          dispatch(setCurrentRide(fullRideRes.data.ride));
+        } catch {
+          dispatch(setCurrentRide(acceptedRide));
+        }
+      } else {
+        dispatch(setCurrentRide(acceptedRide));
+      }
+      dispatch(clearPendingRide());
+      setNewRidePopup(null);
+      navigate('/active-ride');
+    } catch (err: any) {
+      console.error('Accept ride from popup failed:', err);
+      if (err.response?.status === 409 || err.response?.status === 404) {
+        dispatch(clearPendingRide());
+      }
+    } finally {
+      setRideLoading(false);
+    }
+  };
+
+  const handleRejectPopupRide = () => {
+    if (newRidePopup) {
+      dispatch(clearPendingRide());
+    }
+    setNewRidePopup(null);
+  };
 
   useEffect(() => {
     if (profile) {
@@ -101,6 +197,11 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
       isMounted = false;
     };
   }, [dispatch, profile]);
+
+  const notifStyle = notification ? NOTIFICATION_STYLES[notification.type] : null;
+  const handleNotifClose = (_: React.SyntheticEvent | Event, reason?: string) => {
+    if (reason !== 'clickaway') dispatch(hideNotification());
+  };
 
   const effectiveOnline = isOnline || profile?.isOnline || false;
   const approvalStatusTone = getApprovalStatusTone(profile?.status);
@@ -138,29 +239,19 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
           borderBottom: '1px solid rgba(148, 163, 184, 0.18)',
         }}
       >
-        <Toolbar sx={{ minHeight: 76, width: shellMaxWidth, mx: 'auto', px: { xs: 2, sm: 2.5 } }}>
+        <Toolbar sx={{ minHeight: 60, width: shellMaxWidth, mx: 'auto', px: { xs: 2, sm: 2.5 } }}>
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.12em' }}>
-              Cab Booking Driver
-            </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.15 }}>
-              {t(currentTabConfig.labelKey, currentTabConfig.fallback)}
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" sx={{ rowGap: 0.5 }}>
+              <Typography variant="subtitle1" sx={{ color: 'primary.main', fontWeight: 900, letterSpacing: '0.04em' }}>
+                CabDriver
+              </Typography>
               <Chip
                 size="small"
                 color={currentRide ? 'primary' : effectiveOnline ? 'success' : 'default'}
                 variant={currentRide || effectiveOnline ? 'filled' : 'outlined'}
-                label={currentRide ? t('shell.currentRide', 'Đang có cuốc xe') : effectiveOnline ? t('shell.online', 'Đang trực tuyến') : t('shell.offline', 'Đang ngoại tuyến')}
+                label={currentRide ? 'Đang có cuốc' : effectiveOnline ? 'Trực tuyến' : 'Ngoại tuyến'}
+                sx={{ fontWeight: 700, fontSize: '0.7rem' }}
               />
-              {profile?.status && profile.status !== 'APPROVED' && (
-                <Chip
-                  size="small"
-                  color={approvalStatusTone.color}
-                  variant="outlined"
-                  label={t(approvalStatusTone.labelKey, approvalStatusTone.fallback)}
-                />
-              )}
             </Stack>
           </Box>
 
@@ -180,7 +271,7 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
         component="main"
         sx={{
           flexGrow: 1,
-          pt: 'calc(88px + env(safe-area-inset-top))',
+          pt: 'calc(68px + env(safe-area-inset-top))',
           pb: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom) + 56px)`,
           px: { xs: 1.5, sm: 2 },
           minHeight: 0,
@@ -188,6 +279,25 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
           WebkitOverflowScrolling: 'touch',
         }}
       >
+        {profile?.status && profile.status !== 'APPROVED' && (
+          <Box
+            sx={{
+              width: shellMaxWidth,
+              mx: 'auto',
+              mb: 1.5,
+              px: 2,
+              py: 1,
+              borderRadius: 2,
+              bgcolor: approvalStatusTone.color === 'error' ? '#fef2f2' : approvalStatusTone.color === 'warning' ? '#fffbeb' : '#f0f9ff',
+              border: `1px solid ${approvalStatusTone.color === 'error' ? '#fca5a5' : approvalStatusTone.color === 'warning' ? '#fcd34d' : '#93c5fd'}`,
+              textAlign: 'center',
+            }}
+          >
+            <Typography variant="body2" fontWeight={700} sx={{ color: approvalStatusTone.color === 'error' ? '#b91c1c' : approvalStatusTone.color === 'warning' ? '#92400e' : '#1e40af' }}>
+              {t(approvalStatusTone.labelKey, approvalStatusTone.fallback)}
+            </Typography>
+          </Box>
+        )}
         <Box sx={{ minHeight: '100%', width: shellMaxWidth, mx: 'auto' }}>{children}</Box>
       </Box>
 
@@ -255,6 +365,49 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
           English
         </MenuItem>
       </Menu>
+
+      {/* Global notification Snackbar — mirrors customer app style */}
+      <Snackbar
+        open={Boolean(notification)}
+        onClose={handleNotifClose}
+        autoHideDuration={notification?.persistMs ?? 5000}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        TransitionComponent={NotifTransition}
+        sx={{ top: { xs: 70, sm: 80 } }}
+      >
+        <Alert
+          severity={notification?.type ?? 'info'}
+          variant="standard"
+          onClose={handleNotifClose}
+          sx={{
+            width: '100%',
+            minWidth: { xs: 'min(92vw, 320px)', sm: 380 },
+            borderRadius: 3,
+            border: `1.5px solid ${notifStyle?.border ?? '#3b82f6'}`,
+            backgroundColor: notifStyle?.bg ?? '#eff6ff',
+            boxShadow: '0 22px 48px rgba(15,23,42,0.24)',
+            '& .MuiAlert-icon': { color: notifStyle?.icon ?? '#2563eb' },
+          }}
+        >
+          <Typography variant="subtitle2" fontWeight={800} sx={{ color: notifStyle?.title ?? '#1d4ed8' }}>
+            {notification?.title || NOTIFICATION_TITLES[notification?.type ?? 'info']}
+          </Typography>
+          <Typography variant="body2" sx={{ color: notifStyle?.text ?? '#1e3a8a' }}>
+            {notification?.message}
+          </Typography>
+        </Alert>
+      </Snackbar>
+
+      {/* Global ride request popup — visible on all tabs */}
+      <RideRequestModal
+        ride={newRidePopup}
+        timeoutSeconds={20}
+        open={Boolean(newRidePopup)}
+        loading={rideLoading}
+        onAccept={handleAcceptPopupRide}
+        onReject={handleRejectPopupRide}
+        onTimeout={() => setNewRidePopup(null)}
+      />
     </Box>
   );
 };

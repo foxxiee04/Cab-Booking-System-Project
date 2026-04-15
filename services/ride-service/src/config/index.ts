@@ -22,6 +22,7 @@ export const config = {
   services: {
     pricing: process.env.PRICING_SERVICE_URL || 'http://localhost:3009',
     driver: process.env.DRIVER_SERVICE_URL || 'http://localhost:3003',
+    payment: process.env.PAYMENT_SERVICE_URL || 'http://localhost:3004',
   },
 
   grpcServices: {

@@ -16,7 +16,6 @@ import {
 import {
   AttachMoneyRounded,
   DriveEtaRounded,
-  MyLocationRounded,
   RouteRounded,
   AccessTimeRounded,
   LocationOnRounded,
@@ -37,7 +36,6 @@ import { driverSocketService } from '../socket/driver.socket';
 import { watchPosition, clearWatch, calculateDistance, formatDistance, formatDuration } from '../utils/map.utils';
 import { formatCurrency, getVehicleTypeLabel } from '../utils/format.utils';
 import DriverTripMap from '../features/trip/components/DriverTripMap';
-import RideRequestModal from '../components/ride-request/RideRequestModal';
 import { Ride } from '../types';
 
 const getOptimisticCompletedRidesKey = (userId?: string) => `driver:completedRidesCount:${userId || 'anonymous'}`;
@@ -509,40 +507,36 @@ const Dashboard: React.FC = () => {
         {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
         <Grid container spacing={1.5} sx={{ mb: 2 }}>
-          <Grid item xs={12} sm={4}>
-            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3 }}>
-              <Typography variant="overline" color="text.secondary">{t('dashboard.status', 'Trạng thái')}</Typography>
-              <Typography variant="subtitle2" fontWeight={800}>{isOnline ? t('dashboard.youOnline') : t('dashboard.youOffline')}</Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3 }}>
-              <Typography variant="overline" color="text.secondary">{t('dashboard.rating', 'Đánh giá')}</Typography>
+          <Grid item xs={4}>
+            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3, textAlign: 'center' }}>
+              <Typography variant="caption" color="text.secondary" display="block">Đánh giá</Typography>
               <Typography variant="subtitle2" fontWeight={800}>
-                {(profile?.reviewCount ?? 0) > 0 ? `${(profile?.rating ?? 0).toFixed(1)} / 5` : t('profile.noReviews')}
+                {(profile?.reviewCount ?? 0) > 0 ? `${(profile?.rating ?? 0).toFixed(1)} ★` : '—'}
               </Typography>
             </Paper>
           </Grid>
-          <Grid item xs={12} sm={4}>
-            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3 }}>
-              <Typography variant="overline" color="text.secondary">{t('dashboard.todayEarnings')}</Typography>
+          <Grid item xs={4}>
+            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3, textAlign: 'center' }}>
+              <Typography variant="caption" color="text.secondary" display="block">Chuyến</Typography>
+              <Typography variant="subtitle2" fontWeight={800}>{completedRidesCount}</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={4}>
+            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3, textAlign: 'center' }}>
+              <Typography variant="caption" color="text.secondary" display="block">Hôm nay</Typography>
               <Typography variant="subtitle2" fontWeight={800}>{formatCurrency(earnings?.today || 0)}</Typography>
             </Paper>
           </Grid>
         </Grid>
 
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
-          {browsingLocation && <Chip icon={<MyLocationRounded />} label={`${browsingLocation.lat.toFixed(5)}, ${browsingLocation.lng.toFixed(5)}`} size="small" variant="outlined" />}
-          <Chip icon={<AttachMoneyRounded />} label={t('dashboard.ridesCompleted', { count: completedRidesCount })} size="small" variant="outlined" />
+          <Chip icon={<AttachMoneyRounded />} label={`${completedRidesCount} chuyến hoàn tất`} size="small" variant="outlined" />
         </Stack>
 
-        <Grid container spacing={2} alignItems="center">
+        <Grid container spacing={2} alignItems="center" sx={{ mb: 1 }}>
           <Grid item xs>
-            <Typography variant="h6" fontWeight={800} sx={{ mb: 0.5 }}>
-              {t('dashboard.availabilityControl', 'Điều khiển trạng thái nhận cuốc')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {isOnline ? t('dashboard.readyToAccept') : t('dashboard.goOnlineHint')}
+            <Typography variant="subtitle1" fontWeight={800}>
+              {isOnline ? 'Đang nhận cuốc' : 'Hiện đang ngoại tuyến'}
             </Typography>
           </Grid>
           <Grid item>
@@ -669,27 +663,6 @@ const Dashboard: React.FC = () => {
           )}
         </Box>
       </Paper>
-
-      <RideRequestModal
-        ride={newRidePopup}
-        timeoutSeconds={20}
-        open={Boolean(newRidePopup)}
-        loading={loading}
-        onAccept={async () => {
-          if (!newRidePopup) return;
-          await handleAcceptSpecificRide(newRidePopup.id);
-          setNewRidePopup(null);
-        }}
-        onReject={() => {
-          if (newRidePopup) {
-            dismissPendingRide(newRidePopup.id);
-          }
-          setNewRidePopup(null);
-        }}
-        onTimeout={() => {
-          setNewRidePopup(null);
-        }}
-      />
     </Box>
   );
 };

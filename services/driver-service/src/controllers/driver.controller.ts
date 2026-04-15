@@ -159,7 +159,11 @@ export class DriverController {
 
       const response = await axios.get(`${process.env.RIDE_SERVICE_URL || config.services.ride}/api/rides/available`, {
         params: { lat, lng, radius, vehicleType: driver.vehicleType },
-        headers: { Authorization: req.header('authorization') || '' },
+        headers: {
+          Authorization: req.header('authorization') || '',
+          'x-user-id': req.user!.userId,
+          'x-user-role': req.user!.role,
+        },
         timeout: 5000,
       });
 
@@ -366,6 +370,39 @@ export class DriverController {
       res.status(500).json({ 
         success: false, 
         error: { code: 'INTERNAL_ERROR', message: 'Failed to get driver by userId' } 
+      });
+    }
+  };
+
+  getDriverPublicProfile = async (req: Request, res: Response) => {
+    try {
+      const { driverId } = req.params;
+      const driver = await this.driverService.getDriverById(driverId);
+      if (!driver) {
+        return res.status(404).json({ 
+          success: false, 
+          error: { code: 'NOT_FOUND', message: 'Driver not found' } 
+        });
+      }
+
+      const profile = {
+        id: driver.id,
+        firstName: '',
+        lastName: '',
+        vehicleMake: driver.vehicleBrand,
+        vehicleModel: driver.vehicleModel,
+        vehicleColor: driver.vehicleColor,
+        licensePlate: driver.vehiclePlate,
+        rating: driver.ratingAverage ?? 5,
+        totalRides: driver.ratingCount ?? 0,
+      };
+
+      res.json({ success: true, data: { driver: profile } });
+    } catch (err) {
+      logger.error('Get driver public profile error:', err);
+      res.status(500).json({ 
+        success: false, 
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get driver profile' } 
       });
     }
   };

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Container,
   Box,
   Typography,
   Card,
@@ -255,7 +254,7 @@ const Profile: React.FC = () => {
   }, [availableLicenseClasses, formData.licenseClass]);
 
   return (
-    <Container sx={{ py: 3, pb: { xs: 16, sm: 12 } }}>
+    <Box sx={{ pb: 4 }}>
       {success && (
         <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
           {success}
@@ -420,9 +419,7 @@ const Profile: React.FC = () => {
                         </Typography>
                       </Stack>
                     )}
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.1 }}>
-                      Dùng cho bước đối chiếu hồ sơ và nhận diện phương tiện khi duyệt tài xế.
-                    </Typography>
+
                     {editing && (
                       <Button
                         component="label"
@@ -521,7 +518,7 @@ const Profile: React.FC = () => {
           </Card>
         </>
       )}
-    </Container>
+    </Box>
   );
 };
 

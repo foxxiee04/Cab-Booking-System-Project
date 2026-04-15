@@ -174,6 +174,54 @@ export class SocketServer {
       socket.on('subscribe_ride_tracking', subscribeToRideRoom);
       socket.on('ride:unsubscribe', unsubscribeFromRideRoom);
 
+      // ── In-ride Chat ──────────────────────────────────────────────────────────
+      // Relay text messages between customer and driver inside an active ride room.
+      socket.on('chat:send', (payload: { rideId?: string; message?: string }) => {
+        const rideId = payload?.rideId?.trim();
+        const message = payload?.message?.trim();
+        if (!rideId || !message || message.length > 500) return;
+
+        const rideRoom = `ride:${rideId}`;
+        this.io.to(rideRoom).emit('chat:message', {
+          from: userId,
+          role,
+          message,
+          timestamp: Date.now(),
+        });
+        logger.debug(`Chat relay: userId=${userId} → room=${rideRoom}`);
+      });
+
+      // ── WebRTC Signaling (Voice Call) ─────────────────────────────────────────
+      // Relay SDP offer/answer and ICE candidates between the two peers in a ride room.
+      // The media stream is P2P — it never passes through this server.
+      socket.on('call:offer', (payload: { rideId?: string; sdp?: unknown }) => {
+        const rideId = payload?.rideId?.trim();
+        if (!rideId || !payload.sdp) return;
+        socket.to(`ride:${rideId}`).emit('call:offer', { from: userId, role, sdp: payload.sdp });
+        logger.debug(`WebRTC offer relayed: userId=${userId} → ride:${rideId}`);
+      });
+
+      socket.on('call:answer', (payload: { rideId?: string; sdp?: unknown }) => {
+        const rideId = payload?.rideId?.trim();
+        if (!rideId || !payload.sdp) return;
+        socket.to(`ride:${rideId}`).emit('call:answer', { from: userId, role, sdp: payload.sdp });
+        logger.debug(`WebRTC answer relayed: userId=${userId} → ride:${rideId}`);
+      });
+
+      socket.on('call:ice-candidate', (payload: { rideId?: string; candidate?: unknown }) => {
+        const rideId = payload?.rideId?.trim();
+        if (!rideId || !payload.candidate) return;
+        socket.to(`ride:${rideId}`).emit('call:ice-candidate', { from: userId, candidate: payload.candidate });
+      });
+
+      socket.on('call:end', (payload: { rideId?: string }) => {
+        const rideId = payload?.rideId?.trim();
+        if (!rideId) return;
+        socket.to(`ride:${rideId}`).emit('call:end', { from: userId });
+        logger.debug(`Call ended: userId=${userId} → ride:${rideId}`);
+      });
+      // ─────────────────────────────────────────────────────────────────────────
+
       socket.on('driver:update-location', (payload: DriverLocationPayload) => {
         if (role !== 'DRIVER') {
           logger.warn(`Rejected driver:update-location from non-driver socket ${socket.id}`);
