@@ -8,6 +8,7 @@ import ProfileSetup from './pages/ProfileSetup';
 import Dashboard from './pages/Dashboard';
 import ActiveRide from './pages/ActiveRide';
 import RideDemoPage from './pages/RideDemoPage';
+import Account from './pages/Account';
 import Earnings from './pages/Earnings';
 import History from './pages/History';
 import Profile from './pages/Profile';
@@ -84,6 +85,7 @@ const App: React.FC = () => {
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="active-ride" element={<ActiveRide />} />
+          <Route path="account" element={<Account />} />
           <Route path="earnings" element={<Earnings />} />
           <Route path="history" element={<History />} />
           <Route path="profile" element={<Profile />} />

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Avatar,
   Box,
   Typography,
   Card,
@@ -7,6 +8,7 @@ import {
   Chip,
   Button,
   Alert,
+  CircularProgress,
   InputAdornment,
   MenuItem,
   Paper,
@@ -34,6 +36,7 @@ import {
   DriveEtaRounded,
 } from '@mui/icons-material';
 import { driverApi } from '../api/driver.api';
+import { rideApi } from '../api/ride.api';
 import { Ride } from '../types';
 import {
   formatCurrency,
@@ -45,6 +48,8 @@ import {
 } from '../utils/format.utils';
 import { calculateDistance, formatDistance, formatDuration } from '../utils/map.utils';
 import { useTranslation } from 'react-i18next';
+import ContactBox from '../components/ContactBox';
+import { useAppSelector } from '../store/hooks';
 
 const PAGE_SIZE = 10;
 
@@ -62,7 +67,7 @@ const normalizeDurationSeconds = (duration?: number, estimatedDuration?: number)
     return undefined;
   }
 
-  return raw <= 180 ? raw * 60 : raw;
+  return raw <= 30 ? raw * 60 : raw;
 };
 
 const getRideDistanceAndDuration = (ride: Ride) => {
@@ -104,8 +109,18 @@ const getLocationText = (location?: { address?: string; lat?: number; lng?: numb
   return 'Không có dữ liệu vị trí';
 };
 
+const getCustomerName = (ride: Ride) => {
+  const fullName = `${ride.customer?.firstName || ''} ${ride.customer?.lastName || ''}`.trim();
+  return fullName || ride.customer?.phoneNumber || 'Khách hàng';
+};
+
+const canReviewRideConversation = (ride: Ride) => (
+  ['ACCEPTED', 'PICKING_UP', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(ride.status)
+);
+
 const History: React.FC = () => {
   const { t } = useTranslation();
+  const { accessToken, user } = useAppSelector((state) => state.auth);
   const [rides, setRides] = useState<Ride[]>([]);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
@@ -114,6 +129,7 @@ const History: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRide, setSelectedRide] = useState<Ride | null>(null);
+  const [selectedRideLoading, setSelectedRideLoading] = useState(false);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -159,6 +175,20 @@ const History: React.FC = () => {
       return rideText.includes(normalizedSearch);
     });
   }, [rides, searchQuery, statusFilter]);
+
+  const handleOpenRideDetails = async (ride: Ride) => {
+    setSelectedRide(ride);
+    setSelectedRideLoading(true);
+
+    try {
+      const response = await rideApi.getRide(ride.id);
+      setSelectedRide(response.data.ride);
+    } catch {
+      setSelectedRide(ride);
+    } finally {
+      setSelectedRideLoading(false);
+    }
+  };
 
   return (
     <Box
@@ -247,7 +277,7 @@ const History: React.FC = () => {
             <Card
               key={ride.id}
               variant="outlined"
-              onClick={() => setSelectedRide(ride)}
+              onClick={() => void handleOpenRideDetails(ride)}
               sx={{
                 cursor: 'pointer',
                 borderRadius: 3,
@@ -289,6 +319,9 @@ const History: React.FC = () => {
 
                 {/* Metrics row */}
                 <Stack direction="row" spacing={1.5} flexWrap="wrap">
+                  <Typography variant="caption" color="text.secondary">
+                    {getCustomerName(ride)}
+                  </Typography>
                   <Typography variant="caption" fontWeight={700} color="primary.main">
                     {ride.fare ? formatCurrency(ride.fare) : '—'}
                   </Typography>
@@ -302,6 +335,11 @@ const History: React.FC = () => {
                     <Typography variant="caption" color="text.secondary">{getPaymentMethodLabel(ride.paymentMethod)}</Typography>
                   )}
                 </Stack>
+                {ride.customer?.phoneNumber && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                    {ride.customer.phoneNumber}
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           );
@@ -368,6 +406,31 @@ const History: React.FC = () => {
 
             <DialogContent dividers>
               <Stack spacing={2}>
+                {selectedRideLoading && (
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <CircularProgress size={18} />
+                    <Typography variant="body2" color="text.secondary">
+                      Đang tải đầy đủ thông tin chuyến đi...
+                    </Typography>
+                  </Stack>
+                )}
+
+                {selectedRide.customer && (
+                  <Box sx={{ bgcolor: '#eff6ff', borderRadius: 3, p: 1.5, border: '1px solid rgba(59,130,246,0.14)' }}>
+                    <Stack direction="row" spacing={1.25} alignItems="center">
+                      <Avatar src={selectedRide.customer.avatar || undefined} sx={{ width: 44, height: 44, bgcolor: '#1d4ed8' }}>
+                        {selectedRide.customer.firstName?.[0] || 'K'}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={800}>{getCustomerName(selectedRide)}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {selectedRide.customer.phoneNumber || 'Số điện thoại đang cập nhật'}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Box>
+                )}
+
                 {/* Locations */}
                 <Box sx={{ bgcolor: '#f8fafc', borderRadius: 3, p: 1.5 }}>
                   <Stack direction="row" spacing={1} alignItems="flex-start">
@@ -498,23 +561,21 @@ const History: React.FC = () => {
                   </Stack>
                 </Box>
 
-                {/* Customer info if available */}
-                {selectedRide.customer && (
+                {canReviewRideConversation(selectedRide) && selectedRide.customerId && (
                   <>
                     <Divider />
-                    <Box>
-                      <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ mb: 1, display: 'block' }}>
-                        KHÁCH HÀNG
-                      </Typography>
-                      <Typography variant="body2">
-                        {selectedRide.customer.firstName} {selectedRide.customer.lastName}
-                      </Typography>
-                      {selectedRide.customer.phoneNumber && (
-                        <Typography variant="body2" color="text.secondary">
-                          {selectedRide.customer.phoneNumber}
-                        </Typography>
-                      )}
-                    </Box>
+                    <ContactBox
+                      token={accessToken}
+                      rideId={selectedRide.id}
+                      myUserId={user?.id}
+                      contactName={getCustomerName(selectedRide)}
+                      contactPhone={selectedRide.customer?.phoneNumber || undefined}
+                      role="DRIVER"
+                      triggerMode="inline"
+                      triggerLabel="Xem lại cuộc trò chuyện"
+                      fullWidthTrigger
+                      readOnly
+                    />
                   </>
                 )}
               </Stack>

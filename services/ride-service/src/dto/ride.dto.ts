@@ -29,6 +29,7 @@ export interface CreateRideDto {
   };
   vehicleType?: string;
   paymentMethod?: string;
+  voucherCode?: string;
 }
 
 export const createRideSchema = Joi.object<CreateRideDto>({
@@ -40,6 +41,7 @@ export const createRideSchema = Joi.object<CreateRideDto>({
   }),
   vehicleType: Joi.string().valid('MOTORBIKE', 'SCOOTER', 'CAR_4', 'CAR_7').optional().default('CAR_4'),
   paymentMethod: Joi.string().valid('CASH', 'CARD', 'WALLET', 'MOMO', 'VNPAY').optional().default('CASH'),
+  voucherCode: Joi.string().trim().uppercase().max(64).optional(),
 });
 
 // Update Ride Status DTO

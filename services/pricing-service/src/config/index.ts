@@ -38,24 +38,39 @@ export const config = {
   pricing: {
     // Base fare (VND)
     baseFare: {
-      MOTORBIKE: 9000,
-      SCOOTER: 11000,
-      CAR_4: 17000,
-      CAR_7: 22000,
+      MOTORBIKE: 10000,
+      SCOOTER: 14000,
+      CAR_4: 24000,
+      CAR_7: 32000,
     },
     // Per km (VND)
     perKmRate: {
-      MOTORBIKE: 6500,
-      SCOOTER: 7800,
-      CAR_4: 12500,
-      CAR_7: 15500,
+      MOTORBIKE: 6200,
+      SCOOTER: 8400,
+      CAR_4: 15000,
+      CAR_7: 18500,
     },
     // Per minute (VND)
     perMinuteRate: {
-      MOTORBIKE: 500,
-      SCOOTER: 650,
-      CAR_4: 1500,
-      CAR_7: 1900,
+      MOTORBIKE: 450,
+      SCOOTER: 700,
+      CAR_4: 1900,
+      CAR_7: 2400,
+    },
+    // Fixed fee to reflect comfort / operating cost of each vehicle tier.
+    vehicleServiceFee: {
+      MOTORBIKE: 0,
+      SCOOTER: 1500,
+      CAR_4: 6000,
+      CAR_7: 10000,
+    },
+    // Short trips disproportionately consume driver pickup time, especially for cars.
+    shortTripThresholdKm: 2.5,
+    shortTripFee: {
+      MOTORBIKE: 0,
+      SCOOTER: 1500,
+      CAR_4: 6000,
+      CAR_7: 9000,
     },
     // Minimum fare
     minimumFare: 15000,

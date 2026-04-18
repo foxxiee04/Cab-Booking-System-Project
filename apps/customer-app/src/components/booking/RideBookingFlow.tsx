@@ -42,7 +42,7 @@ import { formatCurrency } from '../../utils/format.utils';
 import { pricingApi } from '../../api/pricing.api';
 import { rideApi } from '../../api/ride.api';
 import { paymentApi } from '../../api/payment.api';
-import voucherApi, { ApplyVoucherResult, MyVoucher } from '../../api/voucher.api';
+import voucherApi, { ApplyVoucherResult, MyVoucher, PublicVoucher, VoucherAudience } from '../../api/voucher.api';
 import { Location } from '../../types';
 import motorbikeImage from '../../assets/vehicles/xe_may.jpg';
 import scooterImage from '../../assets/vehicles/xe_ga.jpg';
@@ -75,18 +75,20 @@ interface VehicleOption {
   priceMultiplier: number;
 }
 
-const FALLBACK_PRICING: Record<VehicleOption['type'], { baseFare: number; perKmRate: number; perMinuteRate: number }> = {
-  MOTORBIKE: { baseFare: 9000, perKmRate: 6500, perMinuteRate: 500 },
-  SCOOTER: { baseFare: 11000, perKmRate: 7800, perMinuteRate: 650 },
-  CAR_4: { baseFare: 17000, perKmRate: 12500, perMinuteRate: 1500 },
-  CAR_7: { baseFare: 22000, perKmRate: 15500, perMinuteRate: 1900 },
+const FALLBACK_PRICING: Record<VehicleOption['type'], { baseFare: number; perKmRate: number; perMinuteRate: number; vehicleServiceFee: number; shortTripFee: number }> = {
+  MOTORBIKE: { baseFare: 10000, perKmRate: 6200, perMinuteRate: 450, vehicleServiceFee: 0, shortTripFee: 0 },
+  SCOOTER: { baseFare: 14000, perKmRate: 8400, perMinuteRate: 700, vehicleServiceFee: 1500, shortTripFee: 1500 },
+  CAR_4: { baseFare: 24000, perKmRate: 15000, perMinuteRate: 1900, vehicleServiceFee: 6000, shortTripFee: 6000 },
+  CAR_7: { baseFare: 32000, perKmRate: 18500, perMinuteRate: 2400, vehicleServiceFee: 10000, shortTripFee: 9000 },
 };
 
 const MINIMUM_FARE = 15000;
+const SHORT_TRIP_THRESHOLD_KM = 2.5;
 
-const MIN_PRICE_GAP: Record<'SCOOTER' | 'CAR_7', number> = {
-  SCOOTER: 1500,
-  CAR_7: 5000,
+const MIN_PRICE_GAP: Record<'SCOOTER' | 'CAR_4' | 'CAR_7', number> = {
+  SCOOTER: 3000,
+  CAR_4: 15000,
+  CAR_7: 10000,
 };
 
 const vehicleOptions: VehicleOption[] = [
@@ -130,6 +132,20 @@ const paymentOptions = [
   { method: 'VNPAY', label: 'VNPay QR / Ngân hàng', icon: <AccountBalance />, helper: 'Thanh toán qua QR hoặc ứng dụng ngân hàng.' },
 ];
 
+const VOUCHER_AUDIENCE_LABELS: Record<VoucherAudience, string> = {
+  ALL_CUSTOMERS: 'Mọi khách hàng',
+  NEW_CUSTOMERS: 'Khách mới',
+  RETURNING_CUSTOMERS: 'Khách quay lại',
+};
+
+const getVoucherDiscountText = (voucher: Pick<MyVoucher | PublicVoucher, 'discountType' | 'discountValue' | 'maxDiscount'>): string => {
+  if (voucher.discountType === 'PERCENT') {
+    return `Giảm ${voucher.discountValue}%${voucher.maxDiscount ? ` · tối đa ${formatCurrency(voucher.maxDiscount)}` : ''}`;
+  }
+
+  return `Giảm ${formatCurrency(voucher.discountValue)}`;
+};
+
 const VEHICLE_FETCH_ORDER: Array<'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7'> = ['MOTORBIKE', 'SCOOTER', 'CAR_4', 'CAR_7'];
 
 const enforceVehiclePriceOrder = (estimates: Record<string, PriceEstimate>): Record<string, PriceEstimate> => {
@@ -144,12 +160,21 @@ const enforceVehiclePriceOrder = (estimates: Record<string, PriceEstimate>): Rec
     };
   }
 
+  const normalizedScooterFare = ordered.SCOOTER?.fare;
   const car4Fare = ordered.CAR_4?.fare;
+  if (Number.isFinite(normalizedScooterFare) && Number.isFinite(car4Fare) && car4Fare <= normalizedScooterFare) {
+    ordered.CAR_4 = {
+      ...ordered.CAR_4,
+      fare: Math.max(Math.round(normalizedScooterFare + MIN_PRICE_GAP.CAR_4), MINIMUM_FARE),
+    };
+  }
+
+  const normalizedCar4Fare = ordered.CAR_4?.fare;
   const car7Fare = ordered.CAR_7?.fare;
-  if (Number.isFinite(car4Fare) && Number.isFinite(car7Fare) && car7Fare <= car4Fare) {
+  if (Number.isFinite(normalizedCar4Fare) && Number.isFinite(car7Fare) && car7Fare <= normalizedCar4Fare) {
     ordered.CAR_7 = {
       ...ordered.CAR_7,
-      fare: Math.max(Math.round(car4Fare + MIN_PRICE_GAP.CAR_7), MINIMUM_FARE),
+      fare: Math.max(Math.round(normalizedCar4Fare + MIN_PRICE_GAP.CAR_7), MINIMUM_FARE),
     };
   }
 
@@ -216,6 +241,9 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [myVouchers, setMyVouchers] = useState<MyVoucher[]>([]);
   const [myVouchersLoading, setMyVouchersLoading] = useState(false);
+  const [publicVouchers, setPublicVouchers] = useState<PublicVoucher[]>([]);
+  const [publicVouchersLoading, setPublicVouchersLoading] = useState(false);
+  const [collectingVoucherCode, setCollectingVoucherCode] = useState<string | null>(null);
   const [priceEstimates, setPriceEstimates] = useState<Record<string, PriceEstimate>>({});
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -229,50 +257,101 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
   const dropoffLat = dropoff?.lat;
   const dropoffLng = dropoff?.lng;
   const dropoffAddress = dropoff?.address;
+  const selectedEstimate = priceEstimates[selectedVehicle];
+  const currentFare = selectedEstimate?.fare ?? 0;
 
-  const handleApplyVoucher = async () => {
-    const code = voucherCode.trim().toUpperCase();
-    if (!code) return;
+  const applyVoucherCode = useCallback(async (code: string, closePickerOnSuccess = true) => {
+    const normalizedCode = code.trim().toUpperCase();
+    if (!normalizedCode) return;
+
+    setVoucherCode(normalizedCode);
     setVoucherError('');
-    setVoucherResult(null);
     setVoucherLoading(true);
+    // Don't clear voucherResult immediately to prevent UI flash/jitter
+
     try {
-      const fare = selectedEstimate?.fare ?? 0;
-      const res = await voucherApi.applyVoucher(code, fare);
+      const res = await voucherApi.applyVoucher(normalizedCode, currentFare);
       setVoucherResult(res.data.data);
-      setPickerOpen(false);
+      setVoucherLoading(false);
+      if (closePickerOnSuccess) {
+        // Delay picker close to prevent jitter from simultaneous state+dialog transitions
+        window.setTimeout(() => setPickerOpen(false), 80);
+      }
     } catch (err: any) {
       setVoucherError(err.response?.data?.error?.message || 'Mã voucher không hợp lệ');
-    } finally {
       setVoucherLoading(false);
     }
+  }, [currentFare]);
+
+  const handleApplyVoucher = async () => {
+    if (!voucherCode.trim()) return;
+    await applyVoucherCode(voucherCode);
   };
 
   const handleSelectSavedVoucher = async (code: string) => {
-    setVoucherCode(code);
-    setVoucherError('');
-    setVoucherResult(null);
-    setVoucherLoading(true);
-    try {
-      const fare = selectedEstimate?.fare ?? 0;
-      const res = await voucherApi.applyVoucher(code, fare);
-      setVoucherResult(res.data.data);
-      setPickerOpen(false);
-    } catch (err: any) {
-      setVoucherError(err.response?.data?.error?.message || 'Mã voucher không hợp lệ');
-    } finally {
-      setVoucherLoading(false);
-    }
+    await applyVoucherCode(code);
   };
 
   const handleOpenPicker = async () => {
     setPickerOpen(true);
+    setVoucherError('');
     setMyVouchersLoading(true);
+    setPublicVouchersLoading(true);
     try {
-      const res = await voucherApi.getMyVouchers();
-      setMyVouchers(res.data.data.filter((v) => v.status === 'USABLE'));
-    } catch { setMyVouchers([]); }
-    finally { setMyVouchersLoading(false); }
+      const [myResult, publicResult] = await Promise.allSettled([
+        voucherApi.getMyVouchers(),
+        voucherApi.getPublicVouchers(),
+      ]);
+
+      if (myResult.status === 'fulfilled') {
+        setMyVouchers(myResult.value.data.data.filter((voucher) => voucher.status === 'USABLE'));
+      } else {
+        setMyVouchers([]);
+      }
+
+      if (publicResult.status === 'fulfilled') {
+        setPublicVouchers(publicResult.value.data.data);
+      } else {
+        setPublicVouchers([]);
+      }
+    } finally {
+      setMyVouchersLoading(false);
+      setPublicVouchersLoading(false);
+    }
+  };
+
+  const handleCollectVoucher = async (voucher: PublicVoucher) => {
+    const normalizedCode = voucher.code.trim().toUpperCase();
+    const eligible = currentFare <= 0 || voucher.minFare === 0 || currentFare >= voucher.minFare;
+
+    setCollectingVoucherCode(normalizedCode);
+    setVoucherError('');
+
+    try {
+      if (!voucher.collected) {
+        const response = await voucherApi.collectVoucher(normalizedCode);
+        const collectedVoucher = response.data.data;
+
+        setMyVouchers((prev) => {
+          const others = prev.filter((item) => item.voucherId !== collectedVoucher.voucherId);
+          return [collectedVoucher, ...others];
+        });
+        setPublicVouchers((prev) => prev.map((item) => (
+          item.voucherId === voucher.voucherId ? { ...item, collected: true } : item
+        )));
+      }
+
+      if (eligible) {
+        await applyVoucherCode(normalizedCode);
+      } else {
+        setVoucherCode(normalizedCode);
+        setVoucherError('Voucher đã được lưu, nhưng chuyến đi hiện tại chưa đủ điều kiện áp dụng.');
+      }
+    } catch (err: any) {
+      setVoucherError(err.response?.data?.error?.message || 'Không thể thu thập voucher lúc này');
+    } finally {
+      setCollectingVoucherCode(null);
+    }
   };
 
   const handleRemoveVoucher = () => {
@@ -311,7 +390,14 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
 
     if (fare <= 0) {
       const fallback = FALLBACK_PRICING[vehicleType];
-      const subtotal = fallback.baseFare + distance * fallback.perKmRate + durationMinutes * fallback.perMinuteRate;
+      const shortTripFee = distance > 0 && distance < SHORT_TRIP_THRESHOLD_KM
+        ? fallback.shortTripFee
+        : 0;
+      const subtotal = fallback.baseFare
+        + fallback.vehicleServiceFee
+        + distance * fallback.perKmRate
+        + durationMinutes * fallback.perMinuteRate
+        + shortTripFee;
       fare = Math.max(Math.round(subtotal * surgeMultiplier), MINIMUM_FARE);
     }
 
@@ -390,6 +476,22 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!voucherResult || currentFare <= 0) {
+      return;
+    }
+
+    if (Math.round(voucherResult.originalAmount) === Math.round(currentFare)) {
+      return;
+    }
+
+    // Debounce re-apply to prevent jitter when switching vehicles
+    const timer = window.setTimeout(() => {
+      void applyVoucherCode(voucherResult.code, false);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [applyVoucherCode, currentFare, voucherResult]);
+
   const handleNext = () => {
     setActiveStep((prev) => prev + 1);
   };
@@ -413,17 +515,20 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
         dropoff,
         vehicleType: selectedVehicle,
         paymentMethod: selectedPayment,
+        voucherCode: voucherResult?.code,
       });
 
       const rideId = response.data.ride.id;
 
       if (selectedPayment === 'MOMO' || selectedPayment === 'VNPAY') {
-        const amount = Math.round(selectedEstimate?.fare || 0);
+        const amount = Math.round(voucherResult?.finalAmount || currentFare);
         if (amount <= 0) {
           throw new Error('Không thể khởi tạo thanh toán vì giá chuyến đi chưa hợp lệ. Vui lòng chọn lại điểm đón/điểm đến.');
         }
 
-        const returnUrl = `${window.location.origin}/payment/callback?provider=${selectedPayment}&rideId=${rideId}`;
+        const returnUrl = selectedPayment === 'VNPAY'
+          ? `${window.location.origin}/payment/callback`
+          : `${window.location.origin}/payment/callback?provider=${selectedPayment}&rideId=${rideId}`;
 
         try {
           const paymentResponse = selectedPayment === 'MOMO'
@@ -442,6 +547,11 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
 
         onClose();
         const params = new URLSearchParams({ amount: String(amount), provider: selectedPayment, rideId });
+        if (voucherResult) {
+          params.set('voucherCode', voucherResult.code);
+          params.set('originalAmount', String(Math.round(voucherResult.originalAmount)));
+          params.set('discountAmount', String(Math.round(voucherResult.discountAmount)));
+        }
         window.location.assign(`${window.location.origin}/payment/sandbox-gateway?${params.toString()}`);
         return;
       }
@@ -455,8 +565,6 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
       setCreating(false);
     }
   };
-
-  const selectedEstimate = priceEstimates[selectedVehicle];
 
   const renderStepContent = () => {
     switch (activeStep) {
@@ -789,16 +897,21 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
               )}
             </Box>
 
-            {/* Voucher picker drawer for confirm step */}
-            <Drawer
-              anchor="bottom"
+            <Dialog
               open={pickerOpen}
               onClose={() => setPickerOpen(false)}
-              PaperProps={{ sx: { borderRadius: '20px 20px 0 0', height: '75vh', maxWidth: 600, mx: 'auto', display: 'flex', flexDirection: 'column' } }}
+              fullWidth
+              maxWidth="sm"
+              TransitionProps={{ timeout: { enter: 200, exit: 150 } }}
+              PaperProps={{ sx: { borderRadius: 5, minHeight: 520, willChange: 'transform, opacity' } }}
             >
-              <Box sx={{ px: 2.5, pt: 2.5, pb: 0, flexShrink: 0 }}>
-                <Box sx={{ width: 40, height: 4, bgcolor: 'grey.300', borderRadius: 99, mx: 'auto', mb: 2 }} />
-                <Typography variant="h6" fontWeight={800} mb={2}>Chọn mã giảm giá</Typography>
+              <DialogTitle sx={{ pb: 1.5 }}>
+                <Typography variant="h6" fontWeight={800}>Chọn mã giảm giá</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  Thu thập voucher công khai hoặc dùng ngay voucher đã lưu cho chuyến này.
+                </Typography>
+              </DialogTitle>
+              <DialogContent dividers sx={{ px: 2.5, py: 2 }}>
                 <Stack direction="row" spacing={1} mb={2}>
                   <TextField
                     size="small"
@@ -825,77 +938,131 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                     {voucherLoading ? <CircularProgress size={18} color="inherit" /> : 'Dùng'}
                   </Button>
                 </Stack>
-              </Box>
-              {/* Scrollable voucher list */}
-              <Box sx={{ flex: 1, overflowY: 'auto', px: 2.5, pb: 4 }}>
-                {myVouchersLoading ? (
-                  <Stack spacing={1}>
-                    {[1, 2].map((i) => <Skeleton key={i} variant="rounded" height={72} sx={{ borderRadius: 3 }} />)}
-                  </Stack>
-                ) : myVouchers.length === 0 ? (
-                  <Box textAlign="center" py={3} color="text.secondary">
-                    <LocalOfferRounded sx={{ fontSize: 40, mb: 1, opacity: 0.4 }} />
-                    <Typography variant="body2">Bạn chưa có voucher khả dụng</Typography>
-                  </Box>
-                ) : (
-                  <Stack spacing={1} pb={3}>
-                    <Typography variant="overline" color="text.secondary" fontWeight={700}>Voucher đã lưu</Typography>
-                    {myVouchers.map((mv) => {
-                      const isSelected = voucherResult?.code === mv.code;
-                      const discountText = mv.discountType === 'PERCENT'
-                        ? `Giảm ${mv.discountValue}%${mv.maxDiscount ? ` (tối đa ${formatCurrency(mv.maxDiscount)})` : ''}`
-                        : `Giảm ${formatCurrency(mv.discountValue)}`;
-                      const eligible = !selectedEstimate || mv.minFare === 0 || selectedEstimate.fare >= mv.minFare;
-                      return (
-                        <Card
-                          key={mv.voucherId}
-                          variant="outlined"
-                          onClick={() => eligible && handleSelectSavedVoucher(mv.code)}
-                          sx={{
-                            borderRadius: 3,
-                            cursor: eligible ? 'pointer' : 'default',
-                            opacity: eligible ? 1 : 0.5,
-                            borderColor: isSelected ? 'success.main' : 'divider',
-                            bgcolor: isSelected ? 'success.50' : undefined,
-                            '&:hover': eligible && !isSelected ? { borderColor: 'primary.main', bgcolor: 'primary.50' } : {},
-                            transition: 'all 150ms',
-                          }}
-                        >
-                          <CardContent sx={{ py: 1.25, px: 2, '&:last-child': { pb: 1.25 } }}>
-                            <Stack direction="row" alignItems="center" justifyContent="space-between">
-                              <Stack direction="row" alignItems="center" spacing={1.5}>
-                                <Box
-                                  sx={{
-                                    width: 36, height: 36, borderRadius: 2,
-                                    bgcolor: isSelected ? 'success.main' : eligible ? 'primary.main' : 'action.disabledBackground',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                                  }}
-                                >
-                                  {isSelected
-                                    ? <CheckCircleRounded sx={{ color: '#fff', fontSize: 20 }} />
-                                    : <LocalOfferRounded sx={{ color: eligible ? '#fff' : 'action.disabled', fontSize: 18 }} />}
-                                </Box>
-                                <Box>
-                                  <Stack direction="row" spacing={1} alignItems="center">
-                                    <Typography variant="body2" fontWeight={800}>{mv.code}</Typography>
-                                    <Chip label={discountText} size="small" color={eligible ? 'primary' : 'default'} sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }} />
-                                  </Stack>
-                                  <Typography variant="caption" color={eligible ? 'text.secondary' : 'error.main'}>
-                                    {mv.minFare > 0 ? `Đơn tối thiểu ${formatCurrency(mv.minFare)}` : 'Không yêu cầu giá tối thiểu'}
-                                    {!eligible && ' — chuyến này chưa đủ điều kiện'}
-                                  </Typography>
-                                </Box>
-                              </Stack>
-                              {!isSelected && eligible && <ChevronRightRounded color="action" fontSize="small" />}
-                            </Stack>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                  </Stack>
+                {voucherError && (
+                  <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                    {voucherError}
+                  </Alert>
                 )}
-              </Box>
-            </Drawer>
+
+                <Stack spacing={2.5}>
+                  <Box>
+                    <Typography variant="overline" color="text.secondary" fontWeight={800}>Voucher đã lưu</Typography>
+                    <Stack spacing={1} sx={{ mt: 1 }}>
+                      {myVouchersLoading ? (
+                        [1, 2].map((item) => <Skeleton key={item} variant="rounded" height={88} sx={{ borderRadius: 3 }} />)
+                      ) : myVouchers.length === 0 ? (
+                        <Box textAlign="center" py={3} color="text.secondary">
+                          <LocalOfferRounded sx={{ fontSize: 36, mb: 1, opacity: 0.4 }} />
+                          <Typography variant="body2">Bạn chưa có voucher khả dụng</Typography>
+                        </Box>
+                      ) : (
+                        myVouchers.map((voucher) => {
+                          const isSelected = voucherResult?.code === voucher.code;
+                          const eligible = currentFare <= 0 || voucher.minFare === 0 || currentFare >= voucher.minFare;
+
+                          return (
+                            <Card
+                              key={voucher.voucherId}
+                              variant="outlined"
+                              sx={{
+                                borderRadius: 3,
+                                borderColor: isSelected ? 'success.main' : eligible ? 'divider' : 'error.light',
+                                bgcolor: isSelected ? 'success.50' : undefined,
+                              }}
+                            >
+                              <CardContent sx={{ py: 1.4, px: 2, '&:last-child': { pb: 1.4 } }}>
+                                <Stack direction="row" spacing={1.5} justifyContent="space-between" alignItems="flex-start">
+                                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                                      <Typography variant="body1" fontWeight={800}>{voucher.code}</Typography>
+                                      <Chip label={getVoucherDiscountText(voucher)} size="small" color={eligible ? 'primary' : 'default'} sx={{ height: 22, fontSize: '0.7rem', fontWeight: 700 }} />
+                                      <Chip label={VOUCHER_AUDIENCE_LABELS[voucher.audienceType]} size="small" variant="outlined" sx={{ height: 22, fontSize: '0.7rem', fontWeight: 700 }} />
+                                    </Stack>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.8 }}>
+                                      {voucher.description || 'Voucher áp dụng cho chuyến đi đủ điều kiện.'}
+                                    </Typography>
+                                    <Typography variant="caption" color={eligible ? 'text.secondary' : 'error.main'} display="block" sx={{ mt: 0.4 }}>
+                                      {voucher.minFare > 0 ? `Đơn tối thiểu ${formatCurrency(voucher.minFare)}` : 'Không yêu cầu giá tối thiểu'}
+                                      {!eligible && ' · Chuyến này chưa đủ điều kiện'}
+                                    </Typography>
+                                  </Box>
+                                  <Button
+                                    variant={isSelected ? 'contained' : 'outlined'}
+                                    color={isSelected ? 'success' : 'primary'}
+                                    onClick={() => handleSelectSavedVoucher(voucher.code)}
+                                    disabled={!eligible || voucherLoading}
+                                    sx={{ borderRadius: 2.5, minWidth: 112, fontWeight: 700 }}
+                                  >
+                                    {isSelected ? 'Đang dùng' : 'Dùng ngay'}
+                                  </Button>
+                                </Stack>
+                              </CardContent>
+                            </Card>
+                          );
+                        })
+                      )}
+                    </Stack>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="overline" color="text.secondary" fontWeight={800}>Voucher có thể thu thập</Typography>
+                    <Stack spacing={1} sx={{ mt: 1 }}>
+                      {publicVouchersLoading ? (
+                        [1, 2].map((item) => <Skeleton key={item} variant="rounded" height={96} sx={{ borderRadius: 3 }} />)
+                      ) : publicVouchers.filter((voucher) => !voucher.collected).length === 0 ? (
+                        <Box textAlign="center" py={3} color="text.secondary">
+                          <CheckCircleRounded sx={{ fontSize: 34, mb: 1, opacity: 0.45 }} />
+                          <Typography variant="body2">Bạn đã lưu hết voucher công khai hiện có</Typography>
+                        </Box>
+                      ) : (
+                        publicVouchers.filter((voucher) => !voucher.collected).map((voucher) => {
+                          const eligible = currentFare <= 0 || voucher.minFare === 0 || currentFare >= voucher.minFare;
+                          const isCollecting = collectingVoucherCode === voucher.code;
+
+                          return (
+                            <Card key={voucher.voucherId} variant="outlined" sx={{ borderRadius: 3 }}>
+                              <CardContent sx={{ py: 1.4, px: 2, '&:last-child': { pb: 1.4 } }}>
+                                <Stack direction="row" spacing={1.5} justifyContent="space-between" alignItems="flex-start">
+                                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                                      <Typography variant="body1" fontWeight={800}>{voucher.code}</Typography>
+                                      <Chip label={getVoucherDiscountText(voucher)} size="small" color={eligible ? 'primary' : 'default'} sx={{ height: 22, fontSize: '0.7rem', fontWeight: 700 }} />
+                                      <Chip label={VOUCHER_AUDIENCE_LABELS[voucher.audienceType]} size="small" variant="outlined" sx={{ height: 22, fontSize: '0.7rem', fontWeight: 700 }} />
+                                    </Stack>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.8 }}>
+                                      {voucher.description || 'Voucher công khai có thể lưu vào ví ưu đãi của bạn.'}
+                                    </Typography>
+                                    <Typography variant="caption" color={eligible ? 'text.secondary' : 'warning.main'} display="block" sx={{ mt: 0.4 }}>
+                                      {voucher.minFare > 0 ? `Đơn tối thiểu ${formatCurrency(voucher.minFare)}` : 'Không yêu cầu giá tối thiểu'}
+                                      {eligible ? ' · Dùng được cho chuyến này' : ' · Hiện chưa dùng được cho chuyến này'}
+                                    </Typography>
+                                  </Box>
+                                  <Button
+                                    variant="contained"
+                                    onClick={() => handleCollectVoucher(voucher)}
+                                    disabled={isCollecting}
+                                    sx={{ borderRadius: 2.5, minWidth: 144, fontWeight: 700 }}
+                                  >
+                                    {isCollecting
+                                      ? <CircularProgress size={18} color="inherit" />
+                                      : eligible ? 'Thu thập và dùng' : 'Thu thập'}
+                                  </Button>
+                                </Stack>
+                              </CardContent>
+                            </Card>
+                          );
+                        })
+                      )}
+                    </Stack>
+                  </Box>
+                </Stack>
+              </DialogContent>
+              <DialogActions sx={{ px: 3, pb: 2.5 }}>
+                <Button onClick={() => setPickerOpen(false)} sx={{ borderRadius: 2.5 }}>
+                  Đóng
+                </Button>
+              </DialogActions>
+            </Dialog>
           </Box>
         );
 

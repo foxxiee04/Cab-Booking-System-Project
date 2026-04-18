@@ -1,19 +1,24 @@
 import { EventConsumer } from '../../events/consumer';
 import { SocketServer } from '../../socket/socket-server';
+import { driverGrpcClient } from '../../grpc/driver.client';
 import Redis from 'ioredis';
-import axios from 'axios';
 
 // Mock dependencies
 jest.mock('ioredis');
 jest.mock('amqplib');
-jest.mock('axios');
 jest.mock('../../socket/socket-server');
+jest.mock('../../grpc/driver.client', () => ({
+  driverGrpcClient: {
+    getDriverById: jest.fn(),
+    getDriverFullProfile: jest.fn(),
+  },
+}));
 
 describe('EventConsumer', () => {
   let eventConsumer: EventConsumer;
   let mockSocketServer: jest.Mocked<SocketServer>;
   let mockRedis: jest.Mocked<Redis>;
-  const mockedAxios = axios as jest.Mocked<typeof axios>;
+  const mockDriverGrpc = driverGrpcClient as jest.Mocked<typeof driverGrpcClient>;
 
   beforeEach(() => {
     // Create mock instances
@@ -22,15 +27,23 @@ describe('EventConsumer', () => {
       emitToDriver: jest.fn(),
       emitToDrivers: jest.fn(),
       isUserOnline: jest.fn(),
+      isUserOnlineRedis: jest.fn(),
     } as any;
 
     mockRedis = {
       georadius: jest.fn(),
+      hgetall: jest.fn(),
+      hset: jest.fn(),
+      hincrby: jest.fn(),
       quit: jest.fn(),
     } as any;
 
     (Redis as jest.MockedClass<typeof Redis>).mockImplementation(() => mockRedis);
-    mockedAxios.get.mockReset();
+    mockRedis.hgetall.mockResolvedValue({} as any);
+    mockRedis.hset.mockResolvedValue(1 as any);
+    mockRedis.hincrby.mockResolvedValue(1 as any);
+    mockDriverGrpc.getDriverById.mockReset();
+    mockDriverGrpc.getDriverFullProfile.mockReset();
 
     eventConsumer = new EventConsumer(mockSocketServer);
   });
@@ -43,12 +56,13 @@ describe('EventConsumer', () => {
         ['driver-3', '2500'],
       ] as any);
 
-      mockedAxios.get
-        .mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-1' } } } })
-        .mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-2' } } } })
-        .mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-3' } } } });
+      mockDriverGrpc.getDriverById
+        .mockResolvedValueOnce({ id: 'driver-1', userId: 'user-1', ratingAverage: 4.9 } as any)
+        .mockResolvedValueOnce({ id: 'driver-2', userId: 'user-2', ratingAverage: 4.8 } as any)
+        .mockResolvedValueOnce({ id: 'driver-3', userId: 'user-3', ratingAverage: 4.7 } as any);
 
       mockSocketServer.isUserOnline.mockImplementation((userId: string) => userId !== 'user-2');
+      mockSocketServer.isUserOnlineRedis.mockResolvedValue(false);
 
       const payload = {
         rideId: 'ride-123',
@@ -74,18 +88,20 @@ describe('EventConsumer', () => {
         'drivers:geo:online',
         106.660172,
         10.762622,
-        5000,
+        2000,
         'm',
-        'WITHDIST'
+        'WITHDIST',
+        'ASC'
       );
 
-      expect(mockSocketServer.emitToDrivers).toHaveBeenCalledWith(
-        ['user-1', 'user-3'],
+      expect(mockSocketServer.emitToDriver).toHaveBeenCalledWith(
+        'user-1',
         'NEW_RIDE_AVAILABLE',
         expect.objectContaining({
           rideId: 'ride-123',
           customerId: 'customer-456',
-          estimatedFare: 50.5,
+          estimatedFare: 51,
+          searchRadiusKm: 2,
         })
       );
     });
@@ -97,11 +113,12 @@ describe('EventConsumer', () => {
         ['driver-3', '2500'],
       ] as any);
 
-      mockedAxios.get
-        .mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-1' } } } })
-        .mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-3' } } } });
+      mockDriverGrpc.getDriverById
+        .mockResolvedValueOnce({ id: 'driver-1', userId: 'user-1', ratingAverage: 4.9 } as any)
+        .mockResolvedValueOnce({ id: 'driver-3', userId: 'user-3', ratingAverage: 4.7 } as any);
 
       mockSocketServer.isUserOnline.mockReturnValue(true);
+      mockSocketServer.isUserOnlineRedis.mockResolvedValue(false);
 
       const payload = {
         rideId: 'ride-456',
@@ -115,17 +132,17 @@ describe('EventConsumer', () => {
 
       await (eventConsumer as any).handleMatchingRequested(payload);
 
-      expect(mockSocketServer.emitToDrivers).toHaveBeenCalledWith(
-        ['user-1', 'user-3'],
+      expect(mockSocketServer.emitToDriver).toHaveBeenCalledWith(
+        'user-1',
         'NEW_RIDE_AVAILABLE',
         expect.any(Object)
       );
 
-      expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+      expect(mockDriverGrpc.getDriverById).toHaveBeenCalledTimes(2);
     });
 
     it('should deliver a targeted ride offer to the resolved driver socket room', async () => {
-      mockedAxios.get.mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-999' } } } });
+      mockDriverGrpc.getDriverById.mockResolvedValueOnce({ id: 'driver-999', userId: 'user-999' } as any);
 
       await (eventConsumer as any).handleRideOffered({
         rideId: 'ride-offer-1',
@@ -167,8 +184,31 @@ describe('EventConsumer', () => {
   });
 
   describe('Ride Status Events', () => {
+    it('should fan out driver approval updates to the driver room', async () => {
+      await (eventConsumer as any).handleDriverApprovalUpdated({
+        driverId: 'driver-1',
+        userId: 'user-1',
+        status: 'APPROVED',
+      });
+
+      expect(mockSocketServer.emitToDriver).toHaveBeenCalledWith(
+        'user-1',
+        'DRIVER_APPROVAL_UPDATED',
+        expect.objectContaining({
+          driverId: 'driver-1',
+          status: 'APPROVED',
+        })
+      );
+    });
+
     it('should handle ride.accepted and notify customer', async () => {
-      mockedAxios.get.mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-789' } } } });
+      mockDriverGrpc.getDriverFullProfile.mockResolvedValueOnce({
+        id: 'driver-789',
+        userId: 'user-789',
+        firstName: 'Driver',
+        lastName: 'Accepted',
+      } as any);
+      mockDriverGrpc.getDriverById.mockResolvedValueOnce({ id: 'driver-789', userId: 'user-789' } as any);
 
       const payload = {
         rideId: 'ride-123',
@@ -200,7 +240,7 @@ describe('EventConsumer', () => {
     });
 
     it('should handle ride.picking_up and notify both parties', async () => {
-      mockedAxios.get.mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-900' } } } });
+      mockDriverGrpc.getDriverById.mockResolvedValueOnce({ id: 'driver-900', userId: 'user-900' } as any);
 
       const payload = {
         rideId: 'ride-pickup-1',
@@ -232,7 +272,7 @@ describe('EventConsumer', () => {
     });
 
     it('should handle ride.started and notify both parties', async () => {
-      mockedAxios.get.mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-222' } } } });
+      mockDriverGrpc.getDriverById.mockResolvedValueOnce({ id: 'driver-222', userId: 'user-222' } as any);
 
       const payload = {
         rideId: 'ride-456',
@@ -263,7 +303,7 @@ describe('EventConsumer', () => {
     });
 
     it('should handle ride.completed with fare info', async () => {
-      mockedAxios.get.mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-444' } } } });
+      mockDriverGrpc.getDriverById.mockResolvedValueOnce({ id: 'driver-444', userId: 'user-444' } as any);
 
       const payload = {
         rideId: 'ride-789',
@@ -300,7 +340,7 @@ describe('EventConsumer', () => {
     });
 
     it('should handle ride.cancelled and notify both parties', async () => {
-      mockedAxios.get.mockResolvedValueOnce({ data: { data: { driver: { userId: 'user-666' } } } });
+      mockDriverGrpc.getDriverById.mockResolvedValueOnce({ id: 'driver-666', userId: 'user-666' } as any);
 
       const payload = {
         rideId: 'ride-cancel',

@@ -31,6 +31,8 @@ const PUBLIC_PATHS = [
   '/api/auth/refresh',
   '/api/payments/momo/return',      // MoMo redirect return (browser redirect)
   '/api/payments/vnpay/return',     // VNPay redirect return (browser redirect)
+  '/api/wallet/top-up/momo/return', // MoMo wallet top-up browser return
+  '/api/wallet/top-up/vnpay/return', // VNPay wallet top-up browser return
   '/api/wallet/top-up/momo-ipn',    // MoMo wallet top-up IPN (called by MoMo servers)
   '/api/wallet/top-up/vnpay-ipn',   // VNPay wallet top-up IPN (called by VNPay servers)
   '/api/map',

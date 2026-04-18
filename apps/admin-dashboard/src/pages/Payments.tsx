@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Typography, Alert, Chip } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, InputAdornment, MenuItem, TextField, Typography } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { SearchRounded } from '@mui/icons-material';
 import { adminApi } from '../api/admin.api';
 import { Payment } from '../types';
 import { formatCurrency, formatDate, getPaymentStatusColor } from '../utils/format.utils';
@@ -23,6 +24,8 @@ const Payments: React.FC = () => {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [keyword, setKeyword] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -31,6 +34,7 @@ const Payments: React.FC = () => {
       setError('');
       try {
         const response = await adminApi.getPayments({
+          status: statusFilter === 'ALL' ? undefined : statusFilter,
           limit: PAGE_SIZE,
           offset: page * PAGE_SIZE,
         });
@@ -44,14 +48,40 @@ const Payments: React.FC = () => {
     };
 
     fetchPayments();
-  }, [page, t]);
+  }, [page, statusFilter, t]);
+
+  const filteredRows = useMemo(() => {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+
+    if (!normalizedKeyword) {
+      return rows;
+    }
+
+    return rows.filter((payment) => (
+      [
+        payment.id,
+        payment.rideId,
+        payment.transactionId,
+        payment.provider,
+        payment.method,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedKeyword)
+    ));
+  }, [keyword, rows]);
 
   const summary = useMemo(() => {
-    return rows.reduce(
+    return filteredRows.reduce(
       (acc, row) => {
         acc.total += 1;
+        acc.amount += row.amount || 0;
         if (row.status === 'COMPLETED') {
           acc.completed += 1;
+        }
+        if (row.status === 'PENDING' || row.status === 'PROCESSING' || row.status === 'REQUIRES_ACTION') {
+          acc.pending += 1;
         }
         if (row.status === 'REFUNDED') {
           acc.refunded += 1;
@@ -64,9 +94,9 @@ const Payments: React.FC = () => {
         }
         return acc;
       },
-      { total: 0, completed: 0, refunded: 0, momo: 0, vnpay: 0 },
+      { total: 0, completed: 0, pending: 0, refunded: 0, momo: 0, vnpay: 0, amount: 0 },
     );
-  }, [rows]);
+  }, [filteredRows]);
 
   const columns: GridColDef<Payment>[] = [
     { field: 'id', headerName: t('columns.paymentId'), flex: 1, minWidth: 210 },
@@ -120,13 +150,16 @@ const Payments: React.FC = () => {
   ];
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" fontWeight="bold">
+    <Box sx={{ p: 3, minHeight: '100%', background: 'radial-gradient(circle at top left, rgba(217,119,6,0.1), transparent 32%), linear-gradient(180deg, #f8fafc 0%, #eef4fb 100%)' }}>
+      <Typography variant="h4" fontWeight={900}>
         {t('tables.payments')}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+        Nắm nhanh chất lượng thanh toán, các giao dịch chờ xử lý và các khoản hoàn tiền ngay trên một màn hình tổng hợp.
       </Typography>
 
       {error && (
-        <Alert severity="error" sx={{ mt: 2 }}>
+        <Alert severity="error" sx={{ mt: 2, borderRadius: 3 }}>
           {error}
         </Alert>
       )}
@@ -135,12 +168,13 @@ const Payments: React.FC = () => {
         sx={{
           mt: 2,
           display: 'grid',
-          gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(5, minmax(0, 1fr))' },
+          gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(6, minmax(0, 1fr))' },
           gap: 1.5,
         }}
       >
         {[
-          { label: 'Bản ghi đang xem', value: summary.total, color: '#1d4ed8' },
+          { label: 'Tổng giá trị', value: formatCurrency(summary.amount), color: '#0f766e' },
+          { label: 'Đang xử lý', value: summary.pending, color: '#d97706' },
           { label: 'Đã thanh toán', value: summary.completed, color: '#15803d' },
           { label: 'Đã hoàn tiền', value: summary.refunded, color: '#0f766e' },
           { label: 'MoMo', value: summary.momo, color: '#be185d' },
@@ -165,19 +199,63 @@ const Payments: React.FC = () => {
         ))}
       </Box>
 
-      <Box sx={{ mt: 2, height: 520 }}>
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          rowCount={total}
-          loading={loading}
-          paginationMode="server"
-          pageSizeOptions={[PAGE_SIZE]}
-          paginationModel={{ page, pageSize: PAGE_SIZE }}
-          onPaginationModelChange={(model) => setPage(model.page)}
-          getRowId={(row) => row.id}
-        />
-      </Box>
+      <Card elevation={0} sx={{ mt: 2, borderRadius: 4, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.06)' }}>
+        <CardContent sx={{ p: 2 }}>
+          <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: '1fr 220px' } }}>
+            <TextField
+              size="small"
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              placeholder="Tìm theo mã giao dịch, mã chuyến, cổng thanh toán hoặc transaction ID"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchRounded fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <TextField
+              select
+              size="small"
+              label="Trạng thái"
+              value={statusFilter}
+              onChange={(event) => {
+                setPage(0);
+                setStatusFilter(event.target.value);
+              }}
+            >
+              <MenuItem value="ALL">Tất cả</MenuItem>
+              <MenuItem value="PENDING">Đang chờ</MenuItem>
+              <MenuItem value="PROCESSING">Đang xử lý</MenuItem>
+              <MenuItem value="REQUIRES_ACTION">Chờ thanh toán</MenuItem>
+              <MenuItem value="COMPLETED">Đã thanh toán</MenuItem>
+              <MenuItem value="FAILED">Thất bại</MenuItem>
+              <MenuItem value="REFUNDED">Đã hoàn tiền</MenuItem>
+            </TextField>
+          </Box>
+        </CardContent>
+      </Card>
+
+      <Card elevation={0} sx={{ mt: 2, borderRadius: 4, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.06)' }}>
+        <CardContent sx={{ p: 1.5 }}>
+          <Box sx={{ mt: 0.5, height: 540 }}>
+            <DataGrid
+              rows={filteredRows}
+              columns={columns}
+              rowCount={statusFilter === 'ALL' && !keyword.trim() ? total : filteredRows.length}
+              loading={loading}
+              paginationMode="server"
+              pageSizeOptions={[PAGE_SIZE]}
+              paginationModel={{ page, pageSize: PAGE_SIZE }}
+              onPaginationModelChange={(model) => setPage(model.page)}
+              getRowId={(row) => row.id}
+              disableRowSelectionOnClick
+              sx={{ border: 0 }}
+            />
+          </Box>
+        </CardContent>
+      </Card>
     </Box>
   );
 };

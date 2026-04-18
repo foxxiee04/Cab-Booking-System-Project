@@ -15,13 +15,11 @@ import {
   LocationOn,
   Flag,
   DirectionsCar,
-  Phone,
   Timer,
   Route as RouteIcon,
   AccessTime,
   AttachMoney,
   TrendingUp,
-  Star,
 } from '@mui/icons-material';
 import { Ride } from '../../types';
 import { formatCurrency, getVehicleTypeLabel } from '../../utils/format.utils';
@@ -46,7 +44,7 @@ const normalizeDurationSeconds = (duration?: number, estimatedDuration?: number)
     return undefined;
   }
 
-  return raw <= 180 ? raw * 60 : raw;
+  return raw <= 30 ? raw * 60 : raw;
 };
 
 interface RideRequestModalProps {
@@ -113,6 +111,9 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
   const progress = (timeLeft / timeoutSeconds) * 100;
   const progressColor = progress > 50 ? 'success' : progress > 25 ? 'warning' : 'error';
   const rideCode = ride.id.slice(0, 8).toUpperCase();
+  const customerName = `${ride.customer?.firstName || ''} ${ride.customer?.lastName || ''}`.trim() || 'Khách hàng đang cập nhật';
+  const customerPhone = ride.customer?.phoneNumber || 'Số điện thoại đang cập nhật';
+  const customerInitials = `${ride.customer?.firstName?.[0] || ''}${ride.customer?.lastName?.[0] || ''}`.trim().toUpperCase() || 'KH';
   const hasFare = ride.fare != null && ride.fare > 0;
   const driverEarning = hasFare ? Math.round(ride.fare! * driverShare) : null;
   const distanceMeters = normalizeDistanceMeters(ride.distance);
@@ -173,14 +174,26 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
 
         {/* Scrollable content */}
         <Box sx={{ overflowY: 'auto', flex: 1, px: 2.5, py: 2 }}>
+          <Box sx={{ mb: 2, p: 1.75, borderRadius: 3, bgcolor: '#eff6ff', border: '1px solid rgba(59,130,246,0.16)' }}>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Avatar sx={{ bgcolor: '#1d4ed8', width: 40, height: 40 }} src={ride.customer?.avatar || undefined}>
+                {customerInitials}
+              </Avatar>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" fontWeight={800}>{customerName}</Typography>
+                <Typography variant="caption" color="text.secondary">{customerPhone}</Typography>
+              </Box>
+            </Stack>
+          </Box>
+
           {/* Map with route */}
-          <Box key={mapKey} sx={{ borderRadius: 3, overflow: 'hidden', mb: 2.5, height: 200, border: '1px solid', borderColor: 'divider' }}>
+          <Box key={mapKey} sx={{ borderRadius: 3, overflow: 'hidden', mb: 2.5, height: 240, minHeight: 200, border: '1px solid', borderColor: 'divider' }}>
             <DriverTripMap
               currentLocation={currentLocation}
               pickupLocation={ride.pickupLocation}
               dropoffLocation={ride.dropoffLocation}
               mode="request"
-              height={200}
+              height={240}
               colorMode="light"
             />
           </Box>
@@ -286,48 +299,6 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
             </Box>
           </Box>
 
-          {/* Customer info */}
-          {ride.customer && (
-            <Box sx={{ bgcolor: '#f8fafc', borderRadius: 3, p: 2, mb: 2 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6, mb: 1, display: 'block' }}>
-                Thông tin khách hàng
-              </Typography>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Avatar sx={{ bgcolor: '#dbeafe', color: '#1d4ed8', fontWeight: 700, width: 44, height: 44 }}>
-                  {ride.customer.firstName?.[0]}
-                </Avatar>
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="body2" fontWeight={700}>
-                    {ride.customer.firstName} {ride.customer.lastName}
-                  </Typography>
-                  {ride.customer.rating != null && (
-                    <Stack direction="row" alignItems="center" spacing={0.5}>
-                      <Star sx={{ fontSize: 14, color: '#f59e0b' }} />
-                      <Typography variant="caption" color="text.secondary">
-                        {ride.customer.rating.toFixed(1)}
-                      </Typography>
-                    </Stack>
-                  )}
-                  {ride.customer.phoneNumber && (
-                    <Typography variant="caption" color="text.secondary">
-                      SĐT: {ride.customer.phoneNumber}
-                    </Typography>
-                  )}
-                </Box>
-                {ride.customer.phoneNumber && (
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<Phone />}
-                    href={`tel:${ride.customer.phoneNumber}`}
-                    sx={{ borderRadius: 999, textTransform: 'none', minWidth: 0 }}
-                  >
-                    Gọi
-                  </Button>
-                )}
-              </Stack>
-            </Box>
-          )}
         </Box>
 
         {/* Action buttons — sticky bottom */}

@@ -6,6 +6,7 @@ const mockPrisma: any = {
     findMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
     delete: jest.fn(),
     count: jest.fn(),
   },
@@ -38,10 +39,19 @@ jest.mock('../config', () => ({
     },
     ride: {
       searchRadiusKm: 5,
+      searchTimeoutMs: 30000,
       matchingTimeoutMs: 30000,
       maxMatchingRetries: 3,
     },
   },
+}));
+
+const mockDriverGrpcClient = {
+  getDriverById: jest.fn(),
+};
+
+jest.mock('../grpc/driver.client', () => ({
+  driverGrpcClient: mockDriverGrpcClient,
 }));
 
 import { RideService } from '../services/ride.service';
@@ -52,7 +62,7 @@ import axios from 'axios';
 describe('RideService - Simple Test Suite', () => {
   let rideService: RideService;
   let mockEventPublisher: jest.Mocked<EventPublisher>;
-  const mockOfferManager = {} as any;
+  let mockOfferManager: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -62,8 +72,22 @@ describe('RideService - Simple Test Suite', () => {
     mockPrisma.ride.findMany.mockReset();
     mockPrisma.ride.create.mockReset();
     mockPrisma.ride.update.mockReset();
+    mockPrisma.ride.updateMany.mockReset();
     mockPrisma.ride.delete.mockReset();
     mockPrisma.ride.count.mockReset();
+
+    mockOfferManager = {
+      getMaxReassignAttempts: jest.fn().mockReturnValue(3),
+      hasBeenOffered: jest.fn().mockResolvedValue(false),
+      createOffer: jest.fn().mockResolvedValue(undefined),
+      acceptOffer: jest.fn().mockResolvedValue(true),
+      cancelOffer: jest.fn().mockResolvedValue(undefined),
+    };
+    mockDriverGrpcClient.getDriverById.mockResolvedValue({
+      id: 'driver-123',
+      vehicleType: 'CAR_4',
+    });
+    mockPrisma.ride.updateMany.mockResolvedValue({ count: 1 });
 
     mockEventPublisher = {
       publish: jest.fn().mockResolvedValue(undefined),
@@ -88,8 +112,9 @@ describe('RideService - Simple Test Suite', () => {
           lat: 10.7809,
           lng: 106.6956,
         },
-        vehicleType: 'ECONOMY' as const,
+        vehicleType: 'CAR_4' as const,
         paymentMethod: 'CASH' as const,
+        voucherCode: 'WELCOME50',
       };
 
       (axios.post as jest.Mock).mockResolvedValue({
@@ -113,6 +138,11 @@ describe('RideService - Simple Test Suite', () => {
 
       expect(result.id).toBe('ride-123');
       expect(mockPrisma.ride.create).toHaveBeenCalled();
+      expect(mockPrisma.ride.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          voucherCode: 'WELCOME50',
+        }),
+      }));
       expect(mockEventPublisher.publish).toHaveBeenCalledWith(
         'ride.created',
         expect.any(Object),
@@ -405,6 +435,7 @@ describe('RideService - Simple Test Suite', () => {
         fare: 50000,
         distance: 5.5,
         duration: 900,
+        voucherCode: 'WELCOME50',
       });
 
       mockPrisma.ride.update.mockResolvedValue({
@@ -420,6 +451,7 @@ describe('RideService - Simple Test Suite', () => {
         expect.objectContaining({
           rideId: 'ride-123',
           fare: 50000,
+          voucherCode: 'WELCOME50',
         }),
         expect.any(String)
       );
@@ -572,6 +604,13 @@ describe('RideService - Simple Test Suite', () => {
       const result = await rideService.getActiveRideForDriver('driver-123');
 
       expect(result?.id).toBe('ride-123');
+      expect(mockPrisma.ride.findFirst).toHaveBeenCalledWith({
+        where: {
+          driverId: 'driver-123',
+          status: { in: ['ASSIGNED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS'] },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
     });
   });
 });

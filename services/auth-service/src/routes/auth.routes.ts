@@ -42,6 +42,9 @@ export const createAuthRouter = (authService: AuthService): Router => {
   // Update profile (email, name, avatar)
   router.patch('/me', authenticate, controller.updateMe);
 
+  // Change password for the current authenticated user
+  router.patch('/change-password', authenticate, controller.changePassword);
+
   // Verify token (internal — called by API gateway)
   router.post('/verify', controller.verifyToken);
 

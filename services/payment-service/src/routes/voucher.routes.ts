@@ -21,6 +21,7 @@ export function createVoucherRoutes(prisma: PrismaClient): Router {
   // ─── Admin endpoints (auth required; role enforcement at API gateway) ────
   router.get('/admin', authMiddleware, controller.adminList);
   router.post('/admin', authMiddleware, controller.adminCreate);
+  router.patch('/admin/:id', authMiddleware, controller.adminUpdate);
   router.patch('/admin/:id/toggle', authMiddleware, controller.adminToggle);
 
   return router;

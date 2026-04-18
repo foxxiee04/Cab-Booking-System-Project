@@ -20,7 +20,7 @@ describe('Ride DTOs Validation', () => {
 
       expect(error).toBeUndefined();
       expect(value.pickup.lat).toBe(10.762622);
-      expect(value.vehicleType).toBe('STANDARD'); // default
+      expect(value.vehicleType).toBe('CAR_4');
     });
 
     it('should reject missing pickup location', () => {
@@ -65,13 +65,26 @@ describe('Ride DTOs Validation', () => {
       const validData = {
         pickup: { lat: 10.0, lng: 106.0 },
         dropoff: { lat: 10.1, lng: 106.1 },
-        vehicleType: 'PREMIUM',
+        vehicleType: 'CAR_7',
       };
 
       const { error, value } = createRideSchema.validate(validData);
 
       expect(error).toBeUndefined();
-      expect(value.vehicleType).toBe('PREMIUM');
+      expect(value.vehicleType).toBe('CAR_7');
+    });
+
+    it('should normalize voucher code when provided', () => {
+      const validData = {
+        pickup: { lat: 10.0, lng: 106.0 },
+        dropoff: { lat: 10.1, lng: 106.1 },
+        voucherCode: '  welcome50 ',
+      };
+
+      const { error, value } = createRideSchema.validate(validData);
+
+      expect(error).toBeUndefined();
+      expect(value.voucherCode).toBe('WELCOME50');
     });
 
     it('should reject invalid vehicle type', () => {

@@ -50,6 +50,20 @@ export interface ResetPasswordRequest {
   newPassword: string;
 }
 
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface UpdateProfileRequest {
+  profile?: {
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+  };
+  email?: string;
+}
+
 export interface OtpDeliveryPayload {
   message: string;
   resendDelay: number;
@@ -113,12 +127,20 @@ export const authApi = {
 
   getMe: async (): Promise<ApiResponse<{ user: any }>> => {
     const response = await axiosInstance.get('/auth/me');
-    return response.data;
+    const result = response.data;
+    if (result.success && result.data?.user) {
+      result.data.user = normalizeUser(result.data.user);
+    }
+    return result;
   },
 
-  updateMe: async (data: { firstName?: string; lastName?: string; avatar?: string; email?: string }): Promise<ApiResponse<{ user: any }>> => {
+  updateMe: async (data: UpdateProfileRequest): Promise<ApiResponse<{ user: any }>> => {
     const response = await axiosInstance.patch('/auth/me', data);
-    return response.data;
+    const result = response.data;
+    if (result.success && result.data?.user) {
+      result.data.user = normalizeUser(result.data.user);
+    }
+    return result;
   },
 
   logout: async (): Promise<ApiResponse> => {
@@ -140,6 +162,11 @@ export const authApi = {
   /** Reset password: verify OTP and set new password */
   resetPassword: async (data: ResetPasswordRequest): Promise<ApiResponse<{ message: string }>> => {
     const response = await axiosInstance.post('/auth/reset-password', data);
+    return response.data;
+  },
+
+  changePassword: async (data: ChangePasswordRequest): Promise<ApiResponse<{ message: string }>> => {
+    const response = await axiosInstance.patch('/auth/change-password', data);
     return response.data;
   },
 };

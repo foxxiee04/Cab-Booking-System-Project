@@ -264,6 +264,7 @@ interface GoogleBookingMapCanvasProps {
   driverHeading: number;
   routeSummary: RouteSummary | null;
   showReferenceMarkers: boolean;
+  showNearbyDrivers: boolean;
   mapRef: React.MutableRefObject<google.maps.Map | null>;
   onMapLoad: (points: google.maps.LatLngLiteral[]) => void;
   fallback: React.ReactNode;
@@ -280,6 +281,7 @@ const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
   driverHeading,
   routeSummary,
   showReferenceMarkers,
+  showNearbyDrivers,
   mapRef,
   onMapLoad,
   fallback,
@@ -355,7 +357,7 @@ const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
         />
       )}
 
-      {showReferenceMarkers && nearbyDrivers.map((driver) => (
+      {showNearbyDrivers && nearbyDrivers.map((driver) => (
         <MarkerF
           key={driver.id}
           position={{ lat: driver.lat, lng: driver.lng }}
@@ -427,7 +429,8 @@ export const BookingMap: React.FC<BookingMapProps> = ({
   const [driverHeading, setDriverHeading] = useState(0);
   const searchContextLabel = useMemo(() => getSearchContextLabel(pickup?.address, dropoff?.address), [dropoff?.address, pickup?.address]);
   const visibleNearbyDrivers = nearbyDrivers;
-  const showReferenceMarkers = mode !== 'tracking';
+  const showReferenceMarkers = Boolean(pickup || dropoff);
+  const showNearbyDrivers = mode !== 'tracking';
 
   useEffect(() => {
     setPickupInput(pickup?.address || '');
@@ -904,7 +907,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
           pathOptions={{ color: MAP_COLORS.accent, opacity: 0.95, weight: 5 }}
         />
       )}
-      {showReferenceMarkers && visibleNearbyDrivers.map((driver) => (
+      {showNearbyDrivers && visibleNearbyDrivers.map((driver) => (
         <LeafletMarker
           key={driver.id}
           position={[driver.lat, driver.lng]}
@@ -947,13 +950,14 @@ export const BookingMap: React.FC<BookingMapProps> = ({
             driverHeading={driverHeading}
             routeSummary={routeSummary}
             showReferenceMarkers={showReferenceMarkers}
+            showNearbyDrivers={showNearbyDrivers}
             mapRef={mapRef}
             onMapLoad={fitMapToLocations}
             fallback={leafletMap}
           />
         ) : leafletMap}
 
-        <Box sx={{ position: 'absolute', right: 16, bottom: mode === 'tracking' ? 144 : 16, zIndex: 2 }}>
+        <Box sx={{ position: 'absolute', right: 16, bottom: 16, zIndex: 2 }}>
           <IconButton
             onClick={handleLocateMe}
             sx={{

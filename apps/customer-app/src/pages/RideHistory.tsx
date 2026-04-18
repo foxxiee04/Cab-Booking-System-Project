@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Avatar,
   Box,
   Card,
   CardContent,
@@ -14,9 +15,26 @@ import {
   Paper,
   Stack,
   TextField,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
 } from '@mui/material';
-import { ExpandMoreRounded, ExpandLessRounded, SearchRounded, ReceiptLongRounded, LocationOnRounded, FlagRounded } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import {
+  ExpandMoreRounded,
+  ExpandLessRounded,
+  SearchRounded,
+  ReceiptLongRounded,
+  LocationOnRounded,
+  FlagRounded,
+  CloseRounded,
+  AttachMoneyRounded,
+  RouteRounded,
+  AccessTimeRounded,
+  DirectionsCarRounded,
+  EventRounded,
+} from '@mui/icons-material';
 import { rideApi } from '../api/ride.api';
 import { paymentApi } from '../api/payment.api';
 import { Payment, Ride } from '../types';
@@ -28,10 +46,33 @@ import {
   getVehicleTypeLabel,
 } from '../utils/format.utils';
 import { useTranslation } from 'react-i18next';
+import ContactBox from '../components/ContactBox';
+import { useAppSelector } from '../store/hooks';
 
 const PAGE_SIZE = 10;
 
 const ONLINE_METHODS = new Set(['MOMO', 'VNPAY', 'CARD', 'WALLET']);
+
+const getDriverName = (ride: Ride) => {
+  const fullName = `${ride.driver?.firstName || ''} ${ride.driver?.lastName || ''}`.trim();
+  return fullName || ride.driver?.phoneNumber || 'Tài xế';
+};
+
+const canReviewRideConversation = (ride: Ride) => (
+  ['ACCEPTED', 'PICKING_UP', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(ride.status)
+);
+
+const getLocationText = (location?: { address?: string; lat?: number; lng?: number }) => {
+  if (location?.address && location.address.trim()) {
+    return location.address;
+  }
+
+  if (typeof location?.lat === 'number' && typeof location?.lng === 'number' && !Number.isNaN(location.lat) && !Number.isNaN(location.lng)) {
+    return `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`;
+  }
+
+  return 'Không có dữ liệu vị trí';
+};
 
 function RefundTimeline({ payment }: { payment: Payment }) {
   const [open, setOpen] = useState(false);
@@ -179,8 +220,8 @@ function RefundTimeline({ payment }: { payment: Payment }) {
 }
 
 const RideHistory: React.FC = () => {
-  const navigate = useNavigate();
   const { t } = useTranslation();
+  const { accessToken, user } = useAppSelector((state) => state.auth);
   const [rides, setRides] = useState<Ride[]>([]);
   const [paymentMap, setPaymentMap] = useState<Map<string, Payment>>(new Map());
   const [page, setPage] = useState(1);
@@ -189,6 +230,8 @@ const RideHistory: React.FC = () => {
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRide, setSelectedRide] = useState<Ride | null>(null);
+  const [selectedRideLoading, setSelectedRideLoading] = useState(false);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -252,6 +295,20 @@ const RideHistory: React.FC = () => {
       return rideText.includes(normalizedSearch);
     });
   }, [rides, searchQuery, statusFilter]);
+
+  const handleOpenRideDetails = async (ride: Ride) => {
+    setSelectedRide(ride);
+    setSelectedRideLoading(true);
+
+    try {
+      const response = await rideApi.getRide(ride.id);
+      setSelectedRide(response.data.ride);
+    } catch {
+      setSelectedRide(ride);
+    } finally {
+      setSelectedRideLoading(false);
+    }
+  };
 
   return (
     <Box
@@ -347,7 +404,7 @@ const RideHistory: React.FC = () => {
             ONLINE_METHODS.has(ride.paymentMethod);
 
           return (
-            <Card key={ride.id} variant="outlined" sx={{ borderRadius: 4 }}>
+            <Card key={ride.id} variant="outlined" sx={{ borderRadius: 4, cursor: 'pointer' }} onClick={() => void handleOpenRideDetails(ride)}>
               <CardContent>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1 }}>
                   <Box>
@@ -364,6 +421,22 @@ const RideHistory: React.FC = () => {
                     size="small"
                   />
                 </Stack>
+
+                {ride.driverId && (
+                  <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 1.25 }}>
+                    <Avatar src={ride.driver?.avatar} sx={{ width: 36, height: 36, bgcolor: '#1d4ed8' }}>
+                      {ride.driver?.firstName?.[0] || 'T'}
+                    </Avatar>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" fontWeight={800} noWrap>
+                        {getDriverName(ride)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" noWrap>
+                        {ride.driver?.phoneNumber || 'Đang cập nhật số điện thoại'}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                )}
 
                 <Stack spacing={0.5} sx={{ mb: 1 }}>
                   <Stack direction="row" spacing={1} alignItems="flex-start">
@@ -384,9 +457,12 @@ const RideHistory: React.FC = () => {
                     size="small"
                     variant="outlined"
                     sx={{ borderRadius: 2 }}
-                    onClick={() => navigate(`/ride/${ride.id}`)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleOpenRideDetails(ride);
+                    }}
                   >
-                    {t('rideHistory.viewRide')}
+                    Xem chi tiết
                   </Button>
                 </Stack>
 
@@ -424,6 +500,176 @@ const RideHistory: React.FC = () => {
           </Button>
         </Stack>
       )}
+
+      <Dialog
+        open={Boolean(selectedRide)}
+        onClose={() => setSelectedRide(null)}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{ sx: { borderRadius: 4 } }}
+      >
+        {selectedRide && (
+          <>
+            <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+              <Box>
+                <Typography variant="h6" fontWeight={800}>Chi tiết chuyến đi</Typography>
+                <Typography variant="caption" color="text.disabled" sx={{ fontFamily: 'monospace' }}>
+                  #{selectedRide.id.slice(0, 8).toUpperCase()}
+                </Typography>
+              </Box>
+              <Button size="small" onClick={() => setSelectedRide(null)} startIcon={<CloseRounded fontSize="small" />}>
+                Đóng
+              </Button>
+            </DialogTitle>
+
+            <DialogContent dividers>
+              <Stack spacing={2}>
+                {selectedRideLoading && (
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <CircularProgress size={18} />
+                    <Typography variant="body2" color="text.secondary">
+                      Đang tải đầy đủ thông tin chuyến đi...
+                    </Typography>
+                  </Stack>
+                )}
+
+                {selectedRide.driverId && (
+                  <Box sx={{ bgcolor: '#eff6ff', borderRadius: 3, p: 1.5, border: '1px solid rgba(59,130,246,0.14)' }}>
+                    <Stack direction="row" spacing={1.25} alignItems="center">
+                      <Avatar src={selectedRide.driver?.avatar} sx={{ width: 44, height: 44, bgcolor: '#1d4ed8' }}>
+                        {selectedRide.driver?.firstName?.[0] || 'T'}
+                      </Avatar>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="subtitle2" fontWeight={800}>{getDriverName(selectedRide)}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {selectedRide.driver?.phoneNumber || 'Số điện thoại đang cập nhật'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {selectedRide.driver?.licensePlate || 'Biển số đang cập nhật'}
+                        </Typography>
+                      </Box>
+                      <Chip label={((selectedRide.driver?.rating || 5)).toFixed(1)} size="small" />
+                    </Stack>
+                  </Box>
+                )}
+
+                <Box sx={{ bgcolor: '#f8fafc', borderRadius: 3, p: 1.5 }}>
+                  <Stack direction="row" spacing={1} alignItems="flex-start">
+                    <LocationOnRounded color="success" sx={{ mt: 0.25, flexShrink: 0 }} />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight={700}>ĐIỂM ĐÓN</Typography>
+                      <Typography variant="body2">{getLocationText(selectedRide.pickupLocation || selectedRide.pickup)}</Typography>
+                    </Box>
+                  </Stack>
+                  <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mt: 1.5 }}>
+                    <FlagRounded color="error" sx={{ mt: 0.25, flexShrink: 0 }} />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight={700}>ĐIỂM ĐẾN</Typography>
+                      <Typography variant="body2">{getLocationText(selectedRide.dropoffLocation || selectedRide.dropoff)}</Typography>
+                    </Box>
+                  </Stack>
+                </Box>
+
+                <Divider />
+
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <AttachMoneyRounded color="primary" fontSize="small" />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Tiền cước</Typography>
+                      <Typography variant="body2" fontWeight={700}>{selectedRide.fare ? formatCurrency(selectedRide.fare) : 'Chưa có'}</Typography>
+                    </Box>
+                  </Stack>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <DirectionsCarRounded color="action" fontSize="small" />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Loại xe</Typography>
+                      <Typography variant="body2" fontWeight={700}>{getVehicleTypeLabel(selectedRide.vehicleType)}</Typography>
+                    </Box>
+                  </Stack>
+                  {selectedRide.distance && (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <RouteRounded color="action" fontSize="small" />
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Khoảng cách</Typography>
+                        <Typography variant="body2" fontWeight={700}>
+                          {selectedRide.distance > 100 ? `${(selectedRide.distance / 1000).toFixed(1)} km` : `${selectedRide.distance.toFixed(1)} km`}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  )}
+                  {selectedRide.duration && (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <AccessTimeRounded color="action" fontSize="small" />
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Thời gian</Typography>
+                        <Typography variant="body2" fontWeight={700}>
+                          {selectedRide.duration > 180 ? `${Math.round(selectedRide.duration / 60)} phút` : `${selectedRide.duration} phút`}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  )}
+                </Box>
+
+                <Divider />
+
+                <Box>
+                  <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ mb: 1, display: 'block' }}>
+                    THỜI GIAN
+                  </Typography>
+                  <Stack spacing={0.75}>
+                    {selectedRide.requestedAt && (
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <EventRounded color="action" fontSize="small" />
+                        <Typography variant="body2" color="text.secondary">Đặt lúc:</Typography>
+                        <Typography variant="body2">{formatDate(selectedRide.requestedAt)}</Typography>
+                      </Stack>
+                    )}
+                    {selectedRide.completedAt && (
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <EventRounded color="action" fontSize="small" />
+                        <Typography variant="body2" color="text.secondary">Hoàn tất:</Typography>
+                        <Typography variant="body2">{formatDate(selectedRide.completedAt)}</Typography>
+                      </Stack>
+                    )}
+                    {selectedRide.cancelledAt && (
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <EventRounded color="action" fontSize="small" />
+                        <Typography variant="body2" color="text.secondary">Hủy lúc:</Typography>
+                        <Typography variant="body2">{formatDate(selectedRide.cancelledAt)}</Typography>
+                      </Stack>
+                    )}
+                  </Stack>
+                </Box>
+
+                {selectedRide.driverId && canReviewRideConversation(selectedRide) && (
+                  <>
+                    <Divider />
+                    <ContactBox
+                      token={accessToken}
+                      rideId={selectedRide.id}
+                      myUserId={user?.id}
+                      contactName={getDriverName(selectedRide)}
+                      contactPhone={selectedRide.driver?.phoneNumber || undefined}
+                      role="CUSTOMER"
+                      triggerMode="inline"
+                      triggerLabel="Xem lại cuộc trò chuyện"
+                      fullWidthTrigger
+                      readOnly
+                    />
+                  </>
+                )}
+              </Stack>
+            </DialogContent>
+
+            <DialogActions sx={{ p: 2 }}>
+              <Button variant="contained" onClick={() => setSelectedRide(null)} sx={{ borderRadius: 999, px: 3 }}>
+                Đóng
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
     </Box>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -13,11 +13,7 @@ import {
   DialogTitle,
   InputAdornment,
   LinearProgress,
-  MenuItem,
   Paper,
-  Select,
-  FormControl,
-  InputLabel,
   Skeleton,
   Stack,
   Step,
@@ -48,25 +44,22 @@ import { formatCurrency, formatDate } from '../utils/format.utils';
 
 const MIN_WITHDRAW = 50_000;
 
-const VN_BANKS = [
-  'Vietcombank',
-  'VietinBank',
-  'BIDV',
-  'Techcombank',
-  'MB Bank',
-  'ACB',
-  'Sacombank',
-  'VPBank',
-  'TPBank',
-  'HDBank',
-  'Agribank',
-  'SCB',
-  'SHB',
-  'LienVietPostBank',
-  'SeABank',
-  'OCB',
-  'MSB',
+const BANK_OPTIONS = [
+  { name: 'Vietcombank', short: 'VCB', accent: '#16a34a', minDigits: 8, maxDigits: 14, helper: 'STK 8-14 số' },
+  { name: 'BIDV', short: 'BIDV', accent: '#1d4ed8', minDigits: 10, maxDigits: 14, helper: 'STK 10-14 số' },
+  { name: 'Techcombank', short: 'TCB', accent: '#dc2626', minDigits: 10, maxDigits: 14, helper: 'STK 10-14 số' },
+  { name: 'MB Bank', short: 'MB', accent: '#0f172a', minDigits: 8, maxDigits: 16, helper: 'STK 8-16 số' },
+  { name: 'ACB', short: 'ACB', accent: '#2563eb', minDigits: 8, maxDigits: 13, helper: 'STK 8-13 số' },
 ];
+
+const digitsOnly = (value: string) => value.replace(/\D/g, '');
+
+const formatDigitGroups = (value: string) => digitsOnly(value).replace(/(\d{4})(?=\d)/g, '$1 ');
+
+const formatMoneyInput = (value: string) => {
+  const digits = digitsOnly(value);
+  return digits ? Number(digits).toLocaleString('vi-VN') : '';
+};
 
 const TX_TYPE_META: Record<
   WalletTransaction['type'],
@@ -97,6 +90,16 @@ export default function WalletPage() {
 
   // Balance
   const [balance, setBalance] = useState<number | null>(null);
+  const [walletState, setWalletState] = useState<{
+    initialActivationCompleted?: boolean;
+    activationRequired?: boolean;
+    warningThresholdReached?: boolean;
+    canAcceptRide?: boolean;
+    activationThreshold?: number;
+    warningThreshold?: number;
+    debtLimit?: number;
+    reason?: string;
+  } | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [balanceError, setBalanceError] = useState('');
 
@@ -140,6 +143,7 @@ export default function WalletPage() {
     try {
       const res = await walletApi.getBalance();
       setBalance(res.data.data.balance);
+      setWalletState(res.data.data);
     } catch (err: any) {
       setBalanceError(err.response?.data?.error?.message || 'Không thể tải số dư ví');
     } finally {
@@ -183,10 +187,16 @@ export default function WalletPage() {
     loadIncentive();
   }, [loadBalance, loadTransactions, loadIncentive]);
 
+  const selectedWithdrawBank = useMemo(
+    () => BANK_OPTIONS.find((bank) => bank.name === withdrawBankName) || null,
+    [withdrawBankName],
+  );
+
   // ─── Withdraw ─────────────────────────────────────────────────────────────
 
   const handleWithdraw = async () => {
-    const amount = parseFloat(withdrawAmount.replace(/[.,]/g, ''));
+    const amount = Number(digitsOnly(withdrawAmount));
+    const accountNumberDigits = digitsOnly(withdrawAccountNumber);
     setWithdrawError('');
 
     if (!amount || amount <= 0) {
@@ -207,12 +217,24 @@ export default function WalletPage() {
       setWithdrawError('Vui lòng chọn ngân hàng');
       return;
     }
-    if (!withdrawAccountNumber || withdrawAccountNumber.length < 6) {
-      setWithdrawError('Vui lòng nhập số tài khoản hợp lệ (≥ 6 ký tự)');
+    if (!selectedWithdrawBank) {
+      setWithdrawError('Ngân hàng nhận tiền chưa được hỗ trợ');
       return;
     }
-    if (!withdrawAccountHolder) {
+    if (
+      !accountNumberDigits
+      || accountNumberDigits.length < selectedWithdrawBank.minDigits
+      || accountNumberDigits.length > selectedWithdrawBank.maxDigits
+    ) {
+      setWithdrawError(`Số tài khoản ${selectedWithdrawBank.name} phải có ${selectedWithdrawBank.minDigits}-${selectedWithdrawBank.maxDigits} chữ số`);
+      return;
+    }
+    if (!withdrawAccountHolder.trim()) {
       setWithdrawError('Vui lòng nhập tên chủ tài khoản');
+      return;
+    }
+    if (!/^[A-Za-zÀ-ỹ\s]+$/u.test(withdrawAccountHolder.trim())) {
+      setWithdrawError('Tên chủ tài khoản chỉ nên chứa chữ cái và khoảng trắng');
       return;
     }
 
@@ -220,8 +242,8 @@ export default function WalletPage() {
     try {
       const bankInfo = {
         bankName: withdrawBankName,
-        accountNumber: withdrawAccountNumber,
-        accountHolder: withdrawAccountHolder.toUpperCase(),
+        accountNumber: accountNumberDigits,
+        accountHolder: withdrawAccountHolder.trim().toUpperCase(),
       };
       const res = await walletApi.withdraw(amount, bankInfo);
       const { newBalance, withdrawalId: wdId, status } = res.data.data;
@@ -305,6 +327,12 @@ export default function WalletPage() {
   };
 
   const todayStats = stats[0];
+  const activationThreshold = walletState?.activationThreshold ?? 300_000;
+  const warningThreshold = walletState?.warningThreshold ?? -100_000;
+  const debtLimit = walletState?.debtLimit ?? -200_000;
+  const activationTopUpNeeded = walletState?.activationRequired && balance !== null
+    ? Math.max(activationThreshold - balance, 10_000)
+    : 0;
 
   // ─── Render helpers ───────────────────────────────────────────────────────
 
@@ -345,7 +373,7 @@ export default function WalletPage() {
           />
         )}
 
-        {balance !== null && balance < -200_000 && (
+        {walletState?.canAcceptRide === false && walletState?.activationRequired !== true && balance !== null && (
           <Alert
             severity="error"
             sx={{
@@ -356,7 +384,7 @@ export default function WalletPage() {
               '& .MuiAlert-icon': { color: '#f87171' },
             }}
           >
-            Số dư dưới -200,000 VND — bạn tạm thời không thể nhận cuốc mới.
+            Số dư đã chạm mốc khóa {formatCurrency(debtLimit)}. Bạn tạm thời không thể nhận cuốc mới.
           </Alert>
         )}
 
@@ -589,7 +617,7 @@ export default function WalletPage() {
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             {rule.type === 'PEAK_HOUR'
-                              ? 'Mỗi cuốc trong giờ cao điểm (7–9h, 17–20h)'
+                              ? 'Mỗi cuốc trong giờ cao điểm (6–9h, 16–19h)'
                               : rule.type === 'TRIP_COUNT'
                               ? `Đạt ≥ ${rule.conditionValue} cuốc/ngày`
                               : `Đạt ≥ ${rule.conditionValue} km/ngày`}
@@ -660,7 +688,7 @@ export default function WalletPage() {
       {renderBalance()}
 
       {/* Activation banner — shown when balance has never exceeded 300k (new driver) */}
-      {balance !== null && balance < 300_000 && balance >= 0 && (
+      {walletState?.activationRequired && balance !== null && (
         <Alert
           severity="info"
           icon={<AccountBalanceWalletRounded />}
@@ -669,15 +697,19 @@ export default function WalletPage() {
               color="inherit"
               size="small"
               sx={{ fontWeight: 700 }}
-              onClick={() => { setTopUpOpen(true); setTopUpError(''); setTopUpAmount(''); }}
+              onClick={() => {
+                setTopUpOpen(true);
+                setTopUpError('');
+                setTopUpAmount(String(activationTopUpNeeded));
+              }}
             >
               Nạp ngay
             </Button>
           }
           sx={{ mb: 2, borderRadius: 2 }}
         >
-          <strong>Kích hoạt tài khoản tài xế:</strong> Nạp tối thiểu <strong>300.000 đ</strong> vào ví
-          để bắt đầu nhận cuốc xe. Số dư hiện tại: {formatCurrency(balance)}.
+          <strong>Kích hoạt tài khoản tài xế:</strong> Nạp thêm tối thiểu <strong>{formatCurrency(activationTopUpNeeded)}</strong> vào ví
+          để đạt ngưỡng <strong>{formatCurrency(activationThreshold)}</strong> trước khi bật nhận cuốc. Số dư hiện tại: {formatCurrency(balance)}.
         </Alert>
       )}
 
@@ -704,13 +736,23 @@ export default function WalletPage() {
       )}
 
       {/* Negative balance warning */}
-      {balance !== null && balance < 0 && balance >= -200_000 && (
+      {walletState?.warningThresholdReached && walletState?.canAcceptRide !== false && balance !== null && (
         <Alert
           severity="warning"
           icon={<WarningAmberRounded />}
           sx={{ mb: 2, borderRadius: 2 }}
         >
-          Số dư ví đang âm ({formatCurrency(balance)}). Nạp tiền để tiếp tục nhận cuốc xe bình thường.
+          Số dư ví đã âm quá {formatCurrency(Math.abs(warningThreshold))} ({formatCurrency(balance)}). Tài khoản vẫn hoạt động nhưng bạn nên nạp thêm trước khi chạm mốc khóa {formatCurrency(debtLimit)}.
+        </Alert>
+      )}
+
+      {walletState?.canAcceptRide === false && walletState?.activationRequired !== true && balance !== null && (
+        <Alert
+          severity="error"
+          icon={<WarningAmberRounded />}
+          sx={{ mb: 2, borderRadius: 2 }}
+        >
+          Số dư ví đã xuống {formatCurrency(balance)} và tài khoản đang bị chặn nhận cuốc mới. Hãy nạp thêm tiền để mở lại.
         </Alert>
       )}
 
@@ -750,22 +792,45 @@ export default function WalletPage() {
             <Stack spacing={2}>
               <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'grey.50' }}>
                 <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="caption" color="text.secondary">
-                    Số dư khả dụng
-                  </Typography>
-                  <Typography fontWeight={800} variant="h6" color="primary">
-                    {formatCurrency(balance ?? 0)}
-                  </Typography>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Số dư khả dụng
+                      </Typography>
+                      <Typography fontWeight={800} variant="h6" color="primary">
+                        {formatCurrency(balance ?? 0)}
+                      </Typography>
+                    </Box>
+                    <Chip label="Chỉ hỗ trợ ngân hàng đã cấu hình" sx={{ borderRadius: 999, fontWeight: 700, bgcolor: '#eff6ff', color: '#1d4ed8' }} />
+                  </Stack>
                 </CardContent>
               </Card>
 
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75, display: 'block' }}>
+                  Chọn nhanh số tiền
+                </Typography>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  {[50_000, 100_000, 200_000, 500_000].map((preset) => (
+                    <Chip
+                      key={preset}
+                      label={formatCurrency(preset)}
+                      onClick={() => setWithdrawAmount(String(preset))}
+                      color={digitsOnly(withdrawAmount) === String(preset) ? 'primary' : 'default'}
+                      variant={digitsOnly(withdrawAmount) === String(preset) ? 'filled' : 'outlined'}
+                      sx={{ fontWeight: 700 }}
+                    />
+                  ))}
+                </Stack>
+              </Box>
+
               <TextField
                 label="Số tiền rút (VND)"
-                type="number"
+                type="text"
                 fullWidth
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                inputProps={{ min: MIN_WITHDRAW, step: 10000 }}
+                value={formatMoneyInput(withdrawAmount)}
+                onChange={(e) => setWithdrawAmount(digitsOnly(e.target.value))}
+                inputProps={{ inputMode: 'numeric' }}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -782,33 +847,99 @@ export default function WalletPage() {
                 helperText={`Tối thiểu ${formatCurrency(MIN_WITHDRAW)}`}
               />
 
-              <FormControl fullWidth size="small">
-                <InputLabel>Ngân hàng</InputLabel>
-                <Select
-                  value={withdrawBankName}
-                  label="Ngân hàng"
-                  onChange={(e) => setWithdrawBankName(e.target.value)}
-                >
-                  {VN_BANKS.map((bank) => (
-                    <MenuItem key={bank} value={bank}>{bank}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75, display: 'block' }}>
+                  Ngân hàng nhận tiền
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1.25 }}>
+                  {BANK_OPTIONS.map((bank) => {
+                    const selected = withdrawBankName === bank.name;
+
+                    return (
+                      <Card
+                        key={bank.name}
+                        variant="outlined"
+                        onClick={() => setWithdrawBankName(bank.name)}
+                        sx={{
+                          cursor: 'pointer',
+                          borderRadius: 3,
+                          border: '2px solid',
+                          borderColor: selected ? bank.accent : 'rgba(148,163,184,0.22)',
+                          bgcolor: selected ? `${bank.accent}10` : '#fff',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <CardContent sx={{ p: 1.4, '&:last-child': { pb: 1.4 } }}>
+                          <Stack spacing={1} alignItems="center" textAlign="center">
+                            <Box
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: '50%',
+                                display: 'grid',
+                                placeItems: 'center',
+                                bgcolor: bank.accent,
+                                color: '#fff',
+                                fontWeight: 800,
+                                fontSize: '0.8rem',
+                              }}
+                            >
+                              {bank.short}
+                            </Box>
+                            <Box>
+                              <Typography variant="body2" fontWeight={700}>{bank.name}</Typography>
+                              <Typography variant="caption" color="text.secondary">{bank.helper}</Typography>
+                            </Box>
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </Box>
+              </Box>
 
               <TextField
                 label="Số tài khoản"
                 fullWidth
-                value={withdrawAccountNumber}
-                onChange={(e) => setWithdrawAccountNumber(e.target.value.replace(/\D/g, ''))}
-                inputProps={{ maxLength: 20 }}
+                value={formatDigitGroups(withdrawAccountNumber)}
+                onChange={(e) => setWithdrawAccountNumber(digitsOnly(e.target.value))}
+                inputProps={{ maxLength: 24, inputMode: 'numeric' }}
+                helperText={selectedWithdrawBank ? `${selectedWithdrawBank.name}: ${selectedWithdrawBank.helper}` : 'Chỉ nhập chữ số, không dấu cách'}
               />
 
               <TextField
                 label="Tên chủ tài khoản"
                 fullWidth
                 value={withdrawAccountHolder}
-                onChange={(e) => setWithdrawAccountHolder(e.target.value)}
+                onChange={(e) => setWithdrawAccountHolder(e.target.value.toUpperCase())}
+                helperText="Dùng đúng tên trên tài khoản ngân hàng"
               />
+
+              <Card variant="outlined" sx={{ borderRadius: 3, bgcolor: '#f8fafc' }}>
+                <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                    Xem trước giao dịch
+                  </Typography>
+                  <Stack spacing={0.85} sx={{ mt: 1 }}>
+                    <Stack direction="row" justifyContent="space-between" spacing={2}>
+                      <Typography variant="body2" color="text.secondary">Ngân hàng</Typography>
+                      <Typography variant="body2" fontWeight={700}>{withdrawBankName || 'Chưa chọn'}</Typography>
+                    </Stack>
+                    <Stack direction="row" justifyContent="space-between" spacing={2}>
+                      <Typography variant="body2" color="text.secondary">Số tài khoản</Typography>
+                      <Typography variant="body2" fontWeight={700}>{formatDigitGroups(withdrawAccountNumber) || 'Chưa nhập'}</Typography>
+                    </Stack>
+                    <Stack direction="row" justifyContent="space-between" spacing={2}>
+                      <Typography variant="body2" color="text.secondary">Chủ tài khoản</Typography>
+                      <Typography variant="body2" fontWeight={700}>{withdrawAccountHolder || 'Chưa nhập'}</Typography>
+                    </Stack>
+                    <Stack direction="row" justifyContent="space-between" spacing={2}>
+                      <Typography variant="body2" color="text.secondary">Số tiền nhận</Typography>
+                      <Typography variant="body2" fontWeight={800} color="primary">{formatCurrency(Number(digitsOnly(withdrawAmount)) || 0)}</Typography>
+                    </Stack>
+                  </Stack>
+                </CardContent>
+              </Card>
 
               {withdrawError && <Alert severity="error">{withdrawError}</Alert>}
             </Stack>
@@ -825,9 +956,9 @@ export default function WalletPage() {
                 <CardContent>
                   <Stack spacing={0.5}>
                     <Typography variant="body2">Mã giao dịch: <strong>{withdrawalId}</strong></Typography>
-                    <Typography variant="body2">Số tiền: <strong>{formatCurrency(parseFloat(withdrawAmount.replace(/[.,]/g, '')) || 0)}</strong></Typography>
+                    <Typography variant="body2">Số tiền: <strong>{formatCurrency(Number(digitsOnly(withdrawAmount)) || 0)}</strong></Typography>
                     <Typography variant="body2">Ngân hàng: <strong>{withdrawBankName}</strong></Typography>
-                    <Typography variant="body2">STK: <strong>****{withdrawAccountNumber.slice(-4)}</strong></Typography>
+                    <Typography variant="body2">STK: <strong>****{digitsOnly(withdrawAccountNumber).slice(-4)}</strong></Typography>
                     <Typography variant="body2">Chủ TK: <strong>{withdrawAccountHolder.toUpperCase()}</strong></Typography>
                   </Stack>
                 </CardContent>
@@ -847,9 +978,9 @@ export default function WalletPage() {
                 <CardContent>
                   <Stack spacing={0.5}>
                     <Typography variant="body2">Mã giao dịch: <strong>{withdrawalId}</strong></Typography>
-                    <Typography variant="body2">Số tiền: <strong>{formatCurrency(parseFloat(withdrawAmount.replace(/[.,]/g, '')) || 0)}</strong></Typography>
+                    <Typography variant="body2">Số tiền: <strong>{formatCurrency(Number(digitsOnly(withdrawAmount)) || 0)}</strong></Typography>
                     <Typography variant="body2">Ngân hàng: <strong>{withdrawBankName}</strong></Typography>
-                    <Typography variant="body2">STK: <strong>****{withdrawAccountNumber.slice(-4)}</strong></Typography>
+                    <Typography variant="body2">STK: <strong>****{digitsOnly(withdrawAccountNumber).slice(-4)}</strong></Typography>
                     <Typography variant="body2">Số dư còn lại: <strong>{formatCurrency(balance ?? 0)}</strong></Typography>
                   </Stack>
                 </CardContent>

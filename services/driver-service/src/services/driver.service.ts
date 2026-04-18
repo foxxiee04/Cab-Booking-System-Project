@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+import axios from 'axios';
 import { DriverStatus, AvailabilityStatus, VehicleType, LicenseClass } from '../generated/prisma-client';
 import { config } from '../config';
 import { prisma } from '../config/db';
@@ -33,6 +34,14 @@ interface GeoPoint {
 interface NearbyDriver {
   driverId: string;
   distance: number; // km
+}
+
+interface DriverUserProfile {
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  phoneNumber?: string | null;
+  avatar?: string | null;
 }
 
 export class DriverService {
@@ -97,6 +106,117 @@ export class DriverService {
     });
   }
 
+  private async fetchUserProfileFromUserService(userId: string): Promise<DriverUserProfile | null> {
+    try {
+      const response = await axios.get(`${config.services.user}/api/users/${userId}`, {
+        timeout: 3000,
+        headers: {
+          'x-internal-token': config.internalServiceToken,
+        },
+      });
+
+      return response.data?.data?.user ?? null;
+    } catch (error) {
+      logger.warn(`Failed to hydrate driver user profile from user-service for ${userId}:`, error);
+      return null;
+    }
+  }
+
+  private async fetchUserProfileFromAuthService(userId: string): Promise<DriverUserProfile | null> {
+    try {
+      const response = await axios.get(`${config.services.auth}/internal/users/${userId}`, {
+        timeout: 3000,
+        headers: {
+          'x-internal-token': config.internalServiceToken,
+        },
+      });
+
+      return response.data?.data?.user ?? null;
+    } catch (error) {
+      logger.warn(`Failed to hydrate driver user profile from auth-service for ${userId}:`, error);
+      return null;
+    }
+  }
+
+  private async getUserProfile(userId: string): Promise<DriverUserProfile | null> {
+    const userProfile = await this.fetchUserProfileFromUserService(userId);
+    if (userProfile) {
+      return userProfile;
+    }
+
+    return this.fetchUserProfileFromAuthService(userId);
+  }
+
+  private async getDriverCompletedRideCount(driverId: string): Promise<number> {
+    try {
+      const response = await axios.get(`${config.services.ride}/internal/drivers/${driverId}/stats`, {
+        timeout: 3000,
+        headers: {
+          'x-internal-token': config.internalServiceToken,
+        },
+      });
+
+      return response.data?.data?.totalCompletedRides ?? 0;
+    } catch (error) {
+      logger.warn(`Failed to hydrate completed ride count for driver ${driverId}:`, error);
+      return 0;
+    }
+  }
+
+  async getEnrichedDriverById(driverId: string): Promise<any | null> {
+    const driver = await this.getDriverById(driverId);
+    if (!driver) {
+      return null;
+    }
+
+    const userProfile = driver.userId ? await this.getUserProfile(driver.userId) : null;
+
+    return {
+      ...driver,
+      firstName: userProfile?.firstName || '',
+      lastName: userProfile?.lastName || '',
+      phone: userProfile?.phone || userProfile?.phoneNumber || '',
+      phoneNumber: userProfile?.phoneNumber || userProfile?.phone || '',
+      avatar: userProfile?.avatar || null,
+      currentLocation:
+        driver.lastLocationLat != null && driver.lastLocationLng != null
+          ? {
+              lat: driver.lastLocationLat,
+              lng: driver.lastLocationLng,
+            }
+          : null,
+    };
+  }
+
+  async getPublicDriverProfile(driverId: string): Promise<any | null> {
+    const driver = await this.getEnrichedDriverById(driverId);
+    if (!driver) {
+      return null;
+    }
+
+    const totalCompletedRides = await this.getDriverCompletedRideCount(driver.id);
+
+    return {
+      id: driver.id,
+      userId: driver.userId,
+      firstName: driver.firstName || '',
+      lastName: driver.lastName || '',
+      phoneNumber: driver.phoneNumber || driver.phone || '',
+      avatar: driver.avatar || null,
+      vehicleType: driver.vehicleType,
+      vehicleMake: driver.vehicleBrand || '',
+      vehicleModel: driver.vehicleModel || '',
+      vehicleColor: driver.vehicleColor || '',
+      vehicleYear: driver.vehicleYear || undefined,
+      vehicleImageUrl: driver.vehicleImageUrl || undefined,
+      licensePlate: driver.vehiclePlate || '',
+      rating: driver.ratingAverage ?? 5,
+      reviewCount: driver.ratingCount ?? 0,
+      totalRides: totalCompletedRides,
+      currentLocation: driver.currentLocation,
+    };
+  }
+
   async goOnline(userId: string): Promise<any> {
     // Get existing driver
     const driver = await prisma.driver.findUnique({
@@ -110,6 +230,19 @@ export class DriverService {
     // Check if driver is approved
     if (driver.status !== DriverStatus.APPROVED) {
       throw new Error(`Driver must be approved before going online. Current status: ${driver.status}`);
+    }
+
+    const walletResponse = await axios.get(`${config.services.payment}/api/wallet/driver/${driver.id}/status`, {
+      timeout: 5000,
+      headers: {
+        'x-internal-token': config.internalServiceToken,
+      },
+    });
+
+    const walletStatus = walletResponse.data?.data || {};
+
+    if (walletStatus.canAcceptRide === false) {
+      throw new Error(walletStatus.reason || 'Ví tài xế hiện không đủ điều kiện để nhận cuốc. Vui lòng nạp thêm tiền.');
     }
 
     // Update to online

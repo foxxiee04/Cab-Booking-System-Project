@@ -52,6 +52,11 @@ export interface ResetPasswordRequest {
   newPassword: string;
 }
 
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
 export interface OtpDeliveryPayload {
   message: string;
   resendDelay: number;
@@ -186,6 +191,11 @@ export const authApi = {
   /** Reset password: verify OTP and set new password */
   resetPassword: async (data: ResetPasswordRequest): Promise<{ success: boolean; data: { message: string } }> => {
     const response = await axiosInstance.post('/auth/reset-password', data);
+    return response.data;
+  },
+
+  changePassword: async (data: ChangePasswordRequest): Promise<{ success: boolean; data: { message: string } }> => {
+    const response = await axiosInstance.patch('/auth/change-password', data);
     return response.data;
   },
 };

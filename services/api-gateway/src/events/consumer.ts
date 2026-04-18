@@ -1,4 +1,5 @@
 import amqp, { Channel, Connection, ConsumeMessage } from 'amqplib';
+import axios from 'axios';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { SocketServer } from '../socket/socket-server';
@@ -89,6 +90,8 @@ interface RideEventPayload {
   customerId: string;
   driverId?: string;
   status: string;
+  cancelledBy?: 'CUSTOMER' | 'DRIVER' | 'SYSTEM';
+  reason?: string;
   pickup?: MatchingLocation;
   dropoff?: MatchingLocation;
   fare?: number;
@@ -174,6 +177,58 @@ interface WaitTimePrediction {
   confidence: number;
   model_version: string;
   reason_code: string;
+}
+
+interface RealtimeCustomerProfile {
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  phoneNumber?: string | null;
+  avatar?: string | null;
+}
+
+function buildRealtimeDriverProfile(rawDriver: any) {
+  if (!rawDriver) {
+    return null;
+  }
+
+  return {
+    id: rawDriver.id,
+    userId: rawDriver.userId,
+    firstName: rawDriver.firstName || '',
+    lastName: rawDriver.lastName || '',
+    phoneNumber: rawDriver.phoneNumber || rawDriver.phone || '',
+    avatar: rawDriver.avatar || undefined,
+    vehicleMake: rawDriver.vehicleBrand || rawDriver.vehicleMake || '',
+    vehicleModel: rawDriver.vehicleModel || '',
+    vehicleColor: rawDriver.vehicleColor || '',
+    vehicleImageUrl: rawDriver.vehicleImageUrl || undefined,
+    licensePlate: rawDriver.vehiclePlate || rawDriver.licensePlate || '',
+    rating: rawDriver.ratingAverage ?? rawDriver.rating ?? 5,
+    reviewCount: rawDriver.ratingCount ?? rawDriver.reviewCount ?? 0,
+    totalRides: rawDriver.totalRides ?? rawDriver.ratingCount ?? 0,
+    currentLocation: rawDriver.currentLocation || (
+      rawDriver.lastLocationLat != null && rawDriver.lastLocationLng != null
+        ? {
+            lat: rawDriver.lastLocationLat,
+            lng: rawDriver.lastLocationLng,
+          }
+        : undefined
+    ),
+  };
+}
+
+function buildRealtimeCustomerProfile(rawCustomer: RealtimeCustomerProfile | null) {
+  if (!rawCustomer) {
+    return null;
+  }
+
+  return {
+    firstName: rawCustomer.firstName || '',
+    lastName: rawCustomer.lastName || '',
+    phoneNumber: rawCustomer.phoneNumber || rawCustomer.phone || '',
+    avatar: rawCustomer.avatar || undefined,
+  };
 }
 
 /** Map lat/lng to HCMC zone for P_accept feature encoding */
@@ -324,6 +379,8 @@ export class EventConsumer {
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.completed');
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.cancelled');
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.no_driver_found');
+      await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'driver.approved');
+      await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'driver.rejected');
 
       await this.channel!.consume(QUEUE_NAME, this.handleMessage.bind(this), { noAck: false });
 
@@ -380,6 +437,18 @@ export class EventConsumer {
           break;
         case 'ride.no_driver_found':
           await this.handleRideNoDriverFound(content.payload);
+          break;
+        case 'driver.approved':
+          await this.handleDriverApprovalUpdated({
+            ...content.payload,
+            status: 'APPROVED',
+          });
+          break;
+        case 'driver.rejected':
+          await this.handleDriverApprovalUpdated({
+            ...content.payload,
+            status: 'REJECTED',
+          });
           break;
         default:
           logger.debug(`Unhandled event type: ${eventType}`);
@@ -500,14 +569,16 @@ export class EventConsumer {
       }
 
       const offeredDrivers = result.ranked.slice(0, roundPlan.offerCount);
-      const effectiveFare = Math.round((payload.fare ?? payload.estimatedFare ?? 0) * effectiveSurge);
+      const canonicalFare = Math.round(payload.fare ?? payload.estimatedFare ?? 0);
+      const customer = await this.resolveRealtimeCustomerProfile(payload.customerId);
 
       const baseNotification = {
         rideId: payload.rideId,
         customerId: payload.customerId,
+        customer,
         pickup: payload.pickup,
         dropoff: payload.dropoff,
-        estimatedFare: effectiveFare,
+        estimatedFare: canonicalFare,
         surgeMultiplierHint: effectiveSurge,
         vehicleType: payload.vehicleType,
         distance: payload.distance,
@@ -847,7 +918,7 @@ export class EventConsumer {
       correlationId: payload.rideId,
       payload: {
         ...payload,
-        fare: Math.round((payload.fare ?? payload.estimatedFare ?? 0) * Math.max(1, lastSurgeHint)),
+        fare: Math.round(payload.fare ?? payload.estimatedFare ?? 0),
         searchRadiusKm: getRoundPlan(nextAttempt).radiusKm,
         excludeDriverIds: excluded,
         attempt: nextAttempt,
@@ -969,9 +1040,12 @@ export class EventConsumer {
       return;
     }
 
+    const customer = await this.resolveRealtimeCustomerProfile(payload.customerId);
+
     this.socketServer.emitToDriver(driverUserId, 'NEW_RIDE_AVAILABLE', {
       rideId: payload.rideId,
       customerId: payload.customerId,
+      customer,
       pickup: payload.pickup,
       dropoff: payload.dropoff,
       estimatedFare: payload.fare,
@@ -985,35 +1059,26 @@ export class EventConsumer {
   private async handleRideAssigned(payload: RideEventPayload): Promise<void> {
     logger.info(`Processing ride.assigned for ride ${payload.rideId}`);
 
+    const realtimeDriverProfile = payload.driverId
+      ? buildRealtimeDriverProfile(await driverGrpcClient.getDriverFullProfile(payload.driverId))
+      : null;
+
     const data = {
       rideId: payload.rideId,
       status: 'ASSIGNED',
       driverId: payload.driverId,
+      driver: realtimeDriverProfile,
       message: 'A driver has been assigned to your ride',
     };
 
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
 
     // Emit legacy ride:assigned event with driver profile for the tracking page
-    if (payload.driverId) {
-      const rawDriver = await driverGrpcClient.getDriverFullProfile(payload.driverId);
-      if (rawDriver) {
-        const driverProfile = {
-          id: rawDriver.id,
-          firstName: '',
-          lastName: '',
-          vehicleMake: rawDriver.vehicleBrand || '',
-          vehicleModel: rawDriver.vehicleModel || '',
-          vehicleColor: rawDriver.vehicleColor || '',
-          licensePlate: rawDriver.vehiclePlate || '',
-          rating: rawDriver.ratingAverage ?? 5,
-          totalRides: rawDriver.ratingCount ?? 0,
-        };
+    if (payload.driverId && realtimeDriverProfile) {
         this.socketServer.emitToCustomer(payload.customerId, 'ride:assigned', {
           ride: { id: payload.rideId, status: 'ASSIGNED', driverId: payload.driverId },
-          driver: driverProfile,
+          driver: realtimeDriverProfile,
         });
-      }
     }
 
     const driverUserId = await this.resolveDriverUserId(payload.driverId);
@@ -1049,10 +1114,15 @@ export class EventConsumer {
   private async handleRideAccepted(payload: RideEventPayload): Promise<void> {
     logger.info(`Processing ride.accepted for ride ${payload.rideId}`);
 
+    const realtimeDriverProfile = payload.driverId
+      ? buildRealtimeDriverProfile(await driverGrpcClient.getDriverFullProfile(payload.driverId))
+      : null;
+
     const data = {
       rideId: payload.rideId,
       status: 'ACCEPTED',
       driverId: payload.driverId,
+      driver: realtimeDriverProfile,
       message: 'Driver has accepted your ride',
     };
 
@@ -1060,25 +1130,11 @@ export class EventConsumer {
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
 
     // Emit legacy ride:assigned event with driver profile so the tracking page can show driver card
-    if (payload.driverId) {
-      const rawDriver = await driverGrpcClient.getDriverFullProfile(payload.driverId);
-      if (rawDriver) {
-        const driverProfile = {
-          id: rawDriver.id,
-          firstName: '',
-          lastName: '',
-          vehicleMake: rawDriver.vehicleBrand || '',
-          vehicleModel: rawDriver.vehicleModel || '',
-          vehicleColor: rawDriver.vehicleColor || '',
-          licensePlate: rawDriver.vehiclePlate || '',
-          rating: rawDriver.ratingAverage ?? 5,
-          totalRides: rawDriver.ratingCount ?? 0,
-        };
+    if (payload.driverId && realtimeDriverProfile) {
         this.socketServer.emitToCustomer(payload.customerId, 'ride:assigned', {
           ride: { id: payload.rideId, status: 'ACCEPTED', driverId: payload.driverId },
-          driver: driverProfile,
+          driver: realtimeDriverProfile,
         });
-      }
     }
 
     const driverUserId = await this.resolveDriverUserId(payload.driverId);
@@ -1167,10 +1223,18 @@ export class EventConsumer {
   private async handleRideCancelled(payload: RideEventPayload): Promise<void> {
     logger.info(`Processing ride.cancelled for ride ${payload.rideId}`);
 
+    const cancelMessage = payload.reason
+      || (payload.cancelledBy === 'DRIVER'
+        ? 'Tài xế đã hủy chuyến.'
+        : payload.cancelledBy === 'CUSTOMER'
+          ? 'Khách hàng đã hủy chuyến.'
+          : 'Chuyến đi đã bị hủy.');
+
     const data = {
       rideId: payload.rideId,
       status: 'CANCELLED',
-      message: 'Ride has been cancelled',
+      message: cancelMessage,
+      cancelledBy: payload.cancelledBy,
     };
 
     // Notify customer
@@ -1180,14 +1244,35 @@ export class EventConsumer {
     if (driverUserId) {
       this.socketServer.emitToDriver(driverUserId, 'ride:cancelled', {
         rideId: payload.rideId,
-        reason: payload.status,
+        reason: cancelMessage,
+        cancelledBy: payload.cancelledBy,
       });
     }
 
     // Track driver-side cancellation (penalises cancel rate in future scoring)
-    if (payload.driverId) {
+    if (payload.driverId && payload.cancelledBy === 'DRIVER') {
       this.redis.hincrby(driverStatsKey(payload.driverId), 'totalCancelled', 1).catch(() => {});
     }
+  }
+
+  private async handleDriverApprovalUpdated(payload: {
+    driverId?: string;
+    userId?: string;
+    status: 'APPROVED' | 'REJECTED';
+    reason?: string;
+  }): Promise<void> {
+    logger.info(`Processing driver approval update for user ${payload.userId || 'unknown'} (${payload.status})`);
+
+    if (!payload.userId) {
+      logger.warn('driver approval event missing userId');
+      return;
+    }
+
+    this.socketServer.emitToDriver(payload.userId, 'DRIVER_APPROVAL_UPDATED', {
+      driverId: payload.driverId,
+      status: payload.status,
+      reason: payload.reason,
+    });
   }
 
   /**
@@ -1239,6 +1324,51 @@ export class EventConsumer {
     }
 
     return null;
+  }
+
+  private async fetchCustomerProfileFromUserService(customerId: string): Promise<RealtimeCustomerProfile | null> {
+    try {
+      const response = await axios.get(`${config.services.user}/api/users/${customerId}`, {
+        timeout: 3000,
+        headers: {
+          'x-internal-token': config.internalServiceToken,
+        },
+      });
+
+      return response.data?.data?.user ?? null;
+    } catch (error) {
+      logger.warn(`Failed to hydrate customer profile from user-service for ${customerId}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  private async fetchCustomerProfileFromAuthService(customerId: string): Promise<RealtimeCustomerProfile | null> {
+    try {
+      const response = await axios.get(`${config.services.auth}/internal/users/${customerId}`, {
+        timeout: 3000,
+        headers: {
+          'x-internal-token': config.internalServiceToken,
+        },
+      });
+
+      return response.data?.data?.user ?? null;
+    } catch (error) {
+      logger.warn(`Failed to hydrate customer profile from auth-service for ${customerId}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  private async resolveRealtimeCustomerProfile(customerId: string) {
+    const userProfile = await this.fetchCustomerProfileFromUserService(customerId);
+    if (userProfile) {
+      return buildRealtimeCustomerProfile(userProfile);
+    }
+
+    return buildRealtimeCustomerProfile(await this.fetchCustomerProfileFromAuthService(customerId));
   }
 
   async close(): Promise<void> {

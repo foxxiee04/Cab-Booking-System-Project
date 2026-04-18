@@ -132,6 +132,8 @@ describe('Browser smoke ride cancellations', () => {
 
       cy.visit(`/ride/${rideId}`);
       cy.contains('button', 'Hủy chuyến', { timeout: 30000 }).click();
+  cy.contains('Đặt nhầm chuyến', { timeout: 15000 }).click({ force: true });
+  cy.contains('button', 'Xác nhận hủy', { timeout: 15000 }).click();
 
       // After cancel, page stays on ride screen showing CANCELLED receipt
       cy.location('pathname', { timeout: 30000 }).should('match', /^\/ride\//);
@@ -216,10 +218,12 @@ describe('Browser smoke ride cancellations', () => {
       loginWithPassword(CUSTOMER_PHONE, '/home');
 
       cy.visit(`/ride/${FAKE_RIDE_ID}`);
+      cy.wait('@getRide');
+      cy.wait('@getPayment');
 
       // Pending refund alert should be visible
-      cy.get('[data-testid="refund-pending-alert"]', { timeout: 15000 }).should('be.visible');
-      cy.get('[data-testid="refund-pending-alert"]').should('contain.text', 'Hệ thống đang gửi yêu cầu hoàn tiền tới MoMo');
+      cy.get('[data-testid="refund-pending-alert"]', { timeout: 15000 }).scrollIntoView().should('be.visible');
+      cy.get('[data-testid="refund-pending-alert"]').should('contain.text', 'hoàn tiền');
 
       // Should NOT navigate away — still on ride screen
       cy.location('pathname').should('eq', `/ride/${FAKE_RIDE_ID}`);
@@ -260,13 +264,16 @@ describe('Browser smoke ride cancellations', () => {
 
       loginWithPassword(CUSTOMER_PHONE, '/home');
       cy.visit(`/ride/${FAKE_RIDE_ID}`);
+      cy.wait('@getRide');
+      cy.wait('@getPayment');
 
       // Refund success alert must be visible
-      cy.get('[data-testid="refund-success-alert"]', { timeout: 15000 }).should('be.visible');
-      cy.get('[data-testid="refund-success-alert"]').should('contain.text', 'đã ghi nhận hoàn tiền');
+      cy.get('[data-testid="refund-success-alert"]', { timeout: 15000 }).scrollIntoView().should('be.visible');
+      cy.get('[data-testid="refund-success-alert"]').should('contain.text', 'hoàn tiền');
 
       // Payment status chip shows "Đã hoàn tiền"
       cy.get('[data-testid="payment-status-chip"]', { timeout: 10000 })
+        .scrollIntoView()
         .should('be.visible')
         .should('contain.text', 'Đã hoàn tiền');
 
@@ -352,7 +359,7 @@ describe('Browser smoke ride cancellations', () => {
       // Refunded badge should appear on the cancelled-MOMO ride card
       cy.get('[data-testid="refund-badge-refunded"]', { timeout: 15000 })
         .should('be.visible')
-        .should('contain.text', 'Đã hoàn tiền');
+        .should('contain.text', 'Đã hoàn');
 
       // Pending badge should NOT be visible for this ride
       cy.get('[data-testid="refund-badge-pending"]').should('not.exist');

@@ -8,6 +8,48 @@ import { driverApi } from '../api/driver.api';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
 
+const hasDriverIdentity = (driver?: {
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  avatar?: string;
+} | null) => Boolean(
+  driver
+  && (
+    `${driver.firstName || ''} ${driver.lastName || ''}`.trim()
+    || driver.phoneNumber
+    || driver.avatar
+  ),
+);
+
+const mergeRideSnapshot = (incomingRide: any) => {
+  if (!incomingRide?.id) {
+    return incomingRide;
+  }
+
+  const currentRide = store.getState().ride.currentRide;
+  if (!currentRide || currentRide.id !== incomingRide.id) {
+    return incomingRide;
+  }
+
+  return {
+    ...currentRide,
+    ...incomingRide,
+    pickup: incomingRide.pickup || currentRide.pickup,
+    dropoff: incomingRide.dropoff || currentRide.dropoff,
+    pickupLocation: incomingRide.pickupLocation || currentRide.pickupLocation || currentRide.pickup,
+    dropoffLocation: incomingRide.dropoffLocation || currentRide.dropoffLocation || currentRide.dropoff,
+    fare: incomingRide.fare ?? currentRide.fare,
+    estimatedFare: incomingRide.estimatedFare ?? currentRide.estimatedFare,
+    distance: incomingRide.distance ?? currentRide.distance,
+    duration: incomingRide.duration ?? currentRide.duration,
+    estimatedDistance: incomingRide.estimatedDistance ?? currentRide.estimatedDistance,
+    estimatedDuration: incomingRide.estimatedDuration ?? currentRide.estimatedDuration,
+    paymentMethod: incomingRide.paymentMethod || currentRide.paymentMethod,
+    vehicleType: incomingRide.vehicleType || currentRide.vehicleType,
+  };
+};
+
 const normalizeCancelledMessage = (message?: string) => {
   const raw = (message || '').trim();
   if (!raw) {
@@ -212,13 +254,17 @@ class SocketService {
     });
 
     // Ride events - matching backend event names
-    this.socket.on('RIDE_STATUS_UPDATE', (data: { rideId: string; status: string; message?: string; driverId?: string }) => {
+    this.socket.on('RIDE_STATUS_UPDATE', (data: { rideId: string; status: string; message?: string; driverId?: string; driver?: any }) => {
       store.dispatch(updateRideStatus({ rideId: data.rideId, status: data.status }));
 
       // When driver is assigned/accepted, fetch driver profile if not already in store
       if ((data.status === 'ASSIGNED' || data.status === 'ACCEPTED') && data.driverId) {
         const currentDriver = store.getState().ride.driver;
-        if (!currentDriver) {
+        if (data.driver) {
+          store.dispatch(setDriver(data.driver));
+        }
+
+        if (!hasDriverIdentity(data.driver) && (!hasDriverIdentity(currentDriver) || currentDriver?.id !== data.driverId)) {
           driverApi.getDriverPublicProfile(data.driverId).then((driver) => {
             if (driver) store.dispatch(setDriver(driver));
           }).catch(() => {});
@@ -250,13 +296,23 @@ class SocketService {
 
     // Legacy event names for backward compatibility
     this.socket.on('ride:assigned', (data: { ride: any; driver: any }) => {
-      store.dispatch(setCurrentRide(data.ride));
-      store.dispatch(setDriver(data.driver));
+      store.dispatch(setCurrentRide(mergeRideSnapshot(data.ride)));
+      if (data.driver) {
+        store.dispatch(setDriver(data.driver));
+      }
+      if (data.ride?.driverId && !hasDriverIdentity(data.driver)) {
+        driverApi.getDriverPublicProfile(data.ride.driverId).then((driver) => {
+          if (driver) store.dispatch(setDriver(driver));
+        }).catch(() => {});
+      }
+      const assignedDriverName = `${data.driver?.firstName || ''} ${data.driver?.lastName || ''}`.trim()
+        || data.driver?.phoneNumber
+        || 'tài xế';
       store.dispatch(
         showNotification({
           type: 'success',
           title: 'Đã có tài xế nhận chuyến',
-          message: `Tài xế ${data.driver.firstName} đã nhận chuyến và đang tới điểm đón của bạn.`,
+          message: `Tài xế ${assignedDriverName} đã nhận chuyến và đang tới điểm đón của bạn.`,
           rideId: data.ride?.id,
           persistMs: 7000,
         })
@@ -288,6 +344,18 @@ class SocketService {
           type: 'warning',
           title: 'Đang mở rộng tìm kiếm',
           message: 'Chưa có tài xế nhận chuyến, hệ thống đang tiếp tục tìm tài xế khác.',
+          rideId: data.rideId,
+        })
+      );
+    });
+
+    this.socket.on('RIDE_MATCHING_FAILED', (data: { rideId: string; message?: string }) => {
+      store.dispatch(updateRideStatus({ rideId: data.rideId, status: 'NO_DRIVER_AVAILABLE' }));
+      store.dispatch(
+        showNotification({
+          type: 'warning',
+          title: 'Chưa tìm thấy tài xế',
+          message: data.message || 'Hiện chưa có tài xế phù hợp cho chuyến đi này. Bạn có thể thử lại sau ít phút.',
           rideId: data.rideId,
         })
       );

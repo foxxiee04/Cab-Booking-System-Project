@@ -28,6 +28,10 @@ export const createRideRouter = (rideService: RideService): Router => {
   // Get ride by ID
   router.get('/:rideId', controller.getRideById);
 
+  // Ride chat history + send message
+  router.get('/:rideId/messages', controller.getRideMessages);
+  router.post('/:rideId/messages', controller.sendRideMessage);
+
   // Get customer's rides
   router.get('/customer/history', controller.getCustomerRides);
 

@@ -6,8 +6,8 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
-  Grid,
   Stack,
   TextField,
   Typography,
@@ -70,7 +70,7 @@ const Profile: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 3, minHeight: '100%', background: 'radial-gradient(circle at top left, rgba(59,130,246,0.08), transparent 34%), linear-gradient(180deg, #f8fafc 0%, #eef4fb 100%)' }}>
       <Typography variant="h4" fontWeight={900} gutterBottom>
         Hồ sơ quản trị viên
       </Typography>
@@ -89,73 +89,79 @@ const Profile: React.FC = () => {
         </Alert>
       )}
 
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Stack spacing={2} alignItems="center">
-                <Avatar src={avatar || undefined} sx={{ width: 88, height: 88 }}>
-                  {displayName[0]}
-                </Avatar>
-                <Typography variant="h6" fontWeight={800}>{displayName}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {user?.role || 'ADMIN'} • {user?.status || 'ACTIVE'}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Tạo lúc: {user?.createdAt ? formatDate(user.createdAt) : 'N/A'}
-                </Typography>
+      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: '360px minmax(0, 1fr)' } }}>
+        <Card elevation={0} sx={{ borderRadius: 5, overflow: 'hidden', border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.06)' }}>
+          <Box sx={{ p: 2.5, background: 'linear-gradient(135deg, #0f172a, #1d4ed8)', color: '#fff' }}>
+            <Stack spacing={2} alignItems="center">
+              <Avatar src={avatar || undefined} sx={{ width: 92, height: 92, border: '3px solid rgba(255,255,255,0.25)' }}>
+                {displayName[0]}
+              </Avatar>
+              <Box textAlign="center">
+                <Typography variant="h6" fontWeight={900}>{displayName}</Typography>
+                <Typography variant="body2" sx={{ opacity: 0.82 }}>{email || 'Chưa cập nhật email'}</Typography>
+              </Box>
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" justifyContent="center">
+                <Chip label={user?.role || 'ADMIN'} sx={{ bgcolor: 'rgba(255,255,255,0.18)', color: '#fff', fontWeight: 700 }} />
+                <Chip label={user?.status || 'ACTIVE'} sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: '#fff', fontWeight: 700 }} />
               </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
+            </Stack>
+          </Box>
 
-        <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Họ"
-                    value={firstName}
-                    onChange={(event) => setFirstName(event.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Tên"
-                    value={lastName}
-                    onChange={(event) => setLastName(event.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    disabled
-                    label="Số điện thoại"
-                    value={user?.phone || 'N/A'}
-                  />
-                </Grid>
-              </Grid>
-
-              <Stack direction="row" justifyContent="flex-end" sx={{ mt: 3 }}>
-                <Button variant="contained" onClick={handleSave} disabled={loading}>
-                  {loading ? <CircularProgress size={20} color="inherit" /> : 'Lưu thay đổi'}
-                </Button>
+          <CardContent>
+            <Stack spacing={1.25}>
+              <Stack direction="row" justifyContent="space-between">
+                <Typography variant="body2" color="text.secondary">Ngày tạo</Typography>
+                <Typography variant="body2" fontWeight={700}>{user?.createdAt ? formatDate(user.createdAt) : 'N/A'}</Typography>
               </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+              <Stack direction="row" justifyContent="space-between">
+                <Typography variant="body2" color="text.secondary">Cập nhật gần nhất</Typography>
+                <Typography variant="body2" fontWeight={700}>{user?.updatedAt ? formatDate(user.updatedAt) : 'N/A'}</Typography>
+              </Stack>
+              <Stack direction="row" justifyContent="space-between">
+                <Typography variant="body2" color="text.secondary">Số điện thoại</Typography>
+                <Typography variant="body2" fontWeight={700}>{user?.phone || 'N/A'}</Typography>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.06)' }}>
+          <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+            <Typography variant="h6" fontWeight={800}>Thông tin tài khoản</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, mb: 2.5 }}>
+              Chỉnh sửa thông tin hiển thị của tài khoản quản trị, dùng cho dashboard nội bộ và các thao tác vận hành hàng ngày.
+            </Typography>
+
+            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>
+              <TextField
+                fullWidth
+                label="Họ"
+                value={firstName}
+                onChange={(event) => setFirstName(event.target.value)}
+              />
+              <TextField
+                fullWidth
+                label="Tên"
+                value={lastName}
+                onChange={(event) => setLastName(event.target.value)}
+              />
+              <TextField
+                fullWidth
+                label="Email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+
+            </Box>
+
+            <Stack direction="row" justifyContent="center" sx={{ mt: 3 }}>
+              <Button variant="contained" onClick={handleSave} disabled={loading} sx={{ minWidth: 220, borderRadius: 3 }}>
+                {loading ? <CircularProgress size={20} color="inherit" /> : 'Lưu thay đổi'}
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Box>
     </Box>
   );
 };

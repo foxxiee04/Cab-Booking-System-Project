@@ -141,9 +141,13 @@ export class PricingService {
     const baseFare = config.pricing.baseFare[pricingKey as keyof typeof config.pricing.baseFare];
     const distanceFare = distance * config.pricing.perKmRate[pricingKey as keyof typeof config.pricing.perKmRate];
     const timeFare = durationMinutes * config.pricing.perMinuteRate[pricingKey as keyof typeof config.pricing.perMinuteRate];
+    const vehicleServiceFee = config.pricing.vehicleServiceFee[pricingKey as keyof typeof config.pricing.vehicleServiceFee];
+    const shortTripFee = distance > 0 && distance < config.pricing.shortTripThresholdKm
+      ? config.pricing.shortTripFee[pricingKey as keyof typeof config.pricing.shortTripFee]
+      : 0;
 
     // Calculate total
-    const subtotal = baseFare + distanceFare + timeFare;
+    const subtotal = baseFare + vehicleServiceFee + distanceFare + timeFare + shortTripFee;
     const totalFare = Math.max(
       Math.round(subtotal * surgeMultiplier),
       config.pricing.minimumFare
@@ -187,6 +191,8 @@ export class PricingService {
       },
       breakdown: {
         baseFare,
+        vehicleServiceFee,
+        shortTripFee,
         distanceFare: Math.round(distanceFare),
         timeFare: Math.round(timeFare),
         subtotal: Math.round(subtotal),

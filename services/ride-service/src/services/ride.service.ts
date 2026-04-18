@@ -1,5 +1,6 @@
 import { PrismaClient, Ride, RideStatus } from '../generated/prisma-client';
 import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
 import { config } from '../config';
 import { RideStateMachine } from '../domain/ride-state-machine';
 import { EventPublisher } from '../events/publisher';
@@ -22,11 +23,20 @@ interface CreateRideInput {
   };
   vehicleType?: 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
   paymentMethod?: 'CASH' | 'CARD' | 'WALLET' | 'MOMO' | 'VNPAY';
+  voucherCode?: string;
 }
 
 interface Location {
   lat: number;
   lng: number;
+}
+
+interface RideUserProfile {
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  phoneNumber?: string | null;
+  avatar?: string | null;
 }
 
 type VehicleTypeStr = 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
@@ -44,6 +54,125 @@ export class RideService {
 
   private shouldStartFindingDriverImmediately(paymentMethod?: string): boolean {
     return (paymentMethod || 'CASH') === 'CASH';
+  }
+
+  private async fetchUserProfileFromUserService(userId: string): Promise<RideUserProfile | null> {
+    try {
+      const response = await axios.get(`${config.services.user}/api/users/${userId}`, {
+        timeout: 3000,
+        headers: { 'x-internal-token': config.internalServiceToken },
+      });
+
+      return response.data?.data?.user ?? null;
+    } catch (error) {
+      logger.warn(`Failed to hydrate ride profile from user-service for ${userId}:`, error);
+      return null;
+    }
+  }
+
+  private async fetchUserProfileFromAuthService(userId: string): Promise<RideUserProfile | null> {
+    try {
+      const response = await axios.get(`${config.services.auth}/internal/users/${userId}`, {
+        timeout: 3000,
+        headers: { 'x-internal-token': config.internalServiceToken },
+      });
+
+      return response.data?.data?.user ?? null;
+    } catch (error) {
+      logger.warn(`Failed to hydrate ride profile from auth-service for ${userId}:`, error);
+      return null;
+    }
+  }
+
+  private async getUserProfile(userId?: string | null): Promise<RideUserProfile | null> {
+    if (!userId) {
+      return null;
+    }
+
+    const userProfile = await this.fetchUserProfileFromUserService(userId);
+    if (userProfile) {
+      return userProfile;
+    }
+
+    return this.fetchUserProfileFromAuthService(userId);
+  }
+
+  private mapCustomerProfile(profile: RideUserProfile | null) {
+    if (!profile) {
+      return undefined;
+    }
+
+    return {
+      firstName: profile.firstName || '',
+      lastName: profile.lastName || '',
+      phoneNumber: profile.phoneNumber || profile.phone || undefined,
+      avatar: profile.avatar || undefined,
+    };
+  }
+
+  private async enrichRideCustomer<T extends Ride | null>(ride: T): Promise<T> {
+    if (!ride?.customerId) {
+      return ride;
+    }
+
+    const customerProfile = await this.getUserProfile(ride.customerId);
+    if (!customerProfile) {
+      return ride;
+    }
+
+    return {
+      ...ride,
+      customer: this.mapCustomerProfile(customerProfile),
+    } as T;
+  }
+
+  private async enrichRideCustomers<T extends Ride>(rides: T[]): Promise<T[]> {
+    const profileCache = new Map<string, Promise<RideUserProfile | null>>();
+
+    return Promise.all(rides.map(async (ride) => {
+      if (!ride.customerId) {
+        return ride;
+      }
+
+      let profilePromise = profileCache.get(ride.customerId);
+      if (!profilePromise) {
+        profilePromise = this.getUserProfile(ride.customerId);
+        profileCache.set(ride.customerId, profilePromise);
+      }
+
+      const customerProfile = await profilePromise;
+      if (!customerProfile) {
+        return ride;
+      }
+
+      return {
+        ...ride,
+        customer: this.mapCustomerProfile(customerProfile),
+      } as T;
+    }));
+  }
+
+  private normalizeVoucherCode(voucherCode?: string | null): string | null {
+    const normalizedCode = voucherCode?.trim().toUpperCase();
+    return normalizedCode ? normalizedCode : null;
+  }
+
+  isChatEnabledStatus(status: RideStatus): boolean {
+    switch (status) {
+      case RideStatus.ASSIGNED:
+      case RideStatus.ACCEPTED:
+      case RideStatus.PICKING_UP:
+      case RideStatus.IN_PROGRESS:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  isChatHistoryAvailableStatus(status: RideStatus): boolean {
+    return this.isChatEnabledStatus(status)
+      || status === RideStatus.COMPLETED
+      || status === RideStatus.CANCELLED;
   }
 
   private getCompatibleDriverVehicleTypes(requestedVehicleType?: string): string[] | null {
@@ -111,6 +240,7 @@ export class RideService {
     }
 
     const rideId = uuidv4();
+    const normalizedVoucherCode = this.normalizeVoucherCode(input.voucherCode);
 
     // Get ETA and surge from Pricing service (with fallback)
     let surgeMultiplier = 1.0;
@@ -150,6 +280,7 @@ export class RideService {
         status: RideStatus.CREATED,
         vehicleType: input.vehicleType || 'CAR_4',
         paymentMethod: input.paymentMethod || 'CASH',
+        voucherCode: normalizedVoucherCode,
         pickupAddress: input.pickup.address,
         pickupLat: input.pickup.lat,
         pickupLng: input.pickup.lng,
@@ -205,12 +336,14 @@ export class RideService {
     dropoffLng: number;
     vehicleType: string;
     paymentMethod: string;
+    voucherCode?: string;
     fare?: number;
     distance?: number;
     duration?: number;
     surgeMultiplier?: number;
   }): Promise<Ride> {
     const rideId = uuidv4();
+    const normalizedVoucherCode = this.normalizeVoucherCode(data.voucherCode);
 
     const shouldStartFindingDriver = this.shouldStartFindingDriverImmediately(data.paymentMethod);
 
@@ -221,6 +354,7 @@ export class RideService {
         status: shouldStartFindingDriver ? RideStatus.FINDING_DRIVER : RideStatus.CREATED,
         vehicleType: (data.vehicleType as any) || 'CAR_4',
         paymentMethod: data.paymentMethod as any,
+        voucherCode: normalizedVoucherCode,
         pickupAddress: data.pickupAddress,
         pickupLat: data.pickupLat,
         pickupLng: data.pickupLng,
@@ -555,6 +689,7 @@ export class RideService {
       vehicleType: ride.vehicleType,
       paymentMethod: ride.paymentMethod,
       surgeMultiplier: ride.surgeMultiplier,
+      voucherCode: ride.voucherCode || undefined,
     }, rideId);
 
     return updatedRide;
@@ -607,9 +742,63 @@ export class RideService {
   }
 
   async getRideById(rideId: string): Promise<Ride | null> {
-    return this.prisma.ride.findUnique({
+    const ride = await this.prisma.ride.findUnique({
       where: { id: rideId },
       include: { transitions: { orderBy: { occurredAt: 'asc' } } },
+    });
+
+    return this.enrichRideCustomer(ride as Ride | null);
+  }
+
+  async getRideMessages(rideId: string, limit = 100): Promise<any[]> {
+    const normalizedLimit = Math.min(Math.max(limit, 1), 200);
+
+    const messages = await this.prisma.rideChatMessage.findMany({
+      where: { rideId },
+      orderBy: { createdAt: 'desc' },
+      take: normalizedLimit,
+    });
+
+    return [...messages].reverse();
+  }
+
+  async createRideMessage(
+    rideId: string,
+    senderId: string,
+    senderRole: string,
+    rawMessage: string,
+    type = 'TEXT',
+  ): Promise<any> {
+    const message = rawMessage.trim();
+    if (!message) {
+      throw new Error('Message cannot be empty');
+    }
+
+    if (message.length > 500) {
+      throw new Error('Message is too long');
+    }
+
+    const ride = await this.prisma.ride.findUnique({
+      where: { id: rideId },
+      select: { status: true },
+    });
+
+    if (!ride) {
+      throw new Error('Ride not found');
+    }
+
+    if (!this.isChatEnabledStatus(ride.status)) {
+      throw new Error('Chat is only available while the trip is active');
+    }
+
+    return this.prisma.rideChatMessage.create({
+      data: {
+        rideId,
+        senderId,
+        senderRole,
+        type: type || 'TEXT',
+        message,
+      },
     });
   }
 
@@ -624,7 +813,7 @@ export class RideService {
       }),
       this.prisma.ride.count({ where: { customerId } }),
     ]);
-    return { rides, total };
+    return { rides: await this.enrichRideCustomers(rides), total };
   }
 
   async getDriverRides(
@@ -653,7 +842,7 @@ export class RideService {
       }),
       this.prisma.ride.count({ where }),
     ]);
-    return { rides, total };
+    return { rides: await this.enrichRideCustomers(rides), total };
   }
 
   async getAllRides(page = 1, limit = 20, status?: RideStatus): Promise<{ rides: Ride[]; total: number }> {
@@ -705,7 +894,7 @@ export class RideService {
   }
 
   async getActiveRideForCustomer(customerId: string): Promise<Ride | null> {
-    return this.prisma.ride.findFirst({
+    const ride = await this.prisma.ride.findFirst({
       where: {
         customerId,
         status: {
@@ -721,16 +910,20 @@ export class RideService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    return this.enrichRideCustomer(ride);
   }
 
   async getActiveRideForDriver(driverId: string): Promise<Ride | null> {
-    return this.prisma.ride.findFirst({
+    const ride = await this.prisma.ride.findFirst({
       where: {
         driverId,
-        status: { in: [RideStatus.ASSIGNED, RideStatus.PICKING_UP, RideStatus.IN_PROGRESS] },
+        status: { in: [RideStatus.ASSIGNED, RideStatus.ACCEPTED, RideStatus.PICKING_UP, RideStatus.IN_PROGRESS] },
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    return this.enrichRideCustomer(ride);
   }
 
   async getAvailableRides(driverLat: number, driverLng: number, radiusKm: number, vehicleType?: string): Promise<any[]> {
@@ -759,7 +952,16 @@ export class RideService {
         distanceFromDriver: parseFloat(distanceKm.toFixed(2)),
       }));
 
-    return availableRides;
+    return this.enrichRideCustomers(availableRides as Ride[]);
+  }
+
+  async countCompletedRidesForDriver(driverId: string): Promise<number> {
+    return this.prisma.ride.count({
+      where: {
+        driverId,
+        status: RideStatus.COMPLETED,
+      },
+    });
   }
 
   private getCompatibleRideTypesForDriver(vehicleType?: string): VehicleTypeStr[] | undefined {

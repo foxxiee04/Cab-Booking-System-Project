@@ -8,7 +8,7 @@
  *  - On refund the voucher is NOT restored (configurable via RESTORE_ON_REFUND).
  */
 
-import { PrismaClient, DiscountType } from '../generated/prisma-client';
+import { PaymentStatus, PrismaClient, DiscountType, VoucherAudience } from '../generated/prisma-client';
 import { logger } from '../utils/logger';
 
 const RESTORE_ON_REFUND = false; // set true to allow reuse after refund
@@ -23,6 +23,32 @@ export interface ApplyVoucherResult {
 
 export class VoucherService {
   constructor(private readonly prisma: PrismaClient) {}
+
+  private async resolveUserAudience(userId: string): Promise<VoucherAudience> {
+    const completedRideCount = await this.prisma.payment.count({
+      where: {
+        customerId: userId,
+        status: PaymentStatus.COMPLETED,
+      },
+    });
+
+    return completedRideCount === 0 ? VoucherAudience.NEW_CUSTOMERS : VoucherAudience.RETURNING_CUSTOMERS;
+  }
+
+  private isAudienceEligible(voucherAudience: VoucherAudience, userAudience: VoucherAudience) {
+    return voucherAudience === VoucherAudience.ALL_CUSTOMERS || voucherAudience === userAudience;
+  }
+
+  private async assertAudienceEligibility(userId: string, audienceType: VoucherAudience) {
+    if (audienceType === VoucherAudience.ALL_CUSTOMERS) {
+      return;
+    }
+
+    const userAudience = await this.resolveUserAudience(userId);
+    if (!this.isAudienceEligible(audienceType, userAudience)) {
+      throw Object.assign(new Error('Mã giảm giá này không áp dụng cho nhóm tài khoản hiện tại của bạn'), { status: 403 });
+    }
+  }
 
   // ─── Collection ──────────────────────────────────────────────────────────
 
@@ -41,6 +67,8 @@ export class VoucherService {
     if (now < voucher.startTime || now > voucher.endTime) {
       throw Object.assign(new Error('Mã giảm giá đã hết hạn hoặc chưa có hiệu lực'), { status: 400 });
     }
+
+    await this.assertAudienceEligibility(userId, voucher.audienceType);
 
     // Check total usage cap
     if (voucher.usageLimit !== null) {
@@ -94,6 +122,7 @@ export class VoucherService {
         voucherId: v.id,
         code: v.code,
         description: v.description,
+        audienceType: v.audienceType,
         discountType: v.discountType,
         discountValue: v.discountValue,
         maxDiscount: v.maxDiscount,
@@ -124,6 +153,8 @@ export class VoucherService {
     if (now < voucher.startTime || now > voucher.endTime) {
       throw Object.assign(new Error('Mã giảm giá đã hết hạn'), { status: 400 });
     }
+
+    await this.assertAudienceEligibility(userId, voucher.audienceType);
 
     if (fare < voucher.minFare) {
       throw Object.assign(
@@ -210,16 +241,26 @@ export class VoucherService {
       orderBy: { createdAt: 'desc' },
     });
 
+    const userAudience = userId ? await this.resolveUserAudience(userId) : null;
+    const eligibleVouchers = vouchers.filter((voucher) => {
+      if (!userAudience) {
+        return voucher.audienceType === VoucherAudience.ALL_CUSTOMERS;
+      }
+
+      return this.isAudienceEligible(voucher.audienceType, userAudience);
+    });
+
     let collectedIds = new Set<string>();
     if (userId) {
       const uvs = await this.prisma.userVoucher.findMany({ where: { userId }, select: { voucherId: true } });
       collectedIds = new Set(uvs.map((uv) => uv.voucherId));
     }
 
-    return vouchers.map((v) => ({
+    return eligibleVouchers.map((v) => ({
       voucherId: v.id,
       code: v.code,
       description: v.description,
+      audienceType: v.audienceType,
       discountType: v.discountType,
       discountValue: v.discountValue,
       maxDiscount: v.maxDiscount,
@@ -237,6 +278,7 @@ export class VoucherService {
   async createVoucher(data: {
     code: string;
     description?: string;
+    audienceType?: VoucherAudience;
     discountType: DiscountType;
     discountValue: number;
     maxDiscount?: number;
@@ -257,15 +299,62 @@ export class VoucherService {
       data: {
         code,
         description: data.description,
+        audienceType: data.audienceType ?? VoucherAudience.ALL_CUSTOMERS,
         discountType: data.discountType,
         discountValue: data.discountValue,
-        maxDiscount: data.maxDiscount ?? null,
+        maxDiscount: data.discountType === DiscountType.PERCENT ? data.maxDiscount ?? null : null,
         minFare: data.minFare ?? 0,
         startTime: data.startTime,
         endTime: data.endTime,
         usageLimit: data.usageLimit ?? null,
         perUserLimit: data.perUserLimit ?? 1,
         isActive: data.isActive ?? true,
+      },
+    });
+  }
+
+  async updateVoucher(id: string, data: {
+    code: string;
+    description?: string;
+    audienceType?: VoucherAudience;
+    discountType: DiscountType;
+    discountValue: number;
+    maxDiscount?: number;
+    minFare?: number;
+    startTime: Date;
+    endTime: Date;
+    usageLimit?: number;
+    perUserLimit?: number;
+    isActive?: boolean;
+  }) {
+    const existing = await this.prisma.voucher.findUnique({ where: { id } });
+    if (!existing) {
+      throw Object.assign(new Error('Không tìm thấy voucher cần cập nhật'), { status: 404 });
+    }
+
+    const code = data.code.trim().toUpperCase();
+    if (code !== existing.code) {
+      const duplicate = await this.prisma.voucher.findUnique({ where: { code } });
+      if (duplicate) {
+        throw Object.assign(new Error(`Mã ${code} đã tồn tại`), { status: 409 });
+      }
+    }
+
+    return this.prisma.voucher.update({
+      where: { id },
+      data: {
+        code,
+        description: data.description ?? null,
+        audienceType: data.audienceType ?? VoucherAudience.ALL_CUSTOMERS,
+        discountType: data.discountType,
+        discountValue: data.discountValue,
+        maxDiscount: data.discountType === DiscountType.PERCENT ? data.maxDiscount ?? null : null,
+        minFare: data.minFare ?? 0,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        usageLimit: data.usageLimit ?? null,
+        perUserLimit: data.perUserLimit ?? 1,
+        isActive: data.isActive ?? existing.isActive,
       },
     });
   }

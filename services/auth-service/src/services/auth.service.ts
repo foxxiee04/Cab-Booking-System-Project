@@ -544,6 +544,56 @@ export class AuthService {
     });
   }
 
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    ipAddress?: string,
+  ): Promise<void> {
+    const ip = ipAddress || 'unknown';
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new Error('Tài khoản không tồn tại.');
+    }
+    if (user.status === UserStatus.SUSPENDED) {
+      throw new Error('Tài khoản đã bị khóa. Vui lòng liên hệ hỗ trợ.');
+    }
+    if (!user.passwordHash) {
+      throw new Error('Tài khoản này chưa có mật khẩu khả dụng.');
+    }
+
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isCurrentPasswordValid) {
+      throw new Error('Mật khẩu hiện tại không đúng.');
+    }
+
+    const isSamePassword = await bcrypt.compare(newPassword, user.passwordHash);
+    if (isSamePassword) {
+      throw new Error('Mật khẩu mới phải khác mật khẩu hiện tại.');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash },
+    });
+
+    await prisma.refreshToken.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    await auditLog({
+      action: 'PROFILE_UPDATED',
+      userId: user.id,
+      phone: user.phone,
+      ipAddress: ip,
+      success: true,
+      metadata: { action: 'password_changed' },
+    });
+  }
+
   async verifyAccessToken(token: string): Promise<{ userId: string; role: string }> {
     try {
       const decoded = jwt.verify(token, config.jwt.secret) as { sub: string; role: string };

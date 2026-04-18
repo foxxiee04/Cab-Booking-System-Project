@@ -5,20 +5,29 @@ const mockPrisma: any = {
     findUnique: jest.fn(),
     findMany: jest.fn().mockResolvedValue([]),
     create: jest.fn(),
+    upsert: jest.fn(),
   },
   payment: {
     findUnique: jest.fn(),
     findFirst: jest.fn(),
     findMany: jest.fn(),
     create: jest.fn(),
+    upsert: jest.fn(),
     update: jest.fn(),
     count: jest.fn(),
   },
   driverEarnings: {
     create: jest.fn().mockResolvedValue({ id: 'earnings-1' }),
+    upsert: jest.fn().mockResolvedValue({ id: 'earnings-1' }),
+    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     findMany: jest.fn(),
+    findUnique: jest.fn(),
     count: jest.fn(),
     aggregate: jest.fn(),
+  },
+  walletTransaction: {
+    findMany: jest.fn().mockResolvedValue([]),
+    aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 0 } }),
   },
   outboxEvent: {
     create: jest.fn(),
@@ -50,12 +59,17 @@ jest.mock('../generated/prisma-client', () => ({
     VISA: 'VISA',
     ZALOPAY: 'ZALOPAY',
   },
+  WalletTransactionType: {
+    BONUS: 'BONUS',
+    COMMISSION: 'COMMISSION',
+  },
 }));
 
 jest.mock('../events/publisher');
 
 import { PaymentService } from '../services/payment.service';
 import { EventPublisher } from '../events/publisher';
+import { commissionService } from '../services/commission.service';
 
 describe('PaymentService - Simple Test Suite', () => {
   let paymentService: PaymentService;
@@ -70,16 +84,23 @@ describe('PaymentService - Simple Test Suite', () => {
     mockPrisma.fare.findMany.mockReset();
     mockPrisma.fare.findMany.mockResolvedValue([]);
     mockPrisma.fare.create.mockReset();
+    mockPrisma.fare.upsert.mockReset();
     mockPrisma.payment.findUnique.mockReset();
     mockPrisma.payment.findFirst.mockReset();
     mockPrisma.payment.findMany.mockReset();
     mockPrisma.payment.create.mockReset();
+    mockPrisma.payment.upsert.mockReset();
     mockPrisma.payment.update.mockReset();
     mockPrisma.payment.count.mockReset();
     mockPrisma.driverEarnings.create.mockReset();
+    mockPrisma.driverEarnings.upsert.mockReset();
+    mockPrisma.driverEarnings.updateMany.mockReset();
+    mockPrisma.driverEarnings.findUnique.mockReset();
     mockPrisma.driverEarnings.findMany?.mockReset?.();
     mockPrisma.driverEarnings.count?.mockReset?.();
     mockPrisma.driverEarnings.aggregate?.mockReset?.();
+    mockPrisma.walletTransaction.findMany?.mockReset?.();
+    mockPrisma.walletTransaction.aggregate?.mockReset?.();
     mockPrisma.outboxEvent.create.mockReset();
     mockPrisma.$transaction.mockImplementation((callback: any) => callback(mockPrisma));
 
@@ -90,6 +111,18 @@ describe('PaymentService - Simple Test Suite', () => {
     } as any;
 
     paymentService = new PaymentService(mockPrisma as any, mockEventPublisher);
+    (paymentService as any).walletService = {
+      debitCommission: jest.fn().mockResolvedValue(-8_789),
+      creditEarning: jest.fn().mockResolvedValue(42_000),
+    };
+    (paymentService as any).incentiveService = {
+      evaluateAfterRide: jest.fn().mockResolvedValue({ totalBonus: 0, bonuses: [] }),
+      getDailyStats: jest.fn(),
+    };
+    (paymentService as any).voucherService = {
+      applyVoucher: jest.fn(),
+      redeemVoucher: jest.fn(),
+    };
   });
 
   describe('PROCESS RIDE COMPLETED', () => {
@@ -104,18 +137,19 @@ describe('PaymentService - Simple Test Suite', () => {
         vehicleType: 'ECONOMY',
       };
 
-      mockPrisma.fare.findFirst.mockResolvedValue(null);
-      mockPrisma.fare.create.mockResolvedValue({
+      mockPrisma.fare.findUnique.mockResolvedValue(null);
+      mockPrisma.payment.findUnique.mockResolvedValue(null);
+      mockPrisma.driverEarnings.findUnique.mockResolvedValue(null);
+      mockPrisma.fare.upsert.mockResolvedValue({
         id: 'fare-123',
         rideId: 'ride-123',
         totalFare: 50000,
       });
-      mockPrisma.payment.create.mockResolvedValue({
-        id: 'payment-123',
+      mockPrisma.driverEarnings.upsert.mockResolvedValue({
+        id: 'earnings-123',
         rideId: 'ride-123',
-        status: 'PENDING',
       });
-      mockPrisma.payment.findUnique.mockResolvedValue({
+      mockPrisma.payment.upsert.mockResolvedValue({
         id: 'payment-123',
         rideId: 'ride-123',
         status: 'PENDING',
@@ -124,15 +158,16 @@ describe('PaymentService - Simple Test Suite', () => {
         driverId: 'driver-456',
       });
       mockPrisma.outboxEvent.create.mockResolvedValue({});
+      (paymentService as any).processPaymentRecord = jest.fn().mockResolvedValue(undefined);
 
       await paymentService.processRideCompleted(payload);
 
-      expect(mockPrisma.fare.create).toHaveBeenCalled();
-      expect(mockPrisma.payment.create).toHaveBeenCalled();
-      expect(mockEventPublisher.publish).toHaveBeenCalled();
+      expect(mockPrisma.fare.upsert).toHaveBeenCalled();
+      expect(mockPrisma.payment.upsert).toHaveBeenCalled();
+      expect((paymentService as any).processPaymentRecord).toHaveBeenCalled();
     });
 
-    it('should skip if fare already processed', async () => {
+    it('should skip when the ride was already processed end-to-end', async () => {
       const payload = {
         rideId: 'ride-123',
         customerId: 'customer-123',
@@ -141,14 +176,104 @@ describe('PaymentService - Simple Test Suite', () => {
         duration: 600,
       };
 
-      mockPrisma.fare.findFirst.mockResolvedValue({
+      mockPrisma.fare.findUnique.mockResolvedValue({
         id: 'existing-fare',
+        rideId: 'ride-123',
+      });
+      mockPrisma.payment.findUnique.mockResolvedValue({
+        id: 'existing-payment',
+        rideId: 'ride-123',
+      });
+      mockPrisma.driverEarnings.findUnique.mockResolvedValue({
+        id: 'existing-earnings',
         rideId: 'ride-123',
       });
 
       await paymentService.processRideCompleted(payload);
 
-      expect(mockPrisma.fare.create).not.toHaveBeenCalled();
+      expect(mockPrisma.fare.upsert).not.toHaveBeenCalled();
+      expect(mockPrisma.payment.upsert).not.toHaveBeenCalled();
+    });
+
+    it('should debit cash debt and mark it settled after wallet deduction', async () => {
+      jest.spyOn(paymentService as any, 'calculateFare').mockReturnValue({
+        baseFare: 30_000,
+        distanceFare: 12_000,
+        timeFare: 8_000,
+        totalFare: 50_000,
+      });
+      jest.spyOn(commissionService, 'calculateCommission').mockReturnValue({
+        grossFare: 50_000,
+        commissionRate: 0.2,
+        platformFee: 10_000,
+        bonus: 2_000,
+        penalty: 789,
+        netEarnings: 41_211,
+        driverCollected: true,
+        cashDebt: 8_789,
+        breakdown: {
+          bonuses: { highRating: 2_000 },
+          penalties: { lowAcceptance: 789 },
+        },
+      } as any);
+
+      mockPrisma.fare.findUnique.mockResolvedValue(null);
+      mockPrisma.payment.findUnique.mockResolvedValue(null);
+      mockPrisma.driverEarnings.findUnique.mockResolvedValue(null);
+      mockPrisma.fare.upsert.mockResolvedValue({ rideId: 'ride-cash-1' });
+      mockPrisma.driverEarnings.upsert.mockResolvedValue({ rideId: 'ride-cash-1' });
+      mockPrisma.payment.upsert.mockResolvedValue({
+        id: 'payment-cash-1',
+        rideId: 'ride-cash-1',
+        status: 'PENDING',
+        amount: 50_000,
+        customerId: 'customer-1',
+        driverId: 'driver-1',
+      });
+      mockPrisma.outboxEvent.create.mockResolvedValue({});
+      (paymentService as any).processPaymentRecord = jest.fn().mockResolvedValue(undefined);
+
+      await paymentService.processRideCompleted({
+        rideId: 'ride-cash-1',
+        customerId: 'customer-1',
+        driverId: 'driver-1',
+        distance: 5,
+        duration: 600,
+        paymentMethod: 'CASH',
+      });
+
+      expect((paymentService as any).walletService.debitCommission).toHaveBeenCalledWith('driver-1', 8_789, 'ride-cash-1');
+      expect(mockPrisma.driverEarnings.updateMany).toHaveBeenCalledWith({
+        where: { rideId: 'ride-cash-1', driverId: 'driver-1', driverCollected: true },
+        data: { isPaid: true },
+      });
+    });
+  });
+
+  describe('GET DRIVER EARNINGS', () => {
+    it('should reconcile settled cash debt rows before aggregating summary', async () => {
+      mockPrisma.walletTransaction.findMany.mockResolvedValue([{ rideId: 'ride-legacy-1' }, { rideId: null }]);
+      mockPrisma.driverEarnings.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.driverEarnings.findMany.mockResolvedValue([]);
+      mockPrisma.driverEarnings.count.mockResolvedValue(0);
+      mockPrisma.driverEarnings.aggregate
+        .mockResolvedValueOnce({ _sum: { grossFare: 0, platformFee: 0, bonus: 0, penalty: 0, netEarnings: 0, cashDebt: 0 } })
+        .mockResolvedValueOnce({ _sum: { cashDebt: 0 } });
+      mockPrisma.walletTransaction.aggregate.mockResolvedValue({ _sum: { amount: 15_000 } });
+
+      const result = await paymentService.getDriverEarnings('driver-1');
+
+      expect(mockPrisma.driverEarnings.updateMany).toHaveBeenCalledWith({
+        where: {
+          driverId: 'driver-1',
+          driverCollected: true,
+          isPaid: false,
+          rideId: { in: ['ride-legacy-1'] },
+        },
+        data: { isPaid: true },
+      });
+      expect(result.summary.totalBonus).toBe(15_000);
+      expect(result.summary.unpaidCashDebt).toBe(0);
     });
   });
 

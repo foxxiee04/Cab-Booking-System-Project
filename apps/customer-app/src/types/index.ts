@@ -17,6 +17,17 @@ export interface AuthTokens {
   refreshToken: string;
 }
 
+export interface Notification {
+  id: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+  title?: string;
+  message: string;
+  rideId?: string;
+  persistMs?: number;
+  createdAt: string;
+  read: boolean;
+}
+
 export interface Location {
   lat: number;
   lng: number;
@@ -46,12 +57,18 @@ export interface Ride {
   status: RideStatus;
   pickup: Location;
   dropoff: Location;
+  pickupLocation?: Location;
+  dropoffLocation?: Location;
   vehicleType: VehicleType;
   paymentMethod: PaymentMethod;
   distance: number | null;
   duration: number | null;
   fare: number | null;
+  estimatedFare?: number | null;
+  estimatedDistance?: number | null;
+  estimatedDuration?: number | null;
   surgeMultiplier: number;
+  voucherCode?: string | null;
   requestedAt: string;
   assignedAt: string | null;
   acceptedAt: string | null;
@@ -60,6 +77,7 @@ export interface Ride {
   cancelledAt: string | null;
   cancelReason: string | null;
   updatedAt?: string | null;
+  driver?: Driver | null;
 }
 
 export interface Driver {
@@ -97,10 +115,24 @@ export interface Payment {
   id: string;
   rideId: string;
   amount: number;
+  discountAmount?: number | null;
+  finalAmount?: number | null;
+  driverEarnings?: {
+    grossFare: number;
+    commissionRate: number;
+    platformFee: number;
+    bonus: number;
+    penalty: number;
+    netEarnings: number;
+    paymentMethod: string;
+    driverCollected: boolean;
+    cashDebt: number;
+  } | null;
   method: PaymentMethod;
   provider?: 'MOCK' | 'STRIPE' | 'MOMO' | 'VNPAY' | 'ZALOPAY';
   status: 'PENDING' | 'PROCESSING' | 'REQUIRES_ACTION' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
   transactionId?: string;
+  voucherCode?: string | null;
   refundedAt?: string;
   updatedAt?: string;
   refund?: {

@@ -1,7 +1,125 @@
 import { Request, Response, NextFunction } from 'express';
 import { VoucherService } from '../services/voucher.service';
 import { AuthenticatedRequest } from '../middleware/auth';
-import { DiscountType } from '../generated/prisma-client';
+import { DiscountType, VoucherAudience } from '../generated/prisma-client';
+
+const parseOptionalNumber = (value: unknown) => {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  return Number(value);
+};
+
+function parseAdminVoucherPayload(body: any) {
+  const {
+    code,
+    description,
+    discountType,
+    discountValue,
+    audienceType,
+    maxDiscount,
+    minFare,
+    startTime,
+    endTime,
+    usageLimit,
+    perUserLimit,
+    isActive,
+  } = body ?? {};
+
+  if (!code || !discountType || discountValue === undefined || !startTime || !endTime) {
+    throw Object.assign(new Error('code, discountType, discountValue, startTime, endTime là bắt buộc'), {
+      status: 400,
+      code: 'VALIDATION_ERROR',
+    });
+  }
+
+  if (!Object.values(DiscountType).includes(discountType)) {
+    throw Object.assign(new Error('discountType phải là PERCENT hoặc FIXED'), {
+      status: 400,
+      code: 'VALIDATION_ERROR',
+    });
+  }
+
+  if (audienceType !== undefined && !Object.values(VoucherAudience).includes(audienceType)) {
+    throw Object.assign(new Error(`audienceType phải là một trong: ${Object.values(VoucherAudience).join(', ')}`), {
+      status: 400,
+      code: 'VALIDATION_ERROR',
+    });
+  }
+
+  const parsedStartTime = new Date(startTime);
+  const parsedEndTime = new Date(endTime);
+  if (Number.isNaN(parsedStartTime.getTime()) || Number.isNaN(parsedEndTime.getTime())) {
+    throw Object.assign(new Error('startTime hoặc endTime không hợp lệ'), {
+      status: 400,
+      code: 'VALIDATION_ERROR',
+    });
+  }
+
+  if (parsedEndTime <= parsedStartTime) {
+    throw Object.assign(new Error('Thời gian kết thúc phải sau thời gian bắt đầu'), {
+      status: 400,
+      code: 'VALIDATION_ERROR',
+    });
+  }
+
+  const parsedDiscountValue = Number(discountValue);
+  const parsedMaxDiscount = parseOptionalNumber(maxDiscount);
+  const parsedMinFare = parseOptionalNumber(minFare);
+  const parsedUsageLimit = parseOptionalNumber(usageLimit);
+  const parsedPerUserLimit = parseOptionalNumber(perUserLimit);
+
+  if (!Number.isFinite(parsedDiscountValue) || parsedDiscountValue <= 0) {
+    throw Object.assign(new Error('discountValue phải là số dương'), {
+      status: 400,
+      code: 'VALIDATION_ERROR',
+    });
+  }
+
+  if (parsedMaxDiscount !== undefined && (!Number.isFinite(parsedMaxDiscount) || parsedMaxDiscount <= 0)) {
+    throw Object.assign(new Error('maxDiscount phải là số dương'), {
+      status: 400,
+      code: 'VALIDATION_ERROR',
+    });
+  }
+
+  if (parsedMinFare !== undefined && (!Number.isFinite(parsedMinFare) || parsedMinFare < 0)) {
+    throw Object.assign(new Error('minFare phải là số không âm'), {
+      status: 400,
+      code: 'VALIDATION_ERROR',
+    });
+  }
+
+  if (parsedUsageLimit !== undefined && (!Number.isInteger(parsedUsageLimit) || parsedUsageLimit <= 0)) {
+    throw Object.assign(new Error('usageLimit phải là số nguyên dương'), {
+      status: 400,
+      code: 'VALIDATION_ERROR',
+    });
+  }
+
+  if (parsedPerUserLimit !== undefined && (!Number.isInteger(parsedPerUserLimit) || parsedPerUserLimit <= 0)) {
+    throw Object.assign(new Error('perUserLimit phải là số nguyên dương'), {
+      status: 400,
+      code: 'VALIDATION_ERROR',
+    });
+  }
+
+  return {
+    code: String(code).trim(),
+    description: typeof description === 'string' ? description.trim() || undefined : undefined,
+    audienceType: audienceType as VoucherAudience | undefined,
+    discountType: discountType as DiscountType,
+    discountValue: parsedDiscountValue,
+    maxDiscount: parsedMaxDiscount,
+    minFare: parsedMinFare,
+    startTime: parsedStartTime,
+    endTime: parsedEndTime,
+    usageLimit: parsedUsageLimit,
+    perUserLimit: parsedPerUserLimit,
+    isActive: typeof isActive === 'boolean' ? isActive : undefined,
+  };
+}
 
 export class VoucherController {
   constructor(private readonly voucherService: VoucherService) {}
@@ -121,55 +239,36 @@ export class VoucherController {
    */
   adminCreate = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const {
-        code,
-        description,
-        discountType,
-        discountValue,
-        maxDiscount,
-        minFare,
-        startTime,
-        endTime,
-        usageLimit,
-        perUserLimit,
-        isActive,
-      } = req.body ?? {};
-
-      if (!code || !discountType || discountValue === undefined || !startTime || !endTime) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'code, discountType, discountValue, startTime, endTime là bắt buộc',
-          },
-        });
-      }
-
-      if (!Object.values(DiscountType).includes(discountType)) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: `discountType phải là PERCENT hoặc FIXED` },
-        });
-      }
-
-      const voucher = await this.voucherService.createVoucher({
-        code,
-        description,
-        discountType: discountType as DiscountType,
-        discountValue: Number(discountValue),
-        maxDiscount: maxDiscount !== undefined ? Number(maxDiscount) : undefined,
-        minFare: minFare !== undefined ? Number(minFare) : undefined,
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
-        usageLimit: usageLimit !== undefined ? Number(usageLimit) : undefined,
-        perUserLimit: perUserLimit !== undefined ? Number(perUserLimit) : undefined,
-        isActive,
-      });
+      const voucher = await this.voucherService.createVoucher(parseAdminVoucherPayload(req.body));
 
       res.status(201).json({ success: true, data: voucher });
     } catch (err: any) {
       if (err.status) {
-        return res.status(err.status).json({ success: false, error: { message: err.message } });
+        return res.status(err.status).json({
+          success: false,
+          error: { code: err.code || 'VALIDATION_ERROR', message: err.message },
+        });
+      }
+      next(err);
+    }
+  };
+
+  /**
+   * PATCH /api/voucher/admin/:id
+   * Body: Voucher update fields.
+   * Updates an existing voucher.
+   */
+  adminUpdate = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const voucher = await this.voucherService.updateVoucher(id, parseAdminVoucherPayload(req.body));
+      res.json({ success: true, data: voucher });
+    } catch (err: any) {
+      if (err.status) {
+        return res.status(err.status).json({
+          success: false,
+          error: { code: err.code || 'VALIDATION_ERROR', message: err.message },
+        });
       }
       next(err);
     }

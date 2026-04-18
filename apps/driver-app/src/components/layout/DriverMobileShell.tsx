@@ -3,12 +3,18 @@ import {
   Alert,
   AppBar,
   Avatar,
+  Badge,
   BottomNavigation,
   BottomNavigationAction,
   Box,
+  Button,
   Chip,
   Divider,
+  Drawer,
   IconButton,
+  List,
+  ListItemButton,
+  ListItemText,
   Menu,
   MenuItem,
   Paper,
@@ -25,6 +31,7 @@ import {
   DriveEtaRounded,
   HistoryRounded,
   LogoutRounded,
+  NotificationsRounded,
   PersonRounded,
   TranslateRounded,
 } from '@mui/icons-material';
@@ -32,12 +39,18 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { logout } from '../../store/auth.slice';
-import { hideNotification } from '../../store/ui.slice';
+import {
+  hideNotification,
+  markAllNotificationsRead,
+  showNotification,
+} from '../../store/ui.slice';
 import { driverApi } from '../../api/driver.api';
 import { rideApi } from '../../api/ride.api';
+import { walletApi } from '../../api/wallet.api';
 import { setProfile } from '../../store/driver.slice';
 import { clearPendingRide, setCurrentRide } from '../../store/ride.slice';
 import { driverSocketService } from '../../socket/driver.socket';
+import { WalletBalance } from '../../api/wallet.api';
 import { formatCurrency } from '../../utils/format.utils';
 import RideRequestModal from '../ride-request/RideRequestModal';
 import { Ride } from '../../types';
@@ -53,10 +66,14 @@ const tabs = [
   { value: '/history', icon: <HistoryRounded />, labelKey: 'history.title', fallback: 'Chuyến đi' },
   { value: '/earnings', icon: <AttachMoneyRounded />, labelKey: 'earnings.title', fallback: 'Thu nhập' },
   { value: '/wallet', icon: <AccountBalanceWalletRounded />, labelKey: 'wallet.title', fallback: 'Ví tiền' },
-  { value: '/profile', icon: <PersonRounded />, labelKey: 'profile.title', fallback: 'Tài khoản' },
+  { value: '/account', icon: <PersonRounded />, labelKey: 'profile.title', fallback: 'Tài khoản' },
 ];
 
 const resolveTab = (pathname: string) => {
+  if (pathname === '/profile' || pathname.startsWith('/profile/')) {
+    return '/account';
+  }
+
   const match = tabs.find((tab) => pathname === tab.value || pathname.startsWith(`${tab.value}/`));
   return match?.value || '/dashboard';
 };
@@ -69,6 +86,20 @@ const NOTIFICATION_STYLES = {
 };
 const NOTIFICATION_TITLES = { success: 'Thành công', error: 'Có lỗi xảy ra', warning: 'Lưu ý', info: 'Thông báo' };
 const NotifTransition = (props: SlideProps) => <Slide {...props} direction="down" />;
+
+const formatNotificationTimestamp = (createdAt: string) => {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) {
+    return 'Vừa xong';
+  }
+
+  return date.toLocaleString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+  });
+};
 
 const getApprovalStatusTone = (status?: string) => {
   switch (status) {
@@ -92,21 +123,25 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
   const { user, accessToken } = useAppSelector((state) => state.auth);
   const { currentRide, pendingRide } = useAppSelector((state) => state.ride);
   const { isOnline, profile } = useAppSelector((state) => state.driver);
-  const notification = useAppSelector((state) => state.ui.notification);
+  const { notification, notificationHistory } = useAppSelector((state) => state.ui);
 
   const currentTab = resolveTab(location.pathname);
+  const unreadNotificationCount = notificationHistory.filter((item) => !item.read).length;
 
   const [profileAnchorEl, setProfileAnchorEl] = React.useState<null | HTMLElement>(null);
   const [langAnchorEl, setLangAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [notificationsOpen, setNotificationsOpen] = React.useState(false);
+  const [walletState, setWalletState] = React.useState<WalletBalance | null>(null);
 
   // ── Global ride request popup ──────────────────────────────────────────
   const [newRidePopup, setNewRidePopup] = useState<Ride | null>(null);
   const [rideLoading, setRideLoading] = useState(false);
   const seenRidePopupIdsRef = useRef<Set<string>>(new Set());
+  const previousApprovalStatusRef = useRef<string | null>(null);
 
-  // Connect/disconnect socket based on online status (global, not per page)
+  // Keep socket connected for all authenticated drivers so approval changes arrive without reload.
   useEffect(() => {
-    if (isOnline && accessToken) {
+    if (accessToken) {
       driverSocketService.connect(accessToken);
     } else {
       driverSocketService.disconnect();
@@ -115,7 +150,7 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
     return () => {
       driverSocketService.disconnect();
     };
-  }, [isOnline, accessToken]);
+  }, [accessToken]);
 
   // Show popup when a new pending ride arrives (regardless of current tab)
   useEffect(() => {
@@ -126,6 +161,13 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
     if (pendingRide && !seenRidePopupIdsRef.current.has(pendingRide.id)) {
       seenRidePopupIdsRef.current.add(pendingRide.id);
       setNewRidePopup(pendingRide);
+      dispatch(showNotification({
+        type: 'info',
+        title: 'Có cuốc xe mới',
+        message: `${pendingRide.pickupLocation?.address || 'Điểm đón gần bạn'}${pendingRide.fare ? ` - ${formatCurrency(pendingRide.fare)}` : ''}`,
+        rideId: pendingRide.id,
+        persistMs: 7000,
+      }));
 
       // Browser notification
       if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
@@ -135,7 +177,31 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
         window.setTimeout(() => notification.close(), 7000);
       }
     }
-  }, [currentRide, isOnline, newRidePopup, pendingRide]);
+  }, [currentRide, dispatch, isOnline, newRidePopup, pendingRide]);
+
+  useEffect(() => {
+    if (!pendingRide || !newRidePopup || pendingRide.id !== newRidePopup.id) {
+      return;
+    }
+
+    if (
+      pendingRide !== newRidePopup
+      && (
+        pendingRide.customer?.phoneNumber !== newRidePopup.customer?.phoneNumber
+        || pendingRide.customer?.avatar !== newRidePopup.customer?.avatar
+        || pendingRide.customer?.firstName !== newRidePopup.customer?.firstName
+        || pendingRide.fare !== newRidePopup.fare
+      )
+    ) {
+      setNewRidePopup(pendingRide);
+    }
+  }, [newRidePopup, pendingRide]);
+
+  useEffect(() => {
+    if (!pendingRide && !newRidePopup && !currentRide) {
+      seenRidePopupIdsRef.current.clear();
+    }
+  }, [currentRide, newRidePopup, pendingRide]);
 
   const handleAcceptPopupRide = async () => {
     if (!newRidePopup) return;
@@ -143,7 +209,11 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
     try {
       const response = await rideApi.acceptRide(newRidePopup.id);
       const acceptedRide = response.data.ride;
-      if (!acceptedRide?.pickupLocation?.lat || !acceptedRide?.dropoffLocation?.lat) {
+      if (
+        !acceptedRide?.pickupLocation?.lat
+        || !acceptedRide?.dropoffLocation?.lat
+        || !acceptedRide?.customer?.firstName
+      ) {
         try {
           const fullRideRes = await rideApi.getRide(newRidePopup.id);
           dispatch(setCurrentRide(fullRideRes.data.ride));
@@ -198,6 +268,190 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
     };
   }, [dispatch, profile]);
 
+  useEffect(() => {
+    previousApprovalStatusRef.current = null;
+  }, [user?.id]);
+
+  useEffect(() => {
+    const currentApprovalStatus = profile?.status || null;
+
+    if (!currentApprovalStatus) {
+      previousApprovalStatusRef.current = null;
+      return;
+    }
+
+    const previousApprovalStatus = previousApprovalStatusRef.current;
+    previousApprovalStatusRef.current = currentApprovalStatus;
+
+    if (!previousApprovalStatus || previousApprovalStatus === currentApprovalStatus) {
+      return;
+    }
+
+    if (currentApprovalStatus === 'APPROVED') {
+      dispatch(showNotification({
+        type: 'success',
+        title: 'Hồ sơ đã được duyệt',
+        message: 'Tài khoản tài xế đã được duyệt. Bạn có thể bật trực tuyến và nhận chuyến ngay.',
+        persistMs: 7000,
+      }));
+      return;
+    }
+
+    if (currentApprovalStatus === 'REJECTED') {
+      dispatch(showNotification({
+        type: 'warning',
+        title: 'Hồ sơ cần cập nhật',
+        message: 'Hồ sơ tài xế chưa được duyệt. Vui lòng kiểm tra lại thông tin hồ sơ.',
+        persistMs: 7000,
+      }));
+    }
+  }, [dispatch, profile?.status]);
+
+  useEffect(() => {
+    if (!accessToken || profile?.status !== 'PENDING') {
+      return;
+    }
+
+    let isMounted = true;
+    let isFetching = false;
+
+    const syncPendingApprovalStatus = async () => {
+      if (isFetching) {
+        return;
+      }
+
+      isFetching = true;
+      try {
+        const response = await driverApi.getProfile();
+        if (!isMounted) {
+          return;
+        }
+
+        const nextProfile = response.data.driver;
+        if (nextProfile?.status && nextProfile.status !== profile.status) {
+          dispatch(setProfile(nextProfile));
+        }
+      } catch {
+        // Keep the shell usable while waiting for approval sync.
+      } finally {
+        isFetching = false;
+      }
+    };
+
+    void syncPendingApprovalStatus();
+    const intervalId = window.setInterval(() => {
+      void syncPendingApprovalStatus();
+    }, 3000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, [accessToken, dispatch, profile?.status]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setWalletState(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    const hydrateWalletBalance = async () => {
+      try {
+        const [balanceResponse, transactionsResponse] = await Promise.all([
+          walletApi.getBalance(),
+          walletApi.getTransactions(1, 0),
+        ]);
+
+        if (isMounted) {
+          const walletData = balanceResponse.data.data;
+          setWalletState(walletData);
+
+          const latestTransaction = transactionsResponse.data.data.transactions?.[0];
+          if (
+            user?.id
+            && latestTransaction?.type === 'COMMISSION'
+            && latestTransaction.id
+          ) {
+            const notificationKey = `wallet:commission-deduction:${user.id}:${latestTransaction.id}`;
+            if (!sessionStorage.getItem(notificationKey)) {
+              sessionStorage.setItem(notificationKey, '1');
+              dispatch(showNotification({
+                type: 'info',
+                title: 'Đã khấu trừ vào ví',
+                message: `${latestTransaction.description || 'Ví vừa được khấu trừ công nợ chuyến tiền mặt.'} ${formatCurrency(latestTransaction.amount)}. Số dư hiện tại: ${formatCurrency(walletData.balance)}.`,
+                persistMs: 7000,
+              }));
+            }
+          }
+        }
+      } catch {
+        if (isMounted) {
+          setWalletState(null);
+        }
+      }
+    };
+
+    void hydrateWalletBalance();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken, dispatch, location.pathname, user?.id]);
+
+  const walletBalance = walletState ? Number(walletState.balance ?? 0) : null;
+  const activationThreshold = walletState?.activationThreshold ?? 300_000;
+  const warningThreshold = walletState?.warningThreshold ?? -100_000;
+  const debtLimit = walletState?.debtLimit ?? -200_000;
+
+  useEffect(() => {
+    if (profile?.status !== 'APPROVED' || !user?.id || walletBalance === null || !walletState?.activationRequired) {
+      return;
+    }
+
+    const remainingAmount = Math.max(activationThreshold - walletBalance, 0);
+    const warningKey = `wallet:activation-warning:${user.id}:${walletBalance}`;
+    if (sessionStorage.getItem(warningKey)) {
+      return;
+    }
+
+    sessionStorage.setItem(warningKey, '1');
+    dispatch(showNotification({
+      type: 'warning',
+      title: 'Nạp để kích hoạt tài khoản',
+      message: remainingAmount > 0
+        ? `Ví hiện có ${formatCurrency(walletBalance)}. Nạp thêm ${formatCurrency(remainingAmount)} để kích hoạt}.`
+        : 'Ví tài xế chưa đạt điều kiện kích hoạt. Vui lòng kiểm tra lại số dư ví.',
+      persistMs: 7000,
+    }));
+  }, [activationThreshold, dispatch, profile?.status, user?.id, walletBalance, walletState?.activationRequired]);
+
+  useEffect(() => {
+    if (
+      profile?.status !== 'APPROVED'
+      || !user?.id
+      || walletBalance === null
+      || !walletState?.warningThresholdReached
+      || walletState.canAcceptRide === false
+    ) {
+      return;
+    }
+
+    const warningKey = `wallet:debt-warning:${user.id}:${walletBalance}`;
+    if (sessionStorage.getItem(warningKey)) {
+      return;
+    }
+
+    sessionStorage.setItem(warningKey, '1');
+    dispatch(showNotification({
+      type: 'warning',
+      title: 'Ví sắp chạm ngưỡng khóa',
+      message: `Số dư hiện tại là ${formatCurrency(walletBalance)}. Tài khoản vẫn hoạt động, nhưng bạn nên nạp thêm trước khi chạm mốc khóa ${formatCurrency(debtLimit)}.`,
+      persistMs: 7000,
+    }));
+  }, [debtLimit, dispatch, profile?.status, user?.id, walletBalance, walletState?.canAcceptRide, walletState?.warningThresholdReached]);
+
   const notifStyle = notification ? NOTIFICATION_STYLES[notification.type] : null;
   const handleNotifClose = (_: React.SyntheticEvent | Event, reason?: string) => {
     if (reason !== 'clickaway') dispatch(hideNotification());
@@ -205,6 +459,10 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
 
   const effectiveOnline = isOnline || profile?.isOnline || false;
   const approvalStatusTone = getApprovalStatusTone(profile?.status);
+
+  const handleOpenNotifications = () => {
+    setNotificationsOpen(true);
+  };
 
   const handleLogout = () => {
     dispatch(logout());
@@ -243,7 +501,7 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" sx={{ rowGap: 0.5 }}>
               <Typography variant="subtitle1" sx={{ color: 'primary.main', fontWeight: 900, letterSpacing: '0.04em' }}>
-                CabDriver
+                FoxGo Tài xế
               </Typography>
               <Chip
                 size="small"
@@ -257,6 +515,12 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
 
           <IconButton onClick={(event) => setLangAnchorEl(event.currentTarget)} sx={{ mr: 1 }}>
             <TranslateRounded />
+          </IconButton>
+
+          <IconButton onClick={handleOpenNotifications} sx={{ mr: 1 }}>
+            <Badge color="error" badgeContent={unreadNotificationCount} max={99}>
+              <NotificationsRounded />
+            </Badge>
           </IconButton>
 
           <IconButton onClick={(event) => setProfileAnchorEl(event.currentTarget)}>
@@ -297,6 +561,45 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
               {t(approvalStatusTone.labelKey, approvalStatusTone.fallback)}
             </Typography>
           </Box>
+        )}
+        {profile?.status === 'APPROVED' && walletState?.activationRequired && walletBalance !== null && (
+          <Alert
+            severity="warning"
+            sx={{ width: shellMaxWidth, mx: 'auto', mb: 1.5, borderRadius: 3 }}
+            action={
+              <Button color="inherit" size="small" sx={{ fontWeight: 700 }} onClick={() => navigate('/wallet')}>
+                Nạp để kích hoạt tài khoản
+              </Button>
+            }
+          >
+            Tài khoản tài xế chưa được kích hoạt. Số dư hiện tại là {formatCurrency(walletBalance)}. Bạn cần đạt tối thiểu {formatCurrency(activationThreshold)} để bật nhận cuốc.
+          </Alert>
+        )}
+        {profile?.status === 'APPROVED' && !walletState?.activationRequired && walletState?.warningThresholdReached && walletState?.canAcceptRide !== false && walletBalance !== null && (
+          <Alert
+            severity="warning"
+            sx={{ width: shellMaxWidth, mx: 'auto', mb: 1.5, borderRadius: 3 }}
+            action={
+              <Button color="inherit" size="small" sx={{ fontWeight: 700 }} onClick={() => navigate('/wallet')}>
+                Nạp ví
+              </Button>
+            }
+          >
+            Ví đã âm quá {formatCurrency(Math.abs(warningThreshold))}. Tài khoản vẫn hoạt động nhưng bạn nên nạp thêm trước khi chạm mốc khóa {formatCurrency(debtLimit)}.
+          </Alert>
+        )}
+        {profile?.status === 'APPROVED' && !walletState?.activationRequired && walletState?.canAcceptRide === false && walletBalance !== null && (
+          <Alert
+            severity="error"
+            sx={{ width: shellMaxWidth, mx: 'auto', mb: 1.5, borderRadius: 3 }}
+            action={
+              <Button color="inherit" size="small" sx={{ fontWeight: 700 }} onClick={() => navigate('/wallet')}>
+                Nạp ví
+              </Button>
+            }
+          >
+            Ví đã chạm mốc khóa nhận cuốc {formatCurrency(debtLimit)}. Số dư hiện tại là {formatCurrency(walletBalance)}. Bạn cần nạp thêm để bật lại nhận chuyến.
+          </Alert>
         )}
         <Box sx={{ minHeight: '100%', width: shellMaxWidth, mx: 'auto' }}>{children}</Box>
       </Box>
@@ -347,6 +650,10 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
           </Box>
         </MenuItem>
         <Divider />
+        <MenuItem onClick={() => { navigate('/account'); setProfileAnchorEl(null); }}>
+          <PersonRounded fontSize="small" style={{ marginRight: 8 }} />
+          {t('shell.accountCenter', 'Tài khoản')}
+        </MenuItem>
         <MenuItem onClick={() => { navigate('/profile'); setProfileAnchorEl(null); }}>
           <PersonRounded fontSize="small" style={{ marginRight: 8 }} />
           {t('shell.accountCenter', 'Hồ sơ tài xế')}
@@ -365,6 +672,95 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
           English
         </MenuItem>
       </Menu>
+
+      <Drawer
+        anchor="right"
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        PaperProps={{
+          sx: {
+            width: { xs: 'min(92vw, 360px)', sm: 380 },
+            background: 'linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)',
+          },
+        }}
+      >
+        <Box sx={{ px: 2, py: 2 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+            <Box>
+              <Typography variant="h6" fontWeight={800}>
+                Thông báo
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {notificationHistory.length === 0
+                  ? 'Chưa có thông báo nào được lưu.'
+                  : `${notificationHistory.length} thông báo`}
+              </Typography>
+            </Box>
+            {unreadNotificationCount > 0 && (
+              <Button size="small" onClick={() => dispatch(markAllNotificationsRead())}>
+                Đánh dấu đã đọc
+              </Button>
+            )}
+          </Stack>
+        </Box>
+        <Divider />
+        {notificationHistory.length === 0 ? (
+          <Box sx={{ px: 2.5, py: 4 }}>
+            <Typography variant="body2" color="text.secondary">
+              Các thông báo popup, nạp ví, cảnh báo tài khoản và cập nhật chuyến xe sẽ được lưu ở đây.
+            </Typography>
+          </Box>
+        ) : (
+          <List sx={{ py: 0 }}>
+            {notificationHistory.map((item) => {
+              const itemStyle = NOTIFICATION_STYLES[item.type];
+              return (
+                <ListItemButton
+                  key={item.id}
+                  alignItems="flex-start"
+                  sx={{
+                    px: 2,
+                    py: 1.5,
+                    borderBottom: '1px solid rgba(148, 163, 184, 0.14)',
+                    bgcolor: item.read ? 'transparent' : itemStyle.bg,
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      bgcolor: itemStyle.icon,
+                      mt: 0.9,
+                      mr: 1.5,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <ListItemText
+                    disableTypography
+                    primary={
+                      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
+                        <Typography variant="subtitle2" fontWeight={800} sx={{ color: itemStyle.title }}>
+                          {item.title || NOTIFICATION_TITLES[item.type]}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                          {formatNotificationTimestamp(item.createdAt)}
+                        </Typography>
+                      </Stack>
+                    }
+                    secondary={
+                      <Typography variant="body2" sx={{ color: itemStyle.text, mt: 0.5 }}>
+                        {item.message}
+                      </Typography>
+                    }
+                  />
+                </ListItemButton>
+              );
+            })}
+          </List>
+        )}
+      </Drawer>
 
       {/* Global notification Snackbar — mirrors customer app style */}
       <Snackbar

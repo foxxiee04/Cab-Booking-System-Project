@@ -1,13 +1,15 @@
 import axiosInstance from './axios.config';
 
 export type VoucherDiscountType = 'PERCENT' | 'FIXED';
-export type MyVoucherStatus = 'USABLE' | 'USED' | 'EXPIRED';
+export type VoucherAudience = 'ALL_CUSTOMERS' | 'NEW_CUSTOMERS' | 'RETURNING_CUSTOMERS';
+export type MyVoucherStatus = 'USABLE' | 'USED_UP' | 'EXPIRED';
 
 /** Shape returned by GET /voucher/my — flat joined structure */
 export interface MyVoucher {
   voucherId: string;
   code: string;
   description: string | null;
+  audienceType: VoucherAudience;
   discountType: VoucherDiscountType;
   discountValue: number;
   maxDiscount: number | null;
@@ -23,6 +25,7 @@ export interface PublicVoucher {
   voucherId: string;
   code: string;
   description: string | null;
+  audienceType: VoucherAudience;
   discountType: VoucherDiscountType;
   discountValue: number;
   maxDiscount: number | null;

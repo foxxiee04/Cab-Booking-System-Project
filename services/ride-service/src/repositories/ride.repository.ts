@@ -68,7 +68,7 @@ export class RideRepository implements IRideRepository {
       where: {
         driverId,
         status: {
-          in: [RideStatus.ASSIGNED, RideStatus.PICKING_UP, RideStatus.IN_PROGRESS],
+          in: [RideStatus.ASSIGNED, RideStatus.ACCEPTED, RideStatus.PICKING_UP, RideStatus.IN_PROGRESS],
         },
       },
       orderBy: { createdAt: 'desc' },

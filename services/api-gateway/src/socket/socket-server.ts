@@ -2,6 +2,7 @@ import { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
+import axios from 'axios';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { logger } from '../utils/logger';
@@ -29,6 +30,16 @@ interface DriverLocationPayload {
   timestamp?: number;
 }
 
+interface ChatRoomPayload {
+  rideId?: string;
+  roomId?: string;
+}
+
+interface ChatSendPayload extends ChatRoomPayload {
+  message?: string;
+  type?: string;
+}
+
 export class SocketServer {
   private io: Server;
   private pubClient: Redis;
@@ -49,6 +60,76 @@ export class SocketServer {
   // user:online:{userId} = role, expires after PRESENCE_TTL_S seconds.
   // Renewed on every ping from the client.
   private readonly PRESENCE_TTL_S = 60;
+
+  private buildTripRoomId(rideId: string): string {
+    return `trip_${rideId}`;
+  }
+
+  private resolveRideIdFromChatPayload(payload: ChatRoomPayload | ChatSendPayload): string | null {
+    const directRideId = payload?.rideId?.trim();
+    if (directRideId) {
+      return directRideId;
+    }
+
+    const roomId = payload?.roomId?.trim();
+    if (!roomId) {
+      return null;
+    }
+
+    if (roomId.startsWith('trip_')) {
+      return roomId.slice('trip_'.length).trim() || null;
+    }
+
+    if (roomId.startsWith('trip:')) {
+      return roomId.slice('trip:'.length).trim() || null;
+    }
+
+    return roomId;
+  }
+
+  private async fetchRideForChat(rideId: string, userId: string, role: string): Promise<any | null> {
+    try {
+      const response = await axios.get(`${config.services.ride}/api/rides/${rideId}`, {
+        timeout: 3000,
+        headers: {
+          'x-user-id': userId,
+          'x-user-role': role,
+        },
+      });
+
+      return response.data?.data?.ride ?? null;
+    } catch (error) {
+      logger.warn(`Failed to authorize chat room for ride ${rideId}:`, error);
+      return null;
+    }
+  }
+
+  private async persistRideChatMessage(
+    rideId: string,
+    senderId: string,
+    senderRole: string,
+    message: string,
+    type = 'TEXT',
+  ): Promise<any | null> {
+    try {
+      const response = await axios.post(
+        `${config.services.ride}/api/rides/${rideId}/messages`,
+        { message, type },
+        {
+          timeout: 3000,
+          headers: {
+            'x-user-id': senderId,
+            'x-user-role': senderRole,
+          },
+        },
+      );
+
+      return response.data?.data?.message ?? null;
+    } catch (error) {
+      logger.warn(`Failed to persist chat message for ride ${rideId}:`, error);
+      return null;
+    }
+  }
 
   constructor(httpServer: HttpServer) {
     this.io = new Server(httpServer, {
@@ -174,22 +255,73 @@ export class SocketServer {
       socket.on('subscribe_ride_tracking', subscribeToRideRoom);
       socket.on('ride:unsubscribe', unsubscribeFromRideRoom);
 
+      const subscribeToTripChatRoom = async (payload: ChatRoomPayload) => {
+        const rideId = this.resolveRideIdFromChatPayload(payload);
+        if (!rideId) {
+          return;
+        }
+
+        const ride = await this.fetchRideForChat(rideId, userId, role);
+        if (!ride) {
+          socket.emit('chat:error', { rideId, code: 'FORBIDDEN', message: 'Không thể tham gia cuộc trò chuyện này' });
+          return;
+        }
+
+        socket.join(this.buildTripRoomId(rideId));
+        logger.info(`Socket ${socket.id} joined trip chat room: ${this.buildTripRoomId(rideId)}`);
+      };
+
+      const unsubscribeFromTripChatRoom = (payload: ChatRoomPayload) => {
+        const rideId = this.resolveRideIdFromChatPayload(payload);
+        if (!rideId) {
+          return;
+        }
+
+        socket.leave(this.buildTripRoomId(rideId));
+        logger.info(`Socket ${socket.id} left trip chat room: ${this.buildTripRoomId(rideId)}`);
+      };
+
+      socket.on('join_room', (payload) => void subscribeToTripChatRoom(payload));
+      socket.on('leave_room', unsubscribeFromTripChatRoom);
+
       // ── In-ride Chat ──────────────────────────────────────────────────────────
       // Relay text messages between customer and driver inside an active ride room.
-      socket.on('chat:send', (payload: { rideId?: string; message?: string }) => {
-        const rideId = payload?.rideId?.trim();
+      const handleChatSend = async (payload: ChatSendPayload) => {
+        const rideId = this.resolveRideIdFromChatPayload(payload);
         const message = payload?.message?.trim();
         if (!rideId || !message || message.length > 500) return;
 
-        const rideRoom = `ride:${rideId}`;
-        this.io.to(rideRoom).emit('chat:message', {
-          from: userId,
+        const persistedMessage = await this.persistRideChatMessage(
+          rideId,
+          userId,
           role,
           message,
-          timestamp: Date.now(),
-        });
-        logger.debug(`Chat relay: userId=${userId} → room=${rideRoom}`);
-      });
+          payload?.type || 'TEXT',
+        );
+
+        if (!persistedMessage) {
+          socket.emit('chat:error', { rideId, code: 'SEND_FAILED', message: 'Không thể gửi tin nhắn cho chuyến đi này' });
+          return;
+        }
+
+        const normalizedMessage = {
+          id: persistedMessage.id,
+          from: persistedMessage.from,
+          role: persistedMessage.role,
+          type: persistedMessage.type,
+          message: persistedMessage.message,
+          timestamp: persistedMessage.timestamp,
+          createdAt: persistedMessage.createdAt,
+        };
+
+        const tripRoom = this.buildTripRoomId(rideId);
+        this.io.to(tripRoom).emit('receive_message', normalizedMessage);
+        this.io.to(tripRoom).emit('chat:message', normalizedMessage);
+        logger.debug(`Chat relay: userId=${userId} → room=${tripRoom}`);
+      };
+
+      socket.on('chat:send', (payload) => void handleChatSend(payload));
+      socket.on('send_message', (payload) => void handleChatSend(payload));
 
       // ── WebRTC Signaling (Voice Call) ─────────────────────────────────────────
       // Relay SDP offer/answer and ICE candidates between the two peers in a ride room.

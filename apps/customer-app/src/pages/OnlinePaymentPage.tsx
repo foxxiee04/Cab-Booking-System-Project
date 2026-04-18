@@ -15,6 +15,7 @@ import {
 import { ArrowBack as BackIcon } from '@mui/icons-material';
 import { paymentApi } from '../api/payment.api';
 import { rideApi } from '../api/ride.api';
+import voucherApi, { ApplyVoucherResult } from '../api/voucher.api';
 import { QRCodePayment } from '../components/payment/QRCodePayment';
 
 export type PaymentMethod = 'CASH' | 'MOMO' | 'VNPAY';
@@ -29,6 +30,7 @@ const OnlinePaymentPage: React.FC = () => {
   const initialMethod: PaymentMethod = providerParam === 'VNPAY' ? 'VNPAY' : 'MOMO';
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>(initialMethod);
   const [amount, setAmount] = useState<number>(0);
+  const [voucherPreview, setVoucherPreview] = useState<ApplyVoucherResult | null>(null);
   const [paymentUrl, setPaymentUrl] = useState<string>('');
   const [deeplink, setDeeplink] = useState<string>('');
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
@@ -80,9 +82,24 @@ const OnlinePaymentPage: React.FC = () => {
       }
 
       const amountParam = Number(searchParams.get('amount') || 0);
+      const voucherCodeParam = (searchParams.get('voucherCode') || '').trim().toUpperCase();
+      const originalAmountParam = Number(searchParams.get('originalAmount') || 0);
+      const discountAmountParam = Number(searchParams.get('discountAmount') || 0);
+
       if (Number.isFinite(amountParam) && amountParam > 0) {
         if (!cancelled) {
           setAmount(Math.round(amountParam));
+          if (voucherCodeParam && Number.isFinite(originalAmountParam) && originalAmountParam > 0 && Number.isFinite(discountAmountParam) && discountAmountParam > 0) {
+            setVoucherPreview({
+              voucherId: '',
+              code: voucherCodeParam,
+              originalAmount: Math.round(originalAmountParam),
+              discountAmount: Math.round(discountAmountParam),
+              finalAmount: Math.round(amountParam),
+            });
+          } else {
+            setVoucherPreview(null);
+          }
           setLoading(false);
         }
         return;
@@ -108,16 +125,47 @@ const OnlinePaymentPage: React.FC = () => {
           || rideData.finalFare
           || 0
         );
-        const paymentAmount = Number(
-          paymentData.amount
-          || paymentData.totalAmount
-          || paymentData.finalAmount
-          || 0
-        );
-        const resolvedAmount = rideFare > 0 ? rideFare : paymentAmount;
+        const paymentAmount = Number(paymentData.amount || paymentData.totalAmount || 0);
+        const paymentFinalAmount = Number(paymentData.finalAmount || 0);
+        const paymentDiscountAmount = Number(paymentData.discountAmount || 0);
+        const resolvedVoucherCode = (voucherCodeParam || paymentData.voucherCode || rideData.voucherCode || '').trim().toUpperCase();
+
+        if (paymentFinalAmount > 0) {
+          setAmount(Math.round(paymentFinalAmount));
+          setVoucherPreview(
+            resolvedVoucherCode && paymentDiscountAmount > 0
+              ? {
+                  voucherId: '',
+                  code: resolvedVoucherCode,
+                  originalAmount: Math.round(Number(paymentData.amount || rideFare || paymentFinalAmount)),
+                  discountAmount: Math.round(paymentDiscountAmount),
+                  finalAmount: Math.round(paymentFinalAmount),
+                }
+              : null,
+          );
+          return;
+        }
+
+        if (resolvedVoucherCode && rideFare > 0) {
+          try {
+            const voucherResponse = await voucherApi.applyVoucher(resolvedVoucherCode, rideFare);
+            if (cancelled) {
+              return;
+            }
+
+            setVoucherPreview(voucherResponse.data.data);
+            setAmount(Math.round(voucherResponse.data.data.finalAmount));
+            return;
+          } catch {
+            // Fall back to payment / ride amount below when voucher is no longer applicable.
+          }
+        }
+
+        const resolvedAmount = paymentAmount > 0 ? paymentAmount : rideFare;
 
         if (resolvedAmount > 0) {
           setAmount(Math.round(resolvedAmount));
+          setVoucherPreview(null);
         } else {
           setError('Không thể xác định số tiền thanh toán cho chuyến đi này.');
         }
@@ -286,12 +334,34 @@ const OnlinePaymentPage: React.FC = () => {
         {/* Amount Display */}
         <Card sx={{ borderRadius: 3, bgcolor: 'success.light' }}>
           <CardContent sx={{ textAlign: 'center' }}>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              Số tiền cần thanh toán
-            </Typography>
-            <Typography variant="h4" fontWeight={800} color="success.dark">
-              {amount.toLocaleString('vi-VN')} ₫
-            </Typography>
+            {voucherPreview ? (
+              <Stack spacing={1.25}>
+                <Typography variant="body2" color="text.secondary">
+                  Số tiền cần thanh toán sau ưu đãi
+                </Typography>
+                <Typography variant="h4" fontWeight={800} color="success.dark">
+                  {amount.toLocaleString('vi-VN')} ₫
+                </Typography>
+                <Divider />
+                <Stack direction="row" justifyContent="space-between" spacing={2}>
+                  <Typography variant="body2" color="text.secondary">Cước gốc</Typography>
+                  <Typography variant="body2" fontWeight={700}>{voucherPreview.originalAmount.toLocaleString('vi-VN')} ₫</Typography>
+                </Stack>
+                <Stack direction="row" justifyContent="space-between" spacing={2}>
+                  <Typography variant="body2" color="success.dark">Ưu đãi {voucherPreview.code}</Typography>
+                  <Typography variant="body2" fontWeight={700} color="success.dark">-{voucherPreview.discountAmount.toLocaleString('vi-VN')} ₫</Typography>
+                </Stack>
+              </Stack>
+            ) : (
+              <>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Số tiền cần thanh toán
+                </Typography>
+                <Typography variant="h4" fontWeight={800} color="success.dark">
+                  {amount.toLocaleString('vi-VN')} ₫
+                </Typography>
+              </>
+            )}
           </CardContent>
         </Card>
 

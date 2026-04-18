@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { WalletService } from '../services/wallet.service';
 import { IncentiveService } from '../services/incentive.service';
 import { AuthenticatedRequest } from '../middleware/auth';
-import { IncentiveRuleType } from '../generated/prisma-client';
+import { IncentiveRuleType, TopUpStatus } from '../generated/prisma-client';
 import { momoGateway } from '../services/momo.gateway';
 import { vnpayGateway } from '../services/vnpay.gateway';
 import { logger } from '../utils/logger';
@@ -14,6 +14,79 @@ export class WalletController {
     private readonly incentiveService: IncentiveService,
   ) {}
 
+  private extractTopUpIdFromVnpayOrderInfo(orderInfo?: string): string {
+    if (!orderInfo) {
+      return '';
+    }
+
+    const match = orderInfo.match(/^wallet_topup:([0-9a-fA-F-]{36})$/);
+    return match?.[1] || '';
+  }
+
+  private async finalizeTopUpBrowserReturn(
+    order: {
+      id: string;
+      driverId: string;
+      orderId: string;
+      amount: number;
+      provider: string;
+      status: TopUpStatus;
+    },
+    paid: boolean,
+    transactionId: string,
+    failureReason: string | undefined,
+    gatewayMetadata: Record<string, string>,
+  ): Promise<{
+    paid: boolean;
+    status: TopUpStatus;
+    newBalance?: number;
+    activated?: boolean;
+    initialActivationCompleted?: boolean;
+    warningThresholdReached?: boolean;
+  }> {
+    if (order.status === TopUpStatus.COMPLETED) {
+      const walletStatus = await this.walletService.getDriverWalletStatus(order.driverId);
+      return {
+        paid: true,
+        status: TopUpStatus.COMPLETED,
+        newBalance: walletStatus.balance,
+        activated: false,
+        initialActivationCompleted: walletStatus.initialActivationCompleted,
+        warningThresholdReached: walletStatus.warningThresholdReached,
+      };
+    }
+
+    if (order.status === TopUpStatus.FAILED) {
+      return { paid: false, status: TopUpStatus.FAILED };
+    }
+
+    if (paid) {
+      const wasInitiallyActivated = await this.walletService.hasCompletedInitialActivation(order.driverId);
+      const confirmed = await this.walletService.confirmTopUp(
+        order.orderId,
+        transactionId || `${order.provider}_RETURN_${Date.now()}`,
+        JSON.stringify(gatewayMetadata),
+      );
+      const walletStatus = await this.walletService.getDriverWalletStatus(order.driverId);
+      return {
+        paid: true,
+        status: TopUpStatus.COMPLETED,
+        newBalance: confirmed.newBalance,
+        activated: !wasInitiallyActivated && walletStatus.initialActivationCompleted,
+        initialActivationCompleted: walletStatus.initialActivationCompleted,
+        warningThresholdReached: walletStatus.warningThresholdReached,
+      };
+    }
+
+    await this.walletService.failTopUp(
+      order.orderId,
+      failureReason || `${order.provider} return failed`,
+      JSON.stringify(gatewayMetadata),
+    );
+
+    return { paid: false, status: TopUpStatus.FAILED };
+  }
+
   // ─── Driver endpoints (requires auth) ───────────────────────────────────
 
   /**
@@ -23,7 +96,7 @@ export class WalletController {
   getWallet = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const driverId = await resolveDriverId(req.user!.userId);
-      const data = await this.walletService.getBalance(driverId);
+      const data = await this.walletService.getDriverWalletStatus(driverId);
       res.json({ success: true, data });
     } catch (err) {
       next(err);
@@ -241,6 +314,82 @@ export class WalletController {
   };
 
   /**
+   * GET /api/wallet/top-up/momo/return
+   * Browser callback for MoMo wallet top-up.
+   */
+  handleMomoTopUpReturn = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const query = req.query as Record<string, string>;
+      const topUpId = query.topUpId || '';
+      const orderId = String(query.orderId || query.order_id || '');
+      const resultCode = Number(query.resultCode ?? query.result_code ?? -1);
+      const paid = resultCode === 0;
+
+      if (!topUpId && !orderId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Thiếu topUpId/orderId từ callback MoMo' },
+        });
+      }
+
+      const order = topUpId
+        ? await this.walletService.getTopUpOrder(topUpId)
+        : await this.walletService.getTopUpOrderByOrderId(orderId);
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Top-up order not found' },
+        });
+      }
+
+      const returnedAmount = Number(query.amount ?? 0);
+      if (Number.isFinite(returnedAmount) && returnedAmount > 0 && Math.round(order.amount) !== Math.round(returnedAmount)) {
+        logger.warn('MoMo top-up return: amount mismatch', { topUpId, expected: order.amount, received: returnedAmount });
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_AMOUNT', message: 'Số tiền trả về không hợp lệ' },
+        });
+      }
+
+      const finalResult = await this.finalizeTopUpBrowserReturn(
+        order,
+        paid,
+        String(query.transId ?? query.requestId ?? ''),
+        paid ? undefined : (query.message || `MoMo code: ${resultCode}`),
+        query,
+      );
+
+      return res.json({
+        success: true,
+        data: {
+          topUpId: order.id,
+          paid: finalResult.paid,
+          status: finalResult.status,
+          amount: order.amount,
+          provider: order.provider,
+          newBalance: finalResult.newBalance,
+          activated: finalResult.activated,
+          initialActivationCompleted: finalResult.initialActivationCompleted,
+          warningThresholdReached: finalResult.warningThresholdReached,
+          transactionId: query.transId || query.requestId || '',
+          resultCode,
+          message: finalResult.paid
+            ? (finalResult.activated
+              ? 'Nạp ví thành công qua MoMo. Tài khoản tài xế đã được kích hoạt.'
+              : finalResult.initialActivationCompleted === false
+                ? 'Nạp ví thành công qua MoMo nhưng ví vẫn chưa đạt mốc kích hoạt 300.000 đ.'
+                : finalResult.warningThresholdReached
+                  ? 'Nạp ví thành công qua MoMo. Tài khoản vẫn hoạt động nhưng số dư còn thấp, nên nạp thêm để tránh bị khóa nhận cuốc.'
+              : (query.message || 'Nạp ví thành công qua MoMo'))
+            : (query.message || 'Giao dịch MoMo không thành công'),
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  /**
    * GET /api/wallet/top-up/vnpay-ipn
    * VNPay server-to-server IPN (no auth required, GET with query params).
    * Must respond within 5 s with { RspCode, Message }.
@@ -298,6 +447,148 @@ export class WalletController {
   };
 
   /**
+   * GET /api/wallet/top-up/vnpay/return
+   * Browser callback for VNPay wallet top-up.
+   */
+  handleVnpayTopUpReturn = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const query = req.query as Record<string, string>;
+      const result = vnpayGateway.verifyReturn(query);
+      const topUpId = query.topUpId || this.extractTopUpIdFromVnpayOrderInfo(query.vnp_OrderInfo);
+
+      if (!topUpId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Không xác định được topUpId từ callback VNPay' },
+        });
+      }
+
+      if (!result.valid) {
+        logger.warn('VNPay top-up return: invalid signature', { topUpId, txnRef: result.txnRef });
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_SIGNATURE', message: 'Chữ ký không hợp lệ' },
+        });
+      }
+
+      const order = await this.walletService.getTopUpOrder(topUpId);
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Top-up order not found' },
+        });
+      }
+
+      if (Math.round(order.amount) !== Math.round(result.amount)) {
+        logger.warn('VNPay top-up return: amount mismatch', {
+          topUpId,
+          expected: order.amount,
+          received: result.amount,
+        });
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_AMOUNT', message: 'Số tiền trả về không hợp lệ' },
+        });
+      }
+
+      const finalResult = await this.finalizeTopUpBrowserReturn(
+        order,
+        result.success,
+        result.transactionId,
+        result.success ? undefined : `VNPay code: ${result.responseCode}`,
+        query,
+      );
+
+      return res.json({
+        success: true,
+        data: {
+          topUpId: order.id,
+          paid: finalResult.paid,
+          status: finalResult.status,
+          amount: order.amount,
+          provider: order.provider,
+          newBalance: finalResult.newBalance,
+          activated: finalResult.activated,
+          initialActivationCompleted: finalResult.initialActivationCompleted,
+          warningThresholdReached: finalResult.warningThresholdReached,
+          transactionId: result.transactionId,
+          responseCode: result.responseCode,
+          message: finalResult.paid
+            ? (finalResult.activated
+              ? 'Nạp ví thành công qua VNPay. Tài khoản tài xế đã được kích hoạt.'
+              : finalResult.initialActivationCompleted === false
+                ? 'Nạp ví thành công qua VNPay nhưng ví vẫn chưa đạt mốc kích hoạt 300.000 đ.'
+                : finalResult.warningThresholdReached
+                  ? 'Nạp ví thành công qua VNPay. Tài khoản vẫn hoạt động nhưng số dư còn thấp, nên nạp thêm để tránh bị khóa nhận cuốc.'
+              : 'Nạp ví thành công qua VNPay')
+            : `Giao dịch VNPay không thành công (${result.responseCode})`,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  /**
+   * POST /api/wallet/top-up/sandbox-confirm
+   * Body: { topUpId: string, success: boolean }
+   * Sandbox-only endpoint to simulate gateway IPN for wallet top-up.
+   * Only works in non-production environments.
+   */
+  sandboxConfirmTopUp = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Sandbox endpoint not available in production' },
+        });
+      }
+
+      const driverId = await resolveDriverId(req.user!.userId);
+      const { topUpId, success: paid } = req.body;
+
+      if (!topUpId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'topUpId là bắt buộc' },
+        });
+      }
+
+      const order = await this.walletService.getTopUpOrder(topUpId);
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Top-up order not found' },
+        });
+      }
+      if (order.driverId !== driverId) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Access denied' },
+        });
+      }
+
+      if (paid !== false) {
+        // Confirm top-up (credit wallet)
+        const result = await this.walletService.confirmTopUp(
+          order.orderId,
+          `SANDBOX_MOCK_${Date.now()}`,
+          JSON.stringify({ sandbox: true, confirmedAt: new Date().toISOString() }),
+        );
+        logger.info(`Sandbox top-up confirmed: topUpId=${topUpId} amount=${order.amount}`);
+        return res.json({ success: true, data: result });
+      } else {
+        // Fail the top-up
+        await this.walletService.failTopUp(order.orderId, 'Sandbox: user declined', '{}');
+        logger.info(`Sandbox top-up declined: topUpId=${topUpId}`);
+        return res.json({ success: true, data: { topUpId, status: 'FAILED' } });
+      }
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  /**
    * GET /api/wallet/top-up/status/:topUpId
    * Returns the current status of a wallet top-up order.
    * Used by the driver app callback page to show the result.
@@ -315,7 +606,8 @@ export class WalletController {
       }
 
       // Only the owning driver can check status
-      if (order.driverId !== req.user!.userId) {
+      const driverId = await resolveDriverId(req.user!.userId);
+      if (order.driverId !== driverId) {
         return res.status(403).json({
           success: false,
           error: { code: 'FORBIDDEN', message: 'Access denied' },
@@ -331,6 +623,40 @@ export class WalletController {
           provider: order.provider,
           createdAt: order.createdAt,
           completedAt: order.completedAt,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  /**
+   * GET /api/wallet/driver/:driverId/status
+   * Internal status endpoint used by driver-service before allowing a driver
+   * to go online and receive rides.
+   */
+  internalGetDriverWalletStatus = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { driverId } = req.params;
+      const [walletStatus, completedRideCount] = await Promise.all([
+        this.walletService.getDriverWalletStatus(driverId),
+        this.walletService.getCompletedRideCount(driverId),
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          driverId,
+          balance: walletStatus.balance,
+          completedRideCount,
+          canAcceptRide: walletStatus.canAcceptRide,
+          reason: walletStatus.reason,
+          initialActivationCompleted: walletStatus.initialActivationCompleted,
+          activationRequired: walletStatus.activationRequired,
+          warningThresholdReached: walletStatus.warningThresholdReached,
+          activationThreshold: walletStatus.activationThreshold,
+          warningThreshold: walletStatus.warningThreshold,
+          debtLimit: walletStatus.debtLimit,
         },
       });
     } catch (err) {

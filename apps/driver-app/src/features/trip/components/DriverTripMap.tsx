@@ -10,6 +10,8 @@ import '../../../styles/map.css';
 
 const libraries: ('geometry' | 'places')[] = ['geometry', 'places'];
 const defaultCenter = { lat: 10.7769, lng: 106.7009 };
+const SINGLE_POINT_ZOOM = 14;
+const MAX_AUTO_FIT_ZOOM = 16;
 
 const darkMapStyles: google.maps.MapTypeStyle[] = [
   { elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
@@ -25,6 +27,47 @@ interface RouteSummary {
   distanceText: string;
   durationText: string;
   polylinePath: google.maps.LatLngLiteral[];
+}
+
+function fitGoogleViewport(
+  map: google.maps.Map,
+  points: google.maps.LatLngLiteral[],
+  viewportLockedRef: React.MutableRefObject<boolean>,
+  programmaticViewportRef: React.MutableRefObject<boolean>,
+  force = false,
+) {
+  if (!points.length || !window.google || (!force && viewportLockedRef.current)) {
+    return;
+  }
+
+  programmaticViewportRef.current = true;
+
+  if (points.length === 1) {
+    map.panTo(points[0]);
+    if ((map.getZoom() ?? SINGLE_POINT_ZOOM) !== SINGLE_POINT_ZOOM) {
+      map.setZoom(SINGLE_POINT_ZOOM);
+    }
+    google.maps.event.addListenerOnce(map, 'idle', () => {
+      programmaticViewportRef.current = false;
+    });
+    return;
+  }
+
+  const bounds = new google.maps.LatLngBounds();
+  points.forEach((point) => bounds.extend(point));
+  map.fitBounds(bounds, 56);
+  google.maps.event.addListenerOnce(map, 'idle', () => {
+    const currentZoom = map.getZoom();
+    if (currentZoom && currentZoom > MAX_AUTO_FIT_ZOOM) {
+      map.setZoom(MAX_AUTO_FIT_ZOOM);
+      google.maps.event.addListenerOnce(map, 'idle', () => {
+        programmaticViewportRef.current = false;
+      });
+      return;
+    }
+
+    programmaticViewportRef.current = false;
+  });
 }
 
 const leafletIconCache = new Map<string, L.DivIcon>();
@@ -72,10 +115,19 @@ const LeafletViewportController: React.FC<{
   autoFitKey: string;
 }> = ({ currentLocation, destinationLocation, viewportLockedRef, programmaticViewportRef, autoFitKey }) => {
   const map = useMap();
-  const lat0 = currentLocation?.lat;
-  const lng0 = currentLocation?.lng;
-  const lat1 = destinationLocation?.lat;
-  const lng1 = destinationLocation?.lng;
+  const viewportPointsRef = useRef<[number, number][]>([]);
+
+  useEffect(() => {
+    const points: [number, number][] = [];
+    if (currentLocation?.lat != null && currentLocation?.lng != null) {
+      points.push([currentLocation.lat, currentLocation.lng]);
+    }
+    if (destinationLocation?.lat != null && destinationLocation?.lng != null) {
+      points.push([destinationLocation.lat, destinationLocation.lng]);
+    }
+
+    viewportPointsRef.current = points;
+  }, [currentLocation, destinationLocation]);
 
   useEffect(() => {
     // Fix: Leaflet may not detect container size when rendered inside flex/absolute containers,
@@ -86,27 +138,54 @@ const LeafletViewportController: React.FC<{
 
     map.invalidateSize({ animate: false, pan: false });
 
+    // MUI Dialogs have a ~225ms fade-in animation that can leave the map container
+    // at 0×0 initially. We aggressively invalidate size + re-fit the viewport after
+    // the container actually reports non-zero dimensions.
+    const forceInvalidateAndFit = () => {
+      map.invalidateSize({ animate: false, pan: false });
+      // Also auto-fit viewport to ensure markers are visible after resize
+      const pts = viewportPointsRef.current;
+      if (pts.length >= 2) {
+        programmaticViewportRef.current = true;
+        viewportLockedRef.current = false;
+        map.fitBounds(L.latLngBounds(pts), { padding: [56, 56], animate: false, maxZoom: MAX_AUTO_FIT_ZOOM });
+        window.setTimeout(() => { programmaticViewportRef.current = false; }, 50);
+      } else if (pts.length === 1) {
+        programmaticViewportRef.current = true;
+        viewportLockedRef.current = false;
+        map.setView(pts[0], SINGLE_POINT_ZOOM, { animate: false });
+        window.setTimeout(() => { programmaticViewportRef.current = false; }, 50);
+      }
+    };
+
     if (container && typeof window !== 'undefined' && window.ResizeObserver) {
       let lastW = 0; let lastH = 0;
       const ro = new ResizeObserver((entries) => {
         const entry = entries[0];
         if (!entry) return;
         const { width, height } = entry.contentRect;
-        if (width !== lastW || height !== lastH) {
+        if (width > 0 && height > 0 && (width !== lastW || height !== lastH)) {
           lastW = width; lastH = height;
-          map.invalidateSize({ animate: false, pan: false });
+          forceInvalidateAndFit();
         }
       });
       ro.observe(container);
-      return () => ro.disconnect();
+      // Also fire delayed invalidations to catch Dialog open animation
+      const timers = [100, 250, 500, 800, 1200, 2000].map((delay) =>
+        window.setTimeout(forceInvalidateAndFit, delay),
+      );
+      return () => {
+        ro.disconnect();
+        timers.forEach((t) => window.clearTimeout(t));
+      };
     }
 
     // Fallback for environments without ResizeObserver
-    const timers = [100, 300, 600, 900, 1200, 1800, 2500].map((delay) =>
-      window.setTimeout(() => { map.invalidateSize({ animate: false, pan: false }); }, delay),
+    const timers = [100, 250, 450, 700, 1000, 1500, 2200, 3000].map((delay) =>
+      window.setTimeout(forceInvalidateAndFit, delay),
     );
     return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [map]);
+  }, [autoFitKey, map, programmaticViewportRef, viewportLockedRef]);
 
   useEffect(() => {
     const lockViewport = () => {
@@ -125,17 +204,18 @@ const LeafletViewportController: React.FC<{
   }, [map, programmaticViewportRef, viewportLockedRef]);
 
   useEffect(() => {
-    const points: [number, number][] = [];
-    if (lat0 != null && lng0 != null) points.push([lat0, lng0]);
-    if (lat1 != null && lng1 != null) points.push([lat1, lng1]);
-    if (!points.length || viewportLockedRef.current) {
+    const points = viewportPointsRef.current;
+    if (!points.length) {
       return;
     }
 
+    // Always fit on autoFitKey change (mode or destination changed)
+    // Reset viewport lock to ensure the map auto-zooms correctly
+    viewportLockedRef.current = false;
     programmaticViewportRef.current = true;
 
     if (points.length === 1) {
-      map.setView(points[0], 15, { animate: false });
+      map.setView(points[0], SINGLE_POINT_ZOOM, { animate: false });
       window.setTimeout(() => {
         programmaticViewportRef.current = false;
       }, 0);
@@ -145,11 +225,12 @@ const LeafletViewportController: React.FC<{
     map.fitBounds(L.latLngBounds(points), {
       padding: [56, 56],
       animate: false,
+      maxZoom: MAX_AUTO_FIT_ZOOM,
     });
     window.setTimeout(() => {
       programmaticViewportRef.current = false;
     }, 0);
-  }, [autoFitKey, map, lat0, lng0, lat1, lng1, programmaticViewportRef, viewportLockedRef]);
+  }, [autoFitKey, map, programmaticViewportRef, viewportLockedRef]);
 
   return null;
 };
@@ -240,7 +321,7 @@ const GoogleDriverTripMapCanvas: React.FC<GoogleDriverTripMapCanvasProps> = ({
     <GoogleMap
       mapContainerStyle={{ width: '100%', height: '100%' }}
       center={initialCenter}
-      zoom={14}
+      zoom={SINGLE_POINT_ZOOM}
       onLoad={(map) => {
         mapRef.current = map;
         onMapLoad(
@@ -260,6 +341,7 @@ const GoogleDriverTripMapCanvas: React.FC<GoogleDriverTripMapCanvasProps> = ({
         mapTypeControl: false,
         fullscreenControl: false,
         clickableIcons: false,
+        minZoom: 10,
         styles: themeMode === 'dark' ? darkMapStyles : undefined,
       }}
     >
@@ -305,10 +387,14 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
   colorMode = 'light',
 }) => {
   const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
+  const [googleMapReady, setGoogleMapReady] = useState(0);
   const mapRef = useRef<google.maps.Map | null>(null);
+  const leafletMapRef = useRef<L.Map | null>(null);
   const viewportLockedRef = useRef(false);
   const programmaticViewportRef = useRef(false);
   const lastAutoFitKeyRef = useRef('');
+  const googleViewportPointsRef = useRef<google.maps.LatLngLiteral[]>([]);
+  const leafletViewportPointsRef = useRef<[number, number][]>([]);
   const themeMode = resolveColorMode(colorMode);
   const hasGoogleMapsApiKey = googleMapsApiKey.trim().length > 0;
 
@@ -338,6 +424,20 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
     viewportLockedRef.current = false;
     lastAutoFitKeyRef.current = '';
   }, [mode, destination?.lat, destination?.lng]);
+
+  useEffect(() => {
+    googleViewportPointsRef.current = [currentLocation, destination].filter(Boolean) as google.maps.LatLngLiteral[];
+
+    const leafletPoints: [number, number][] = [];
+    if (currentLocation?.lat != null && currentLocation?.lng != null) {
+      leafletPoints.push([currentLocation.lat, currentLocation.lng]);
+    }
+    if (destination?.lat != null && destination?.lng != null) {
+      leafletPoints.push([destination.lat, destination.lng]);
+    }
+
+    leafletViewportPointsRef.current = leafletPoints;
+  }, [currentLocation, destination]);
 
   useEffect(() => {
     let cancelled = false;
@@ -370,10 +470,7 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
 
   useEffect(() => {
     const map = mapRef.current;
-    const points = [
-      currentLocation,
-      destination,
-    ].filter(Boolean) as google.maps.LatLngLiteral[];
+    const points = googleViewportPointsRef.current;
 
     if (
       !map ||
@@ -385,28 +482,67 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
       return;
     }
 
-    programmaticViewportRef.current = true;
     lastAutoFitKeyRef.current = autoFitKey;
+    fitGoogleViewport(map, points, viewportLockedRef, programmaticViewportRef);
+  }, [autoFitKey]);
 
-    if (points.length === 1) {
-      map.panTo(points[0]);
-      const currentZoom = map.getZoom() ?? 0;
-      if (currentZoom < 15) {
-        map.setZoom(15);
-      }
-      google.maps.event.addListenerOnce(map, 'idle', () => {
-        programmaticViewportRef.current = false;
-      });
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !hasGoogleMapsApiKey || !window.google) {
       return;
     }
 
-    const bounds = new google.maps.LatLngBounds();
-    points.forEach((point) => bounds.extend(point));
-    map.fitBounds(bounds, 56);
-    google.maps.event.addListenerOnce(map, 'idle', () => {
-      programmaticViewportRef.current = false;
-    });
-  }, [autoFitKey, currentLocation, destination]);
+    const container = map.getDiv();
+    const triggerResize = () => {
+      google.maps.event.trigger(map, 'resize');
+      fitGoogleViewport(map, googleViewportPointsRef.current, viewportLockedRef, programmaticViewportRef, true);
+    };
+
+    triggerResize();
+
+    const timers = [150, 350, 700, 1200].map((delay) => window.setTimeout(triggerResize, delay));
+    const resizeObserver = typeof window.ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => {
+          triggerResize();
+        })
+      : null;
+
+    resizeObserver?.observe(container);
+
+    return () => {
+      timers.forEach((timerId) => window.clearTimeout(timerId));
+      resizeObserver?.disconnect();
+    };
+  }, [autoFitKey, googleMapReady, hasGoogleMapsApiKey]);
+
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    if (!map) {
+      return;
+    }
+
+    const refreshViewport = () => {
+      map.invalidateSize({ animate: false, pan: false });
+
+      const points = leafletViewportPointsRef.current;
+
+      if (points.length >= 2) {
+        map.fitBounds(L.latLngBounds(points), { padding: [56, 56], animate: false, maxZoom: MAX_AUTO_FIT_ZOOM });
+        return;
+      }
+
+      if (points.length === 1) {
+        map.setView(points[0], SINGLE_POINT_ZOOM, { animate: false });
+      }
+    };
+
+    refreshViewport();
+    const timers = [120, 280, 500, 900].map((delay) => window.setTimeout(refreshViewport, delay));
+
+    return () => {
+      timers.forEach((timerId) => window.clearTimeout(timerId));
+    };
+  }, [autoFitKey]);
 
   const leafletTileUrl =
     themeMode === 'dark'
@@ -420,8 +556,10 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
 
   const leafletMap = (
     <LeafletMapContainer
+      ref={leafletMapRef}
       center={[center.lat, center.lng]}
-      zoom={14}
+      zoom={SINGLE_POINT_ZOOM}
+      minZoom={10}
       style={{ width: '100%', height: '100%' }}
       zoomControl
       scrollWheelZoom
@@ -484,6 +622,8 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
               return;
             }
 
+            setGoogleMapReady((prev) => prev + 1);
+
             map.addListener('dragstart', () => {
               viewportLockedRef.current = true;
             });
@@ -497,27 +637,8 @@ export const DriverTripMap: React.FC<DriverTripMapProps> = ({
               return;
             }
 
-            programmaticViewportRef.current = true;
             lastAutoFitKeyRef.current = autoFitKey;
-
-            if (points.length === 1) {
-              map.panTo(points[0]);
-              const currentZoom = map.getZoom() ?? 0;
-              if (currentZoom < 15) {
-                map.setZoom(15);
-              }
-              google.maps.event.addListenerOnce(map, 'idle', () => {
-                programmaticViewportRef.current = false;
-              });
-              return;
-            }
-
-            const bounds = new google.maps.LatLngBounds();
-            points.forEach((point) => bounds.extend(point));
-            map.fitBounds(bounds, 56);
-            google.maps.event.addListenerOnce(map, 'idle', () => {
-              programmaticViewportRef.current = false;
-            });
+            fitGoogleViewport(map, points, viewportLockedRef, programmaticViewportRef, true);
           }}
           fallback={leafletMap}
         />

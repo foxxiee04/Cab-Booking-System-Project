@@ -81,6 +81,25 @@ export function createApp({ rideService, getReadiness }: RideAppOptions) {
     }
   });
 
+  app.get('/internal/drivers/:driverId/stats', async (req, res) => {
+    try {
+      const totalCompletedRides = await rideService.countCompletedRidesForDriver(req.params.driverId);
+
+      return res.json({
+        success: true,
+        data: {
+          totalCompletedRides,
+        },
+      });
+    } catch (err) {
+      logger.error('Internal get driver stats error:', err);
+      return res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get driver stats' },
+      });
+    }
+  });
+
   app.use('/api/rides', authenticate, createRideRouter(rideService));
 
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

@@ -1,4 +1,4 @@
-import { PrismaClient, PaymentStatus, PaymentMethod, PaymentProvider } from '../generated/prisma-client';
+import { PrismaClient, PaymentStatus, PaymentMethod, PaymentProvider, WalletTransactionType } from '../generated/prisma-client';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
 import { config } from '../config';
@@ -485,6 +485,7 @@ export class PaymentService {
             paymentMethod: mappedMethod,
             driverCollected: earnings.driverCollected,
             cashDebt: earnings.cashDebt,
+            isPaid: !earnings.driverCollected || earnings.cashDebt === 0,
             bonusBreakdown: earnings.breakdown.bonuses as any,
             penaltyBreakdown: earnings.breakdown.penalties as any,
           },
@@ -500,6 +501,7 @@ export class PaymentService {
             paymentMethod:   mappedMethod,
             driverCollected: earnings.driverCollected,
             cashDebt:        earnings.cashDebt,
+            isPaid:          !earnings.driverCollected || earnings.cashDebt === 0,
             bonusBreakdown:   earnings.breakdown.bonuses   as any,
             penaltyBreakdown: earnings.breakdown.penalties as any,
           },
@@ -579,10 +581,14 @@ export class PaymentService {
         if (mappedMethod === PaymentMethod.CASH) {
           // Cash payment: mark as completed immediately (COD)
           await this.processPaymentRecord(createdPayment);
-          // CASH: driver already has the full fare in hand; platform takes its cut from wallet
-          // Commission is always based on gross fare regardless of customer voucher
-          if (driverId) {
-            await this.walletService.debitCommission(driverId, earnings.platformFee, rideId);
+          // CASH: driver already has the full fare in hand; platform settles the
+          // remaining obligation from wallet after per-trip bonus/penalty adjustments.
+          if (driverId && earnings.cashDebt > 0) {
+            await this.walletService.debitCommission(driverId, earnings.cashDebt, rideId);
+            await this.prisma.driverEarnings.updateMany({
+              where: { rideId, driverId, driverCollected: true },
+              data: { isPaid: true },
+            });
           }
         } else {
           // Electronic payment (MOMO/VISA): process with gateway mock
@@ -917,8 +923,12 @@ export class PaymentService {
       return null;
     }
 
-    const fare = await this.prisma.fare.findUnique({ where: { rideId: payment.rideId } });
-    return this.serializePaymentRecord(payment, fare);
+    const [fare, driverEarnings] = await Promise.all([
+      this.prisma.fare.findUnique({ where: { rideId: payment.rideId } }),
+      this.prisma.driverEarnings.findUnique({ where: { rideId: payment.rideId } }),
+    ]);
+
+    return this.serializePaymentRecord(payment, fare, driverEarnings);
   }
 
   async getCustomerPayments(customerId: string, page = 1, limit = 20) {
@@ -947,7 +957,9 @@ export class PaymentService {
   async getDriverEarnings(driverId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
 
-    const [earningsRows, total, aggregates] = await Promise.all([
+    await this.reconcileWalletSettledCashDebt(driverId);
+
+    const [earningsRows, total, aggregates, walletBonusAggregate] = await Promise.all([
       this.prisma.driverEarnings.findMany({
         where: { driverId },
         skip,
@@ -958,6 +970,10 @@ export class PaymentService {
       this.prisma.driverEarnings.aggregate({
         where: { driverId },
         _sum: { grossFare: true, platformFee: true, bonus: true, penalty: true, netEarnings: true, cashDebt: true },
+      }),
+      this.prisma.walletTransaction.aggregate({
+        where: { driverId, type: WalletTransactionType.BONUS },
+        _sum: { amount: true },
       }),
     ]);
 
@@ -972,12 +988,43 @@ export class PaymentService {
       summary: {
         totalGrossFare:  aggregates._sum.grossFare   || 0,
         totalPlatformFee: aggregates._sum.platformFee || 0,
-        totalBonus:      aggregates._sum.bonus       || 0,
+        totalBonus:      (aggregates._sum.bonus || 0) + (walletBonusAggregate._sum.amount || 0),
         totalPenalty:    aggregates._sum.penalty     || 0,
         totalNetEarnings: aggregates._sum.netEarnings || 0,
         unpaidCashDebt:  unpaidCashDebt._sum.cashDebt || 0,
       },
     };
+  }
+
+  private async reconcileWalletSettledCashDebt(driverId: string): Promise<void> {
+    const settledTransactions = await this.prisma.walletTransaction.findMany({
+      where: {
+        driverId,
+        type: WalletTransactionType.COMMISSION,
+        rideId: { not: null },
+      },
+      select: { rideId: true },
+    });
+
+    const settledRideIds = [...new Set(
+      settledTransactions
+        .map((transaction) => transaction.rideId)
+        .filter((rideId): rideId is string => Boolean(rideId)),
+    )];
+
+    if (settledRideIds.length === 0) {
+      return;
+    }
+
+    await this.prisma.driverEarnings.updateMany({
+      where: {
+        driverId,
+        driverCollected: true,
+        isPaid: false,
+        rideId: { in: settledRideIds },
+      },
+      data: { isPaid: true },
+    });
   }
 
   async refundPayment(rideId: string, reason: string): Promise<void> {
@@ -1083,7 +1130,7 @@ export class PaymentService {
         throw new Error('VNPay payment is missing vnp_TxnRef for refund – ensure IPN was processed');
       }
 
-      const { vnpayGateway: vg } = await import('./vnpay.gateway');
+      const { vnpayGateway: vg } = require('./vnpay.gateway');
       const refundResponse = await vg.createRefund({
         txnRef: vnpTxnRef,
         transactionNo: vnpTransactionNo,
@@ -1402,7 +1449,7 @@ export class PaymentService {
     return parsed;
   }
 
-  private serializePaymentRecord(payment: any, fare: any = null) {
+  private serializePaymentRecord(payment: any, fare: any = null, driverEarnings: any = null) {
     const gatewayResponse = this.buildGatewayResponseEnvelope(payment.gatewayResponse);
     const rawRefund = gatewayResponse.refund && typeof gatewayResponse.refund === 'object'
       ? { ...(gatewayResponse.refund as Record<string, any>) }
@@ -1436,6 +1483,19 @@ export class PaymentService {
       ...payment,
       fare,
       refund,
+      driverEarnings: driverEarnings
+        ? {
+            grossFare: driverEarnings.grossFare,
+            commissionRate: driverEarnings.commissionRate,
+            platformFee: driverEarnings.platformFee,
+            bonus: driverEarnings.bonus,
+            penalty: driverEarnings.penalty,
+            netEarnings: driverEarnings.netEarnings,
+            paymentMethod: driverEarnings.paymentMethod,
+            driverCollected: driverEarnings.driverCollected,
+            cashDebt: driverEarnings.cashDebt,
+          }
+        : null,
     };
   }
 

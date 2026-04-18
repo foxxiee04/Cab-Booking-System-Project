@@ -5,6 +5,7 @@ export interface User {
   firstName: string;
   lastName: string;
   phoneNumber?: string;
+  avatar?: string;
   role: 'DRIVER';
   createdAt: string;
   updatedAt: string;
@@ -111,6 +112,7 @@ export interface Ride {
     firstName: string;
     lastName: string;
     phoneNumber?: string;
+    avatar?: string;
     rating?: number;
   };
 }
@@ -210,5 +212,8 @@ export interface Notification {
   type: 'success' | 'error' | 'warning' | 'info';
   message: string;
   title?: string;
+  rideId?: string;
   persistMs?: number;
+  createdAt: string;
+  read: boolean;
 }

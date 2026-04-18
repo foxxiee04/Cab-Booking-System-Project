@@ -7,21 +7,34 @@
  * is always available.
  *
  * Debt control:
- *   balance < DEBT_LIMIT (-200 000 VND) → driver cannot accept new rides
+ *   Initial activation requires reaching 300 000 VND once
+ *   balance <= DEBT_LIMIT (-200 000 VND) → driver cannot accept new rides
+ *   balance <= WARNING_THRESHOLD (-100 000 VND) → warn driver to top up soon
  *   For cash rides we also pre-check: balance - commission < DEBT_LIMIT
  */
 
-import { PrismaClient, WalletTransactionType, TopUpStatus } from '../generated/prisma-client';
+import { PrismaClient, WalletTransactionType, TopUpStatus, PaymentStatus } from '../generated/prisma-client';
 import { v4 as uuidv4 } from 'uuid';
 import { momoGateway } from './momo.gateway';
 import { vnpayGateway, VNPayGateway } from './vnpay.gateway';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
+export const INITIAL_ACTIVATION_BALANCE = 300_000; // VND
+export const WARNING_THRESHOLD = -100_000; // VND
 export const DEBT_LIMIT = -200_000; // VND
 
 export class WalletService {
   constructor(private readonly prisma: PrismaClient) {}
+
+  private normalizeVnpayReturnUrl(rawReturnUrl: string): string {
+    try {
+      const parsed = new URL(rawReturnUrl);
+      return `${parsed.origin}${parsed.pathname}`;
+    } catch {
+      return rawReturnUrl;
+    }
+  }
 
   // ─── Internal helpers ────────────────────────────────────────────────────
 
@@ -98,8 +111,9 @@ export class WalletService {
   }
 
   /**
-   * Debit platform commission for a cash ride.
-   * The driver collected the full fare in cash; the platform deducts its cut.
+   * Debit the platform obligation for a cash ride.
+   * The driver collected the full fare in cash; the platform deducts the amount
+   * that still needs to be settled after any in-fare bonuses/penalties.
    * This can push the balance negative (debt).
    */
   async debitCommission(driverId: string, commission: number, rideId: string): Promise<number> {
@@ -107,7 +121,7 @@ export class WalletService {
       driverId,
       -commission,
       WalletTransactionType.COMMISSION,
-      `Hoa hồng platform (tiền mặt)`,
+      `Khấu trừ công nợ chuyến tiền mặt`,
       rideId,
     );
     return newBalance;
@@ -202,20 +216,76 @@ export class WalletService {
 
   // ─── Debt control ────────────────────────────────────────────────────────
 
+  async hasCompletedInitialActivation(driverId: string): Promise<boolean> {
+    const wallet = await this.getOrCreateWallet(driverId);
+    if (wallet.balance >= INITIAL_ACTIVATION_BALANCE) {
+      return true;
+    }
+
+    const qualifyingTransaction = await this.prisma.walletTransaction.findFirst({
+      where: {
+        driverId,
+        balanceAfter: { gte: INITIAL_ACTIVATION_BALANCE },
+      },
+      select: { id: true },
+    });
+
+    return Boolean(qualifyingTransaction);
+  }
+
+  async getDriverWalletStatus(driverId: string): Promise<{
+    driverId: string;
+    balance: number;
+    initialActivationCompleted: boolean;
+    activationRequired: boolean;
+    warningThresholdReached: boolean;
+    canAcceptRide: boolean;
+    activationThreshold: number;
+    warningThreshold: number;
+    debtLimit: number;
+    reason?: string;
+  }> {
+    const wallet = await this.getOrCreateWallet(driverId);
+    const initialActivationCompleted = await this.hasCompletedInitialActivation(driverId);
+    const activationRequired = !initialActivationCompleted && wallet.balance < INITIAL_ACTIVATION_BALANCE;
+    const warningThresholdReached = initialActivationCompleted && wallet.balance <= WARNING_THRESHOLD;
+    const canAcceptRide = !activationRequired && wallet.balance > DEBT_LIMIT;
+
+    let reason: string | undefined;
+    if (activationRequired) {
+      reason = `Tài khoản tài xế mới cần tối thiểu ${INITIAL_ACTIVATION_BALANCE.toLocaleString('vi-VN')} VND trong ví trước khi bật nhận cuốc. Số dư hiện tại: ${wallet.balance.toLocaleString('vi-VN')} VND.`;
+    } else if (wallet.balance <= DEBT_LIMIT) {
+      reason = `Số dư ví (${wallet.balance.toLocaleString('vi-VN')} VND) đã chạm ngưỡng nợ ${DEBT_LIMIT.toLocaleString('vi-VN')} VND. Vui lòng nạp thêm tiền trước khi nhận cuốc mới.`;
+    }
+
+    return {
+      driverId,
+      balance: wallet.balance,
+      initialActivationCompleted,
+      activationRequired,
+      warningThresholdReached,
+      canAcceptRide,
+      activationThreshold: INITIAL_ACTIVATION_BALANCE,
+      warningThreshold: WARNING_THRESHOLD,
+      debtLimit: DEBT_LIMIT,
+      reason,
+    };
+  }
+
   /**
    * Check whether a driver is allowed to accept a new ride.
    * Returns false when the wallet is already past the debt limit.
    */
   async canAcceptRide(driverId: string): Promise<{ allowed: boolean; balance: number; reason?: string }> {
-    const wallet = await this.getOrCreateWallet(driverId);
-    if (wallet.balance < DEBT_LIMIT) {
+    const status = await this.getDriverWalletStatus(driverId);
+    if (!status.canAcceptRide) {
       return {
         allowed: false,
-        balance: wallet.balance,
-        reason: `Số dư ví (${wallet.balance} VND) vượt quá giới hạn nợ. Vui lòng nạp tiền trước.`,
+        balance: status.balance,
+        reason: status.reason,
       };
     }
-    return { allowed: true, balance: wallet.balance };
+    return { allowed: true, balance: status.balance };
   }
 
   /**
@@ -226,16 +296,24 @@ export class WalletService {
     driverId: string,
     commission: number,
   ): Promise<{ allowed: boolean; balance: number; reason?: string }> {
-    const wallet = await this.getOrCreateWallet(driverId);
-    const projectedBalance = wallet.balance - commission;
-    if (projectedBalance < DEBT_LIMIT) {
+    const status = await this.getDriverWalletStatus(driverId);
+    if (status.activationRequired) {
       return {
         allowed: false,
-        balance: wallet.balance,
+        balance: status.balance,
+        reason: status.reason,
+      };
+    }
+
+    const projectedBalance = status.balance - commission;
+    if (projectedBalance <= DEBT_LIMIT) {
+      return {
+        allowed: false,
+        balance: status.balance,
         reason: `Nhận cuốc này sẽ đẩy số dư xuống ${projectedBalance} VND, vượt giới hạn nợ ${DEBT_LIMIT} VND.`,
       };
     }
-    return { allowed: true, balance: wallet.balance };
+    return { allowed: true, balance: status.balance };
   }
 
   // ─── Queries ─────────────────────────────────────────────────────────────
@@ -243,6 +321,15 @@ export class WalletService {
   async getBalance(driverId: string): Promise<{ driverId: string; balance: number }> {
     const wallet = await this.getOrCreateWallet(driverId);
     return { driverId, balance: wallet.balance };
+  }
+
+  async getCompletedRideCount(driverId: string): Promise<number> {
+    return this.prisma.payment.count({
+      where: {
+        driverId,
+        status: PaymentStatus.COMPLETED,
+      },
+    });
   }
 
   async getTransactions(
@@ -290,7 +377,7 @@ export class WalletService {
 
     const topUpId = uuidv4();
     const orderId = `TU${topUpId.replace(/-/g, '').slice(0, 14).toUpperCase()}`;
-    const orderInfo = `Nạp ví tài xế - ${amount.toLocaleString('vi-VN')}đ`;
+    const orderInfo = `Nạp ví tài xế ${orderId} - ${amount.toLocaleString('vi-VN')}đ`;
 
     let payUrl: string;
 
@@ -319,7 +406,7 @@ export class WalletService {
         throw new Error('VNPay chưa được cấu hình. Vui lòng dùng phương thức khác.');
       }
 
-      const vnpayReturn = `${returnUrl}?topUpId=${topUpId}&provider=VNPAY`;
+      const vnpayReturn = this.normalizeVnpayReturnUrl(returnUrl);
 
       const result = gateway.createPaymentUrl({
         orderId,
@@ -442,5 +529,9 @@ export class WalletService {
   /** Fetch a top-up order by its UUID (topUpId). */
   async getTopUpOrder(topUpId: string) {
     return this.prisma.walletTopUpOrder.findUnique({ where: { id: topUpId } });
+  }
+
+  async getTopUpOrderByOrderId(orderId: string) {
+    return this.prisma.walletTopUpOrder.findUnique({ where: { orderId } });
   }
 }

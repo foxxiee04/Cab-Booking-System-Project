@@ -600,7 +600,7 @@ const ProfileSetup: React.FC = () => {
       PaperProps={{ sx: { borderRadius: 3, maxHeight: '90vh' } }}
     >
       <DialogTitle sx={{ fontWeight: 800, pb: 0 }}>
-        ĐIỀU KHOẢN DỊCH VỤ DÀNH CHO TÀI XẾ CABDRIVER
+        ĐIỀU KHOẢN DỊCH VỤ DÀNH CHO TÀI XẾ FOXGO
       </DialogTitle>
       <DialogContent dividers sx={{ overflowY: 'auto' }}>
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>
@@ -614,21 +614,21 @@ const ProfileSetup: React.FC = () => {
           2. Xét duyệt tài khoản
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
-          Hồ sơ sẽ được đội ngũ CabDriver xem xét trong vòng 1–3 ngày làm việc. CabDriver có quyền từ chối hồ sơ không đủ tiêu chuẩn mà không cần nêu lý do.
+          Hồ sơ sẽ được đội ngũ FoxGo xem xét trong vòng 1–3 ngày làm việc. FoxGo có quyền từ chối hồ sơ không đủ tiêu chuẩn mà không cần nêu lý do.
         </Typography>
 
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-          3. Kích hoạt tài khoản & Ví CabDriver
+          3. Kích hoạt tài khoản & Ví FoxGo Driver
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
-          Sau khi hồ sơ được duyệt, tài xế cần nạp tối thiểu <strong>300.000 ₫</strong> vào Ví CabDriver để kích hoạt tài khoản và bắt đầu nhận cuốc xe.
+          Sau khi hồ sơ được duyệt, tài xế cần nạp tối thiểu <strong>300.000 ₫</strong> vào Ví FoxGo Driver để kích hoạt tài khoản và bắt đầu nhận cuốc xe.
         </Typography>
 
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>
           4. Phí nền tảng (hoa hồng)
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
-          CabDriver thu <strong>20%</strong> trên giá trị mỗi chuyến hoàn tất, khấu trừ tự động từ Ví CabDriver. Với chuyến thanh toán tiền mặt, tài xế nhận đủ tiền từ khách; phần hoa hồng được ghi nợ vào ví sau chuyến.
+          FoxGo thu <strong>20%</strong> trên giá trị mỗi chuyến hoàn tất, khấu trừ tự động từ Ví FoxGo Driver. Với chuyến thanh toán tiền mặt, tài xế nhận đủ tiền từ khách; phần hoa hồng được ghi nợ vào ví sau chuyến.
         </Typography>
 
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>
@@ -656,14 +656,14 @@ const ProfileSetup: React.FC = () => {
           8. Tạm ngưng tài khoản
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
-          CabDriver có quyền tạm ngưng tài khoản tài xế khi phát hiện vi phạm hoặc khiếu nại từ khách hàng để tiến hành điều tra. Tài xế sẽ được thông báo và có 7 ngày làm việc để phản hồi.
+          FoxGo có quyền tạm ngưng tài khoản tài xế khi phát hiện vi phạm hoặc khiếu nại từ khách hàng để tiến hành điều tra. Tài xế sẽ được thông báo và có 7 ngày làm việc để phản hồi.
         </Typography>
 
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>
           9. Thay đổi điều khoản
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          CabDriver có quyền cập nhật điều khoản bất cứ lúc nào và sẽ thông báo trước 7 ngày. Việc tiếp tục sử dụng dịch vụ sau thời điểm có hiệu lực đồng nghĩa với việc chấp thuận điều khoản mới.
+          FoxGo có quyền cập nhật điều khoản bất cứ lúc nào và sẽ thông báo trước 7 ngày. Việc tiếp tục sử dụng dịch vụ sau thời điểm có hiệu lực đồng nghĩa với việc chấp thuận điều khoản mới.
         </Typography>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2.5, flexDirection: 'column', alignItems: 'stretch', gap: 1 }}>

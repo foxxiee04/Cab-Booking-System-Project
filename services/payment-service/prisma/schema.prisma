@@ -279,11 +279,18 @@ enum DiscountType {
   FIXED   // discount_value is a fixed VND amount
 }
 
+enum VoucherAudience {
+  ALL_CUSTOMERS
+  NEW_CUSTOMERS
+  RETURNING_CUSTOMERS
+}
+
 // Master voucher catalogue.
 model Voucher {
   id            String       @id @default(uuid())
   code          String       @unique
   description   String?
+  audienceType  VoucherAudience @default(ALL_CUSTOMERS)
 
   discountType  DiscountType
   discountValue Float                          // percent (0-100) or flat VND amount
@@ -305,6 +312,7 @@ model Voucher {
 
   @@index([code])
   @@index([endTime])
+  @@index([audienceType, startTime, endTime])
   @@map("vouchers")
 }
 

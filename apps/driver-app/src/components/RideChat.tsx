@@ -3,9 +3,7 @@ import {
   Avatar,
   Box,
   CircularProgress,
-  Dialog,
-  DialogContent,
-  DialogTitle,
+  Drawer,
   IconButton,
   InputAdornment,
   Stack,
@@ -81,14 +79,24 @@ const RideChat: React.FC<RideChatProps> = ({ open, onClose, token, rideId, myUse
   };
 
   return (
-    <Dialog
+    <Drawer
+      anchor="right"
       open={open}
       onClose={onClose}
-      fullWidth
-      maxWidth="xs"
-      PaperProps={{ sx: { borderRadius: 4, height: '70vh', display: 'flex', flexDirection: 'column' } }}
+      ModalProps={{ keepMounted: true }}
+      PaperProps={{
+        sx: {
+          width: { xs: '100%', sm: 380, md: 420 },
+          borderTopLeftRadius: { xs: 24, sm: 28 },
+          borderBottomLeftRadius: { xs: 0, sm: 28 },
+          display: 'flex',
+          flexDirection: 'column',
+          borderLeft: '1px solid rgba(148,163,184,0.18)',
+          overflow: 'hidden',
+        },
+      }}
     >
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2.5, py: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
         <ChatBubbleRounded color="primary" fontSize="small" />
         <Stack sx={{ flex: 1 }}>
           <Typography variant="subtitle1" fontWeight={800}>
@@ -104,11 +112,9 @@ const RideChat: React.FC<RideChatProps> = ({ open, onClose, token, rideId, myUse
           )}
         </Stack>
         <IconButton size="small" onClick={onClose}><Close fontSize="small" /></IconButton>
-      </DialogTitle>
+      </Box>
 
-      <DialogContent
-        sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', py: 2, px: 2 }}
-      >
+      <Box sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', py: 2, px: 2 }}>
         {messages.length === 0 && (
           <Box sx={{ m: 'auto', textAlign: 'center', color: 'text.secondary' }}>
             <ChatBubbleRounded sx={{ fontSize: 40, opacity: 0.2, mb: 1 }} />
@@ -121,7 +127,7 @@ const RideChat: React.FC<RideChatProps> = ({ open, onClose, token, rideId, myUse
           <MessageBubble key={i} msg={msg} />
         ))}
         <div ref={bottomRef} />
-      </DialogContent>
+      </Box>
 
       <Box sx={{ px: 2, py: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
         <TextField
@@ -151,7 +157,7 @@ const RideChat: React.FC<RideChatProps> = ({ open, onClose, token, rideId, myUse
           }}
         />
       </Box>
-    </Dialog>
+    </Drawer>
   );
 };
 

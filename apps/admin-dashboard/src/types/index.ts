@@ -170,6 +170,27 @@ export interface Payment {
   ride?: Ride;
 }
 
+export type VoucherDiscountType = 'PERCENT' | 'FIXED';
+export type VoucherAudience = 'ALL_CUSTOMERS' | 'NEW_CUSTOMERS' | 'RETURNING_CUSTOMERS';
+
+export interface Voucher {
+  id: string;
+  code: string;
+  description: string | null;
+  audienceType: VoucherAudience;
+  discountType: VoucherDiscountType;
+  discountValue: number;
+  maxDiscount: number | null;
+  minFare: number;
+  startTime: string;
+  endTime: string;
+  usageLimit: number | null;
+  perUserLimit: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Pricing Types
 export interface SurgePricing {
   multiplier: number;

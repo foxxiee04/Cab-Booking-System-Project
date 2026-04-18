@@ -1,12 +1,14 @@
 import { io, Socket } from 'socket.io-client';
+import { driverApi } from '../api/driver.api';
 import { store } from '../store';
-import { logout, updateTokens } from '../store/auth.slice';
+import { logout } from '../store/auth.slice';
+import { setProfile, updateProfile } from '../store/driver.slice';
 import { setPendingRide, clearPendingRide, updateRideStatus } from '../store/ride.slice';
 import { showNotification } from '../store/ui.slice';
 import { Ride, VehicleType } from '../types';
+import { refreshAuthSession } from '../api/axios.config';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 class DriverSocketService {
   private socket: Socket | null = null;
@@ -14,6 +16,15 @@ class DriverSocketService {
   private maxReconnectAttempts = 5;
   private authFailureHandled = false;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
+
+  private async syncDriverProfile() {
+    try {
+      const response = await driverApi.getProfile();
+      store.dispatch(setProfile(response.data.driver));
+    } catch {
+      // Keep realtime status updates resilient even if profile sync fails.
+    }
+  }
 
   private isAuthError(error: unknown) {
     const message = typeof error === 'string'
@@ -48,24 +59,7 @@ class DriverSocketService {
 
     void (async () => {
       try {
-        const response = await fetch(`${API_URL}/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Refresh failed');
-        }
-
-        const payload = await response.json();
-        const tokens = payload?.data?.tokens;
-
-        if (!tokens?.accessToken || !tokens?.refreshToken) {
-          throw new Error('Refresh payload missing tokens');
-        }
-
-        store.dispatch(updateTokens(tokens));
+        const tokens = await refreshAuthSession();
         this.authFailureHandled = false;
         this.connect(tokens.accessToken);
       } catch {
@@ -134,6 +128,10 @@ class DriverSocketService {
     // Listen for new ride requests - match backend event name
     this.socket.on('NEW_RIDE_AVAILABLE', (data: { rideId: string; customerId: string; pickup: any; dropoff: any; estimatedFare?: number; vehicleType?: string; distance?: number; duration?: number; timeoutSeconds?: number; customer?: any }) => {
       console.log('🚗 New ride available:', data);
+
+      if (!data?.rideId || !data?.customerId) {
+        return;
+      }
       
       // Convert backend format to frontend Ride format
       const ride: Ride = {
@@ -157,24 +155,27 @@ class DriverSocketService {
         estimatedDuration: data.duration,
         status: 'PENDING',
         customer: data.customer ? {
-          firstName: data.customer.firstName || 'Khách hàng',
+          firstName: data.customer.firstName || '',
           lastName: data.customer.lastName || '',
           phoneNumber: data.customer.phoneNumber,
+          avatar: data.customer.avatar,
           rating: data.customer.rating
         } : undefined
       };
       
       store.dispatch(setPendingRide({ ride, timeoutSeconds: data.timeoutSeconds || 30 }));
-      
-      store.dispatch(
-        showNotification({
-          type: 'info',
-          message: `Có yêu cầu chuyến mới. Bạn có ${data.timeoutSeconds || 30} giây để nhận.`,
-        })
-      );
 
       // Play notification sound
       this.playNotificationSound();
+    });
+
+    this.socket.on('DRIVER_APPROVAL_UPDATED', (data: { driverId?: string; status: 'APPROVED' | 'REJECTED'; reason?: string }) => {
+      const currentProfile = store.getState().driver.profile;
+      if (currentProfile) {
+        store.dispatch(updateProfile({ status: data.status }));
+      }
+
+      void this.syncDriverProfile();
     });
 
     // Legacy event name for backward compatibility

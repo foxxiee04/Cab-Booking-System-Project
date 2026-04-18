@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
-  IconButton,
   Card,
   CardContent,
   Button,
@@ -17,12 +16,14 @@ import {
   DialogContentText,
   DialogActions,
   CircularProgress,
+  FormControlLabel,
+  Radio,
+  RadioGroup,
   Stack,
+  TextField,
 } from '@mui/material';
 import {
   ArrowBack,
-  Phone,
-  Chat,
   Navigation,
   FiberManualRecord,
   PlayArrow,
@@ -35,14 +36,13 @@ import { updateRideStatus, clearCurrentRide, setCurrentRide } from '../store/rid
 import { setCurrentLocation } from '../store/driver.slice';
 import { rideApi } from '../api/ride.api';
 import { driverApi } from '../api/driver.api';
-import { formatCurrency } from '../utils/format.utils';
+import { Ride } from '../types';
+import { formatCurrency, getPaymentMethodLabel } from '../utils/format.utils';
 import { useTranslation } from 'react-i18next';
 import DriverTripMap from '../features/trip/components/DriverTripMap';
 import { driverSocketService } from '../socket/driver.socket';
 import { watchPosition, clearWatch } from '../utils/map.utils';
-import RideChat from '../components/RideChat';
-import RideCall from '../components/RideCall';
-import { useWebRTCCall } from '../hooks/useWebRTCCall';
+import ContactBox from '../components/ContactBox';
 
 const getOptimisticCompletedRidesKey = (userId?: string) => `driver:completedRidesCount:${userId || 'anonymous'}`;
 
@@ -78,6 +78,23 @@ const PHASE_CONFIG: Record<string, {
   },
 };
 
+const DRIVER_CANCEL_REASONS = [
+  'Khách không xuất hiện tại điểm đón',
+  'Không thể liên hệ với khách',
+  'Khách yêu cầu hủy chuyến',
+  'Sự cố phương tiện',
+  'Sự cố giao thông / an toàn',
+  'Khác',
+];
+
+const hasCustomerIdentity = (customer: Ride['customer'] | undefined) => Boolean(
+  customer && (
+    `${customer.firstName || ''} ${customer.lastName || ''}`.trim()
+    || customer.phoneNumber
+    || customer.avatar
+  )
+);
+
 const ActiveRide: React.FC = () => {
   const loggedGeoErrorCodesRef = useRef<Set<number>>(new Set());
   const navigate = useNavigate();
@@ -93,25 +110,9 @@ const ActiveRide: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCancelDialog, setShowCancelDialog] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [customCancelReason, setCustomCancelReason] = useState('');
   const watchIdRef = useRef<number | null>(null);
-
-  const { callState, callError, startCall, acceptCall, hangUp } = useWebRTCCall(
-    accessToken,
-    currentRide?.id,
-  );
-
-  useEffect(() => {
-    if (isOnline && accessToken) {
-      driverSocketService.connect(accessToken);
-    } else {
-      driverSocketService.disconnect();
-    }
-
-    return () => {
-      driverSocketService.disconnect();
-    };
-  }, [accessToken, isOnline]);
 
   useEffect(() => {
     if (!isOnline || !currentRide || watchIdRef.current !== null) {
@@ -181,6 +182,38 @@ const ActiveRide: React.FC = () => {
     };
   }, [currentRide, dispatch, t]);
 
+  useEffect(() => {
+    if (!currentRide?.id) {
+      return;
+    }
+
+    const shouldRefreshCustomerIdentity = ['ASSIGNED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS'].includes(currentRide.status)
+      && !hasCustomerIdentity(currentRide.customer);
+
+    if (!shouldRefreshCustomerIdentity) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const hydrateCurrentRide = async () => {
+      try {
+        const response = await rideApi.getRide(currentRide.id);
+        if (isMounted && response.data.ride) {
+          dispatch(setCurrentRide(response.data.ride));
+        }
+      } catch {
+        // Keep current ride usable even if the customer profile hydration fails.
+      }
+    };
+
+    void hydrateCurrentRide();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentRide?.customer, currentRide?.id, currentRide?.status, dispatch]);
+
   const handleStartRide = useCallback(async () => {
     if (!currentRide) return;
     setLoading(true);
@@ -224,11 +257,11 @@ const ActiveRide: React.FC = () => {
     }
   }, [currentRide, dispatch, navigate, t, user?.id]);
 
-  const handleCancelRide = useCallback(async () => {
+  const handleCancelRide = useCallback(async (reason: string) => {
     if (!currentRide) return;
     setLoading(true);
     try {
-      await rideApi.cancelRide(currentRide.id, 'Tài xế hủy chuyến');
+      await rideApi.cancelRide(currentRide.id, reason);
       dispatch(clearCurrentRide());
       navigate('/dashboard');
     } catch (err: any) {
@@ -265,13 +298,43 @@ const ActiveRide: React.FC = () => {
 
   const status = currentRide.status;
   const phase = PHASE_CONFIG[status] || PHASE_CONFIG.ACCEPTED;
+  const customerIdentityReady = hasCustomerIdentity(currentRide.customer);
+  const customerPhoneNumber = currentRide.customer?.phoneNumber || '';
+  const customerName = customerIdentityReady
+    ? `${currentRide.customer?.firstName || ''} ${currentRide.customer?.lastName || ''}`.trim() || customerPhoneNumber || 'Khách hàng'
+    : 'Đang tải thông tin khách hàng';
+  const customerInitials = `${currentRide.customer?.firstName?.[0] || ''}${currentRide.customer?.lastName?.[0] || ''}`.trim().toUpperCase() || 'KH';
+  const pickupAddress = currentRide.pickupLocation?.address || `${currentRide.pickupLocation.lat.toFixed(5)}, ${currentRide.pickupLocation.lng.toFixed(5)}`;
+  const dropoffAddress = currentRide.dropoffLocation?.address || `${currentRide.dropoffLocation.lat.toFixed(5)}, ${currentRide.dropoffLocation.lng.toFixed(5)}`;
 
   return (
     <Box sx={{ minHeight: '100%', display: 'flex', flexDirection: 'column', gap: 1.5, pb: 1.5 }}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: { xs: 0.5, md: 0 } }}>
+        <Button
+          variant="text"
+          startIcon={<ArrowBack />}
+          onClick={() => navigate('/dashboard')}
+          sx={{ borderRadius: 999, fontWeight: 700, px: 1.5 }}
+        >
+          Quay lại
+        </Button>
+        <Chip
+          icon={phase.icon as React.ReactElement}
+          label={phase.label}
+          sx={{
+            bgcolor: phase.bgColor,
+            color: phase.color,
+            fontWeight: 700,
+            '& .MuiChip-icon': { color: phase.color },
+          }}
+        />
+      </Stack>
+
       {/* Map section with explicit height so Leaflet tiles render correctly */}
       <Box sx={{
         position: 'relative',
-        height: { xs: 300, sm: 380, md: 440 },
+        height: { xs: 340, sm: 420, md: 480 },
+        minHeight: 280,
         borderRadius: { xs: 3, md: 4 },
         overflow: 'hidden',
         background: 'linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)',
@@ -286,32 +349,6 @@ const ActiveRide: React.FC = () => {
           height="100%"
           colorMode="light"
         />
-
-        {/* Floating back button + phase chip overlay on the map */}
-        <Box sx={{
-          position: 'absolute', top: 12, left: 12, right: 12, zIndex: 1000,
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <IconButton
-            onClick={() => navigate('/dashboard')}
-            sx={{ bgcolor: 'rgba(255,255,255,0.92)', boxShadow: 2, backdropFilter: 'blur(8px)', '&:hover': { bgcolor: 'white' } }}
-          >
-            <ArrowBack />
-          </IconButton>
-          <Chip
-            icon={phase.icon as React.ReactElement}
-            label={phase.label}
-            sx={{
-              bgcolor: 'rgba(255,255,255,0.92)',
-              color: phase.color,
-              fontWeight: 700,
-              fontSize: 14,
-              backdropFilter: 'blur(8px)',
-              boxShadow: 2,
-              '& .MuiChip-icon': { color: phase.color },
-            }}
-          />
-        </Box>
       </Box>
 
       {/* Ride info card */}
@@ -330,14 +367,20 @@ const ActiveRide: React.FC = () => {
               {error}
             </Alert>
           )}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-            <Avatar sx={{ width: 50, height: 50, bgcolor: 'primary.main', fontSize: 20 }}>
-              {currentRide.customer?.firstName?.[0]}{currentRide.customer?.lastName?.[0]}
+          <Box sx={{ display: 'flex', alignItems: { xs: 'flex-start', sm: 'center' }, gap: 2, mb: 2 }}>
+            <Avatar src={currentRide.customer?.avatar || undefined} sx={{ width: 50, height: 50, bgcolor: 'primary.main', fontSize: 20 }}>
+              {customerInitials}
             </Avatar>
             <Box sx={{ flex: 1 }}>
               <Typography variant="subtitle1" fontWeight={600}>
-                {currentRide.customer?.firstName} {currentRide.customer?.lastName}
+                {customerName}
               </Typography>
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 0.75 }}>
+                {customerIdentityReady && customerPhoneNumber && (
+                  <Chip size="small" label={customerPhoneNumber} sx={{ borderRadius: 999, bgcolor: '#ecfeff', color: '#0f766e', fontWeight: 700 }} />
+                )}
+                <Chip size="small" label={`Mã chuyến ${currentRide.id.slice(0, 8).toUpperCase()}`} sx={{ borderRadius: 999, bgcolor: '#eff6ff', color: '#1d4ed8', fontWeight: 700 }} />
+              </Stack>
               {currentRide.customer?.rating && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <StarRate sx={{ color: '#FFC107', fontSize: 16 }} />
@@ -346,46 +389,49 @@ const ActiveRide: React.FC = () => {
                   </Typography>
                 </Box>
               )}
-              {currentRide.customer?.phoneNumber && (
-                <Typography variant="caption" color="text.secondary">
-                  SĐT: {currentRide.customer.phoneNumber}
-                </Typography>
-              )}
             </Box>
-
-            {currentRide.customer?.phoneNumber && (
-              <IconButton color="primary" href={`tel:${currentRide.customer.phoneNumber}`} sx={{ bgcolor: 'primary.50', '&:hover': { bgcolor: 'primary.100' } }}>
-                <Phone />
-              </IconButton>
+            {['ASSIGNED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS'].includes(status) && (
+              <ContactBox
+                token={accessToken}
+                rideId={currentRide?.id}
+                myUserId={user?.id}
+                contactName={customerName}
+                contactPhone={customerPhoneNumber || undefined}
+                role="DRIVER"
+                triggerMode="inline"
+                panelMode="floating"
+                triggerLabel="Liên hệ"
+              />
             )}
           </Box>
 
-          {/* Voice call + Chat buttons */}
-          <Stack direction="row" spacing={1.5} sx={{ mb: 1.5 }}>
-            <RideCall
-              callState={callState}
-              callError={callError}
-              driverName={`${currentRide.customer?.firstName || ''} ${currentRide.customer?.lastName || ''}`.trim() || 'Khách hàng'}
-              onStart={startCall}
-              onAccept={acceptCall}
-              onHangUp={hangUp}
-              onClose={() => {}}
-            />
-            <Button
-              variant="outlined"
-              fullWidth
-              startIcon={<Chat />}
-              sx={{ borderRadius: 3, py: 1.2 }}
-              onClick={() => setChatOpen(true)}
-            >
-              Nhắn tin
-            </Button>
-          </Stack>
 
-          <Stack spacing={1} sx={{ mb: 2 }}>
-            <Typography variant="body2"><strong>Điểm đón:</strong> {currentRide.pickupLocation?.address || `${currentRide.pickupLocation.lat.toFixed(5)}, ${currentRide.pickupLocation.lng.toFixed(5)}`}</Typography>
-            <Typography variant="body2"><strong>Điểm đến:</strong> {currentRide.dropoffLocation?.address || `${currentRide.dropoffLocation.lat.toFixed(5)}, ${currentRide.dropoffLocation.lng.toFixed(5)}`}</Typography>
-          </Stack>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25, mb: 2 }}>
+            <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <Typography variant="caption" color="text.secondary">Điểm đón</Typography>
+              <Typography variant="body2" fontWeight={700} sx={{ mt: 0.5 }}>
+                {pickupAddress}
+              </Typography>
+            </Box>
+            <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <Typography variant="caption" color="text.secondary">Điểm đến</Typography>
+              <Typography variant="body2" fontWeight={700} sx={{ mt: 0.5 }}>
+                {dropoffAddress}
+              </Typography>
+            </Box>
+            <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: '#eff6ff', border: '1px solid rgba(59,130,246,0.14)' }}>
+              <Typography variant="caption" color="text.secondary">Thanh toán</Typography>
+              <Typography variant="body2" fontWeight={800} sx={{ mt: 0.5, color: '#1d4ed8' }}>
+                {getPaymentMethodLabel(currentRide.paymentMethod || 'CASH')}
+              </Typography>
+            </Box>
+            <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: '#ecfeff', border: '1px solid rgba(13,148,136,0.16)' }}>
+              <Typography variant="caption" color="text.secondary">Mã chuyến</Typography>
+              <Typography variant="body2" fontWeight={800} sx={{ mt: 0.5, color: '#0f766e' }}>
+                {currentRide.id.slice(0, 8).toUpperCase()}
+              </Typography>
+            </Box>
+          </Box>
 
           <Divider sx={{ my: 1.5 }} />
 
@@ -454,7 +500,11 @@ const ActiveRide: React.FC = () => {
       {/* ── Cancel confirmation dialog ────────────────────────────── */}
       <Dialog
         open={showCancelDialog}
-        onClose={() => setShowCancelDialog(false)}
+        onClose={() => {
+          setShowCancelDialog(false);
+          setCancelReason('');
+          setCustomCancelReason('');
+        }}
         PaperProps={{ sx: { borderRadius: 3 } }}
       >
         <DialogTitle sx={{ fontWeight: 700 }}>
@@ -464,20 +514,58 @@ const ActiveRide: React.FC = () => {
           <DialogContentText>
             {t('activeRide.confirmCancelMessage', 'Bạn có chắc muốn hủy chuyến? Thao tác này có thể ảnh hưởng đến tỷ lệ nhận chuyến của bạn.')}
           </DialogContentText>
+          <RadioGroup
+            value={cancelReason}
+            onChange={(event) => setCancelReason(event.target.value)}
+            sx={{ mt: 2 }}
+          >
+            {DRIVER_CANCEL_REASONS.map((reason) => (
+              <FormControlLabel
+                key={reason}
+                value={reason}
+                control={<Radio />}
+                label={reason}
+              />
+            ))}
+          </RadioGroup>
+          {cancelReason === 'Khác' && (
+            <TextField
+              fullWidth
+              autoFocus
+              multiline
+              minRows={2}
+              label="Nhập lý do hủy chuyến"
+              value={customCancelReason}
+              onChange={(event) => setCustomCancelReason(event.target.value)}
+              sx={{ mt: 1 }}
+            />
+          )}
         </DialogContent>
         <DialogActions sx={{ p: 2, pt: 0 }}>
           <Button
-            onClick={() => setShowCancelDialog(false)}
+            onClick={() => {
+              setShowCancelDialog(false);
+              setCancelReason('');
+              setCustomCancelReason('');
+            }}
             variant="outlined"
             sx={{ borderRadius: 2 }}
           >
             {t('common.no', 'Tiếp tục chuyến này')}
           </Button>
           <Button
-            onClick={handleCancelRide}
+            onClick={() => {
+              const reason = cancelReason === 'Khác'
+                ? customCancelReason.trim()
+                : cancelReason;
+              if (!reason) {
+                return;
+              }
+              void handleCancelRide(reason);
+            }}
             color="error"
             variant="contained"
-            disabled={loading}
+            disabled={loading || !cancelReason || (cancelReason === 'Khác' && !customCancelReason.trim())}
             data-testid="confirm-cancel-ride-button"
             sx={{ borderRadius: 2 }}
           >
@@ -485,16 +573,6 @@ const ActiveRide: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* In-ride chat dialog */}
-      <RideChat
-        open={chatOpen}
-        onClose={() => setChatOpen(false)}
-        token={accessToken}
-        rideId={currentRide?.id}
-        myUserId={user?.id}
-        driverName={`${currentRide?.customer?.firstName || ''} ${currentRide?.customer?.lastName || ''}`.trim() || 'Khách hàng'}
-      />
     </Box>
   );
 };

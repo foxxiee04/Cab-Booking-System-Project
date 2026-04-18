@@ -11,6 +11,7 @@ export interface CreateRideBody {
   dropoff: LocationInput;
   vehicleType?: 'ECONOMY' | 'COMFORT' | 'PREMIUM';
   paymentMethod?: 'CASH' | 'CARD' | 'WALLET' | 'MOMO' | 'VNPAY';
+  voucherCode?: string;
 }
 
 export interface CancelRideBody {
@@ -29,7 +30,7 @@ export interface AvailableRidesQuery {
 }
 
 export const validateCreateRide = (req: Request, res: Response, next: NextFunction) => {
-  const { pickup, dropoff } = req.body as CreateRideBody;
+  const { pickup, dropoff, voucherCode } = req.body as CreateRideBody;
 
   if (!pickup || !dropoff) {
     return res.status(400).json({
@@ -66,6 +67,13 @@ export const validateCreateRide = (req: Request, res: Response, next: NextFuncti
     return res.status(400).json({
       success: false,
       error: { code: 'VALIDATION_ERROR', message: 'Longitude must be between -180 and 180' },
+    });
+  }
+
+  if (voucherCode != null && (typeof voucherCode !== 'string' || voucherCode.trim().length === 0)) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'voucherCode must be a non-empty string' },
     });
   }
 

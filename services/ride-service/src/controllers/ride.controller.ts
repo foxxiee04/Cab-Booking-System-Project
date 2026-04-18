@@ -14,6 +14,29 @@ interface AuthRequest extends Request {
 export class RideController {
   constructor(private readonly rideService: RideService) {}
 
+  private async canAccessRide(req: AuthRequest, ride: { customerId: string; driverId: string | null }): Promise<boolean> {
+    const hasAdminAccess = req.user!.role === UserRole.ADMIN;
+    const hasCustomerAccess = ride.customerId === req.user!.userId;
+    const driverActorIds = req.user!.role === UserRole.DRIVER
+      ? await this.resolveDriverActorIds(req.user!.userId)
+      : [];
+    const hasDriverAccess = Boolean(ride.driverId && driverActorIds.includes(ride.driverId));
+
+    return hasAdminAccess || hasCustomerAccess || hasDriverAccess;
+  }
+
+  private mapRideMessage(message: any) {
+    return {
+      id: message.id,
+      from: message.senderId,
+      role: message.senderRole,
+      type: message.type,
+      message: message.message,
+      timestamp: new Date(message.createdAt).getTime(),
+      createdAt: message.createdAt,
+    };
+  }
+
   private async resolveDriverActorIds(userId: string): Promise<string[]> {
     const actorIds = [userId];
 
@@ -32,6 +55,42 @@ export class RideController {
   private async resolveDriverActorId(userId: string): Promise<string> {
     const [driverActorId] = await this.resolveDriverActorIds(userId);
     return driverActorId;
+  }
+
+  private isDriverOwnershipMismatch(message: string): boolean {
+    const normalizedMessage = message.toLowerCase();
+
+    return normalizedMessage.includes('assigned ride')
+      || normalizedMessage.includes('assigned driver')
+      || normalizedMessage.includes('own offer');
+  }
+
+  private async withResolvedDriverActorId<T>(
+    userId: string,
+    operation: (actorId: string) => Promise<T>,
+  ): Promise<T> {
+    const actorIds = await this.resolveDriverActorIds(userId);
+    let lastError: unknown;
+
+    for (let index = 0; index < actorIds.length; index += 1) {
+      const actorId = actorIds[index];
+
+      try {
+        return await operation(actorId);
+      } catch (err) {
+        lastError = err;
+        const message = err instanceof Error ? err.message : String(err);
+        const hasFallback = index < actorIds.length - 1;
+
+        if (!hasFallback || !this.isDriverOwnershipMismatch(message)) {
+          throw err;
+        }
+
+        logger.warn(`Retrying driver ride action with fallback actorId for user ${userId}`);
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('Driver action failed');
   }
 
   private parseRideStatuses(rawStatus: unknown): PrismaRideStatus[] | undefined {
@@ -160,7 +219,7 @@ export class RideController {
 
   createRide = async (req: AuthRequest, res: Response) => {
     try {
-      const { pickup, dropoff, vehicleType, paymentMethod } = req.body;
+      const { pickup, dropoff, vehicleType, paymentMethod, voucherCode } = req.body;
 
       // Check if customer has active ride
       const activeRide = await this.rideService.getActiveRideForCustomer(req.user!.userId);
@@ -177,6 +236,7 @@ export class RideController {
         dropoff,
         vehicleType,
         paymentMethod,
+        voucherCode,
       });
 
       res.status(201).json({ success: true, data: { ride } });
@@ -200,9 +260,7 @@ export class RideController {
       }
 
       // Verify access
-      if (req.user!.role !== UserRole.ADMIN && 
-          ride.customerId !== req.user!.userId && 
-          ride.driverId !== req.user!.userId) {
+      if (!(await this.canAccessRide(req, ride))) {
         return res.status(403).json({
           success: false,
           error: { code: 'FORBIDDEN', message: 'Access denied' },
@@ -215,6 +273,90 @@ export class RideController {
       res.status(500).json({
         success: false,
         error: { code: 'INTERNAL_ERROR', message: 'Failed to get ride' },
+      });
+    }
+  };
+
+  getRideMessages = async (req: AuthRequest, res: Response) => {
+    try {
+      const ride = await this.rideService.getRideById(req.params.rideId);
+      if (!ride) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Ride not found' },
+        });
+      }
+
+      if (!(await this.canAccessRide(req, ride))) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Access denied' },
+        });
+      }
+
+      if (!this.rideService.isChatHistoryAvailableStatus(ride.status)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'CHAT_NOT_AVAILABLE', message: 'Chat chỉ khả dụng sau khi chuyến đã được nhận hoặc khi cần xem lại lịch sử' },
+        });
+      }
+
+      const limit = Math.min(Math.max(parseInt(String(req.query.limit || '100'), 10) || 100, 1), 200);
+      const messages = await this.rideService.getRideMessages(req.params.rideId, limit);
+
+      res.json({ success: true, data: { messages: messages.map((message) => this.mapRideMessage(message)) } });
+    } catch (err) {
+      logger.error('Get ride messages error:', err);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get ride messages' },
+      });
+    }
+  };
+
+  sendRideMessage = async (req: AuthRequest, res: Response) => {
+    try {
+      const ride = await this.rideService.getRideById(req.params.rideId);
+      if (!ride) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Ride not found' },
+        });
+      }
+
+      if (!(await this.canAccessRide(req, ride))) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Access denied' },
+        });
+      }
+
+      const rawMessage = typeof req.body?.message === 'string' ? req.body.message : '';
+      const type = typeof req.body?.type === 'string' ? req.body.type : 'TEXT';
+
+      if (!rawMessage.trim()) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'message is required' },
+        });
+      }
+
+      const message = await this.rideService.createRideMessage(
+        req.params.rideId,
+        req.user!.userId,
+        req.user!.role,
+        rawMessage,
+        type,
+      );
+
+      res.status(201).json({ success: true, data: { message: this.mapRideMessage(message) } });
+    } catch (err) {
+      logger.error('Send ride message error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to send message';
+      const statusCode = /active|empty|long|not found/i.test(message) ? 400 : 500;
+      res.status(statusCode).json({
+        success: false,
+        error: { code: 'SEND_MESSAGE_FAILED', message },
       });
     }
   };
@@ -257,21 +399,15 @@ export class RideController {
         });
       }
 
-      const userId = req.user!.userId;
-      
-      // Get driver profile to get driverId
-      let driverId = userId;
-      
-      try {
-        const driver = await driverGrpcClient.getDriverByUserId(userId);
-        if (driver?.id) {
-          driverId = driver.id;
+      const driverActorIds = await this.resolveDriverActorIds(req.user!.userId);
+      let ride = null;
+
+      for (const driverActorId of driverActorIds) {
+        ride = await this.rideService.getActiveRideForDriver(driverActorId);
+        if (ride) {
+          break;
         }
-      } catch (err) {
-        logger.warn('Could not fetch driver profile, using userId as driverId');
       }
-      
-      const ride = await this.rideService.getActiveRideForDriver(driverId);
       
       if (!ride) {
         return res.json({ success: true, data: null });
@@ -321,8 +457,9 @@ export class RideController {
         });
       }
 
-      const driverId = await this.resolveDriverActorId(req.user!.userId);
-      const ride = await this.rideService.acceptRide(req.params.rideId, driverId);
+      const ride = await this.withResolvedDriverActorId(req.user!.userId, (driverId) =>
+        this.rideService.acceptRide(req.params.rideId, driverId)
+      );
       res.json({ success: true, data: { ride } });
     } catch (err) {
       logger.error('Accept ride error:', err);
@@ -343,8 +480,9 @@ export class RideController {
         });
       }
 
-      const driverId = await this.resolveDriverActorId(req.user!.userId);
-      const ride = await this.rideService.rejectRide(req.params.rideId, driverId);
+      const ride = await this.withResolvedDriverActorId(req.user!.userId, (driverId) =>
+        this.rideService.rejectRide(req.params.rideId, driverId)
+      );
       res.json({ success: true, data: { ride } });
     } catch (err) {
       logger.error('Reject ride error:', err);
@@ -365,8 +503,9 @@ export class RideController {
         });
       }
 
-      const driverId = await this.resolveDriverActorId(req.user!.userId);
-      const ride = await this.rideService.startRide(req.params.rideId, driverId);
+      const ride = await this.withResolvedDriverActorId(req.user!.userId, (driverId) =>
+        this.rideService.startRide(req.params.rideId, driverId)
+      );
       res.json({ success: true, data: { ride } });
     } catch (err) {
       logger.error('Start ride error:', err);
@@ -463,8 +602,9 @@ export class RideController {
         });
       }
 
-      const driverId = await this.resolveDriverActorId(req.user!.userId);
-      const ride = await this.rideService.markPickedUp(req.params.rideId, driverId);
+      const ride = await this.withResolvedDriverActorId(req.user!.userId, (driverId) =>
+        this.rideService.markPickedUp(req.params.rideId, driverId)
+      );
       res.json({ success: true, data: { ride } });
     } catch (err) {
       logger.error('Pickup error:', err);
@@ -485,8 +625,9 @@ export class RideController {
         });
       }
 
-      const driverId = await this.resolveDriverActorId(req.user!.userId);
-      const ride = await this.rideService.completeRide(req.params.rideId, driverId);
+      const ride = await this.withResolvedDriverActorId(req.user!.userId, (driverId) =>
+        this.rideService.completeRide(req.params.rideId, driverId)
+      );
       res.json({ success: true, data: { ride } });
     } catch (err) {
       logger.error('Complete ride error:', err);
@@ -503,16 +644,21 @@ export class RideController {
       const { reason } = req.body;
       const userType = req.user!.role === UserRole.DRIVER ? 'DRIVER' : 'CUSTOMER';
 
-      const actorId = userType === 'DRIVER'
-        ? await this.resolveDriverActorId(req.user!.userId)
-        : req.user!.userId;
-
-      const ride = await this.rideService.cancelRide(
-        req.params.rideId,
-        actorId,
-        userType as 'CUSTOMER' | 'DRIVER',
-        reason
-      );
+      const ride = userType === 'DRIVER'
+        ? await this.withResolvedDriverActorId(req.user!.userId, (actorId) =>
+            this.rideService.cancelRide(
+              req.params.rideId,
+              actorId,
+              'DRIVER',
+              reason
+            )
+          )
+        : await this.rideService.cancelRide(
+            req.params.rideId,
+            req.user!.userId,
+            'CUSTOMER',
+            reason
+          );
       res.json({ success: true, data: { ride } });
     } catch (err) {
       logger.error('Cancel ride error:', err);

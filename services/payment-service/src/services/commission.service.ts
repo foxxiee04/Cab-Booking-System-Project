@@ -4,8 +4,9 @@
  * Responsibilities:
  *  1. Base commission rates per vehicle class (configurable via env)
  *  2. Dynamic rate modifier: lower commission during peak demand (surge ≥ threshold)
- *  3. Incentive bonuses: peak-hour bonus, trip milestone bonus, high-rating bonus,
- *     high-acceptance-rate bonus
+ *  3. Operational bonuses: high-rating bonus, high-acceptance-rate bonus
+ *     Campaign bonuses such as peak-hour, trip milestone, and distance rewards
+ *     are awarded by IncentiveService so they are not double-counted here.
  *  4. Penalties: elevated cancel-rate deduction, low-acceptance-rate deduction
  *  5. Cash vs. electronic payment accounting:
  *       - Cash:       driver collected the full fare → owes platform the net platform cut
@@ -304,23 +305,8 @@ export class CommissionService {
     const bonuses: Record<string, number> = {};
     const inc = this.cfg.incentive;
     const stats = ctx.driverStats;
-    const completedAt = ctx.completedAt ?? new Date();
-
-    // ── Peak-hour bonus ───────────────────────────────────────────────────────
-    if (this.isPeakHour(completedAt)) {
-      bonuses.peakHour = inc.peakHourBonus;
-    }
 
     if (!stats) return bonuses;
-
-    // ── Trip milestone bonus ──────────────────────────────────────────────────
-    // Award when tripsCompletedToday is a positive multiple of the interval
-    if (
-      stats.tripsCompletedToday > 0 &&
-      stats.tripsCompletedToday % inc.tripMilestoneInterval === 0
-    ) {
-      bonuses.tripMilestone = inc.tripMilestoneBonus;
-    }
 
     // ── High-rating bonus ─────────────────────────────────────────────────────
     if (stats.rating !== undefined && stats.rating >= inc.highRatingThreshold) {

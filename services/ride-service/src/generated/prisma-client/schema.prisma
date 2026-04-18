@@ -28,8 +28,9 @@ model Ride {
   status     RideStatus @default(CREATED)
 
   // Booking preferences
-  vehicleType   String @default("ECONOMY") // ECONOMY, COMFORT, PREMIUM
-  paymentMethod String @default("CASH") // CASH, CARD, WALLET
+  vehicleType   String  @default("ECONOMY") // ECONOMY, COMFORT, PREMIUM
+  paymentMethod String  @default("CASH") // CASH, CARD, WALLET
+  voucherCode   String?
 
   // Pickup location
   pickupAddress String
@@ -73,10 +74,26 @@ model Ride {
 
   // Relations
   transitions RideStateTransition[]
+  messages    RideChatMessage[]
 
   @@index([customerId, createdAt(sort: Desc)])
   @@index([driverId, createdAt(sort: Desc)])
   @@index([status])
+  @@index([voucherCode])
+}
+
+model RideChatMessage {
+  id         String   @id @default(uuid())
+  rideId     String
+  ride       Ride     @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  senderId   String
+  senderRole String
+  type       String   @default("TEXT")
+  message    String
+  createdAt  DateTime @default(now())
+
+  @@index([rideId, createdAt])
+  @@index([senderId, createdAt(sort: Desc)])
 }
 
 model RideStateTransition {

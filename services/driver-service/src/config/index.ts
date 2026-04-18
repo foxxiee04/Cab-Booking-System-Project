@@ -26,7 +26,10 @@ export const config = {
   internalServiceToken: getRequiredEnv('INTERNAL_SERVICE_TOKEN'),
   
   services: {
+    auth: process.env.AUTH_SERVICE_URL || 'http://localhost:3001',
     ride: process.env.RIDE_SERVICE_URL || 'http://localhost:3002',
+    payment: process.env.PAYMENT_SERVICE_URL || 'http://localhost:3004',
+    user: process.env.USER_SERVICE_URL || 'http://localhost:3007',
   },
   
   serviceName: process.env.SERVICE_NAME || 'driver-service',

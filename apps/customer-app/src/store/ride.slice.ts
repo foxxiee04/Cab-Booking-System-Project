@@ -60,7 +60,7 @@ const rideSlice = createSlice({
       if (!state.driver) {
         state.driver = {
           id: state.currentRide?.driverId || 'unknown-driver',
-          firstName: 'Tài xế',
+          firstName: '',
           lastName: '',
           vehicleMake: '',
           vehicleModel: '',

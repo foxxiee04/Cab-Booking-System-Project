@@ -377,25 +377,13 @@ export class DriverController {
   getDriverPublicProfile = async (req: Request, res: Response) => {
     try {
       const { driverId } = req.params;
-      const driver = await this.driverService.getDriverById(driverId);
-      if (!driver) {
+      const profile = await this.driverService.getPublicDriverProfile(driverId);
+      if (!profile) {
         return res.status(404).json({ 
           success: false, 
           error: { code: 'NOT_FOUND', message: 'Driver not found' } 
         });
       }
-
-      const profile = {
-        id: driver.id,
-        firstName: '',
-        lastName: '',
-        vehicleMake: driver.vehicleBrand,
-        vehicleModel: driver.vehicleModel,
-        vehicleColor: driver.vehicleColor,
-        licensePlate: driver.vehiclePlate,
-        rating: driver.ratingAverage ?? 5,
-        totalRides: driver.ratingCount ?? 0,
-      };
 
       res.json({ success: true, data: { driver: profile } });
     } catch (err) {

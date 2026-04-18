@@ -23,8 +23,13 @@ export function createWalletRoutes(prisma: PrismaClient): Router {
   // ─── Real gateway top-up (MoMo / VNPay) ─────────────────────────────────
   // Initiate payment — authenticated
   router.post('/top-up/init', authMiddleware, controller.initTopUp);
+  // Sandbox-confirm (dev/test only) — authenticated
+  router.post('/top-up/sandbox-confirm', authMiddleware, controller.sandboxConfirmTopUp);
   // Check order status — authenticated
   router.get('/top-up/status/:topUpId', authMiddleware, controller.getTopUpStatus);
+  // Browser redirect returns — no auth
+  router.get('/top-up/momo/return', controller.handleMomoTopUpReturn);
+  router.get('/top-up/vnpay/return', controller.handleVnpayTopUpReturn);
   // MoMo IPN — called server-to-server by MoMo (no auth)
   router.post('/top-up/momo-ipn', controller.handleMomoTopUpIpn);
   // VNPay IPN — called server-to-server by VNPay (GET, no auth)
@@ -33,6 +38,7 @@ export function createWalletRoutes(prisma: PrismaClient): Router {
   // ─── Internal service-to-service (no user JWT needed) ───────────────────
   // Used by ride-service to check debt limit before dispatching a cash ride.
   router.get('/driver/:driverId/can-accept-cash', controller.internalCanAcceptCash);
+  router.get('/driver/:driverId/status', controller.internalGetDriverWalletStatus);
 
   // ─── Admin endpoints ─────────────────────────────────────────────────────
   // All admin routes require auth; role enforcement is the API-gateway's job.

@@ -157,22 +157,13 @@ describe('CommissionService — cash accounting', () => {
   });
 
   it('bonus reduces the cash debt the driver owes', () => {
-    // Force a peak-hour detection at an arbitrary time
-    const peakTime = new Date();
-    peakTime.setHours(8); // 08:00 weekday → peak
-    // Force it to be a weekday
-    const dayOfWeek = peakTime.getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      // weekend — skip this test unless we mock the date (avoid flakiness)
-      return;
-    }
-
     const result = svc.calculateCommission(100_000, ctx({
       paymentMethod: 'CASH',
-      completedAt: peakTime,
+      completedAt: new Date('2025-03-17T14:00:00'),
+      driverStats: { tripsCompletedToday: 3, rating: 4.9 },
     }));
 
-    expect(result.bonus).toBe(DEFAULT_COMMISSION_CONFIG.incentive.peakHourBonus);
+    expect(result.bonus).toBe(DEFAULT_COMMISSION_CONFIG.incentive.highRatingBonus);
     // cashDebt should be reduced by the bonus
     expect(result.cashDebt).toBe(Math.max(0, result.platformFee - result.bonus));
   });
@@ -197,9 +188,7 @@ describe('CommissionService — incentive bonuses', () => {
       completedAt: offPeak,
       driverStats: { tripsCompletedToday: 10 },
     }));
-    expect(result.breakdown.bonuses.tripMilestone).toBe(
-      DEFAULT_COMMISSION_CONFIG.incentive.tripMilestoneBonus,
-    );
+    expect(result.breakdown.bonuses.tripMilestone).toBeUndefined();
   });
 
   it('no milestone bonus on non-multiple trips', () => {
@@ -290,11 +279,10 @@ describe('CommissionService — penalties', () => {
 // ─── Full integration scenario ────────────────────────────────────────────────
 
 describe('CommissionService — end-to-end scenario', () => {
-  it('premium driver at peak, 10th trip, high rating, surge 1.5, MOMO payment', () => {
+  it('premium driver with strong profile, surge 1.5, MOMO payment', () => {
     const svc = makeSvc();
 
-    // Force a weekday peak hour
-    const completedAt = new Date('2025-03-17T08:30:00'); // Monday 08:30
+    const completedAt = new Date('2025-03-17T14:30:00');
 
     const result = svc.calculateCommission(300_000, {
       vehicleType:    'PREMIUM',
@@ -302,7 +290,7 @@ describe('CommissionService — end-to-end scenario', () => {
       paymentMethod:  'MOMO',
       completedAt,
       driverStats: {
-        tripsCompletedToday: 10, // milestone
+        tripsCompletedToday: 10,
         rating:         4.9,   // high rating
         acceptanceRate: 0.97,  // high acceptance
         cancelRate:     0.02,  // clean
@@ -313,11 +301,9 @@ describe('CommissionService — end-to-end scenario', () => {
     expect(result.commissionRate).toBeCloseTo(0.12);
     expect(result.platformFee).toBe(Math.round(300_000 * 0.12));
 
-    // Bonuses: peakHour + tripMilestone + highRating + highAcceptance
+    // Bonuses: highRating + highAcceptance
     const inc = DEFAULT_COMMISSION_CONFIG.incentive;
     const expectedBonus =
-      inc.peakHourBonus +
-      inc.tripMilestoneBonus +
       inc.highRatingBonus +
       inc.highAcceptanceBonus;
     expect(result.bonus).toBe(expectedBonus);

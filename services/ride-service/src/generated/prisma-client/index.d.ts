@@ -19,6 +19,11 @@ export type PrismaPromise<T> = $Public.PrismaPromise<T>
  */
 export type Ride = $Result.DefaultSelection<Prisma.$RidePayload>
 /**
+ * Model RideChatMessage
+ * 
+ */
+export type RideChatMessage = $Result.DefaultSelection<Prisma.$RideChatMessagePayload>
+/**
  * Model RideStateTransition
  * 
  */
@@ -180,6 +185,16 @@ export class PrismaClient<
     * ```
     */
   get ride(): Prisma.RideDelegate<ExtArgs>;
+
+  /**
+   * `prisma.rideChatMessage`: Exposes CRUD operations for the **RideChatMessage** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more RideChatMessages
+    * const rideChatMessages = await prisma.rideChatMessage.findMany()
+    * ```
+    */
+  get rideChatMessage(): Prisma.RideChatMessageDelegate<ExtArgs>;
 
   /**
    * `prisma.rideStateTransition`: Exposes CRUD operations for the **RideStateTransition** model.
@@ -632,6 +647,7 @@ export namespace Prisma {
 
   export const ModelName: {
     Ride: 'Ride',
+    RideChatMessage: 'RideChatMessage',
     RideStateTransition: 'RideStateTransition'
   };
 
@@ -648,7 +664,7 @@ export namespace Prisma {
 
   export type TypeMap<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, ClientOptions = {}> = {
     meta: {
-      modelProps: "ride" | "rideStateTransition"
+      modelProps: "ride" | "rideChatMessage" | "rideStateTransition"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -719,6 +735,76 @@ export namespace Prisma {
           count: {
             args: Prisma.RideCountArgs<ExtArgs>
             result: $Utils.Optional<RideCountAggregateOutputType> | number
+          }
+        }
+      }
+      RideChatMessage: {
+        payload: Prisma.$RideChatMessagePayload<ExtArgs>
+        fields: Prisma.RideChatMessageFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.RideChatMessageFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RideChatMessagePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.RideChatMessageFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RideChatMessagePayload>
+          }
+          findFirst: {
+            args: Prisma.RideChatMessageFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RideChatMessagePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.RideChatMessageFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RideChatMessagePayload>
+          }
+          findMany: {
+            args: Prisma.RideChatMessageFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RideChatMessagePayload>[]
+          }
+          create: {
+            args: Prisma.RideChatMessageCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RideChatMessagePayload>
+          }
+          createMany: {
+            args: Prisma.RideChatMessageCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.RideChatMessageCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RideChatMessagePayload>[]
+          }
+          delete: {
+            args: Prisma.RideChatMessageDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RideChatMessagePayload>
+          }
+          update: {
+            args: Prisma.RideChatMessageUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RideChatMessagePayload>
+          }
+          deleteMany: {
+            args: Prisma.RideChatMessageDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.RideChatMessageUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.RideChatMessageUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RideChatMessagePayload>
+          }
+          aggregate: {
+            args: Prisma.RideChatMessageAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateRideChatMessage>
+          }
+          groupBy: {
+            args: Prisma.RideChatMessageGroupByArgs<ExtArgs>
+            result: $Utils.Optional<RideChatMessageGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.RideChatMessageCountArgs<ExtArgs>
+            result: $Utils.Optional<RideChatMessageCountAggregateOutputType> | number
           }
         }
       }
@@ -954,10 +1040,12 @@ export namespace Prisma {
 
   export type RideCountOutputType = {
     transitions: number
+    messages: number
   }
 
   export type RideCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     transitions?: boolean | RideCountOutputTypeCountTransitionsArgs
+    messages?: boolean | RideCountOutputTypeCountMessagesArgs
   }
 
   // Custom InputTypes
@@ -976,6 +1064,13 @@ export namespace Prisma {
    */
   export type RideCountOutputTypeCountTransitionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: RideStateTransitionWhereInput
+  }
+
+  /**
+   * RideCountOutputType without action
+   */
+  export type RideCountOutputTypeCountMessagesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RideChatMessageWhereInput
   }
 
 
@@ -1026,6 +1121,7 @@ export namespace Prisma {
     status: $Enums.RideStatus | null
     vehicleType: string | null
     paymentMethod: string | null
+    voucherCode: string | null
     pickupAddress: string | null
     pickupLat: number | null
     pickupLng: number | null
@@ -1059,6 +1155,7 @@ export namespace Prisma {
     status: $Enums.RideStatus | null
     vehicleType: string | null
     paymentMethod: string | null
+    voucherCode: string | null
     pickupAddress: string | null
     pickupLat: number | null
     pickupLng: number | null
@@ -1092,6 +1189,7 @@ export namespace Prisma {
     status: number
     vehicleType: number
     paymentMethod: number
+    voucherCode: number
     pickupAddress: number
     pickupLat: number
     pickupLng: number
@@ -1154,6 +1252,7 @@ export namespace Prisma {
     status?: true
     vehicleType?: true
     paymentMethod?: true
+    voucherCode?: true
     pickupAddress?: true
     pickupLat?: true
     pickupLng?: true
@@ -1187,6 +1286,7 @@ export namespace Prisma {
     status?: true
     vehicleType?: true
     paymentMethod?: true
+    voucherCode?: true
     pickupAddress?: true
     pickupLat?: true
     pickupLng?: true
@@ -1220,6 +1320,7 @@ export namespace Prisma {
     status?: true
     vehicleType?: true
     paymentMethod?: true
+    voucherCode?: true
     pickupAddress?: true
     pickupLat?: true
     pickupLng?: true
@@ -1343,6 +1444,7 @@ export namespace Prisma {
     status: $Enums.RideStatus
     vehicleType: string
     paymentMethod: string
+    voucherCode: string | null
     pickupAddress: string
     pickupLat: number
     pickupLng: number
@@ -1398,6 +1500,7 @@ export namespace Prisma {
     status?: boolean
     vehicleType?: boolean
     paymentMethod?: boolean
+    voucherCode?: boolean
     pickupAddress?: boolean
     pickupLat?: boolean
     pickupLng?: boolean
@@ -1426,6 +1529,7 @@ export namespace Prisma {
     createdAt?: boolean
     updatedAt?: boolean
     transitions?: boolean | Ride$transitionsArgs<ExtArgs>
+    messages?: boolean | Ride$messagesArgs<ExtArgs>
     _count?: boolean | RideCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["ride"]>
 
@@ -1436,6 +1540,7 @@ export namespace Prisma {
     status?: boolean
     vehicleType?: boolean
     paymentMethod?: boolean
+    voucherCode?: boolean
     pickupAddress?: boolean
     pickupLat?: boolean
     pickupLng?: boolean
@@ -1472,6 +1577,7 @@ export namespace Prisma {
     status?: boolean
     vehicleType?: boolean
     paymentMethod?: boolean
+    voucherCode?: boolean
     pickupAddress?: boolean
     pickupLat?: boolean
     pickupLng?: boolean
@@ -1503,6 +1609,7 @@ export namespace Prisma {
 
   export type RideInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     transitions?: boolean | Ride$transitionsArgs<ExtArgs>
+    messages?: boolean | Ride$messagesArgs<ExtArgs>
     _count?: boolean | RideCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type RideIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
@@ -1511,6 +1618,7 @@ export namespace Prisma {
     name: "Ride"
     objects: {
       transitions: Prisma.$RideStateTransitionPayload<ExtArgs>[]
+      messages: Prisma.$RideChatMessagePayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -1519,6 +1627,7 @@ export namespace Prisma {
       status: $Enums.RideStatus
       vehicleType: string
       paymentMethod: string
+      voucherCode: string | null
       pickupAddress: string
       pickupLat: number
       pickupLng: number
@@ -1911,6 +2020,7 @@ export namespace Prisma {
   export interface Prisma__RideClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: "PrismaPromise"
     transitions<T extends Ride$transitionsArgs<ExtArgs> = {}>(args?: Subset<T, Ride$transitionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RideStateTransitionPayload<ExtArgs>, T, "findMany"> | Null>
+    messages<T extends Ride$messagesArgs<ExtArgs> = {}>(args?: Subset<T, Ride$messagesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RideChatMessagePayload<ExtArgs>, T, "findMany"> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1946,6 +2056,7 @@ export namespace Prisma {
     readonly status: FieldRef<"Ride", 'RideStatus'>
     readonly vehicleType: FieldRef<"Ride", 'String'>
     readonly paymentMethod: FieldRef<"Ride", 'String'>
+    readonly voucherCode: FieldRef<"Ride", 'String'>
     readonly pickupAddress: FieldRef<"Ride", 'String'>
     readonly pickupLat: FieldRef<"Ride", 'Float'>
     readonly pickupLng: FieldRef<"Ride", 'Float'>
@@ -2307,6 +2418,26 @@ export namespace Prisma {
   }
 
   /**
+   * Ride.messages
+   */
+  export type Ride$messagesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RideChatMessage
+     */
+    select?: RideChatMessageSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RideChatMessageInclude<ExtArgs> | null
+    where?: RideChatMessageWhereInput
+    orderBy?: RideChatMessageOrderByWithRelationInput | RideChatMessageOrderByWithRelationInput[]
+    cursor?: RideChatMessageWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: RideChatMessageScalarFieldEnum | RideChatMessageScalarFieldEnum[]
+  }
+
+  /**
    * Ride without action
    */
   export type RideDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -2318,6 +2449,963 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: RideInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model RideChatMessage
+   */
+
+  export type AggregateRideChatMessage = {
+    _count: RideChatMessageCountAggregateOutputType | null
+    _min: RideChatMessageMinAggregateOutputType | null
+    _max: RideChatMessageMaxAggregateOutputType | null
+  }
+
+  export type RideChatMessageMinAggregateOutputType = {
+    id: string | null
+    rideId: string | null
+    senderId: string | null
+    senderRole: string | null
+    type: string | null
+    message: string | null
+    createdAt: Date | null
+  }
+
+  export type RideChatMessageMaxAggregateOutputType = {
+    id: string | null
+    rideId: string | null
+    senderId: string | null
+    senderRole: string | null
+    type: string | null
+    message: string | null
+    createdAt: Date | null
+  }
+
+  export type RideChatMessageCountAggregateOutputType = {
+    id: number
+    rideId: number
+    senderId: number
+    senderRole: number
+    type: number
+    message: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type RideChatMessageMinAggregateInputType = {
+    id?: true
+    rideId?: true
+    senderId?: true
+    senderRole?: true
+    type?: true
+    message?: true
+    createdAt?: true
+  }
+
+  export type RideChatMessageMaxAggregateInputType = {
+    id?: true
+    rideId?: true
+    senderId?: true
+    senderRole?: true
+    type?: true
+    message?: true
+    createdAt?: true
+  }
+
+  export type RideChatMessageCountAggregateInputType = {
+    id?: true
+    rideId?: true
+    senderId?: true
+    senderRole?: true
+    type?: true
+    message?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type RideChatMessageAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RideChatMessage to aggregate.
+     */
+    where?: RideChatMessageWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RideChatMessages to fetch.
+     */
+    orderBy?: RideChatMessageOrderByWithRelationInput | RideChatMessageOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: RideChatMessageWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RideChatMessages from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RideChatMessages.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned RideChatMessages
+    **/
+    _count?: true | RideChatMessageCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: RideChatMessageMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: RideChatMessageMaxAggregateInputType
+  }
+
+  export type GetRideChatMessageAggregateType<T extends RideChatMessageAggregateArgs> = {
+        [P in keyof T & keyof AggregateRideChatMessage]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateRideChatMessage[P]>
+      : GetScalarType<T[P], AggregateRideChatMessage[P]>
+  }
+
+
+
+
+  export type RideChatMessageGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RideChatMessageWhereInput
+    orderBy?: RideChatMessageOrderByWithAggregationInput | RideChatMessageOrderByWithAggregationInput[]
+    by: RideChatMessageScalarFieldEnum[] | RideChatMessageScalarFieldEnum
+    having?: RideChatMessageScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: RideChatMessageCountAggregateInputType | true
+    _min?: RideChatMessageMinAggregateInputType
+    _max?: RideChatMessageMaxAggregateInputType
+  }
+
+  export type RideChatMessageGroupByOutputType = {
+    id: string
+    rideId: string
+    senderId: string
+    senderRole: string
+    type: string
+    message: string
+    createdAt: Date
+    _count: RideChatMessageCountAggregateOutputType | null
+    _min: RideChatMessageMinAggregateOutputType | null
+    _max: RideChatMessageMaxAggregateOutputType | null
+  }
+
+  type GetRideChatMessageGroupByPayload<T extends RideChatMessageGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<RideChatMessageGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof RideChatMessageGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], RideChatMessageGroupByOutputType[P]>
+            : GetScalarType<T[P], RideChatMessageGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type RideChatMessageSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    rideId?: boolean
+    senderId?: boolean
+    senderRole?: boolean
+    type?: boolean
+    message?: boolean
+    createdAt?: boolean
+    ride?: boolean | RideDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["rideChatMessage"]>
+
+  export type RideChatMessageSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    rideId?: boolean
+    senderId?: boolean
+    senderRole?: boolean
+    type?: boolean
+    message?: boolean
+    createdAt?: boolean
+    ride?: boolean | RideDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["rideChatMessage"]>
+
+  export type RideChatMessageSelectScalar = {
+    id?: boolean
+    rideId?: boolean
+    senderId?: boolean
+    senderRole?: boolean
+    type?: boolean
+    message?: boolean
+    createdAt?: boolean
+  }
+
+  export type RideChatMessageInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    ride?: boolean | RideDefaultArgs<ExtArgs>
+  }
+  export type RideChatMessageIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    ride?: boolean | RideDefaultArgs<ExtArgs>
+  }
+
+  export type $RideChatMessagePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "RideChatMessage"
+    objects: {
+      ride: Prisma.$RidePayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      rideId: string
+      senderId: string
+      senderRole: string
+      type: string
+      message: string
+      createdAt: Date
+    }, ExtArgs["result"]["rideChatMessage"]>
+    composites: {}
+  }
+
+  type RideChatMessageGetPayload<S extends boolean | null | undefined | RideChatMessageDefaultArgs> = $Result.GetResult<Prisma.$RideChatMessagePayload, S>
+
+  type RideChatMessageCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = 
+    Omit<RideChatMessageFindManyArgs, 'select' | 'include' | 'distinct'> & {
+      select?: RideChatMessageCountAggregateInputType | true
+    }
+
+  export interface RideChatMessageDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['RideChatMessage'], meta: { name: 'RideChatMessage' } }
+    /**
+     * Find zero or one RideChatMessage that matches the filter.
+     * @param {RideChatMessageFindUniqueArgs} args - Arguments to find a RideChatMessage
+     * @example
+     * // Get one RideChatMessage
+     * const rideChatMessage = await prisma.rideChatMessage.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends RideChatMessageFindUniqueArgs>(args: SelectSubset<T, RideChatMessageFindUniqueArgs<ExtArgs>>): Prisma__RideChatMessageClient<$Result.GetResult<Prisma.$RideChatMessagePayload<ExtArgs>, T, "findUnique"> | null, null, ExtArgs>
+
+    /**
+     * Find one RideChatMessage that matches the filter or throw an error with `error.code='P2025'` 
+     * if no matches were found.
+     * @param {RideChatMessageFindUniqueOrThrowArgs} args - Arguments to find a RideChatMessage
+     * @example
+     * // Get one RideChatMessage
+     * const rideChatMessage = await prisma.rideChatMessage.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends RideChatMessageFindUniqueOrThrowArgs>(args: SelectSubset<T, RideChatMessageFindUniqueOrThrowArgs<ExtArgs>>): Prisma__RideChatMessageClient<$Result.GetResult<Prisma.$RideChatMessagePayload<ExtArgs>, T, "findUniqueOrThrow">, never, ExtArgs>
+
+    /**
+     * Find the first RideChatMessage that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RideChatMessageFindFirstArgs} args - Arguments to find a RideChatMessage
+     * @example
+     * // Get one RideChatMessage
+     * const rideChatMessage = await prisma.rideChatMessage.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends RideChatMessageFindFirstArgs>(args?: SelectSubset<T, RideChatMessageFindFirstArgs<ExtArgs>>): Prisma__RideChatMessageClient<$Result.GetResult<Prisma.$RideChatMessagePayload<ExtArgs>, T, "findFirst"> | null, null, ExtArgs>
+
+    /**
+     * Find the first RideChatMessage that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RideChatMessageFindFirstOrThrowArgs} args - Arguments to find a RideChatMessage
+     * @example
+     * // Get one RideChatMessage
+     * const rideChatMessage = await prisma.rideChatMessage.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends RideChatMessageFindFirstOrThrowArgs>(args?: SelectSubset<T, RideChatMessageFindFirstOrThrowArgs<ExtArgs>>): Prisma__RideChatMessageClient<$Result.GetResult<Prisma.$RideChatMessagePayload<ExtArgs>, T, "findFirstOrThrow">, never, ExtArgs>
+
+    /**
+     * Find zero or more RideChatMessages that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RideChatMessageFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all RideChatMessages
+     * const rideChatMessages = await prisma.rideChatMessage.findMany()
+     * 
+     * // Get first 10 RideChatMessages
+     * const rideChatMessages = await prisma.rideChatMessage.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const rideChatMessageWithIdOnly = await prisma.rideChatMessage.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends RideChatMessageFindManyArgs>(args?: SelectSubset<T, RideChatMessageFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RideChatMessagePayload<ExtArgs>, T, "findMany">>
+
+    /**
+     * Create a RideChatMessage.
+     * @param {RideChatMessageCreateArgs} args - Arguments to create a RideChatMessage.
+     * @example
+     * // Create one RideChatMessage
+     * const RideChatMessage = await prisma.rideChatMessage.create({
+     *   data: {
+     *     // ... data to create a RideChatMessage
+     *   }
+     * })
+     * 
+     */
+    create<T extends RideChatMessageCreateArgs>(args: SelectSubset<T, RideChatMessageCreateArgs<ExtArgs>>): Prisma__RideChatMessageClient<$Result.GetResult<Prisma.$RideChatMessagePayload<ExtArgs>, T, "create">, never, ExtArgs>
+
+    /**
+     * Create many RideChatMessages.
+     * @param {RideChatMessageCreateManyArgs} args - Arguments to create many RideChatMessages.
+     * @example
+     * // Create many RideChatMessages
+     * const rideChatMessage = await prisma.rideChatMessage.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends RideChatMessageCreateManyArgs>(args?: SelectSubset<T, RideChatMessageCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many RideChatMessages and returns the data saved in the database.
+     * @param {RideChatMessageCreateManyAndReturnArgs} args - Arguments to create many RideChatMessages.
+     * @example
+     * // Create many RideChatMessages
+     * const rideChatMessage = await prisma.rideChatMessage.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many RideChatMessages and only return the `id`
+     * const rideChatMessageWithIdOnly = await prisma.rideChatMessage.createManyAndReturn({ 
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends RideChatMessageCreateManyAndReturnArgs>(args?: SelectSubset<T, RideChatMessageCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RideChatMessagePayload<ExtArgs>, T, "createManyAndReturn">>
+
+    /**
+     * Delete a RideChatMessage.
+     * @param {RideChatMessageDeleteArgs} args - Arguments to delete one RideChatMessage.
+     * @example
+     * // Delete one RideChatMessage
+     * const RideChatMessage = await prisma.rideChatMessage.delete({
+     *   where: {
+     *     // ... filter to delete one RideChatMessage
+     *   }
+     * })
+     * 
+     */
+    delete<T extends RideChatMessageDeleteArgs>(args: SelectSubset<T, RideChatMessageDeleteArgs<ExtArgs>>): Prisma__RideChatMessageClient<$Result.GetResult<Prisma.$RideChatMessagePayload<ExtArgs>, T, "delete">, never, ExtArgs>
+
+    /**
+     * Update one RideChatMessage.
+     * @param {RideChatMessageUpdateArgs} args - Arguments to update one RideChatMessage.
+     * @example
+     * // Update one RideChatMessage
+     * const rideChatMessage = await prisma.rideChatMessage.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends RideChatMessageUpdateArgs>(args: SelectSubset<T, RideChatMessageUpdateArgs<ExtArgs>>): Prisma__RideChatMessageClient<$Result.GetResult<Prisma.$RideChatMessagePayload<ExtArgs>, T, "update">, never, ExtArgs>
+
+    /**
+     * Delete zero or more RideChatMessages.
+     * @param {RideChatMessageDeleteManyArgs} args - Arguments to filter RideChatMessages to delete.
+     * @example
+     * // Delete a few RideChatMessages
+     * const { count } = await prisma.rideChatMessage.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends RideChatMessageDeleteManyArgs>(args?: SelectSubset<T, RideChatMessageDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more RideChatMessages.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RideChatMessageUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many RideChatMessages
+     * const rideChatMessage = await prisma.rideChatMessage.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends RideChatMessageUpdateManyArgs>(args: SelectSubset<T, RideChatMessageUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one RideChatMessage.
+     * @param {RideChatMessageUpsertArgs} args - Arguments to update or create a RideChatMessage.
+     * @example
+     * // Update or create a RideChatMessage
+     * const rideChatMessage = await prisma.rideChatMessage.upsert({
+     *   create: {
+     *     // ... data to create a RideChatMessage
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the RideChatMessage we want to update
+     *   }
+     * })
+     */
+    upsert<T extends RideChatMessageUpsertArgs>(args: SelectSubset<T, RideChatMessageUpsertArgs<ExtArgs>>): Prisma__RideChatMessageClient<$Result.GetResult<Prisma.$RideChatMessagePayload<ExtArgs>, T, "upsert">, never, ExtArgs>
+
+
+    /**
+     * Count the number of RideChatMessages.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RideChatMessageCountArgs} args - Arguments to filter RideChatMessages to count.
+     * @example
+     * // Count the number of RideChatMessages
+     * const count = await prisma.rideChatMessage.count({
+     *   where: {
+     *     // ... the filter for the RideChatMessages we want to count
+     *   }
+     * })
+    **/
+    count<T extends RideChatMessageCountArgs>(
+      args?: Subset<T, RideChatMessageCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], RideChatMessageCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a RideChatMessage.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RideChatMessageAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends RideChatMessageAggregateArgs>(args: Subset<T, RideChatMessageAggregateArgs>): Prisma.PrismaPromise<GetRideChatMessageAggregateType<T>>
+
+    /**
+     * Group by RideChatMessage.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RideChatMessageGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends RideChatMessageGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: RideChatMessageGroupByArgs['orderBy'] }
+        : { orderBy?: RideChatMessageGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, RideChatMessageGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetRideChatMessageGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the RideChatMessage model
+   */
+  readonly fields: RideChatMessageFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for RideChatMessage.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__RideChatMessageClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    ride<T extends RideDefaultArgs<ExtArgs> = {}>(args?: Subset<T, RideDefaultArgs<ExtArgs>>): Prisma__RideClient<$Result.GetResult<Prisma.$RidePayload<ExtArgs>, T, "findUniqueOrThrow"> | Null, Null, ExtArgs>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the RideChatMessage model
+   */ 
+  interface RideChatMessageFieldRefs {
+    readonly id: FieldRef<"RideChatMessage", 'String'>
+    readonly rideId: FieldRef<"RideChatMessage", 'String'>
+    readonly senderId: FieldRef<"RideChatMessage", 'String'>
+    readonly senderRole: FieldRef<"RideChatMessage", 'String'>
+    readonly type: FieldRef<"RideChatMessage", 'String'>
+    readonly message: FieldRef<"RideChatMessage", 'String'>
+    readonly createdAt: FieldRef<"RideChatMessage", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * RideChatMessage findUnique
+   */
+  export type RideChatMessageFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RideChatMessage
+     */
+    select?: RideChatMessageSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RideChatMessageInclude<ExtArgs> | null
+    /**
+     * Filter, which RideChatMessage to fetch.
+     */
+    where: RideChatMessageWhereUniqueInput
+  }
+
+  /**
+   * RideChatMessage findUniqueOrThrow
+   */
+  export type RideChatMessageFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RideChatMessage
+     */
+    select?: RideChatMessageSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RideChatMessageInclude<ExtArgs> | null
+    /**
+     * Filter, which RideChatMessage to fetch.
+     */
+    where: RideChatMessageWhereUniqueInput
+  }
+
+  /**
+   * RideChatMessage findFirst
+   */
+  export type RideChatMessageFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RideChatMessage
+     */
+    select?: RideChatMessageSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RideChatMessageInclude<ExtArgs> | null
+    /**
+     * Filter, which RideChatMessage to fetch.
+     */
+    where?: RideChatMessageWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RideChatMessages to fetch.
+     */
+    orderBy?: RideChatMessageOrderByWithRelationInput | RideChatMessageOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RideChatMessages.
+     */
+    cursor?: RideChatMessageWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RideChatMessages from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RideChatMessages.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RideChatMessages.
+     */
+    distinct?: RideChatMessageScalarFieldEnum | RideChatMessageScalarFieldEnum[]
+  }
+
+  /**
+   * RideChatMessage findFirstOrThrow
+   */
+  export type RideChatMessageFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RideChatMessage
+     */
+    select?: RideChatMessageSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RideChatMessageInclude<ExtArgs> | null
+    /**
+     * Filter, which RideChatMessage to fetch.
+     */
+    where?: RideChatMessageWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RideChatMessages to fetch.
+     */
+    orderBy?: RideChatMessageOrderByWithRelationInput | RideChatMessageOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RideChatMessages.
+     */
+    cursor?: RideChatMessageWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RideChatMessages from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RideChatMessages.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RideChatMessages.
+     */
+    distinct?: RideChatMessageScalarFieldEnum | RideChatMessageScalarFieldEnum[]
+  }
+
+  /**
+   * RideChatMessage findMany
+   */
+  export type RideChatMessageFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RideChatMessage
+     */
+    select?: RideChatMessageSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RideChatMessageInclude<ExtArgs> | null
+    /**
+     * Filter, which RideChatMessages to fetch.
+     */
+    where?: RideChatMessageWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RideChatMessages to fetch.
+     */
+    orderBy?: RideChatMessageOrderByWithRelationInput | RideChatMessageOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing RideChatMessages.
+     */
+    cursor?: RideChatMessageWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RideChatMessages from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RideChatMessages.
+     */
+    skip?: number
+    distinct?: RideChatMessageScalarFieldEnum | RideChatMessageScalarFieldEnum[]
+  }
+
+  /**
+   * RideChatMessage create
+   */
+  export type RideChatMessageCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RideChatMessage
+     */
+    select?: RideChatMessageSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RideChatMessageInclude<ExtArgs> | null
+    /**
+     * The data needed to create a RideChatMessage.
+     */
+    data: XOR<RideChatMessageCreateInput, RideChatMessageUncheckedCreateInput>
+  }
+
+  /**
+   * RideChatMessage createMany
+   */
+  export type RideChatMessageCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many RideChatMessages.
+     */
+    data: RideChatMessageCreateManyInput | RideChatMessageCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * RideChatMessage createManyAndReturn
+   */
+  export type RideChatMessageCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RideChatMessage
+     */
+    select?: RideChatMessageSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * The data used to create many RideChatMessages.
+     */
+    data: RideChatMessageCreateManyInput | RideChatMessageCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RideChatMessageIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * RideChatMessage update
+   */
+  export type RideChatMessageUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RideChatMessage
+     */
+    select?: RideChatMessageSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RideChatMessageInclude<ExtArgs> | null
+    /**
+     * The data needed to update a RideChatMessage.
+     */
+    data: XOR<RideChatMessageUpdateInput, RideChatMessageUncheckedUpdateInput>
+    /**
+     * Choose, which RideChatMessage to update.
+     */
+    where: RideChatMessageWhereUniqueInput
+  }
+
+  /**
+   * RideChatMessage updateMany
+   */
+  export type RideChatMessageUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update RideChatMessages.
+     */
+    data: XOR<RideChatMessageUpdateManyMutationInput, RideChatMessageUncheckedUpdateManyInput>
+    /**
+     * Filter which RideChatMessages to update
+     */
+    where?: RideChatMessageWhereInput
+  }
+
+  /**
+   * RideChatMessage upsert
+   */
+  export type RideChatMessageUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RideChatMessage
+     */
+    select?: RideChatMessageSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RideChatMessageInclude<ExtArgs> | null
+    /**
+     * The filter to search for the RideChatMessage to update in case it exists.
+     */
+    where: RideChatMessageWhereUniqueInput
+    /**
+     * In case the RideChatMessage found by the `where` argument doesn't exist, create a new RideChatMessage with this data.
+     */
+    create: XOR<RideChatMessageCreateInput, RideChatMessageUncheckedCreateInput>
+    /**
+     * In case the RideChatMessage was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<RideChatMessageUpdateInput, RideChatMessageUncheckedUpdateInput>
+  }
+
+  /**
+   * RideChatMessage delete
+   */
+  export type RideChatMessageDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RideChatMessage
+     */
+    select?: RideChatMessageSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RideChatMessageInclude<ExtArgs> | null
+    /**
+     * Filter which RideChatMessage to delete.
+     */
+    where: RideChatMessageWhereUniqueInput
+  }
+
+  /**
+   * RideChatMessage deleteMany
+   */
+  export type RideChatMessageDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RideChatMessages to delete
+     */
+    where?: RideChatMessageWhereInput
+  }
+
+  /**
+   * RideChatMessage without action
+   */
+  export type RideChatMessageDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RideChatMessage
+     */
+    select?: RideChatMessageSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RideChatMessageInclude<ExtArgs> | null
   }
 
 
@@ -3311,6 +4399,7 @@ export namespace Prisma {
     status: 'status',
     vehicleType: 'vehicleType',
     paymentMethod: 'paymentMethod',
+    voucherCode: 'voucherCode',
     pickupAddress: 'pickupAddress',
     pickupLat: 'pickupLat',
     pickupLng: 'pickupLng',
@@ -3341,6 +4430,19 @@ export namespace Prisma {
   };
 
   export type RideScalarFieldEnum = (typeof RideScalarFieldEnum)[keyof typeof RideScalarFieldEnum]
+
+
+  export const RideChatMessageScalarFieldEnum: {
+    id: 'id',
+    rideId: 'rideId',
+    senderId: 'senderId',
+    senderRole: 'senderRole',
+    type: 'type',
+    message: 'message',
+    createdAt: 'createdAt'
+  };
+
+  export type RideChatMessageScalarFieldEnum = (typeof RideChatMessageScalarFieldEnum)[keyof typeof RideChatMessageScalarFieldEnum]
 
 
   export const RideStateTransitionScalarFieldEnum: {
@@ -3469,6 +4571,7 @@ export namespace Prisma {
     status?: EnumRideStatusFilter<"Ride"> | $Enums.RideStatus
     vehicleType?: StringFilter<"Ride"> | string
     paymentMethod?: StringFilter<"Ride"> | string
+    voucherCode?: StringNullableFilter<"Ride"> | string | null
     pickupAddress?: StringFilter<"Ride"> | string
     pickupLat?: FloatFilter<"Ride"> | number
     pickupLng?: FloatFilter<"Ride"> | number
@@ -3497,6 +4600,7 @@ export namespace Prisma {
     createdAt?: DateTimeFilter<"Ride"> | Date | string
     updatedAt?: DateTimeFilter<"Ride"> | Date | string
     transitions?: RideStateTransitionListRelationFilter
+    messages?: RideChatMessageListRelationFilter
   }
 
   export type RideOrderByWithRelationInput = {
@@ -3506,6 +4610,7 @@ export namespace Prisma {
     status?: SortOrder
     vehicleType?: SortOrder
     paymentMethod?: SortOrder
+    voucherCode?: SortOrderInput | SortOrder
     pickupAddress?: SortOrder
     pickupLat?: SortOrder
     pickupLng?: SortOrder
@@ -3534,6 +4639,7 @@ export namespace Prisma {
     createdAt?: SortOrder
     updatedAt?: SortOrder
     transitions?: RideStateTransitionOrderByRelationAggregateInput
+    messages?: RideChatMessageOrderByRelationAggregateInput
   }
 
   export type RideWhereUniqueInput = Prisma.AtLeast<{
@@ -3546,6 +4652,7 @@ export namespace Prisma {
     status?: EnumRideStatusFilter<"Ride"> | $Enums.RideStatus
     vehicleType?: StringFilter<"Ride"> | string
     paymentMethod?: StringFilter<"Ride"> | string
+    voucherCode?: StringNullableFilter<"Ride"> | string | null
     pickupAddress?: StringFilter<"Ride"> | string
     pickupLat?: FloatFilter<"Ride"> | number
     pickupLng?: FloatFilter<"Ride"> | number
@@ -3574,6 +4681,7 @@ export namespace Prisma {
     createdAt?: DateTimeFilter<"Ride"> | Date | string
     updatedAt?: DateTimeFilter<"Ride"> | Date | string
     transitions?: RideStateTransitionListRelationFilter
+    messages?: RideChatMessageListRelationFilter
   }, "id">
 
   export type RideOrderByWithAggregationInput = {
@@ -3583,6 +4691,7 @@ export namespace Prisma {
     status?: SortOrder
     vehicleType?: SortOrder
     paymentMethod?: SortOrder
+    voucherCode?: SortOrderInput | SortOrder
     pickupAddress?: SortOrder
     pickupLat?: SortOrder
     pickupLng?: SortOrder
@@ -3627,6 +4736,7 @@ export namespace Prisma {
     status?: EnumRideStatusWithAggregatesFilter<"Ride"> | $Enums.RideStatus
     vehicleType?: StringWithAggregatesFilter<"Ride"> | string
     paymentMethod?: StringWithAggregatesFilter<"Ride"> | string
+    voucherCode?: StringNullableWithAggregatesFilter<"Ride"> | string | null
     pickupAddress?: StringWithAggregatesFilter<"Ride"> | string
     pickupLat?: FloatWithAggregatesFilter<"Ride"> | number
     pickupLng?: FloatWithAggregatesFilter<"Ride"> | number
@@ -3654,6 +4764,71 @@ export namespace Prisma {
     cancelledBy?: StringNullableWithAggregatesFilter<"Ride"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"Ride"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Ride"> | Date | string
+  }
+
+  export type RideChatMessageWhereInput = {
+    AND?: RideChatMessageWhereInput | RideChatMessageWhereInput[]
+    OR?: RideChatMessageWhereInput[]
+    NOT?: RideChatMessageWhereInput | RideChatMessageWhereInput[]
+    id?: StringFilter<"RideChatMessage"> | string
+    rideId?: StringFilter<"RideChatMessage"> | string
+    senderId?: StringFilter<"RideChatMessage"> | string
+    senderRole?: StringFilter<"RideChatMessage"> | string
+    type?: StringFilter<"RideChatMessage"> | string
+    message?: StringFilter<"RideChatMessage"> | string
+    createdAt?: DateTimeFilter<"RideChatMessage"> | Date | string
+    ride?: XOR<RideRelationFilter, RideWhereInput>
+  }
+
+  export type RideChatMessageOrderByWithRelationInput = {
+    id?: SortOrder
+    rideId?: SortOrder
+    senderId?: SortOrder
+    senderRole?: SortOrder
+    type?: SortOrder
+    message?: SortOrder
+    createdAt?: SortOrder
+    ride?: RideOrderByWithRelationInput
+  }
+
+  export type RideChatMessageWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: RideChatMessageWhereInput | RideChatMessageWhereInput[]
+    OR?: RideChatMessageWhereInput[]
+    NOT?: RideChatMessageWhereInput | RideChatMessageWhereInput[]
+    rideId?: StringFilter<"RideChatMessage"> | string
+    senderId?: StringFilter<"RideChatMessage"> | string
+    senderRole?: StringFilter<"RideChatMessage"> | string
+    type?: StringFilter<"RideChatMessage"> | string
+    message?: StringFilter<"RideChatMessage"> | string
+    createdAt?: DateTimeFilter<"RideChatMessage"> | Date | string
+    ride?: XOR<RideRelationFilter, RideWhereInput>
+  }, "id">
+
+  export type RideChatMessageOrderByWithAggregationInput = {
+    id?: SortOrder
+    rideId?: SortOrder
+    senderId?: SortOrder
+    senderRole?: SortOrder
+    type?: SortOrder
+    message?: SortOrder
+    createdAt?: SortOrder
+    _count?: RideChatMessageCountOrderByAggregateInput
+    _max?: RideChatMessageMaxOrderByAggregateInput
+    _min?: RideChatMessageMinOrderByAggregateInput
+  }
+
+  export type RideChatMessageScalarWhereWithAggregatesInput = {
+    AND?: RideChatMessageScalarWhereWithAggregatesInput | RideChatMessageScalarWhereWithAggregatesInput[]
+    OR?: RideChatMessageScalarWhereWithAggregatesInput[]
+    NOT?: RideChatMessageScalarWhereWithAggregatesInput | RideChatMessageScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"RideChatMessage"> | string
+    rideId?: StringWithAggregatesFilter<"RideChatMessage"> | string
+    senderId?: StringWithAggregatesFilter<"RideChatMessage"> | string
+    senderRole?: StringWithAggregatesFilter<"RideChatMessage"> | string
+    type?: StringWithAggregatesFilter<"RideChatMessage"> | string
+    message?: StringWithAggregatesFilter<"RideChatMessage"> | string
+    createdAt?: DateTimeWithAggregatesFilter<"RideChatMessage"> | Date | string
   }
 
   export type RideStateTransitionWhereInput = {
@@ -3733,6 +4908,7 @@ export namespace Prisma {
     status?: $Enums.RideStatus
     vehicleType?: string
     paymentMethod?: string
+    voucherCode?: string | null
     pickupAddress: string
     pickupLat: number
     pickupLng: number
@@ -3761,6 +4937,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     transitions?: RideStateTransitionCreateNestedManyWithoutRideInput
+    messages?: RideChatMessageCreateNestedManyWithoutRideInput
   }
 
   export type RideUncheckedCreateInput = {
@@ -3770,6 +4947,7 @@ export namespace Prisma {
     status?: $Enums.RideStatus
     vehicleType?: string
     paymentMethod?: string
+    voucherCode?: string | null
     pickupAddress: string
     pickupLat: number
     pickupLng: number
@@ -3798,6 +4976,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     transitions?: RideStateTransitionUncheckedCreateNestedManyWithoutRideInput
+    messages?: RideChatMessageUncheckedCreateNestedManyWithoutRideInput
   }
 
   export type RideUpdateInput = {
@@ -3807,6 +4986,7 @@ export namespace Prisma {
     status?: EnumRideStatusFieldUpdateOperationsInput | $Enums.RideStatus
     vehicleType?: StringFieldUpdateOperationsInput | string
     paymentMethod?: StringFieldUpdateOperationsInput | string
+    voucherCode?: NullableStringFieldUpdateOperationsInput | string | null
     pickupAddress?: StringFieldUpdateOperationsInput | string
     pickupLat?: FloatFieldUpdateOperationsInput | number
     pickupLng?: FloatFieldUpdateOperationsInput | number
@@ -3835,6 +5015,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transitions?: RideStateTransitionUpdateManyWithoutRideNestedInput
+    messages?: RideChatMessageUpdateManyWithoutRideNestedInput
   }
 
   export type RideUncheckedUpdateInput = {
@@ -3844,6 +5025,7 @@ export namespace Prisma {
     status?: EnumRideStatusFieldUpdateOperationsInput | $Enums.RideStatus
     vehicleType?: StringFieldUpdateOperationsInput | string
     paymentMethod?: StringFieldUpdateOperationsInput | string
+    voucherCode?: NullableStringFieldUpdateOperationsInput | string | null
     pickupAddress?: StringFieldUpdateOperationsInput | string
     pickupLat?: FloatFieldUpdateOperationsInput | number
     pickupLng?: FloatFieldUpdateOperationsInput | number
@@ -3872,6 +5054,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transitions?: RideStateTransitionUncheckedUpdateManyWithoutRideNestedInput
+    messages?: RideChatMessageUncheckedUpdateManyWithoutRideNestedInput
   }
 
   export type RideCreateManyInput = {
@@ -3881,6 +5064,7 @@ export namespace Prisma {
     status?: $Enums.RideStatus
     vehicleType?: string
     paymentMethod?: string
+    voucherCode?: string | null
     pickupAddress: string
     pickupLat: number
     pickupLng: number
@@ -3917,6 +5101,7 @@ export namespace Prisma {
     status?: EnumRideStatusFieldUpdateOperationsInput | $Enums.RideStatus
     vehicleType?: StringFieldUpdateOperationsInput | string
     paymentMethod?: StringFieldUpdateOperationsInput | string
+    voucherCode?: NullableStringFieldUpdateOperationsInput | string | null
     pickupAddress?: StringFieldUpdateOperationsInput | string
     pickupLat?: FloatFieldUpdateOperationsInput | number
     pickupLng?: FloatFieldUpdateOperationsInput | number
@@ -3953,6 +5138,7 @@ export namespace Prisma {
     status?: EnumRideStatusFieldUpdateOperationsInput | $Enums.RideStatus
     vehicleType?: StringFieldUpdateOperationsInput | string
     paymentMethod?: StringFieldUpdateOperationsInput | string
+    voucherCode?: NullableStringFieldUpdateOperationsInput | string | null
     pickupAddress?: StringFieldUpdateOperationsInput | string
     pickupLat?: FloatFieldUpdateOperationsInput | number
     pickupLng?: FloatFieldUpdateOperationsInput | number
@@ -3980,6 +5166,75 @@ export namespace Prisma {
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RideChatMessageCreateInput = {
+    id?: string
+    senderId: string
+    senderRole: string
+    type?: string
+    message: string
+    createdAt?: Date | string
+    ride: RideCreateNestedOneWithoutMessagesInput
+  }
+
+  export type RideChatMessageUncheckedCreateInput = {
+    id?: string
+    rideId: string
+    senderId: string
+    senderRole: string
+    type?: string
+    message: string
+    createdAt?: Date | string
+  }
+
+  export type RideChatMessageUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    senderId?: StringFieldUpdateOperationsInput | string
+    senderRole?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    message?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    ride?: RideUpdateOneRequiredWithoutMessagesNestedInput
+  }
+
+  export type RideChatMessageUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    rideId?: StringFieldUpdateOperationsInput | string
+    senderId?: StringFieldUpdateOperationsInput | string
+    senderRole?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    message?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RideChatMessageCreateManyInput = {
+    id?: string
+    rideId: string
+    senderId: string
+    senderRole: string
+    type?: string
+    message: string
+    createdAt?: Date | string
+  }
+
+  export type RideChatMessageUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    senderId?: StringFieldUpdateOperationsInput | string
+    senderRole?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    message?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RideChatMessageUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    rideId?: StringFieldUpdateOperationsInput | string
+    senderId?: StringFieldUpdateOperationsInput | string
+    senderRole?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    message?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type RideStateTransitionCreateInput = {
@@ -4175,12 +5430,22 @@ export namespace Prisma {
     none?: RideStateTransitionWhereInput
   }
 
+  export type RideChatMessageListRelationFilter = {
+    every?: RideChatMessageWhereInput
+    some?: RideChatMessageWhereInput
+    none?: RideChatMessageWhereInput
+  }
+
   export type SortOrderInput = {
     sort: SortOrder
     nulls?: NullsOrder
   }
 
   export type RideStateTransitionOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type RideChatMessageOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -4191,6 +5456,7 @@ export namespace Prisma {
     status?: SortOrder
     vehicleType?: SortOrder
     paymentMethod?: SortOrder
+    voucherCode?: SortOrder
     pickupAddress?: SortOrder
     pickupLat?: SortOrder
     pickupLng?: SortOrder
@@ -4239,6 +5505,7 @@ export namespace Prisma {
     status?: SortOrder
     vehicleType?: SortOrder
     paymentMethod?: SortOrder
+    voucherCode?: SortOrder
     pickupAddress?: SortOrder
     pickupLat?: SortOrder
     pickupLng?: SortOrder
@@ -4272,6 +5539,7 @@ export namespace Prisma {
     status?: SortOrder
     vehicleType?: SortOrder
     paymentMethod?: SortOrder
+    voucherCode?: SortOrder
     pickupAddress?: SortOrder
     pickupLat?: SortOrder
     pickupLng?: SortOrder
@@ -4448,16 +5716,46 @@ export namespace Prisma {
     _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
+  export type RideRelationFilter = {
+    is?: RideWhereInput
+    isNot?: RideWhereInput
+  }
+
+  export type RideChatMessageCountOrderByAggregateInput = {
+    id?: SortOrder
+    rideId?: SortOrder
+    senderId?: SortOrder
+    senderRole?: SortOrder
+    type?: SortOrder
+    message?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type RideChatMessageMaxOrderByAggregateInput = {
+    id?: SortOrder
+    rideId?: SortOrder
+    senderId?: SortOrder
+    senderRole?: SortOrder
+    type?: SortOrder
+    message?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type RideChatMessageMinOrderByAggregateInput = {
+    id?: SortOrder
+    rideId?: SortOrder
+    senderId?: SortOrder
+    senderRole?: SortOrder
+    type?: SortOrder
+    message?: SortOrder
+    createdAt?: SortOrder
+  }
+
   export type EnumRideStatusNullableFilter<$PrismaModel = never> = {
     equals?: $Enums.RideStatus | EnumRideStatusFieldRefInput<$PrismaModel> | null
     in?: $Enums.RideStatus[] | ListEnumRideStatusFieldRefInput<$PrismaModel> | null
     notIn?: $Enums.RideStatus[] | ListEnumRideStatusFieldRefInput<$PrismaModel> | null
     not?: NestedEnumRideStatusNullableFilter<$PrismaModel> | $Enums.RideStatus | null
-  }
-
-  export type RideRelationFilter = {
-    is?: RideWhereInput
-    isNot?: RideWhereInput
   }
 
   export type RideStateTransitionCountOrderByAggregateInput = {
@@ -4522,11 +5820,25 @@ export namespace Prisma {
     connect?: RideStateTransitionWhereUniqueInput | RideStateTransitionWhereUniqueInput[]
   }
 
+  export type RideChatMessageCreateNestedManyWithoutRideInput = {
+    create?: XOR<RideChatMessageCreateWithoutRideInput, RideChatMessageUncheckedCreateWithoutRideInput> | RideChatMessageCreateWithoutRideInput[] | RideChatMessageUncheckedCreateWithoutRideInput[]
+    connectOrCreate?: RideChatMessageCreateOrConnectWithoutRideInput | RideChatMessageCreateOrConnectWithoutRideInput[]
+    createMany?: RideChatMessageCreateManyRideInputEnvelope
+    connect?: RideChatMessageWhereUniqueInput | RideChatMessageWhereUniqueInput[]
+  }
+
   export type RideStateTransitionUncheckedCreateNestedManyWithoutRideInput = {
     create?: XOR<RideStateTransitionCreateWithoutRideInput, RideStateTransitionUncheckedCreateWithoutRideInput> | RideStateTransitionCreateWithoutRideInput[] | RideStateTransitionUncheckedCreateWithoutRideInput[]
     connectOrCreate?: RideStateTransitionCreateOrConnectWithoutRideInput | RideStateTransitionCreateOrConnectWithoutRideInput[]
     createMany?: RideStateTransitionCreateManyRideInputEnvelope
     connect?: RideStateTransitionWhereUniqueInput | RideStateTransitionWhereUniqueInput[]
+  }
+
+  export type RideChatMessageUncheckedCreateNestedManyWithoutRideInput = {
+    create?: XOR<RideChatMessageCreateWithoutRideInput, RideChatMessageUncheckedCreateWithoutRideInput> | RideChatMessageCreateWithoutRideInput[] | RideChatMessageUncheckedCreateWithoutRideInput[]
+    connectOrCreate?: RideChatMessageCreateOrConnectWithoutRideInput | RideChatMessageCreateOrConnectWithoutRideInput[]
+    createMany?: RideChatMessageCreateManyRideInputEnvelope
+    connect?: RideChatMessageWhereUniqueInput | RideChatMessageWhereUniqueInput[]
   }
 
   export type StringFieldUpdateOperationsInput = {
@@ -4610,6 +5922,20 @@ export namespace Prisma {
     deleteMany?: RideStateTransitionScalarWhereInput | RideStateTransitionScalarWhereInput[]
   }
 
+  export type RideChatMessageUpdateManyWithoutRideNestedInput = {
+    create?: XOR<RideChatMessageCreateWithoutRideInput, RideChatMessageUncheckedCreateWithoutRideInput> | RideChatMessageCreateWithoutRideInput[] | RideChatMessageUncheckedCreateWithoutRideInput[]
+    connectOrCreate?: RideChatMessageCreateOrConnectWithoutRideInput | RideChatMessageCreateOrConnectWithoutRideInput[]
+    upsert?: RideChatMessageUpsertWithWhereUniqueWithoutRideInput | RideChatMessageUpsertWithWhereUniqueWithoutRideInput[]
+    createMany?: RideChatMessageCreateManyRideInputEnvelope
+    set?: RideChatMessageWhereUniqueInput | RideChatMessageWhereUniqueInput[]
+    disconnect?: RideChatMessageWhereUniqueInput | RideChatMessageWhereUniqueInput[]
+    delete?: RideChatMessageWhereUniqueInput | RideChatMessageWhereUniqueInput[]
+    connect?: RideChatMessageWhereUniqueInput | RideChatMessageWhereUniqueInput[]
+    update?: RideChatMessageUpdateWithWhereUniqueWithoutRideInput | RideChatMessageUpdateWithWhereUniqueWithoutRideInput[]
+    updateMany?: RideChatMessageUpdateManyWithWhereWithoutRideInput | RideChatMessageUpdateManyWithWhereWithoutRideInput[]
+    deleteMany?: RideChatMessageScalarWhereInput | RideChatMessageScalarWhereInput[]
+  }
+
   export type RideStateTransitionUncheckedUpdateManyWithoutRideNestedInput = {
     create?: XOR<RideStateTransitionCreateWithoutRideInput, RideStateTransitionUncheckedCreateWithoutRideInput> | RideStateTransitionCreateWithoutRideInput[] | RideStateTransitionUncheckedCreateWithoutRideInput[]
     connectOrCreate?: RideStateTransitionCreateOrConnectWithoutRideInput | RideStateTransitionCreateOrConnectWithoutRideInput[]
@@ -4622,6 +5948,34 @@ export namespace Prisma {
     update?: RideStateTransitionUpdateWithWhereUniqueWithoutRideInput | RideStateTransitionUpdateWithWhereUniqueWithoutRideInput[]
     updateMany?: RideStateTransitionUpdateManyWithWhereWithoutRideInput | RideStateTransitionUpdateManyWithWhereWithoutRideInput[]
     deleteMany?: RideStateTransitionScalarWhereInput | RideStateTransitionScalarWhereInput[]
+  }
+
+  export type RideChatMessageUncheckedUpdateManyWithoutRideNestedInput = {
+    create?: XOR<RideChatMessageCreateWithoutRideInput, RideChatMessageUncheckedCreateWithoutRideInput> | RideChatMessageCreateWithoutRideInput[] | RideChatMessageUncheckedCreateWithoutRideInput[]
+    connectOrCreate?: RideChatMessageCreateOrConnectWithoutRideInput | RideChatMessageCreateOrConnectWithoutRideInput[]
+    upsert?: RideChatMessageUpsertWithWhereUniqueWithoutRideInput | RideChatMessageUpsertWithWhereUniqueWithoutRideInput[]
+    createMany?: RideChatMessageCreateManyRideInputEnvelope
+    set?: RideChatMessageWhereUniqueInput | RideChatMessageWhereUniqueInput[]
+    disconnect?: RideChatMessageWhereUniqueInput | RideChatMessageWhereUniqueInput[]
+    delete?: RideChatMessageWhereUniqueInput | RideChatMessageWhereUniqueInput[]
+    connect?: RideChatMessageWhereUniqueInput | RideChatMessageWhereUniqueInput[]
+    update?: RideChatMessageUpdateWithWhereUniqueWithoutRideInput | RideChatMessageUpdateWithWhereUniqueWithoutRideInput[]
+    updateMany?: RideChatMessageUpdateManyWithWhereWithoutRideInput | RideChatMessageUpdateManyWithWhereWithoutRideInput[]
+    deleteMany?: RideChatMessageScalarWhereInput | RideChatMessageScalarWhereInput[]
+  }
+
+  export type RideCreateNestedOneWithoutMessagesInput = {
+    create?: XOR<RideCreateWithoutMessagesInput, RideUncheckedCreateWithoutMessagesInput>
+    connectOrCreate?: RideCreateOrConnectWithoutMessagesInput
+    connect?: RideWhereUniqueInput
+  }
+
+  export type RideUpdateOneRequiredWithoutMessagesNestedInput = {
+    create?: XOR<RideCreateWithoutMessagesInput, RideUncheckedCreateWithoutMessagesInput>
+    connectOrCreate?: RideCreateOrConnectWithoutMessagesInput
+    upsert?: RideUpsertWithoutMessagesInput
+    connect?: RideWhereUniqueInput
+    update?: XOR<XOR<RideUpdateToOneWithWhereWithoutMessagesInput, RideUpdateWithoutMessagesInput>, RideUncheckedUpdateWithoutMessagesInput>
   }
 
   export type RideCreateNestedOneWithoutTransitionsInput = {
@@ -4926,6 +6280,34 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type RideChatMessageCreateWithoutRideInput = {
+    id?: string
+    senderId: string
+    senderRole: string
+    type?: string
+    message: string
+    createdAt?: Date | string
+  }
+
+  export type RideChatMessageUncheckedCreateWithoutRideInput = {
+    id?: string
+    senderId: string
+    senderRole: string
+    type?: string
+    message: string
+    createdAt?: Date | string
+  }
+
+  export type RideChatMessageCreateOrConnectWithoutRideInput = {
+    where: RideChatMessageWhereUniqueInput
+    create: XOR<RideChatMessageCreateWithoutRideInput, RideChatMessageUncheckedCreateWithoutRideInput>
+  }
+
+  export type RideChatMessageCreateManyRideInputEnvelope = {
+    data: RideChatMessageCreateManyRideInput | RideChatMessageCreateManyRideInput[]
+    skipDuplicates?: boolean
+  }
+
   export type RideStateTransitionUpsertWithWhereUniqueWithoutRideInput = {
     where: RideStateTransitionWhereUniqueInput
     update: XOR<RideStateTransitionUpdateWithoutRideInput, RideStateTransitionUncheckedUpdateWithoutRideInput>
@@ -4956,13 +6338,43 @@ export namespace Prisma {
     occurredAt?: DateTimeFilter<"RideStateTransition"> | Date | string
   }
 
-  export type RideCreateWithoutTransitionsInput = {
+  export type RideChatMessageUpsertWithWhereUniqueWithoutRideInput = {
+    where: RideChatMessageWhereUniqueInput
+    update: XOR<RideChatMessageUpdateWithoutRideInput, RideChatMessageUncheckedUpdateWithoutRideInput>
+    create: XOR<RideChatMessageCreateWithoutRideInput, RideChatMessageUncheckedCreateWithoutRideInput>
+  }
+
+  export type RideChatMessageUpdateWithWhereUniqueWithoutRideInput = {
+    where: RideChatMessageWhereUniqueInput
+    data: XOR<RideChatMessageUpdateWithoutRideInput, RideChatMessageUncheckedUpdateWithoutRideInput>
+  }
+
+  export type RideChatMessageUpdateManyWithWhereWithoutRideInput = {
+    where: RideChatMessageScalarWhereInput
+    data: XOR<RideChatMessageUpdateManyMutationInput, RideChatMessageUncheckedUpdateManyWithoutRideInput>
+  }
+
+  export type RideChatMessageScalarWhereInput = {
+    AND?: RideChatMessageScalarWhereInput | RideChatMessageScalarWhereInput[]
+    OR?: RideChatMessageScalarWhereInput[]
+    NOT?: RideChatMessageScalarWhereInput | RideChatMessageScalarWhereInput[]
+    id?: StringFilter<"RideChatMessage"> | string
+    rideId?: StringFilter<"RideChatMessage"> | string
+    senderId?: StringFilter<"RideChatMessage"> | string
+    senderRole?: StringFilter<"RideChatMessage"> | string
+    type?: StringFilter<"RideChatMessage"> | string
+    message?: StringFilter<"RideChatMessage"> | string
+    createdAt?: DateTimeFilter<"RideChatMessage"> | Date | string
+  }
+
+  export type RideCreateWithoutMessagesInput = {
     id?: string
     customerId: string
     driverId?: string | null
     status?: $Enums.RideStatus
     vehicleType?: string
     paymentMethod?: string
+    voucherCode?: string | null
     pickupAddress: string
     pickupLat: number
     pickupLng: number
@@ -4990,6 +6402,175 @@ export namespace Prisma {
     cancelledBy?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
+    transitions?: RideStateTransitionCreateNestedManyWithoutRideInput
+  }
+
+  export type RideUncheckedCreateWithoutMessagesInput = {
+    id?: string
+    customerId: string
+    driverId?: string | null
+    status?: $Enums.RideStatus
+    vehicleType?: string
+    paymentMethod?: string
+    voucherCode?: string | null
+    pickupAddress: string
+    pickupLat: number
+    pickupLng: number
+    dropoffAddress: string
+    dropoffLat: number
+    dropoffLng: number
+    distance?: number | null
+    duration?: number | null
+    fare?: number | null
+    surgeMultiplier?: number
+    suggestedDriverIds?: RideCreatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideCreateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideCreaterejectedDriverIdsInput | string[]
+    reassignAttempts?: number
+    acceptedDriverId?: string | null
+    requestedAt?: Date | string
+    pickupAt?: Date | string | null
+    offeredAt?: Date | string | null
+    assignedAt?: Date | string | null
+    acceptedAt?: Date | string | null
+    startedAt?: Date | string | null
+    completedAt?: Date | string | null
+    cancelledAt?: Date | string | null
+    cancelReason?: string | null
+    cancelledBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    transitions?: RideStateTransitionUncheckedCreateNestedManyWithoutRideInput
+  }
+
+  export type RideCreateOrConnectWithoutMessagesInput = {
+    where: RideWhereUniqueInput
+    create: XOR<RideCreateWithoutMessagesInput, RideUncheckedCreateWithoutMessagesInput>
+  }
+
+  export type RideUpsertWithoutMessagesInput = {
+    update: XOR<RideUpdateWithoutMessagesInput, RideUncheckedUpdateWithoutMessagesInput>
+    create: XOR<RideCreateWithoutMessagesInput, RideUncheckedCreateWithoutMessagesInput>
+    where?: RideWhereInput
+  }
+
+  export type RideUpdateToOneWithWhereWithoutMessagesInput = {
+    where?: RideWhereInput
+    data: XOR<RideUpdateWithoutMessagesInput, RideUncheckedUpdateWithoutMessagesInput>
+  }
+
+  export type RideUpdateWithoutMessagesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    customerId?: StringFieldUpdateOperationsInput | string
+    driverId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumRideStatusFieldUpdateOperationsInput | $Enums.RideStatus
+    vehicleType?: StringFieldUpdateOperationsInput | string
+    paymentMethod?: StringFieldUpdateOperationsInput | string
+    voucherCode?: NullableStringFieldUpdateOperationsInput | string | null
+    pickupAddress?: StringFieldUpdateOperationsInput | string
+    pickupLat?: FloatFieldUpdateOperationsInput | number
+    pickupLng?: FloatFieldUpdateOperationsInput | number
+    dropoffAddress?: StringFieldUpdateOperationsInput | string
+    dropoffLat?: FloatFieldUpdateOperationsInput | number
+    dropoffLng?: FloatFieldUpdateOperationsInput | number
+    distance?: NullableFloatFieldUpdateOperationsInput | number | null
+    duration?: NullableIntFieldUpdateOperationsInput | number | null
+    fare?: NullableFloatFieldUpdateOperationsInput | number | null
+    surgeMultiplier?: FloatFieldUpdateOperationsInput | number
+    suggestedDriverIds?: RideUpdatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideUpdateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideUpdaterejectedDriverIdsInput | string[]
+    reassignAttempts?: IntFieldUpdateOperationsInput | number
+    acceptedDriverId?: NullableStringFieldUpdateOperationsInput | string | null
+    requestedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    pickupAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    offeredAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    assignedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    acceptedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    transitions?: RideStateTransitionUpdateManyWithoutRideNestedInput
+  }
+
+  export type RideUncheckedUpdateWithoutMessagesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    customerId?: StringFieldUpdateOperationsInput | string
+    driverId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumRideStatusFieldUpdateOperationsInput | $Enums.RideStatus
+    vehicleType?: StringFieldUpdateOperationsInput | string
+    paymentMethod?: StringFieldUpdateOperationsInput | string
+    voucherCode?: NullableStringFieldUpdateOperationsInput | string | null
+    pickupAddress?: StringFieldUpdateOperationsInput | string
+    pickupLat?: FloatFieldUpdateOperationsInput | number
+    pickupLng?: FloatFieldUpdateOperationsInput | number
+    dropoffAddress?: StringFieldUpdateOperationsInput | string
+    dropoffLat?: FloatFieldUpdateOperationsInput | number
+    dropoffLng?: FloatFieldUpdateOperationsInput | number
+    distance?: NullableFloatFieldUpdateOperationsInput | number | null
+    duration?: NullableIntFieldUpdateOperationsInput | number | null
+    fare?: NullableFloatFieldUpdateOperationsInput | number | null
+    surgeMultiplier?: FloatFieldUpdateOperationsInput | number
+    suggestedDriverIds?: RideUpdatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideUpdateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideUpdaterejectedDriverIdsInput | string[]
+    reassignAttempts?: IntFieldUpdateOperationsInput | number
+    acceptedDriverId?: NullableStringFieldUpdateOperationsInput | string | null
+    requestedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    pickupAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    offeredAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    assignedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    acceptedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    transitions?: RideStateTransitionUncheckedUpdateManyWithoutRideNestedInput
+  }
+
+  export type RideCreateWithoutTransitionsInput = {
+    id?: string
+    customerId: string
+    driverId?: string | null
+    status?: $Enums.RideStatus
+    vehicleType?: string
+    paymentMethod?: string
+    voucherCode?: string | null
+    pickupAddress: string
+    pickupLat: number
+    pickupLng: number
+    dropoffAddress: string
+    dropoffLat: number
+    dropoffLng: number
+    distance?: number | null
+    duration?: number | null
+    fare?: number | null
+    surgeMultiplier?: number
+    suggestedDriverIds?: RideCreatesuggestedDriverIdsInput | string[]
+    offeredDriverIds?: RideCreateofferedDriverIdsInput | string[]
+    rejectedDriverIds?: RideCreaterejectedDriverIdsInput | string[]
+    reassignAttempts?: number
+    acceptedDriverId?: string | null
+    requestedAt?: Date | string
+    pickupAt?: Date | string | null
+    offeredAt?: Date | string | null
+    assignedAt?: Date | string | null
+    acceptedAt?: Date | string | null
+    startedAt?: Date | string | null
+    completedAt?: Date | string | null
+    cancelledAt?: Date | string | null
+    cancelReason?: string | null
+    cancelledBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    messages?: RideChatMessageCreateNestedManyWithoutRideInput
   }
 
   export type RideUncheckedCreateWithoutTransitionsInput = {
@@ -4999,6 +6580,7 @@ export namespace Prisma {
     status?: $Enums.RideStatus
     vehicleType?: string
     paymentMethod?: string
+    voucherCode?: string | null
     pickupAddress: string
     pickupLat: number
     pickupLng: number
@@ -5026,6 +6608,7 @@ export namespace Prisma {
     cancelledBy?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
+    messages?: RideChatMessageUncheckedCreateNestedManyWithoutRideInput
   }
 
   export type RideCreateOrConnectWithoutTransitionsInput = {
@@ -5051,6 +6634,7 @@ export namespace Prisma {
     status?: EnumRideStatusFieldUpdateOperationsInput | $Enums.RideStatus
     vehicleType?: StringFieldUpdateOperationsInput | string
     paymentMethod?: StringFieldUpdateOperationsInput | string
+    voucherCode?: NullableStringFieldUpdateOperationsInput | string | null
     pickupAddress?: StringFieldUpdateOperationsInput | string
     pickupLat?: FloatFieldUpdateOperationsInput | number
     pickupLng?: FloatFieldUpdateOperationsInput | number
@@ -5078,6 +6662,7 @@ export namespace Prisma {
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    messages?: RideChatMessageUpdateManyWithoutRideNestedInput
   }
 
   export type RideUncheckedUpdateWithoutTransitionsInput = {
@@ -5087,6 +6672,7 @@ export namespace Prisma {
     status?: EnumRideStatusFieldUpdateOperationsInput | $Enums.RideStatus
     vehicleType?: StringFieldUpdateOperationsInput | string
     paymentMethod?: StringFieldUpdateOperationsInput | string
+    voucherCode?: NullableStringFieldUpdateOperationsInput | string | null
     pickupAddress?: StringFieldUpdateOperationsInput | string
     pickupLat?: FloatFieldUpdateOperationsInput | number
     pickupLng?: FloatFieldUpdateOperationsInput | number
@@ -5114,6 +6700,7 @@ export namespace Prisma {
     cancelledBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    messages?: RideChatMessageUncheckedUpdateManyWithoutRideNestedInput
   }
 
   export type RideStateTransitionCreateManyRideInput = {
@@ -5124,6 +6711,15 @@ export namespace Prisma {
     actorType?: string | null
     reason?: string | null
     occurredAt?: Date | string
+  }
+
+  export type RideChatMessageCreateManyRideInput = {
+    id?: string
+    senderId: string
+    senderRole: string
+    type?: string
+    message: string
+    createdAt?: Date | string
   }
 
   export type RideStateTransitionUpdateWithoutRideInput = {
@@ -5156,6 +6752,33 @@ export namespace Prisma {
     occurredAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type RideChatMessageUpdateWithoutRideInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    senderId?: StringFieldUpdateOperationsInput | string
+    senderRole?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    message?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RideChatMessageUncheckedUpdateWithoutRideInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    senderId?: StringFieldUpdateOperationsInput | string
+    senderRole?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    message?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RideChatMessageUncheckedUpdateManyWithoutRideInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    senderId?: StringFieldUpdateOperationsInput | string
+    senderRole?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    message?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
 
 
   /**
@@ -5169,6 +6792,10 @@ export namespace Prisma {
      * @deprecated Use RideDefaultArgs instead
      */
     export type RideArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = RideDefaultArgs<ExtArgs>
+    /**
+     * @deprecated Use RideChatMessageDefaultArgs instead
+     */
+    export type RideChatMessageArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = RideChatMessageDefaultArgs<ExtArgs>
     /**
      * @deprecated Use RideStateTransitionDefaultArgs instead
      */

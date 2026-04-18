@@ -1,12 +1,12 @@
 # Seed Account Reference
 
-Generated at: 08:08:24 11/4/2026
+Generated at: 04:34:57 18/4/2026
 
 ## Credentials
 
 - Admin: admin@cabbooking.com / 0900000001
 - Password chung: Password@1
-- Admin userId: 554fd858-c399-4be0-8817-32596eba2f30
+- Admin userId: 769b58b2-974d-4d66-96dc-cf4005925daf
 
 ## Driver Accounts
 

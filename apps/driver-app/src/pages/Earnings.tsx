@@ -143,6 +143,7 @@ const Earnings: React.FC = () => {
     { label: 'Hoa hồng', value: formatCurrency(earnings.commissionTotal), icon: <PercentRounded fontSize="small" />, color: '#dc2626', bg: '#fef2f2' },
     { label: 'Thưởng', value: formatCurrency(earnings.bonusTotal), icon: <EmojiEventsRounded fontSize="small" />, color: '#d97706', bg: '#fffbeb' },
   ];
+  const hasCashSettlementTrips = earnings.recentTrips.some((trip) => trip.driverCollected && trip.paymentMethod === 'CASH');
 
   return (
     <Box
@@ -167,28 +168,36 @@ const Earnings: React.FC = () => {
           mb: 2,
         }}
       >
-        <CardContent sx={{ p: 2.5 }}>
-          <Typography variant="caption" sx={{ opacity: 0.8, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            Thực nhận tuần này
-          </Typography>
-          <Typography variant="h4" fontWeight={800} letterSpacing={-0.5} sx={{ mt: 0.5, mb: 1.5 }}>
-            {formatCurrency(earnings.week)}
-          </Typography>
-          <Stack direction="row" spacing={2}>
-            <Box>
-              <Typography variant="caption" sx={{ opacity: 0.75 }}>Hôm nay</Typography>
-              <Typography variant="body1" fontWeight={700}>{formatCurrency(earnings.today)}</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={{ opacity: 0.75 }}>Số chuyến</Typography>
-              <Typography variant="body1" fontWeight={700}>{weekTrips} chuyến</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={{ opacity: 0.75 }}>Thưởng</Typography>
-              <Typography variant="body1" fontWeight={700}>{formatCurrency(earnings.bonusTotal)}</Typography>
-            </Box>
-          </Stack>
-        </CardContent>
+        <CardContent sx={{ p: 3 }}>
+  {/* Title */}
+  <Typography
+    variant="caption"
+    sx={{
+      opacity: 0.7,
+      fontWeight: 600,
+      letterSpacing: '0.06em',
+      textTransform: 'uppercase',
+      display: 'block',
+      textAlign: 'center',
+    }}
+  >
+    Thực nhận tuần này
+  </Typography>
+
+  {/* Main number */}
+  <Typography
+    variant="h3"
+    sx={{
+      fontWeight: 800,
+      textAlign: 'center',
+      mt: 1,
+      mb: 2.5,
+    }}
+  >
+    {formatCurrency(earnings.week)}
+  </Typography>
+
+</CardContent>
       </Card>
 
       {/* Stats row */}
@@ -208,19 +217,7 @@ const Earnings: React.FC = () => {
         ))}
       </Box>
 
-      {earnings.unpaidCashDebt > 0 && (
-        <Card elevation={0} sx={{ borderRadius: 3, bgcolor: '#fef2f2', border: '1px solid #fecaca', mb: 2 }}>
-          <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <WarningAmberRounded sx={{ color: '#dc2626' }} fontSize="small" />
-              <Box>
-                <Typography variant="body2" fontWeight={700} color="error.main">Nợ tiền mặt chưa thanh toán</Typography>
-                <Typography variant="caption" color="text.secondary">{formatCurrency(earnings.unpaidCashDebt)}</Typography>
-              </Box>
-            </Stack>
-          </CardContent>
-        </Card>
-      )}
+
 
       {/* Chart section */}
       <Card variant="outlined" sx={{ borderRadius: 3 }}>

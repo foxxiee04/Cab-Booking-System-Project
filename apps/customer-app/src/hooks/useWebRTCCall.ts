@@ -20,10 +20,36 @@ export function useWebRTCCall(
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const endedStateTimeoutRef = useRef<number | null>(null);
 
   const [callState, setCallState] = useState<CallState>('idle');
   const [incomingSdp, setIncomingSdp] = useState<RTCSessionDescriptionInit | null>(null);
   const [callError, setCallError] = useState<string | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+  const cleanupPeer = useCallback(() => {
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    localStreamRef.current = null;
+    pcRef.current?.close();
+    pcRef.current = null;
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
+    }
+  }, []);
+
+  const markCallEnded = useCallback(() => {
+    if (endedStateTimeoutRef.current) {
+      window.clearTimeout(endedStateTimeoutRef.current);
+    }
+
+    setCallState('ended');
+    endedStateTimeoutRef.current = window.setTimeout(() => {
+      setCallState('idle');
+      endedStateTimeoutRef.current = null;
+    }, 4000);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Socket setup for WebRTC signaling (separate from the tracking socket)
@@ -66,28 +92,19 @@ export function useWebRTCCall(
 
     socket.on('call:end', () => {
       cleanupPeer();
-      setCallState('ended');
-      setTimeout(() => setCallState('idle'), 2000);
+      setIncomingSdp(null);
+      markCallEnded();
     });
 
     return () => {
+      if (endedStateTimeoutRef.current) {
+        window.clearTimeout(endedStateTimeoutRef.current);
+        endedStateTimeoutRef.current = null;
+      }
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [token, rideId]);
-
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
-  const cleanupPeer = useCallback(() => {
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
-    localStreamRef.current = null;
-    pcRef.current?.close();
-    pcRef.current = null;
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = null;
-    }
-  }, []);
+  }, [cleanupPeer, markCallEnded, token, rideId]);
 
   const createPeerConnection = useCallback((): RTCPeerConnection => {
     const pc = new RTCPeerConnection(STUN_CONFIG);
@@ -174,9 +191,9 @@ export function useWebRTCCall(
       socketRef.current.emit('call:end', { rideId });
     }
     cleanupPeer();
-    setCallState('idle');
     setIncomingSdp(null);
-  }, [cleanupPeer, rideId]);
+    markCallEnded();
+  }, [cleanupPeer, markCallEnded, rideId]);
 
   return { callState, callError, startCall, acceptCall, hangUp };
 }

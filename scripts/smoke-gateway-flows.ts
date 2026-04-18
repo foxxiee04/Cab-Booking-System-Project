@@ -115,8 +115,12 @@ async function getDriverProfile(token: string) {
   return payload.driver || payload;
 }
 
-async function getPaymentByRide(rideId: string, token: string): Promise<PaymentRecord> {
+async function getPaymentByRide(rideId: string, token: string): Promise<PaymentRecord | null> {
   const response = await request<{ success: boolean; data: { payment: PaymentRecord } }>(`/api/payments/ride/${rideId}`, {}, token);
+  if (response.status === 404) {
+    return null;
+  }
+
   assertCondition(response.status === 200, `Get payment for ride ${rideId} failed: ${response.status}`);
   const payload = (response.data as any).data || {};
   return payload.payment || payload;
@@ -185,7 +189,7 @@ async function waitForPaymentStatus(rideId: string, token: string, allowedStatus
   let latestPayment = await getPaymentByRide(rideId, token);
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    if (allowedStatuses.includes(latestPayment.status)) {
+    if (latestPayment && allowedStatuses.includes(latestPayment.status)) {
       return latestPayment;
     }
 
@@ -193,7 +197,9 @@ async function waitForPaymentStatus(rideId: string, token: string, allowedStatus
     latestPayment = await getPaymentByRide(rideId, token);
   }
 
-  throw new Error(`Payment for ride ${rideId} did not reach one of [${allowedStatuses.join(', ')}], current status=${latestPayment.status}`);
+  throw new Error(
+    `Payment for ride ${rideId} did not reach one of [${allowedStatuses.join(', ')}], current status=${latestPayment?.status || 'NOT_CREATED'}`,
+  );
 }
 
 async function advanceRideToCompleted(ride: RideRecord, customerToken: string, driverToken: string, expectedDriverId: string) {

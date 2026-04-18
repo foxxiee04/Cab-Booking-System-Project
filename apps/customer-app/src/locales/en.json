@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Cab Booking",
+    "title": "FoxGo Customer",
     "welcome": "Welcome, {{name}}!"
   },
   "shell": {
@@ -86,7 +86,7 @@
   },
   "register": {
     "title": "Create Account",
-    "subtitle": "Join Cab Booking - Start your journey",
+    "subtitle": "Join FoxGo Customer - Start your journey",
     "firstName": "First Name",
     "lastName": "Last Name",
     "email": "Email Address",
@@ -111,7 +111,6 @@
     "saveSuccess": "Profile updated successfully.",
     "saveFailed": "Failed to update profile.",
     "nameRequired": "Please enter both first name and last name.",
-    "avatarUrl": "Avatar URL",
     "guest": "Customer",
     "memberTier": "Standard member",
     "noPhone": "No phone number",

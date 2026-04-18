@@ -781,6 +781,93 @@ function getCustomerReference(index: number) {
   };
 }
 
+const SEED_DRIVER_INITIAL_WALLET_BALANCE = 450_000;
+
+function getSeedRideTimeline(index: number, rideSeed: typeof RIDE_SEEDS[number]) {
+  const requestedAt = hoursAgo(24 - index * 3);
+  const assignedAt = rideSeed.driverIndex !== undefined ? new Date(requestedAt.getTime() + 5 * 60 * 1000) : null;
+  const startedAt = rideSeed.status === 'IN_PROGRESS' || rideSeed.status === 'COMPLETED'
+    ? new Date(requestedAt.getTime() + 18 * 60 * 1000)
+    : null;
+  const completedAt = rideSeed.status === 'COMPLETED'
+    ? new Date(requestedAt.getTime() + (rideSeed.duration + 25 * 60) * 1000)
+    : null;
+  const cancelledAt = rideSeed.status === 'CANCELLED'
+    ? new Date(requestedAt.getTime() + 9 * 60 * 1000)
+    : null;
+
+  return {
+    requestedAt,
+    assignedAt,
+    startedAt,
+    completedAt,
+    cancelledAt,
+  };
+}
+
+function getSeedCommissionRate(vehicleType: string) {
+  switch (vehicleType) {
+    case 'CAR_7':
+      return 0.18;
+    default:
+      return 0.2;
+  }
+}
+
+function getSeedRideBonus(index: number, rideSeed: typeof RIDE_SEEDS[number]) {
+  let bonus = 0;
+
+  if (rideSeed.fare >= 100_000) {
+    bonus += 6_000;
+  }
+
+  if (index % 5 === 0) {
+    bonus += 4_000;
+  }
+
+  return bonus;
+}
+
+function getSeedRidePenalty(index: number) {
+  return index % 7 === 0 ? 2_000 : 0;
+}
+
+function getSeedDriverEarnings(index: number, rideSeed: typeof RIDE_SEEDS[number]) {
+  const grossFare = rideSeed.fare;
+  const commissionRate = getSeedCommissionRate(rideSeed.vehicleType);
+  const platformFee = Math.round(grossFare * commissionRate);
+  const bonus = getSeedRideBonus(index, rideSeed);
+  const penalty = getSeedRidePenalty(index);
+  const netEarnings = Math.max(0, grossFare - platformFee + bonus - penalty);
+  const driverCollected = rideSeed.paymentMethod === 'CASH';
+  const cashDebt = driverCollected ? Math.max(0, platformFee - bonus + penalty) : 0;
+
+  return {
+    grossFare,
+    commissionRate,
+    platformFee,
+    bonus,
+    penalty,
+    netEarnings,
+    driverCollected,
+    cashDebt,
+  };
+}
+
+function isSeedPeakHour(date: Date) {
+  const vnHour = (date.getUTCHours() + 7) % 24;
+  return (vnHour >= 6 && vnHour < 9) || (vnHour >= 16 && vnHour < 19);
+}
+
+function getVietnamCalendarDate(date: Date) {
+  const shifted = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+  return new Date(Date.UTC(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth(),
+    shifted.getUTCDate(),
+  ));
+}
+
 async function generateSeedReferenceReport(
   adminId: string,
   customerIds: string[],
@@ -1203,16 +1290,11 @@ async function seedRideDB(customerIds: string[], driverIds: string[]) {
 
     for (let index = 0; index < RIDE_SEEDS.length; index += 1) {
       const rideSeed = RIDE_SEEDS[index];
-      const requestedAt = hoursAgo(24 - index * 3);
-      const assignedAt = rideSeed.driverIndex !== undefined ? new Date(requestedAt.getTime() + 5 * 60 * 1000) : null;
-      const startedAt = rideSeed.status === 'IN_PROGRESS' || rideSeed.status === 'COMPLETED'
-        ? new Date(requestedAt.getTime() + 18 * 60 * 1000)
-        : null;
-      const completedAt = rideSeed.status === 'COMPLETED'
-        ? new Date(requestedAt.getTime() + (rideSeed.duration + 25 * 60) * 1000)
-        : null;
-      const cancelledAt = rideSeed.status === 'CANCELLED'
-        ? new Date(requestedAt.getTime() + 9 * 60 * 1000)
+      const timeline = getSeedRideTimeline(index, rideSeed);
+      const acceptedAt = rideSeed.driverIndex !== undefined
+        && ['ACCEPTED', 'PICKING_UP', 'IN_PROGRESS', 'COMPLETED'].includes(rideSeed.status)
+        && timeline.assignedAt
+        ? new Date(timeline.assignedAt.getTime() + 2 * 60 * 1000)
         : null;
 
       const ride = await prisma.ride.create({
@@ -1234,16 +1316,16 @@ async function seedRideDB(customerIds: string[], driverIds: string[]) {
           surgeMultiplier: rideSeed.status === 'FINDING_DRIVER' ? 1.2 : 1,
           suggestedDriverIds: rideSeed.driverIndex !== undefined ? [driverIds[rideSeed.driverIndex]] : [],
           offeredDriverIds: rideSeed.driverIndex !== undefined ? [driverIds[rideSeed.driverIndex]] : [],
-          acceptedDriverId: rideSeed.status === 'COMPLETED' || rideSeed.status === 'IN_PROGRESS' || rideSeed.status === 'ASSIGNED'
+          acceptedDriverId: ['ASSIGNED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS', 'COMPLETED'].includes(rideSeed.status)
             ? (rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null)
             : null,
-          requestedAt,
-          offeredAt: assignedAt,
-          assignedAt,
-          acceptedAt: rideSeed.status === 'COMPLETED' || rideSeed.status === 'IN_PROGRESS' ? assignedAt : null,
-          startedAt,
-          completedAt,
-          cancelledAt,
+          requestedAt: timeline.requestedAt,
+          offeredAt: timeline.assignedAt,
+          assignedAt: timeline.assignedAt,
+          acceptedAt,
+          startedAt: timeline.startedAt,
+          completedAt: timeline.completedAt,
+          cancelledAt: timeline.cancelledAt,
           cancelReason: rideSeed.status === 'CANCELLED' ? 'Khách hàng đổi kế hoạch' : null,
           cancelledBy: rideSeed.status === 'CANCELLED' ? 'CUSTOMER' : null,
         },
@@ -1251,27 +1333,96 @@ async function seedRideDB(customerIds: string[], driverIds: string[]) {
 
       rides.push({ id: ride.id, status: rideSeed.status });
 
+      const transitions = [
+        {
+          rideId: ride.id,
+          fromStatus: null,
+          toStatus: 'CREATED',
+          actorId: customerIds[rideSeed.customerIndex],
+          actorType: 'CUSTOMER',
+          occurredAt: timeline.requestedAt,
+        },
+      ];
+
+      if (rideSeed.status === 'FINDING_DRIVER') {
+        transitions.push({
+          rideId: ride.id,
+          fromStatus: 'CREATED',
+          toStatus: 'FINDING_DRIVER',
+          actorId: null,
+          actorType: 'SYSTEM',
+          occurredAt: timeline.requestedAt,
+        });
+      }
+
+      if (rideSeed.driverIndex !== undefined && timeline.assignedAt) {
+        transitions.push({
+          rideId: ride.id,
+          fromStatus: 'CREATED',
+          toStatus: 'ASSIGNED',
+          actorId: driverIds[rideSeed.driverIndex],
+          actorType: 'SYSTEM',
+          occurredAt: timeline.assignedAt,
+        });
+      }
+
+      if (acceptedAt && ['ACCEPTED', 'PICKING_UP', 'IN_PROGRESS', 'COMPLETED'].includes(rideSeed.status)) {
+        transitions.push({
+          rideId: ride.id,
+          fromStatus: 'ASSIGNED',
+          toStatus: 'ACCEPTED',
+          actorId: rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null,
+          actorType: 'DRIVER',
+          occurredAt: acceptedAt,
+        });
+      }
+
+      if (acceptedAt && ['PICKING_UP', 'IN_PROGRESS', 'COMPLETED'].includes(rideSeed.status)) {
+        transitions.push({
+          rideId: ride.id,
+          fromStatus: 'ACCEPTED',
+          toStatus: 'PICKING_UP',
+          actorId: rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null,
+          actorType: 'DRIVER',
+          occurredAt: new Date(acceptedAt.getTime() + 4 * 60 * 1000),
+        });
+      }
+
+      if (timeline.startedAt && ['IN_PROGRESS', 'COMPLETED'].includes(rideSeed.status)) {
+        transitions.push({
+          rideId: ride.id,
+          fromStatus: 'PICKING_UP',
+          toStatus: 'IN_PROGRESS',
+          actorId: rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null,
+          actorType: 'DRIVER',
+          occurredAt: timeline.startedAt,
+        });
+      }
+
+      if (timeline.completedAt && rideSeed.status === 'COMPLETED') {
+        transitions.push({
+          rideId: ride.id,
+          fromStatus: 'IN_PROGRESS',
+          toStatus: 'COMPLETED',
+          actorId: rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null,
+          actorType: 'DRIVER',
+          occurredAt: timeline.completedAt,
+        });
+      }
+
+      if (timeline.cancelledAt && rideSeed.status === 'CANCELLED') {
+        transitions.push({
+          rideId: ride.id,
+          fromStatus: rideSeed.driverIndex !== undefined ? 'ASSIGNED' : 'CREATED',
+          toStatus: 'CANCELLED',
+          actorId: customerIds[rideSeed.customerIndex],
+          actorType: 'CUSTOMER',
+          occurredAt: timeline.cancelledAt,
+        });
+      }
+
       await prisma.rideStateTransition.createMany({
-        data: [
-          {
-            rideId: ride.id,
-            fromStatus: null,
-            toStatus: 'CREATED',
-            actorId: customerIds[rideSeed.customerIndex],
-            actorType: 'CUSTOMER',
-            occurredAt: requestedAt,
-          },
-          ...(rideSeed.status === 'FINDING_DRIVER' || rideSeed.status === 'ASSIGNED' || rideSeed.status === 'IN_PROGRESS' || rideSeed.status === 'COMPLETED' || rideSeed.status === 'CANCELLED'
-            ? [{
-                rideId: ride.id,
-                fromStatus: 'CREATED',
-                toStatus: rideSeed.status === 'FINDING_DRIVER' ? 'FINDING_DRIVER' : 'ASSIGNED',
-                actorId: rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null,
-                actorType: rideSeed.driverIndex !== undefined ? 'SYSTEM' : 'SYSTEM',
-                occurredAt: assignedAt || requestedAt,
-              }]
-            : []),
-        ],
+        data: transitions,
       });
 
       console.log(`    Ride: ${ride.id} (${rideSeed.status})`);
@@ -1290,10 +1441,49 @@ async function seedPaymentDB(rides: Array<{ id: string; status: string }>, custo
   const prisma = createServicePrismaClient('payment-service', 'payment_db');
 
   try {
+    const walletBalances = new Map<string, number>();
+    const dailyStats = new Map<string, {
+      driverId: string;
+      date: Date;
+      tripsCompleted: number;
+      distanceKm: number;
+      peakTrips: number;
+      bonusAwarded: number;
+    }>();
+    let seededDriverEarningsCount = 0;
+    let seededWalletTransactionCount = 0;
+
+    for (const driverId of driverIds) {
+      walletBalances.set(driverId, SEED_DRIVER_INITIAL_WALLET_BALANCE);
+
+      await prisma.driverWallet.upsert({
+        where: { driverId },
+        update: { balance: SEED_DRIVER_INITIAL_WALLET_BALANCE },
+        create: {
+          driverId,
+          balance: SEED_DRIVER_INITIAL_WALLET_BALANCE,
+        },
+      });
+
+      await prisma.walletTransaction.create({
+        data: {
+          driverId,
+          type: 'TOP_UP',
+          amount: SEED_DRIVER_INITIAL_WALLET_BALANCE,
+          balanceAfter: SEED_DRIVER_INITIAL_WALLET_BALANCE,
+          description: 'So du khoi tao seed driver wallet',
+          createdAt: hoursAgo(96),
+        },
+      });
+
+      seededWalletTransactionCount += 1;
+    }
+
     for (let index = 0; index < RIDE_SEEDS.length; index += 1) {
       const rideSeed = RIDE_SEEDS[index];
       const ride = rides[index];
       const initiatedAt = hoursAgo(23 - index * 3);
+      const timeline = getSeedRideTimeline(index, rideSeed);
 
       await prisma.fare.create({
         data: {
@@ -1332,10 +1522,114 @@ async function seedPaymentDB(rides: Array<{ id: string; status: string }>, custo
           },
         },
       });
+
+      if (rideSeed.status === 'COMPLETED' && rideSeed.driverIndex !== undefined) {
+        const driverId = driverIds[rideSeed.driverIndex];
+        const completedAt = timeline.completedAt || new Date(initiatedAt.getTime() + rideSeed.duration * 1000);
+        const earnings = getSeedDriverEarnings(index, rideSeed);
+
+        await prisma.driverEarnings.create({
+          data: {
+            rideId: ride.id,
+            driverId,
+            grossFare: earnings.grossFare,
+            commissionRate: earnings.commissionRate,
+            platformFee: earnings.platformFee,
+            bonus: earnings.bonus,
+            penalty: earnings.penalty,
+            netEarnings: earnings.netEarnings,
+            paymentMethod: rideSeed.paymentMethod,
+            driverCollected: earnings.driverCollected,
+            cashDebt: earnings.cashDebt,
+            isPaid: true,
+            paidAt: completedAt,
+            bonusBreakdown: earnings.bonus > 0 ? { seededPerformanceBonus: earnings.bonus } : null,
+            penaltyBreakdown: earnings.penalty > 0 ? { seededAdjustment: earnings.penalty } : null,
+            createdAt: completedAt,
+          },
+        });
+        seededDriverEarningsCount += 1;
+
+        let currentBalance = walletBalances.get(driverId) ?? SEED_DRIVER_INITIAL_WALLET_BALANCE;
+
+        if (earnings.driverCollected) {
+          if (earnings.cashDebt > 0) {
+            currentBalance -= earnings.cashDebt;
+            await prisma.walletTransaction.create({
+              data: {
+                driverId,
+                type: 'COMMISSION',
+                amount: earnings.cashDebt,
+                balanceAfter: currentBalance,
+                description: 'Khau tru cong no cuoc tien mat seed',
+                rideId: ride.id,
+                createdAt: completedAt,
+              },
+            });
+            seededWalletTransactionCount += 1;
+          }
+        } else if (earnings.netEarnings > 0) {
+          currentBalance += earnings.netEarnings;
+          await prisma.walletTransaction.create({
+            data: {
+              driverId,
+              type: 'EARN',
+              amount: earnings.netEarnings,
+              balanceAfter: currentBalance,
+              description: 'Thu nhap cuoc online seed',
+              rideId: ride.id,
+              createdAt: completedAt,
+            },
+          });
+          seededWalletTransactionCount += 1;
+        }
+
+        walletBalances.set(driverId, currentBalance);
+
+        const statsDate = getVietnamCalendarDate(completedAt);
+        const statsKey = `${driverId}:${statsDate.toISOString()}`;
+        const currentStats = dailyStats.get(statsKey) || {
+          driverId,
+          date: statsDate,
+          tripsCompleted: 0,
+          distanceKm: 0,
+          peakTrips: 0,
+          bonusAwarded: 0,
+        };
+
+        currentStats.tripsCompleted += 1;
+        currentStats.distanceKm += rideSeed.distance;
+        currentStats.peakTrips += isSeedPeakHour(completedAt) ? 1 : 0;
+        currentStats.bonusAwarded += earnings.bonus;
+        dailyStats.set(statsKey, currentStats);
+      }
+    }
+
+    for (const [driverId, balance] of walletBalances.entries()) {
+      await prisma.driverWallet.update({
+        where: { driverId },
+        data: { balance },
+      });
+    }
+
+    for (const stats of dailyStats.values()) {
+      await prisma.driverDailyStats.create({
+        data: {
+          driverId: stats.driverId,
+          date: stats.date,
+          tripsCompleted: stats.tripsCompleted,
+          distanceKm: Number(stats.distanceKm.toFixed(2)),
+          peakTrips: stats.peakTrips,
+          bonusAwarded: stats.bonusAwarded,
+        },
+      });
     }
 
     console.log(`    ${RIDE_SEEDS.length} fares created`);
     console.log(`    ${RIDE_SEEDS.length} payments created`);
+    console.log(`    ${seededDriverEarningsCount} driver earnings rows created`);
+    console.log(`    ${seededWalletTransactionCount} wallet transactions created`);
+    console.log(`    ${dailyStats.size} driver daily stats rows created`);
     await prisma.$disconnect();
   } catch (error) {
     await prisma.$disconnect();
@@ -1354,14 +1648,14 @@ async function syncDriverRideAssignments(driverIds: string[], rides: Array<{ id:
         continue;
       }
 
-      const availabilityStatus = rideSeed.status === 'IN_PROGRESS' || rideSeed.status === 'ASSIGNED'
+      const availabilityStatus = ['ASSIGNED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS'].includes(rideSeed.status)
         ? 'BUSY'
         : 'ONLINE';
 
       await prisma.driver.update({
         where: { id: driverIds[rideSeed.driverIndex] },
         data: {
-          currentRideId: rideSeed.status === 'IN_PROGRESS' || rideSeed.status === 'ASSIGNED' ? rides[index].id : null,
+          currentRideId: ['ASSIGNED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS'].includes(rideSeed.status) ? rides[index].id : null,
           availabilityStatus,
         },
       });

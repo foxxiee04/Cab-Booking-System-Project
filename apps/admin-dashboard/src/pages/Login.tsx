@@ -12,7 +12,7 @@ import {
   CircularProgress,
   InputAdornment,
 } from '@mui/material';
-import { AdminPanelSettings, Email, Lock } from '@mui/icons-material';
+import { AdminPanelSettings, AlternateEmail, Lock } from '@mui/icons-material';
 import { useAppDispatch } from '../store/hooks';
 import { setCredentials } from '../store/auth.slice';
 import { authApi } from '../api/auth.api';
@@ -29,18 +29,26 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!identifier.trim()) {
-      setError('Vui lòng nhập email');
+    const normalizedIdentifier = identifier.trim();
+
+    if (!normalizedIdentifier) {
+      setError('Vui lòng nhập email, số điện thoại hoặc admin');
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier.trim())) {
+
+    if (/^\d+$/.test(normalizedIdentifier) && !/^0\d{9}$/.test(normalizedIdentifier)) {
+      setError('Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0');
+      return;
+    }
+
+    if (normalizedIdentifier.includes('@') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedIdentifier)) {
       setError('Email không hợp lệ');
       return;
     }
     if (!password) { setError('Vui lòng nhập mật khẩu'); return; }
     setLoading(true);
     try {
-      const response = await authApi.login({ identifier: identifier.trim(), password });
+      const response = await authApi.login({ identifier: normalizedIdentifier, password });
       if (response.success) {
         if (response.data.user.role !== 'ADMIN') {
           setError('Tài khoản này không có quyền truy cập trang quản trị.');
@@ -80,18 +88,19 @@ const Login: React.FC = () => {
             <form onSubmit={handleSubmit}>
               <TextField
                 fullWidth
-                label="Email"
-                type="email"
+                label="Email / Số điện thoại / admin"
+                type="text"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 required
                 autoFocus
-                autoComplete="email"
+                autoComplete="username"
+                helperText="Có thể đăng nhập bằng email, số điện thoại hoặc nhập admin"
                 sx={{ mb: 2 }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <Email />
+                      <AlternateEmail />
                     </InputAdornment>
                   ),
                 }}

@@ -129,6 +129,7 @@ exports.Prisma.RideScalarFieldEnum = {
   status: 'status',
   vehicleType: 'vehicleType',
   paymentMethod: 'paymentMethod',
+  voucherCode: 'voucherCode',
   pickupAddress: 'pickupAddress',
   pickupLat: 'pickupLat',
   pickupLng: 'pickupLng',
@@ -156,6 +157,16 @@ exports.Prisma.RideScalarFieldEnum = {
   cancelledBy: 'cancelledBy',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.RideChatMessageScalarFieldEnum = {
+  id: 'id',
+  rideId: 'rideId',
+  senderId: 'senderId',
+  senderRole: 'senderRole',
+  type: 'type',
+  message: 'message',
+  createdAt: 'createdAt'
 };
 
 exports.Prisma.RideStateTransitionScalarFieldEnum = {
@@ -197,6 +208,7 @@ exports.RideStatus = exports.$Enums.RideStatus = {
 
 exports.Prisma.ModelName = {
   Ride: 'Ride',
+  RideChatMessage: 'RideChatMessage',
   RideStateTransition: 'RideStateTransition'
 };
 

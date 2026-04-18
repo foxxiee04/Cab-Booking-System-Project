@@ -1,8 +1,19 @@
+import axios from 'axios';
 import axiosInstance from './axios.config';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 export interface WalletBalance {
   driverId: string;
   balance: number;
+  initialActivationCompleted?: boolean;
+  activationRequired?: boolean;
+  warningThresholdReached?: boolean;
+  canAcceptRide?: boolean;
+  activationThreshold?: number;
+  warningThreshold?: number;
+  debtLimit?: number;
+  reason?: string;
 }
 
 export interface WalletTransaction {
@@ -62,6 +73,25 @@ export interface TopUpStatusResult {
   completedAt: string | null;
 }
 
+export interface TopUpGatewayReturnResponse {
+  success: boolean;
+  data: {
+    topUpId?: string;
+    paid?: boolean;
+    status?: 'PENDING' | 'COMPLETED' | 'FAILED';
+    amount?: number;
+    provider?: 'MOMO' | 'VNPAY';
+    newBalance?: number;
+    activated?: boolean;
+    initialActivationCompleted?: boolean;
+    warningThresholdReached?: boolean;
+    transactionId?: string;
+    responseCode?: string;
+    resultCode?: number;
+    message?: string;
+  };
+}
+
 export const walletApi = {
   getBalance: () =>
     axiosInstance.get<{ success: boolean; data: WalletBalance }>('/wallet'),
@@ -94,6 +124,16 @@ export const walletApi = {
     axiosInstance.get<{ success: boolean; data: TopUpStatusResult }>(
       `/wallet/top-up/status/${topUpId}`,
     ),
+
+  confirmMomoReturn: async (searchParams: URLSearchParams): Promise<TopUpGatewayReturnResponse> => {
+    const response = await axios.get(`${API_BASE_URL}/wallet/top-up/momo/return?${searchParams.toString()}`);
+    return response.data;
+  },
+
+  confirmVnpayReturn: async (searchParams: URLSearchParams): Promise<TopUpGatewayReturnResponse> => {
+    const response = await axios.get(`${API_BASE_URL}/wallet/top-up/vnpay/return?${searchParams.toString()}`);
+    return response.data;
+  },
 
   canAcceptCash: (commission: number) =>
     axiosInstance.get<{ success: boolean; data: { allowed: boolean; balance: number } }>(

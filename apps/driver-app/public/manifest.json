@@ -1,9 +1,9 @@
 {
-  "short_name": "FoxGo KH",
-  "name": "FoxGo Khách hàng",
+  "short_name": "FoxGo TX",
+  "name": "FoxGo Tài xế",
   "icons": [],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#2E7D32",
+  "theme_color": "#1976D2",
   "background_color": "#ffffff"
 }

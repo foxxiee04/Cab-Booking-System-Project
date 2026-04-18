@@ -100,7 +100,7 @@ const normalizeDurationSeconds = (duration?: number, estimatedDuration?: number)
     return undefined;
   }
 
-  return raw <= 180 ? raw * 60 : raw;
+  return raw <= 30 ? raw * 60 : raw;
 };
 
 const getRideMetrics = (ride: Ride) => {
@@ -134,7 +134,7 @@ const Dashboard: React.FC = () => {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
 
-  const { user, accessToken } = useAppSelector((state) => state.auth);
+  const { user } = useAppSelector((state) => state.auth);
   const { profile, isOnline, currentLocation, earnings } = useAppSelector(
     (state) => state.driver
   );
@@ -262,19 +262,6 @@ const Dashboard: React.FC = () => {
 
     fetchProfile();
   }, [dispatch, navigate, user?.id]);
-
-  // Connect socket when online
-  useEffect(() => {
-    if (isOnline && accessToken) {
-      driverSocketService.connect(accessToken);
-    } else {
-      driverSocketService.disconnect();
-    }
-
-    return () => {
-      driverSocketService.disconnect();
-    };
-  }, [isOnline, accessToken]);
 
   // Watch location when online
   useEffect(() => {
@@ -536,7 +523,7 @@ const Dashboard: React.FC = () => {
         <Grid container spacing={2} alignItems="center" sx={{ mb: 1 }}>
           <Grid item xs>
             <Typography variant="subtitle1" fontWeight={800}>
-              {isOnline ? 'Đang nhận cuốc' : 'Hiện đang ngoại tuyến'}
+              {isOnline ? 'Trực tuyến' : 'Ngoại tuyến'}
             </Typography>
           </Grid>
           <Grid item>
@@ -633,17 +620,15 @@ const Dashboard: React.FC = () => {
                       </Stack>
 
                       <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        {isFreshOffer && (
-                          <Button
-                            variant="text"
-                            size="medium"
-                            onClick={() => dismissPendingRide(ride.id)}
-                            disabled={loading}
-                            sx={{ borderRadius: 999, px: 2.5, fontWeight: 700 }}
-                          >
-                            Bỏ qua
-                          </Button>
-                        )}
+                        <Button
+                          variant="text"
+                          size="medium"
+                          onClick={() => dismissPendingRide(ride.id)}
+                          disabled={loading}
+                          sx={{ borderRadius: 999, px: 2.5, fontWeight: 700 }}
+                        >
+                          Bỏ qua
+                        </Button>
                         <Button
                           variant="contained"
                           size="medium"

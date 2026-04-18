@@ -19,7 +19,7 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { setPickupLocation, setDropoffLocation, setCurrentRide, clearRide } from '../store/ride.slice';
+import { setPickupLocation, setDropoffLocation, setCurrentRide, setDriver, clearRide } from '../store/ride.slice';
 import { setCurrentLocation } from '../store/location.slice';
 import RideBookingFlow from '../components/booking/RideBookingFlow';
 import { getCurrentLocation, reverseGeocode } from '../utils/map.utils';
@@ -192,11 +192,13 @@ const HomeMap: React.FC = () => {
             navigate(`/ride/${ride.id}`);
           }
         } else {
-          dispatch(clearRide());
+          dispatch(setCurrentRide(null));
+          dispatch(setDriver(null));
         }
       } catch (activeRideError) {
         console.error('Failed to check active ride:', activeRideError);
-        dispatch(clearRide());
+        dispatch(setCurrentRide(null));
+        dispatch(setDriver(null));
       }
     };
 
@@ -426,11 +428,16 @@ const HomeMap: React.FC = () => {
                 onClick={() => {
                   const method = pendingOnlinePaymentRide.paymentMethod as 'MOMO' | 'VNPAY';
                   const params = new URLSearchParams({ provider: method });
+                  if (pendingOnlinePaymentRide.voucherCode) {
+                    params.set('voucherCode', pendingOnlinePaymentRide.voucherCode);
+                  }
                   const amountCandidate = Number(
-                    pendingOnlinePaymentRide.fare
-                    || (pendingOnlinePaymentRide as any).estimatedFare
-                    || (pendingOnlinePaymentRide as any).totalFare
-                    || 0
+                    !pendingOnlinePaymentRide.voucherCode && (
+                      pendingOnlinePaymentRide.fare
+                      || (pendingOnlinePaymentRide as any).estimatedFare
+                      || (pendingOnlinePaymentRide as any).totalFare
+                      || 0
+                    )
                   );
                   if (Number.isFinite(amountCandidate) && amountCandidate > 0) {
                     params.set('amount', String(Math.round(amountCandidate)));

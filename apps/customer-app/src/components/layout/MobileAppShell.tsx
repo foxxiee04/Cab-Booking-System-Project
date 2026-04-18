@@ -2,12 +2,18 @@ import React from 'react';
 import {
   AppBar,
   Avatar,
+  Badge,
   BottomNavigation,
   BottomNavigationAction,
   Box,
+  Button,
   Chip,
   Divider,
+  Drawer,
   IconButton,
+  List,
+  ListItemButton,
+  ListItemText,
   Menu,
   MenuItem,
   Paper,
@@ -19,6 +25,7 @@ import {
   HomeRounded,
   LocalOfferRounded,
   LogoutRounded,
+  NotificationsRounded,
   PersonRounded,
   ReceiptLongRounded,
   TranslateRounded,
@@ -27,6 +34,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { logout } from '../../store/auth.slice';
+import { markAllNotificationsRead } from '../../store/ui.slice';
 
 interface MobileAppShellProps {
   children: React.ReactNode;
@@ -64,6 +72,34 @@ const resolveView = (pathname: string) => {
   };
 };
 
+const NOTIFICATION_STYLES = {
+  success: { bg: '#ecfdf3', border: '#22c55e', title: '#166534', text: '#14532d', icon: '#16a34a' },
+  info: { bg: '#eff6ff', border: '#3b82f6', title: '#1d4ed8', text: '#1e3a8a', icon: '#2563eb' },
+  warning: { bg: '#fff7ed', border: '#f59e0b', title: '#b45309', text: '#7c2d12', icon: '#d97706' },
+  error: { bg: '#fef2f2', border: '#ef4444', title: '#b91c1c', text: '#7f1d1d', icon: '#dc2626' },
+};
+
+const NOTIFICATION_TITLES = {
+  success: 'Cập nhật chuyến đi',
+  error: 'Có lỗi xảy ra',
+  warning: 'Lưu ý',
+  info: 'Thông báo',
+};
+
+const formatNotificationTimestamp = (createdAt: string) => {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) {
+    return 'Vừa xong';
+  }
+
+  return date.toLocaleString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+  });
+};
+
 const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -71,12 +107,26 @@ const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
   const { t, i18n } = useTranslation();
   const { user } = useAppSelector((state) => state.auth);
   const { currentRide } = useAppSelector((state) => state.ride);
+  const { notificationHistory } = useAppSelector((state) => state.ui);
 
   const currentView = resolveView(location.pathname);
   const currentTab = currentView.tab;
+  const unreadNotificationCount = notificationHistory.filter((item) => !item.read).length;
 
   const [profileAnchorEl, setProfileAnchorEl] = React.useState<null | HTMLElement>(null);
   const [langAnchorEl, setLangAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [notificationsOpen, setNotificationsOpen] = React.useState(false);
+
+  const handleOpenNotifications = () => {
+    setNotificationsOpen(true);
+  };
+
+  const handleNotificationSelect = (rideId?: string) => {
+    setNotificationsOpen(false);
+    if (rideId) {
+      navigate(`/ride/${rideId}`);
+    }
+  };
 
   const handleLogout = () => {
     dispatch(logout());
@@ -114,7 +164,7 @@ const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
         <Toolbar sx={{ minHeight: 76, width: shellMaxWidth, mx: 'auto', px: { xs: 2, sm: 2.5 } }}>
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.12em' }}>
-              Cab Booking
+              FoxGo Khách hàng
             </Typography>
             <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.15 }}>
               {t(currentView.labelKey, currentView.fallback)}
@@ -131,6 +181,12 @@ const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
 
           <IconButton onClick={(event) => setLangAnchorEl(event.currentTarget)} sx={{ mr: 1 }}>
             <TranslateRounded />
+          </IconButton>
+
+          <IconButton onClick={handleOpenNotifications} sx={{ mr: 1 }}>
+            <Badge color="error" badgeContent={unreadNotificationCount} max={99}>
+              <NotificationsRounded />
+            </Badge>
           </IconButton>
 
           <IconButton onClick={(event) => setProfileAnchorEl(event.currentTarget)}>
@@ -219,6 +275,103 @@ const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
           English
         </MenuItem>
       </Menu>
+
+      <Drawer
+        anchor="right"
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        PaperProps={{
+          sx: {
+            width: { xs: 'min(92vw, 360px)', sm: 380 },
+            background: 'linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)',
+          },
+        }}
+      >
+        <Box sx={{ px: 2, py: 2 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+            <Box>
+              <Typography variant="h6" fontWeight={800}>
+                Thông báo
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {notificationHistory.length === 0
+                  ? 'Chưa có thông báo nào được lưu.'
+                  : `${notificationHistory.length} thông báo`}
+              </Typography>
+            </Box>
+            {unreadNotificationCount > 0 && (
+              <Button size="small" onClick={() => dispatch(markAllNotificationsRead())}>
+                Đánh dấu đã đọc
+              </Button>
+            )}
+          </Stack>
+        </Box>
+        <Divider />
+        {notificationHistory.length === 0 ? (
+          <Box sx={{ px: 2.5, py: 4 }}>
+            <Typography variant="body2" color="text.secondary">
+              Tất cả cập nhật chuyến đi, thông báo thanh toán và cảnh báo tài khoản sẽ được lưu ở đây để xem lại.
+            </Typography>
+          </Box>
+        ) : (
+          <List sx={{ py: 0 }}>
+            {notificationHistory.map((item) => {
+              const itemStyle = NOTIFICATION_STYLES[item.type];
+              return (
+                <ListItemButton
+                  key={item.id}
+                  alignItems="flex-start"
+                  onClick={() => handleNotificationSelect(item.rideId)}
+                  sx={{
+                    px: 2,
+                    py: 1.5,
+                    borderBottom: '1px solid rgba(148, 163, 184, 0.14)',
+                    bgcolor: item.read ? 'transparent' : itemStyle.bg,
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      bgcolor: itemStyle.icon,
+                      mt: 0.9,
+                      mr: 1.5,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <ListItemText
+                    disableTypography
+                    primary={
+                      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
+                        <Typography variant="subtitle2" fontWeight={800} sx={{ color: itemStyle.title }}>
+                          {item.title || NOTIFICATION_TITLES[item.type]}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                          {formatNotificationTimestamp(item.createdAt)}
+                        </Typography>
+                      </Stack>
+                    }
+                    secondary={
+                      <Box sx={{ mt: 0.5 }}>
+                        <Typography variant="body2" sx={{ color: itemStyle.text }}>
+                          {item.message}
+                        </Typography>
+                        {item.rideId && (
+                          <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 700, display: 'block', mt: 0.75 }}>
+                            Mở chi tiết chuyến đi
+                          </Typography>
+                        )}
+                      </Box>
+                    }
+                  />
+                </ListItemButton>
+              );
+            })}
+          </List>
+        )}
+      </Drawer>
     </Box>
   );
 };

@@ -16,7 +16,6 @@ import {
   Divider,
   FormControl,
   FormControlLabel,
-  IconButton,
   LinearProgress,
   Radio,
   RadioGroup,
@@ -26,12 +25,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { ArrowBack, AutorenewRounded, Cancel, Chat, CheckCircleRounded, HourglassTopRounded, PaymentRounded, StarRate, AccessTime, Route, Speed, FiberManualRecord } from '@mui/icons-material';
+import { ArrowBack, AutorenewRounded, Cancel, CheckCircleRounded, HourglassTopRounded, PaymentRounded, StarRate, AccessTime, Route, Speed, FiberManualRecord } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { BookingMap, useSocket } from '../features/booking';
-import RideChat from '../components/RideChat';
-import RideCall from '../components/RideCall';
-import { useWebRTCCall } from '../hooks/useWebRTCCall';
+import ContactBox from '../components/ContactBox';
 import { paymentApi } from '../api/payment.api';
 import { reviewApi, RideReview } from '../api/review.api';
 import { rideApi } from '../api/ride.api';
@@ -40,7 +37,7 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { clearRide, setCurrentRide, setDriver, updateRideStatus } from '../store/ride.slice';
 import { Payment } from '../types';
 import { formatCurrency, formatDate, getPaymentMethodLabel, getVehicleTypeLabel } from '../utils/format.utils';
-import { calculateDistance } from '../utils/map.utils';
+import { calculateDistance, formatDistance as formatMapDistance, formatDuration as formatMapDuration } from '../utils/map.utils';
 
 const STATUS_META: Record<string, { label: string; description: string; color: string; allowCancel: boolean }> = {
   CREATED: {
@@ -56,7 +53,7 @@ const STATUS_META: Record<string, { label: string; description: string; color: s
     allowCancel: true,
   },
   ASSIGNED: {
-    label: 'Đã có tài xế nhận chuyến',
+    label: 'Đã tìm được tài xế',
     description: 'Tài xế đã được gán và đang chuẩn bị di chuyển tới bạn.',
     color: '#2563eb',
     allowCancel: true,
@@ -129,21 +126,34 @@ const CANCEL_REASONS = [
   'Khác',
 ];
 
-const formatDistanceKm = (distance: number | null | undefined) => {
+const hasVisibleDriverProfile = (candidate: any) => {
+  const displayName = `${candidate?.firstName || ''} ${candidate?.lastName || ''}`.trim();
+  const hasIdentity = Boolean(displayName || candidate?.phoneNumber || candidate?.avatar);
+  const hasContext = Boolean(
+    candidate?.licensePlate
+    || candidate?.vehicleMake
+    || candidate?.vehicleModel
+    || candidate?.phoneNumber
+    || candidate?.avatar,
+  );
+
+  return Boolean(candidate && hasIdentity && hasContext);
+};
+
+const formatRideDistance = (distance: number | null | undefined) => {
   if (!distance || Number.isNaN(distance)) {
     return 'Đang cập nhật';
   }
 
-  return distance >= 1000 ? `${(distance / 1000).toFixed(1)} km` : `${distance.toFixed(1)} km`;
+  return formatMapDistance(distance);
 };
 
-const formatDuration = (duration: number | null | undefined) => {
+const formatRideDuration = (duration: number | null | undefined) => {
   if (!duration || Number.isNaN(duration)) {
     return 'Đang cập nhật';
   }
 
-  const minutes = duration > 180 ? Math.round(duration / 60) : Math.round(duration);
-  return `${minutes} phút`;
+  return formatMapDuration(duration);
 };
 
 const getRefundProviderLabel = (payment: Payment | null, paymentMethod?: string | null) => {
@@ -211,13 +221,7 @@ const RideTracking: React.FC = () => {
   const [cancelReason, setCancelReason] = useState('');
   const [customCancelReason, setCustomCancelReason] = useState('');
 
-  // Chat & Call state
-  const [chatOpen, setChatOpen] = useState(false);
   const { user } = useAppSelector((state) => state.auth);
-  const { callState, callError, startCall, acceptCall, hangUp } = useWebRTCCall(
-    accessToken,
-    rideId,
-  );
 
   const retryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const retryPaymentRequired = retryParams.get('retryPayment') === '1';
@@ -239,6 +243,31 @@ const RideTracking: React.FC = () => {
       if (profile) dispatch(setDriver(profile));
     }
   }, [dispatch, rideId]);
+
+  useEffect(() => {
+    if (!currentRide?.driverId || hasVisibleDriverProfile(driver)) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const hydrateDriver = async () => {
+      try {
+        const profile = await driverApi.getDriverPublicProfile(currentRide.driverId!);
+        if (isMounted && profile) {
+          dispatch(setDriver(profile));
+        }
+      } catch {
+        // Keep ride tracking available even if public driver hydration fails.
+      }
+    };
+
+    void hydrateDriver();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentRide?.driverId, dispatch, driver]);
 
   const hydrateReceipt = useCallback(async () => {
     if (!rideId) {
@@ -462,30 +491,32 @@ const RideTracking: React.FC = () => {
       return;
     }
 
-    const amount = Math.round(payment?.amount || currentRide?.fare || 0);
-    const returnUrl = retryMethod === 'VNPAY'
-      ? `${window.location.origin}/payment/callback`
-      : `${window.location.origin}/payment/callback?provider=${retryMethod}&rideId=${rideId}`;
-
     setRetryingPayment(true);
     setError('');
     try {
-      const paymentResponse = retryMethod === 'MOMO'
-        ? await paymentApi.createMomoPayment({ rideId, amount, returnUrl })
-        : await paymentApi.createVnpayPayment({ rideId, amount, returnUrl });
-
-      const gatewayUrl = paymentResponse.data?.payUrl || paymentResponse.data?.paymentUrl;
-      if (!gatewayUrl) {
-        throw new Error('Không tạo được link thanh toán mới');
+      const params = new URLSearchParams({ provider: retryMethod });
+      const voucherCode = currentRide?.voucherCode || payment?.voucherCode;
+      if (voucherCode) {
+        params.set('voucherCode', voucherCode);
       }
 
-      window.location.assign(gatewayUrl);
+      const amountCandidate = Number(
+        payment?.finalAmount
+        || payment?.amount
+        || (!voucherCode && (currentRide?.fare || 0))
+        || 0
+      );
+      if (Number.isFinite(amountCandidate) && amountCandidate > 0) {
+        params.set('amount', String(Math.round(amountCandidate)));
+      }
+
+      navigate(`/payment/online/${rideId}?${params.toString()}`);
     } catch (err: any) {
-      setError(err?.response?.data?.error?.message || err?.message || 'Không thể tạo lại giao dịch thanh toán.');
+      setError(err?.message || 'Không thể tạo lại giao dịch thanh toán.');
     } finally {
       setRetryingPayment(false);
     }
-  }, [currentRide?.fare, navigate, payment?.amount, retryMethod, rideId]);
+  }, [currentRide?.fare, currentRide?.voucherCode, navigate, payment?.amount, payment?.finalAmount, payment?.voucherCode, retryMethod, rideId]);
 
   const status = currentRide?.status || 'PENDING';
   const statusMeta = STATUS_META[status] || STATUS_META.PENDING;
@@ -638,7 +669,7 @@ const RideTracking: React.FC = () => {
     }
 
     if (!pickupDistanceKmToDriver || !['ASSIGNED', 'ACCEPTED', 'PICKING_UP'].includes(status)) {
-      return 'Khoảng cách tới bạn: tài xế đang được định vị';
+      return 'Khoảng cách tới bạn: Tài xế đang được định vị';
     }
 
     return `Khoảng cách tới bạn: ${pickupDistanceKmToDriver.toFixed(1)} km`;
@@ -651,6 +682,27 @@ const RideTracking: React.FC = () => {
 
     return `Tốc độ hiện tại: ${Math.round(driverSpeedKph)} km/h`;
   }, [driverSpeedKph]);
+
+  const rideDriver = currentRide?.driver || null;
+  const displayedDriver = driver || rideDriver || null;
+  const driverPhoneNumber = ((displayedDriver as any)?.phoneNumber as string | undefined) || '';
+  const showDriverCard = Boolean(currentRide?.driverId) && status !== 'NO_DRIVER_AVAILABLE';
+  const isChatReadOnly = ['COMPLETED', 'CANCELLED'].includes(status);
+  const driverDisplayName = useMemo(() => {
+    if (!displayedDriver) {
+      return 'Đang tải thông tin tài xế';
+    }
+
+    return `${displayedDriver?.firstName || ''} ${displayedDriver?.lastName || ''}`.trim() || driverPhoneNumber || 'Tài xế';
+  }, [displayedDriver, driverPhoneNumber]);
+
+  const driverVehicleLabel = [displayedDriver?.vehicleMake, displayedDriver?.vehicleModel, displayedDriver?.vehicleColor]
+    .filter(Boolean)
+    .join(' ');
+  const commissionAmount = Number(payment?.driverEarnings?.platformFee || 0);
+  const commissionRatePercent = payment?.driverEarnings?.commissionRate
+    ? Math.round(payment.driverEarnings.commissionRate * 100)
+    : null;
 
   if (loading && !currentRide) {
     return (
@@ -665,6 +717,25 @@ const RideTracking: React.FC = () => {
 
   return (
     <Box sx={{ minHeight: '100%', display: 'flex', flexDirection: 'column', gap: 1.5, pb: 1.5, background: '#f8fafc' }}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: { xs: 0.5, md: 0 } }}>
+        <Button
+          variant="text"
+          startIcon={<ArrowBack />}
+          onClick={() => {
+            if (status === 'COMPLETED' || status === 'CANCELLED' || status === 'NO_DRIVER_AVAILABLE') {
+              dispatch(clearRide());
+              navigate('/home');
+              return;
+            }
+            navigate('/home');
+          }}
+          sx={{ borderRadius: 999, fontWeight: 700, px: 1.5 }}
+        >
+          Quay lại
+        </Button>
+        <Chip label={statusMeta.label} sx={{ bgcolor: `${statusMeta.color}18`, color: statusMeta.color, fontWeight: 700 }} />
+      </Stack>
+
       <Box sx={{ position: 'relative', height: { xs: 320, sm: 380, md: 460 }, borderRadius: 6, overflow: 'hidden', background: '#e2e8f0', boxShadow: '0 18px 48px rgba(15,23,42,0.12)', border: '1px solid rgba(148,163,184,0.2)' }}>
         <BookingMap
           pickup={currentRide?.pickup || null}
@@ -678,33 +749,8 @@ const RideTracking: React.FC = () => {
           height="100%"
         />
 
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 12,
-            left: 12,
-            right: 12,
-            zIndex: 1100,
-            pointerEvents: 'none',
-          }}
-        >
-          <IconButton
-            onClick={() => {
-              if (status === 'COMPLETED' || status === 'CANCELLED' || status === 'NO_DRIVER_AVAILABLE') {
-                dispatch(clearRide());
-                navigate('/home');
-                return;
-              }
-              navigate('/home');
-            }}
-            sx={{ bgcolor: 'rgba(255,255,255,0.92)', boxShadow: 2, backdropFilter: 'blur(8px)', '&:hover': { bgcolor: 'white' }, pointerEvents: 'auto' }}
-          >
-            <ArrowBack />
-          </IconButton>
-        </Box>
-
         {error && (
-          <Alert severity="error" onClose={() => setError('')} sx={{ position: 'absolute', top: 72, left: 16, right: 16, zIndex: 1200, borderRadius: 3 }}>
+          <Alert severity="error" onClose={() => setError('')} sx={{ position: 'absolute', top: 16, left: 16, right: 16, zIndex: 1200, borderRadius: 3 }}>
             {error}
           </Alert>
         )}
@@ -803,9 +849,14 @@ const RideTracking: React.FC = () => {
                     onClick={() => {
                       const method = currentRide.paymentMethod as 'MOMO' | 'VNPAY';
                       const params = new URLSearchParams({ provider: method });
+                      const voucherCode = currentRide.voucherCode || payment?.voucherCode;
+                      if (voucherCode) {
+                        params.set('voucherCode', voucherCode);
+                      }
                       const amountCandidate = Number(
-                        currentRide.fare
+                        payment?.finalAmount
                         || payment?.amount
+                        || (!voucherCode && currentRide.fare)
                         || (currentRide as any).estimatedFare
                         || (currentRide as any).totalFare
                         || 0
@@ -841,27 +892,72 @@ const RideTracking: React.FC = () => {
             </Card>
           )}
 
-          {driver && status !== 'CANCELLED' && status !== 'NO_DRIVER_AVAILABLE' && (
+          {showDriverCard && (
             <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#f8fafc' }}>
               <CardContent>
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Avatar sx={{ width: 56, height: 56, bgcolor: '#1d4ed8' }} src={driver.avatar}>
-                    {driver.firstName?.[0] || 'D'}
+                <Stack direction="row" spacing={2} alignItems="flex-start">
+                  <Avatar sx={{ width: 56, height: 56, bgcolor: '#1d4ed8' }} src={displayedDriver?.avatar}>
+                    {displayedDriver?.firstName?.[0] || 'D'}
                   </Avatar>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="subtitle1" fontWeight={800}>{`${driver.firstName || ''} ${driver.lastName || ''}`.trim() || 'Tài xế'}</Typography>
-                    <Typography variant="body2" color="text.secondary">{[driver.vehicleColor, driver.vehicleMake, driver.vehicleModel].filter(Boolean).join(' ')}</Typography>
-                    <Typography variant="body2" fontWeight={700}>{driver.licensePlate}</Typography>
+                    <Typography variant="subtitle1" fontWeight={800}>{driverDisplayName}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {status === 'IN_PROGRESS'
+                        ? 'Bạn đang đi cùng tài xế này.'
+                        : isChatReadOnly
+                          ? 'Bạn có thể xem lại thông tin tài xế và lịch sử liên hệ của chuyến đi này.'
+                          : 'Tài xế đang di chuyển tới bạn.'}
+                    </Typography>
+                    <Box
+                      sx={{
+                        mt: 1.25,
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' },
+                        gap: 1,
+                      }}
+                    >
+                      <Box sx={{ p: 1.15, borderRadius: 2.5, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <Typography variant="caption" color="text.secondary" display="block">Phương tiện</Typography>
+                        <Typography variant="body2" fontWeight={700} sx={{ mt: 0.35 }}>
+                          {driverVehicleLabel || getVehicleTypeLabel(currentRide?.vehicleType || 'CAR_4')}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ p: 1.15, borderRadius: 2.5, bgcolor: '#eff6ff', border: '1px solid rgba(59,130,246,0.18)' }}>
+                        <Typography variant="caption" color="text.secondary" display="block">Biển số</Typography>
+                        <Typography variant="body2" fontWeight={800} sx={{ mt: 0.35, color: '#1d4ed8' }}>
+                          {displayedDriver?.licensePlate || 'Đang cập nhật'}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ p: 1.15, borderRadius: 2.5, bgcolor: '#ecfeff', border: '1px solid rgba(13,148,136,0.18)' }}>
+                        <Typography variant="caption" color="text.secondary" display="block">Liên hệ</Typography>
+                        <Typography variant="body2" fontWeight={800} sx={{ mt: 0.35, color: '#0f766e' }}>
+                          {driverPhoneNumber || 'Đang cập nhật'}
+                        </Typography>
+                      </Box>
+                    </Box>
                   </Box>
-                  <Chip icon={<StarRate sx={{ color: '#f59e0b !important' }} />} label={(driver.rating || 5).toFixed(1)} variant="outlined" />
+                  <Stack alignItems="flex-end" spacing={1.25}>
+                    <Chip icon={<StarRate sx={{ color: '#f59e0b !important' }} />} label={((displayedDriver?.rating || 5)).toFixed(1)} variant="outlined" />
+                    {Boolean(currentRide?.driverId) && !isChatReadOnly && (
+                      <ContactBox
+                        token={accessToken}
+                        rideId={rideId}
+                        myUserId={user?.id}
+                        contactName={driverDisplayName}
+                        contactPhone={driverPhoneNumber || undefined}
+                        role="CUSTOMER"
+                        triggerMode="inline"
+                        panelMode="floating"
+                        triggerLabel="Liên hệ"
+                      />
+                    )}
+                  </Stack>
                 </Stack>
                 {/* Live tracking info panel */}
-                <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#f0f9ff', borderRadius: 3, border: '1px solid #bae6fd' }}>
+                {!isChatReadOnly && (
+                  <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#f0f9ff', borderRadius: 3, border: '1px solid #bae6fd' }}>
                   <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1.25 }}>
                     <FiberManualRecord sx={{ fontSize: 10, color: effectiveDriverLocation ? '#16a34a' : '#f59e0b' }} />
-                    <Typography variant="caption" fontWeight={700} color={effectiveDriverLocation ? 'success.dark' : 'warning.dark'} sx={{ lineHeight: 1 }}>
-                      {effectiveDriverLocation ? 'Đang theo dõi vị trí tài xế trực tiếp' : 'Đang đồng bộ vị trí tài xế...'}
-                    </Typography>
                   </Stack>
                   <Stack direction="row" spacing={1}>
                     <Box sx={{ flex: 1, textAlign: 'center', py: 0.5 }}>
@@ -888,20 +984,25 @@ const RideTracking: React.FC = () => {
                       </Box>
                     </>) : null}
                   </Stack>
-                </Box>                <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
-                  <RideCall
-                    callState={callState}
-                    callError={callError}
-                    driverName={driver ? `${driver.firstName || ''} ${driver.lastName || ''}`.trim() : undefined}
-                    onStart={startCall}
-                    onAccept={acceptCall}
-                    onHangUp={hangUp}
-                    onClose={() => {}}
-                  />
-                  <Button variant="outlined" fullWidth startIcon={<Chat />} sx={{ borderRadius: 3, py: 1.2 }} onClick={() => setChatOpen(true)}>Nhắn tin</Button>
-                </Stack>
+                  </Box>
+                )}
               </CardContent>
             </Card>
+          )}
+
+          {Boolean(currentRide?.driverId) && isChatReadOnly && ['COMPLETED', 'CANCELLED'].includes(status) && (
+            <ContactBox
+              token={accessToken}
+              rideId={rideId}
+              myUserId={user?.id}
+              contactName={driverDisplayName}
+              contactPhone={driverPhoneNumber || undefined}
+              role="CUSTOMER"
+              triggerMode="inline"
+              triggerLabel={isChatReadOnly ? 'Xem lại cuộc trò chuyện' : 'Liên hệ tài xế'}
+              fullWidthTrigger
+              readOnly={isChatReadOnly}
+            />
           )}
 
           {currentRide && (
@@ -913,9 +1014,15 @@ const RideTracking: React.FC = () => {
                   <Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="body2" color="text.secondary">Điểm đến</Typography><Typography variant="body2" fontWeight={600} textAlign="right">{currentRide.dropoff?.address || '-'}</Typography></Stack>
                   <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Loại xe</Typography><Typography variant="body2" fontWeight={600}>{getVehicleTypeLabel(currentRide.vehicleType || 'CAR_4')}</Typography></Stack>
                   <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thanh toán</Typography><Typography variant="body2" fontWeight={600}>{getPaymentMethodLabel(currentRide.paymentMethod || 'CASH')}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Quãng đường</Typography><Typography variant="body2" fontWeight={600}>{formatDistanceKm(currentRide.distance)}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thời lượng</Typography><Typography variant="body2" fontWeight={600}>{formatDuration(currentRide.duration)}</Typography></Stack>
-                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Cước phí</Typography><Typography variant="body2" fontWeight={800}>{formatCurrency(currentRide.fare || 0)}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Quãng đường</Typography><Typography variant="body2" fontWeight={600}>{formatRideDistance(currentRide.distance)}</Typography></Stack>
+                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thời lượng</Typography><Typography variant="body2" fontWeight={600}>{formatRideDuration(currentRide.duration)}</Typography></Stack>
+                  {commissionAmount > 0 && (
+                    <Stack direction="row" justifyContent="space-between">
+                      <Typography variant="body2" color="text.secondary">Hoa hồng{commissionRatePercent ? ` (${commissionRatePercent}%)` : ''}</Typography>
+                      <Typography variant="body2" fontWeight={600}>{formatCurrency(commissionAmount)}</Typography>
+                    </Stack>
+                  )}
+                  <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Cước phí</Typography><Typography variant="body2" fontWeight={800}>{formatCurrency(payment?.finalAmount || currentRide.fare || 0)}</Typography></Stack>
                 </Stack>
 
                 {statusMeta.allowCancel && !isAwaitingPayment && (
@@ -1003,8 +1110,26 @@ const RideTracking: React.FC = () => {
                       <Divider sx={{ my: 0.5, borderColor: '#93c5fd' }} />
                       <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
                         <Typography className="info-label">Số tiền</Typography>
-                        <Typography className="info-value" sx={{ fontWeight: 800, fontSize: '0.92rem' }} textAlign="right">{formatCurrency(payment?.amount || currentRide.fare || 0)}</Typography>
+                        <Typography className="info-value" sx={{ fontWeight: 800, fontSize: '0.92rem' }} textAlign="right">{formatCurrency(payment?.finalAmount || payment?.amount || currentRide.fare || 0)}</Typography>
                       </Stack>
+                      {Number(payment?.discountAmount || 0) > 0 && (
+                        <>
+                          <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                            <Typography className="info-label">Cước gốc</Typography>
+                            <Typography className="info-value" textAlign="right">{formatCurrency(payment?.amount || currentRide.fare || 0)}</Typography>
+                          </Stack>
+                          <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                            <Typography className="info-label">Ưu đãi {payment?.voucherCode || currentRide.voucherCode || ''}</Typography>
+                            <Typography className="info-value" textAlign="right" sx={{ color: '#166534' }}>-{formatCurrency(payment?.discountAmount || 0)}</Typography>
+                          </Stack>
+                        </>
+                      )}
+                      {commissionAmount > 0 && (
+                        <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                          <Typography className="info-label">Hoa hồng nền tảng{commissionRatePercent ? ` (${commissionRatePercent}%)` : ''}</Typography>
+                          <Typography className="info-value" textAlign="right">{formatCurrency(commissionAmount)}</Typography>
+                        </Stack>
+                      )}
                       <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
                         <Typography className="info-label">Phương thức</Typography>
                         <Typography className="info-value" textAlign="right">{getPaymentMethodLabel(payment?.method || currentRide.paymentMethod || 'CASH')}</Typography>
@@ -1099,7 +1224,7 @@ const RideTracking: React.FC = () => {
                             <Stack spacing={0.8}>
                               <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
                                 <Typography className="refund-label">Số tiền hoàn</Typography>
-                                <Typography className="refund-value" sx={{ fontWeight: 800 }} textAlign="right">{formatCurrency(refundInfo?.amount || payment?.amount || currentRide.fare || 0)}</Typography>
+                                <Typography className="refund-value" sx={{ fontWeight: 800 }} textAlign="right">{formatCurrency(refundInfo?.amount || payment?.finalAmount || payment?.amount || currentRide.fare || 0)}</Typography>
                               </Stack>
                               <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
                                 <Typography className="refund-label">Hoàn về</Typography>
@@ -1222,27 +1347,71 @@ const RideTracking: React.FC = () => {
                 </CardContent>
               </Card>
 
-              {status === 'COMPLETED' && (
-              <Card sx={{ borderRadius: 4 }}>
-                <CardContent>
-                  <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>{existingReview ? 'Đánh giá của bạn' : 'Đánh giá tài xế'}</Typography>
-                  <Stack alignItems="flex-start" spacing={1.5}>
-                    <Rating value={rating} size="large" onChange={(_, nextValue) => { if (!existingReview) { setRating(nextValue); } }} readOnly={Boolean(existingReview)} />
-                    <TextField fullWidth multiline minRows={4} label="Nhận xét" value={comment} onChange={(event) => { if (!existingReview) { setComment(event.target.value); } }} inputProps={{ 'data-testid': 'review-comment-input' }} InputProps={{ readOnly: Boolean(existingReview) }} />
-                  </Stack>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2.5 }}>
-                    {!existingReview && (
-                      <Button variant="contained" onClick={handleSubmitReview} disabled={!rating || submittingReview || !currentRide.driverId} data-testid="submit-review-button" sx={{ borderRadius: 3, py: 1.3, fontWeight: 700 }}>
-                        {submittingReview ? 'Đang gửi...' : 'Gửi đánh giá'}
-                      </Button>
-                    )}
-                    <Button variant={existingReview ? 'contained' : 'outlined'} onClick={() => { dispatch(clearRide()); navigate('/home'); }} sx={{ borderRadius: 3, py: 1.3, fontWeight: 700 }}>
-                      Về trang chủ
-                    </Button>
-                  </Stack>
-                </CardContent>
-              </Card>
-              )}
+{status === 'COMPLETED' && (
+  <Card sx={{ borderRadius: 4 }}>
+    <CardContent>
+      <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>
+        {existingReview ? 'Đánh giá của bạn' : 'Đánh giá tài xế'}
+      </Typography>
+
+      <Stack alignItems="flex-start" spacing={1.5}>
+        <Rating
+          value={rating}
+          size="large"
+          onChange={(_, nextValue) => {
+            if (!existingReview) setRating(nextValue);
+          }}
+          readOnly={Boolean(existingReview)}
+        />
+
+        <TextField
+          fullWidth
+          multiline
+          minRows={4}
+          label="Nhận xét"
+          value={comment}
+          onChange={(event) => {
+            if (!existingReview) setComment(event.target.value);
+          }}
+          inputProps={{ 'data-testid': 'review-comment-input' }}
+          InputProps={{ readOnly: Boolean(existingReview) }}
+        />
+      </Stack>
+
+      {/* NÚT CĂN GIỮA */}
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1.5}
+        sx={{ mt: 2.5 }}
+        justifyContent="center"
+        alignItems="center"
+      >
+        {!existingReview && (
+          <Button
+            variant="contained"
+            onClick={handleSubmitReview}
+            disabled={!rating || submittingReview || !currentRide.driverId}
+            data-testid="submit-review-button"
+            sx={{ borderRadius: 3, py: 1.3, fontWeight: 700 }}
+          >
+            {submittingReview ? 'Đang gửi...' : 'Gửi đánh giá'}
+          </Button>
+        )}
+
+        <Button
+          variant={existingReview ? 'contained' : 'outlined'}
+          onClick={() => {
+            dispatch(clearRide());
+            navigate('/home');
+          }}
+          sx={{ borderRadius: 3, py: 1.3, fontWeight: 700 }}
+        >
+          Về trang chủ
+        </Button>
+      </Stack>
+    </CardContent>
+  </Card>
+)}
             </>
           )}
 
@@ -1253,17 +1422,6 @@ const RideTracking: React.FC = () => {
           )}
         </CardContent>
       </Card>
-
-      {/* In-ride chat dialog */}
-      <RideChat
-        open={chatOpen}
-        onClose={() => setChatOpen(false)}
-        token={accessToken}
-        rideId={rideId}
-        myUserId={user?.id}
-        driverName={driver ? `${driver.firstName || ''} ${driver.lastName || ''}`.trim() : undefined}
-      />
-
       {/* Cancel reason dialog */}
       <Dialog
         open={cancelDialogOpen}

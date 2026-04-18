@@ -10,6 +10,7 @@ import {
   updateRoleSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  changePasswordSchema,
   registerPhoneStartSchema,
   registerPhoneVerifySchema,
   registerCompleteSchema,
@@ -418,6 +419,37 @@ export class AuthController {
       res.status(400).json({
         success: false,
         error: { code: 'PROFILE_UPDATE_FAILED', message },
+      });
+    }
+  };
+
+  changePassword = async (req: AuthRequest, res: Response) => {
+    try {
+      const { error, value } = changePasswordSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: error.details[0].message },
+        });
+      }
+
+      await this.authService.changePassword(
+        req.user!.userId,
+        value.currentPassword,
+        value.newPassword,
+        req.ip,
+      );
+
+      res.json({
+        success: true,
+        data: { message: 'Mật khẩu đã được cập nhật. Các phiên đăng nhập cũ đã được thu hồi.' },
+      });
+    } catch (err) {
+      logger.error('Change password error:', err);
+      const message = err instanceof Error ? err.message : 'Không thể cập nhật mật khẩu';
+      res.status(400).json({
+        success: false,
+        error: { code: 'CHANGE_PASSWORD_FAILED', message },
       });
     }
   };

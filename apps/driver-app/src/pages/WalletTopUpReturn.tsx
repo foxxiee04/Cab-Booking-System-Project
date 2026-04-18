@@ -1,168 +1,473 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
+  Divider,
+  Fade,
   Stack,
   Typography,
 } from '@mui/material';
 import {
   CheckCircleRounded,
+  AccountBalanceWalletRounded,
   ErrorRounded,
-  HourglassTopRounded,
+  HomeRounded,
+  ReplayRounded,
 } from '@mui/icons-material';
+import { useAppDispatch } from '../store/hooks';
+import { showNotification } from '../store/ui.slice';
 import { walletApi } from '../api/wallet.api';
 import { formatCurrency } from '../utils/format.utils';
 
-type Phase = 'polling' | 'success' | 'failed' | 'timeout';
+type CallbackState = 'processing' | 'success' | 'failed';
 
-const MAX_POLLS = 20;        // up to 20 × 1.5 s = 30 s
-const POLL_INTERVAL_MS = 1500;
+const REDIRECT_DELAY_SECONDS = 3;
+
+const PROVIDER_CONFIG: Record<string, { label: string; accentColor: string; accentGradient: string }> = {
+  MOMO: {
+    label: 'MoMo',
+    accentColor: '#ae2070',
+    accentGradient: 'linear-gradient(90deg, #ae2070, #d63384)',
+  },
+  VNPAY: {
+    label: 'VNPay',
+    accentColor: '#005baa',
+    accentGradient: 'linear-gradient(90deg, #005baa, #0081d5)',
+  },
+};
+
+const detectProvider = (params: URLSearchParams, fallbackProvider: string): string => {
+  const explicit = (params.get('provider') || fallbackProvider || '').toUpperCase();
+  if (explicit === 'MOMO' || explicit === 'VNPAY') {
+    return explicit;
+  }
+
+  if (params.get('vnp_TmnCode') || params.get('vnp_TxnRef') || params.get('vnp_ResponseCode')) {
+    return 'VNPAY';
+  }
+
+  if (params.get('resultCode') || params.get('orderId') || params.get('requestId') || params.get('transId')) {
+    return 'MOMO';
+  }
+
+  return explicit;
+};
+
+const clearPendingTopUp = () => {
+  sessionStorage.removeItem('wallet:pendingTopUpId');
+  sessionStorage.removeItem('wallet:pendingTopUpProvider');
+};
 
 export default function WalletTopUpReturn() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const dispatch = useAppDispatch();
+  const location = useLocation();
+  const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const fallbackTopUpId = params.get('topUpId') || sessionStorage.getItem('wallet:pendingTopUpId') || '';
+  const provider = useMemo(
+    () => detectProvider(params, sessionStorage.getItem('wallet:pendingTopUpProvider') || ''),
+    [params],
+  );
 
-  const topUpId  = searchParams.get('topUpId')  || sessionStorage.getItem('wallet:pendingTopUpId') || '';
-  const provider = (searchParams.get('provider') ?? sessionStorage.getItem('wallet:pendingTopUpProvider') ?? '').toUpperCase();
-
-  const [phase, setPhase]   = useState<Phase>('polling');
+  const [state, setState] = useState<CallbackState>('processing');
+  const [message, setMessage] = useState('Đang xác thực kết quả nạp ví...');
+  const [topUpId, setTopUpId] = useState(fallbackTopUpId);
   const [amount, setAmount] = useState<number | null>(null);
-  const pollCount           = useRef(0);
+  const [newBalance, setNewBalance] = useState<number | null>(null);
+  const [activated, setActivated] = useState(false);
+  const [countdown, setCountdown] = useState(REDIRECT_DELAY_SECONDS);
+  const countdownRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!topUpId) {
-      setPhase('failed');
-      return;
-    }
+    let cancelled = false;
 
-    // Clean up sessionStorage now that we have the topUpId
-    sessionStorage.removeItem('wallet:pendingTopUpId');
-    sessionStorage.removeItem('wallet:pendingTopUpProvider');
+    const resolveFromStatus = async () => {
+      if (!fallbackTopUpId) {
+        throw new Error('Không tìm thấy giao dịch nạp ví đang chờ xử lý.');
+      }
 
-    const poll = async () => {
+      const response = await walletApi.getTopUpStatus(fallbackTopUpId);
+      return {
+        topUpId: response.data.data.topUpId,
+        paid: response.data.data.status === 'COMPLETED',
+        status: response.data.data.status,
+        amount: response.data.data.amount,
+        provider: response.data.data.provider,
+        newBalance: undefined,
+        activated: false,
+        initialActivationCompleted: undefined,
+        warningThresholdReached: undefined,
+        message:
+          response.data.data.status === 'COMPLETED'
+            ? 'Nạp tiền thành công. Số dư ví của bạn đã được cập nhật.'
+            : 'Giao dịch nạp ví chưa hoàn tất hoặc đã thất bại.',
+      };
+    };
+
+    const run = async () => {
       try {
-        const res = await walletApi.getTopUpStatus(topUpId);
-        const { status, amount: amt } = res.data.data;
-        setAmount(amt);
+        let payload;
+        const callbackParams = new URLSearchParams(params.toString());
 
-        if (status === 'COMPLETED') {
-          setPhase('success');
-          return;
+        if (fallbackTopUpId && !callbackParams.get('topUpId')) {
+          callbackParams.set('topUpId', fallbackTopUpId);
         }
-        if (status === 'FAILED') {
-          setPhase('failed');
-          return;
+        if (provider && !callbackParams.get('provider')) {
+          callbackParams.set('provider', provider);
         }
 
-        // Still PENDING
-        pollCount.current += 1;
-        if (pollCount.current >= MAX_POLLS) {
-          setPhase('timeout');
+        if (provider === 'MOMO' && (params.get('resultCode') || params.get('orderId') || params.get('requestId'))) {
+          payload = (await walletApi.confirmMomoReturn(callbackParams)).data;
+        } else if (provider === 'VNPAY' && (params.get('vnp_TmnCode') || params.get('vnp_ResponseCode') || params.get('vnp_TxnRef'))) {
+          payload = (await walletApi.confirmVnpayReturn(callbackParams)).data;
+        } else {
+          payload = await resolveFromStatus();
+        }
+
+        if (cancelled) {
           return;
         }
-        setTimeout(poll, POLL_INTERVAL_MS);
-      } catch {
-        pollCount.current += 1;
-        if (pollCount.current >= MAX_POLLS) {
-          setPhase('timeout');
+
+        const resolvedTopUpId = payload.topUpId || fallbackTopUpId;
+        if (resolvedTopUpId) {
+          setTopUpId(resolvedTopUpId);
+        }
+        if (typeof payload.amount === 'number') {
+          setAmount(payload.amount);
+        }
+        if (typeof payload.newBalance === 'number') {
+          setNewBalance(payload.newBalance);
+        }
+        setActivated(Boolean(payload.activated));
+
+        if (payload.paid || payload.status === 'COMPLETED') {
+          const successMessage = payload.message || (
+            payload.activated
+              ? 'Nạp ví thành công'
+              : (payload.initialActivationCompleted === false && typeof payload.newBalance === 'number' && payload.newBalance < 300_000
+                ? 'Nạp ví thành công nhưng tài khoản vẫn chưa được kích hoạt. Vui lòng đạt mốc 300.000 đ để bật nhận cuốc.'
+                : payload.warningThresholdReached
+                  ? 'Nạp ví thành công. Tài khoản vẫn hoạt động nhưng số dư còn thấp, bạn nên nạp thêm để tránh bị khóa nhận cuốc.'
+                : 'Nạp tiền thành công. Hệ thống đang cập nhật lại số dư ví cho bạn.')
+          );
+          clearPendingTopUp();
+          setState('success');
+          setMessage(successMessage);
+          dispatch(showNotification({
+            type: 'success',
+            title: payload.activated ? 'Tài khoản đã kích hoạt' : 'Nạp ví thành công',
+            message: successMessage,
+            persistMs: 6000,
+          }));
           return;
         }
-        setTimeout(poll, POLL_INTERVAL_MS);
+
+        clearPendingTopUp();
+        setState('failed');
+        setMessage(payload.message || 'Giao dịch nạp ví chưa thành công hoặc đã bị hủy.');
+        dispatch(showNotification({
+          type: 'error',
+          title: 'Nạp ví thất bại',
+          message: payload.message || 'Giao dịch nạp ví chưa thành công hoặc đã bị hủy.',
+          persistMs: 6000,
+        }));
+      } catch (error: any) {
+        if (cancelled) {
+          return;
+        }
+
+        try {
+          const fallbackStatus = await resolveFromStatus();
+          if (cancelled) {
+            return;
+          }
+
+          setTopUpId(fallbackStatus.topUpId || fallbackTopUpId);
+          setAmount(fallbackStatus.amount ?? null);
+
+          if (fallbackStatus.paid) {
+            clearPendingTopUp();
+            setState('success');
+            setMessage(fallbackStatus.message);
+            dispatch(showNotification({
+              type: 'success',
+              title: 'Nạp ví thành công',
+              message: fallbackStatus.message,
+              persistMs: 6000,
+            }));
+            return;
+          }
+        } catch {
+          // Ignore secondary lookup failure and surface the original error.
+        }
+
+        clearPendingTopUp();
+        setState('failed');
+        setMessage(error?.response?.data?.error?.message || 'Không thể xác thực kết quả nạp ví.');
+        dispatch(showNotification({
+          type: 'error',
+          title: 'Nạp ví thất bại',
+          message: error?.response?.data?.error?.message || 'Không thể xác thực kết quả nạp ví.',
+          persistMs: 6000,
+        }));
       }
     };
 
-    poll();
-  }, [topUpId]);
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, fallbackTopUpId, params, provider]);
+
+  useEffect(() => {
+    if (state !== 'success') {
+      return;
+    }
+
+    setCountdown(REDIRECT_DELAY_SECONDS);
+
+    countdownRef.current = window.setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          if (countdownRef.current) {
+            window.clearInterval(countdownRef.current);
+          }
+          return 0;
+        }
+
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (countdownRef.current) {
+        window.clearInterval(countdownRef.current);
+      }
+    };
+  }, [state]);
+
+  useEffect(() => {
+    if (state === 'success' && countdown === 0) {
+      navigate('/wallet', { replace: true });
+    }
+  }, [countdown, navigate, state]);
 
   const providerLabel = provider === 'MOMO' ? 'MoMo' : provider === 'VNPAY' ? 'VNPay' : provider;
+  const providerCfg = PROVIDER_CONFIG[provider];
+  const processingGradient = providerCfg?.accentGradient || 'linear-gradient(90deg, #1e40af, #3b82f6)';
+  const processingColor = providerCfg?.accentColor || '#1e40af';
 
   return (
     <Box
       sx={{
-        minHeight: '100dvh',
+        minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        bgcolor: 'background.default',
-        p: 2,
+        background:
+          state === 'success'
+            ? 'linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 50%, #e3f2fd 100%)'
+            : state === 'failed'
+            ? 'linear-gradient(135deg, #fce4ec 0%, #fff3e0 100%)'
+            : 'linear-gradient(135deg, #e3f2fd 0%, #eff6ff 100%)',
+        px: 2,
       }}
     >
-      <Card
-        elevation={0}
-        sx={{ maxWidth: 380, width: '100%', borderRadius: 4, border: '1px solid', borderColor: 'divider' }}
-      >
-        <CardContent sx={{ p: 4, textAlign: 'center' }}>
-          {phase === 'polling' && (
-            <Stack alignItems="center" spacing={2}>
-              <CircularProgress size={56} thickness={4} />
-              <Typography variant="h6" fontWeight={700}>
-                Đang xác nhận thanh toán
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Đang chờ xác nhận từ {providerLabel}…
-              </Typography>
-            </Stack>
-          )}
+      <Fade in timeout={500}>
+        <Card
+          elevation={0}
+          sx={{
+            width: '100%',
+            maxWidth: 420,
+            borderRadius: 5,
+            overflow: 'hidden',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.12)',
+          }}
+        >
+          <Box
+            sx={{
+              height: 6,
+              background:
+                state === 'success'
+                  ? 'linear-gradient(90deg, #43a047, #66bb6a)'
+                  : state === 'failed'
+                  ? 'linear-gradient(90deg, #e53935, #ef9a9a)'
+                  : processingGradient,
+            }}
+          />
 
-          {phase === 'success' && (
-            <Stack alignItems="center" spacing={2}>
-              <CheckCircleRounded sx={{ fontSize: 64, color: 'success.main' }} />
-              <Typography variant="h6" fontWeight={700} color="success.main">
-                Nạp tiền thành công!
-              </Typography>
-              {amount !== null && (
-                <Typography variant="body1" color="text.secondary">
-                  <strong>{formatCurrency(amount)}</strong> đã được cộng vào ví của bạn qua {providerLabel}.
+          <CardContent sx={{ p: 4 }}>
+            <Stack spacing={3} alignItems="center" textAlign="center">
+              <Box
+                sx={{
+                  width: 88,
+                  height: 88,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background:
+                    state === 'success'
+                      ? 'radial-gradient(circle, #e8f5e9, #c8e6c9)'
+                      : state === 'failed'
+                      ? 'radial-gradient(circle, #ffebee, #ffcdd2)'
+                      : `radial-gradient(circle, ${processingColor}18, ${processingColor}30)`,
+                  boxShadow:
+                    state === 'success'
+                      ? '0 4px 20px rgba(67,160,71,0.25)'
+                      : state === 'failed'
+                      ? '0 4px 20px rgba(229,57,53,0.25)'
+                      : `0 4px 20px ${processingColor}33`,
+                }}
+              >
+                {state === 'processing' && (
+                  <CircularProgress size={40} thickness={3} sx={{ color: processingColor }} />
+                )}
+                {state === 'success' && (
+                  <CheckCircleRounded sx={{ fontSize: 52, color: 'success.main' }} />
+                )}
+                {state === 'failed' && (
+                  <ErrorRounded sx={{ fontSize: 52, color: 'error.main' }} />
+                )}
+              </Box>
+
+              <Box>
+                <Typography variant="h5" fontWeight={800} gutterBottom>
+                  {state === 'processing' && 'Đang xử lý nạp ví...'}
+                  {state === 'success' && 'Nạp ví thành công!'}
+                  {state === 'failed' && 'Nạp ví thất bại'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                  {message}
+                </Typography>
+              </Box>
+
+              {providerLabel && (
+                <Chip
+                  label={`Qua ${providerLabel}`}
+                  size="small"
+                  variant="outlined"
+                  color={state === 'success' ? 'success' : state === 'failed' ? 'error' : 'default'}
+                  sx={{ fontWeight: 700 }}
+                />
+              )}
+
+              {(topUpId || amount !== null) && (
+                <>
+                  <Divider sx={{ width: '100%' }} />
+                  <Card variant="outlined" sx={{ width: '100%', borderRadius: 3 }}>
+                    <CardContent sx={{ p: 2.25 }}>
+                      <Stack spacing={1.25}>
+                        {amount !== null && (
+                          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <AccountBalanceWalletRounded color="primary" fontSize="small" />
+                              <Typography variant="body2" color="text.secondary">
+                                Số tiền nạp
+                              </Typography>
+                            </Stack>
+                            <Typography variant="body1" fontWeight={800} color="success.main">
+                              {formatCurrency(amount)}
+                            </Typography>
+                          </Stack>
+                        )}
+                        {newBalance !== null && state === 'success' && (
+                          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+                            <Typography variant="body2" color="text.secondary">
+                              Số dư mới
+                            </Typography>
+                            <Typography variant="body1" fontWeight={800} color="primary.main">
+                              {formatCurrency(newBalance)}
+                            </Typography>
+                          </Stack>
+                        )}
+                        {activated && state === 'success' && (
+                          <Chip
+                            color="success"
+                            label="Tài khoản tài xế đã được kích hoạt"
+                            sx={{ fontWeight: 700, alignSelf: 'flex-start' }}
+                          />
+                        )}
+                        {topUpId && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                              Mã giao dịch nạp ví
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              fontWeight={700}
+                              sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
+                            >
+                              {topUpId}
+                            </Typography>
+                          </Box>
+                        )}
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+
+              {state === 'success' && countdown > 0 && (
+                <Typography variant="caption" color="text.secondary">
+                  Tự động quay về ví sau{' '}
+                  <Box component="span" fontWeight={700} color="success.main">
+                    {countdown}s
+                  </Box>
                 </Typography>
               )}
-              <Button
-                variant="contained"
-                color="success"
-                fullWidth
-                sx={{ mt: 1, borderRadius: 3, fontWeight: 700 }}
-                onClick={() => navigate('/wallet')}
-              >
-                Về trang ví
-              </Button>
-            </Stack>
-          )}
 
-          {(phase === 'failed' || phase === 'timeout') && (
-            <Stack alignItems="center" spacing={2}>
-              {phase === 'timeout' ? (
-                <HourglassTopRounded sx={{ fontSize: 64, color: 'warning.main' }} />
-              ) : (
-                <ErrorRounded sx={{ fontSize: 64, color: 'error.main' }} />
-              )}
-              <Typography
-                variant="h6"
-                fontWeight={700}
-                color={phase === 'timeout' ? 'warning.main' : 'error.main'}
-              >
-                {phase === 'timeout' ? 'Chưa xác nhận được' : 'Thanh toán thất bại'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {phase === 'timeout'
-                  ? 'Hệ thống chưa nhận được xác nhận từ cổng thanh toán. Nếu tiền đã bị trừ, vui lòng liên hệ hỗ trợ.'
-                  : 'Giao dịch không thành công hoặc đã bị huỷ.'}
-              </Typography>
-              <Button
-                variant="contained"
-                color="primary"
-                fullWidth
-                sx={{ mt: 1, borderRadius: 3, fontWeight: 700 }}
-                onClick={() => navigate('/wallet')}
-              >
-                Về trang ví
-              </Button>
+              <Stack spacing={1.5} sx={{ width: '100%', pt: 1 }}>
+                {state === 'success' && (
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={() => navigate('/wallet', { replace: true })}
+                    sx={{
+                      borderRadius: 3,
+                      fontWeight: 700,
+                      py: 1.25,
+                      background: 'linear-gradient(90deg, #43a047, #66bb6a)',
+                      '&:hover': { background: 'linear-gradient(90deg, #388e3c, #43a047)' },
+                    }}
+                  >
+                    Về ví ngay
+                  </Button>
+                )}
+
+                {state === 'failed' && (
+                  <Button
+                    variant="contained"
+                    size="large"
+                    startIcon={<ReplayRounded />}
+                    onClick={() => navigate('/wallet', { replace: true })}
+                    sx={{ borderRadius: 3, fontWeight: 700, py: 1.25 }}
+                    color="warning"
+                  >
+                    Quay lại ví để thử lại
+                  </Button>
+                )}
+
+                <Button
+                  variant="text"
+                  size="medium"
+                  startIcon={<HomeRounded />}
+                  onClick={() => navigate('/dashboard', { replace: true })}
+                  sx={{ borderRadius: 3, color: 'text.secondary' }}
+                >
+                  Về dashboard
+                </Button>
+              </Stack>
             </Stack>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </Fade>
     </Box>
   );
 }

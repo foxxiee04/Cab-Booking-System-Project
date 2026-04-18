@@ -220,6 +220,8 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/ride_db?schema=public
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - USER_SERVICE_URL=http://user-service:3007
       - PRICING_SERVICE_URL=http://pricing-service:3009
       - PRICING_GRPC_ADDRESS=pricing-service:50057
       - DRIVER_SERVICE_URL=http://driver-service:3003
@@ -258,6 +260,9 @@ services:
       - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
       - RIDE_SERVICE_URL=http://ride-service:3002
+      - PAYMENT_SERVICE_URL=http://payment-service:3004
+      - USER_SERVICE_URL=http://user-service:3007
+      - AUTH_SERVICE_URL=http://auth-service:3001
     depends_on:
       postgres:
         condition: service_healthy

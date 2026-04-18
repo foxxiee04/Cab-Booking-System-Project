@@ -99,7 +99,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({
         )}
 
         <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-          {title || t('app.name', 'Driver App')}
+          {title || t('app.name', 'FoxGo Tài xế')}
         </Typography>
 
         <IconButton color="inherit" onClick={handleLangOpen} sx={{ mr: 1 }}>

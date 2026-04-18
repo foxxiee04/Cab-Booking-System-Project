@@ -1,28 +1,28 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
+  Avatar,
   Box,
-  Typography,
+  Button,
   Card,
   CardContent,
-  CircularProgress,
-  Alert,
-  Divider,
-  Button,
   Chip,
+  CircularProgress,
+  Divider,
   Grid,
   MenuItem,
+  Paper,
   Stack,
   TextField,
-  Avatar,
-  Paper,
+  Typography,
 } from '@mui/material';
 import {
-  DirectionsBikeRounded,
-  StarRounded,
   BadgeRounded,
+  DirectionsBikeRounded,
   EditRounded,
-  AddPhotoAlternate,
+  StarRounded,
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { driverApi } from '../api/driver.api';
 import { setProfile } from '../store/driver.slice';
@@ -56,27 +56,12 @@ const resolveVehicleImageUrl = (rawUrl?: string) => {
   return `${API_ROOT}/${rawUrl}`;
 };
 
-const fileToDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') {
-        reject(new Error('Invalid image payload'));
-        return;
-      }
-      resolve(reader.result);
-    };
-    reader.onerror = () => reject(new Error('Cannot read image file'));
-    reader.readAsDataURL(file);
-  });
-
 type ProfileFormData = {
   vehicleType: VehicleType;
   vehicleMake: string;
   vehicleModel: string;
   vehicleColor: string;
   vehicleYear: number;
-  vehicleImageUrl: string;
   licensePlate: string;
   licenseClass: LicenseClass;
   licenseNumber: string;
@@ -85,9 +70,11 @@ type ProfileFormData = {
 
 const Profile: React.FC = () => {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const { profile } = useAppSelector((state) => state.driver);
   const user = useAppSelector((state) => state.auth.user);
   const { t } = useTranslation();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -99,13 +86,11 @@ const Profile: React.FC = () => {
     vehicleModel: '',
     vehicleColor: '',
     vehicleYear: new Date().getFullYear(),
-    vehicleImageUrl: '',
     licensePlate: '',
     licenseClass: 'B',
     licenseNumber: '',
     licenseExpiryDate: '',
   });
-  const [imageUploading, setImageUploading] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     setLoading(true);
@@ -121,7 +106,7 @@ const Profile: React.FC = () => {
   }, [dispatch, t]);
 
   useEffect(() => {
-    fetchProfile();
+    void fetchProfile();
   }, [fetchProfile]);
 
   useEffect(() => {
@@ -135,7 +120,6 @@ const Profile: React.FC = () => {
       vehicleModel: profile.vehicleModel || '',
       vehicleColor: profile.vehicleColor || '',
       vehicleYear: profile.vehicleYear || new Date().getFullYear(),
-      vehicleImageUrl: profile.vehicleImageUrl || '',
       licensePlate: profile.licensePlate || '',
       licenseClass: profile.licenseClass || 'B',
       licenseNumber: profile.licenseNumber || '',
@@ -150,15 +134,15 @@ const Profile: React.FC = () => {
   );
   const driverDisplayName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Tài xế';
   const driverInitials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.trim().toUpperCase() || 'TX';
-  const vehiclePreviewUrl = resolveVehicleImageUrl(formData.vehicleImageUrl || profile?.vehicleImageUrl);
+  const vehiclePreviewUrl = resolveVehicleImageUrl(profile?.vehicleImageUrl);
   const approvalStatus = profile?.status || 'PENDING';
   const approvalTone = approvalStatus === 'APPROVED'
-    ? { color: 'success' as const, label: t('profile.approved', 'Da duoc duyet') }
+    ? { color: 'success' as const, label: 'Đã duyệt' }
     : approvalStatus === 'REJECTED'
-      ? { color: 'error' as const, label: t('profile.rejected', 'Bi tu choi') }
+      ? { color: 'error' as const, label: 'Bị từ chối' }
       : approvalStatus === 'SUSPENDED'
-        ? { color: 'default' as const, label: t('profile.suspended', 'Tam khoa') }
-        : { color: 'warning' as const, label: t('profile.pendingApproval', 'Cho duyet ho so') };
+        ? { color: 'default' as const, label: 'Tạm khóa' }
+        : { color: 'warning' as const, label: 'Chờ duyệt hồ sơ' };
 
   const handleChange = (field: keyof ProfileFormData) => (event: React.ChangeEvent<HTMLInputElement>) => {
     let value: ProfileFormData[keyof ProfileFormData];
@@ -198,7 +182,6 @@ const Profile: React.FC = () => {
         vehicleModel: formData.vehicleModel.trim(),
         vehicleColor: formData.vehicleColor.trim(),
         vehicleYear: formData.vehicleYear,
-        vehicleImageUrl: formData.vehicleImageUrl,
         licensePlate: formData.licensePlate.trim(),
         licenseClass: formData.licenseClass,
         licenseNumber: formData.licenseNumber.trim(),
@@ -212,35 +195,6 @@ const Profile: React.FC = () => {
       setError(err.response?.data?.error?.message || t('profile.saveFailed', 'Không thể cập nhật hồ sơ tài xế.'));
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleVehicleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(file.type)) {
-      setError('Chỉ hỗ trợ ảnh PNG/JPG/WEBP');
-      return;
-    }
-
-    if (file.size > 3 * 1024 * 1024) {
-      setError('Ảnh tối đa 3MB');
-      return;
-    }
-
-    setImageUploading(true);
-    setError('');
-    try {
-      const encoded = await fileToDataUrl(file);
-      setFormData((prev) => ({ ...prev, vehicleImageUrl: encoded }));
-    } catch (err: any) {
-      setError(err?.message || 'Không thể xử lý ảnh xe');
-    } finally {
-      setImageUploading(false);
-      event.target.value = '';
     }
   };
 
@@ -275,7 +229,6 @@ const Profile: React.FC = () => {
 
       {profile && (
         <>
-          {/* Hero header with photo */}
           <Paper
             elevation={0}
             sx={{
@@ -287,14 +240,9 @@ const Profile: React.FC = () => {
             }}
           >
             <Box sx={{ px: 3, pt: 4, pb: 7 }}>
-              <Chip
-                color={approvalTone.color}
-                label={approvalTone.label}
-                size="small"
-                sx={{ fontWeight: 700, mb: 1.5 }}
-              />
+              <Chip color={approvalTone.color} label={approvalTone.label} size="small" sx={{ fontWeight: 700, mb: 1.5 }} />
               <Typography variant="h5" fontWeight={900} sx={{ color: '#fff' }}>
-                {t('profile.driverProfile')}
+                Hồ sơ tài xế
               </Typography>
               <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.75)', mt: 0.5 }}>
                 {driverDisplayName}{user?.phoneNumber ? ` • ${user.phoneNumber}` : ''}
@@ -325,7 +273,6 @@ const Profile: React.FC = () => {
             </Box>
           </Paper>
 
-          {/* Stats row */}
           <Box sx={{ mt: 7, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5, mb: 2.5 }}>
             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 3, textAlign: 'center' }}>
               <StarRounded sx={{ color: '#f59e0b', fontSize: 22 }} />
@@ -350,172 +297,119 @@ const Profile: React.FC = () => {
             </Paper>
           </Box>
 
-          {/* Profile details card */}
           <Card variant="outlined" sx={{ borderRadius: 4 }}>
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography variant="subtitle1" fontWeight={700}>Thông tin xe</Typography>
-                <Button
-                  variant={editing ? 'outlined' : 'contained'}
-                  size="small"
-                  startIcon={<EditRounded />}
-                  onClick={() => setEditing((prev) => !prev)}
-                  sx={{ borderRadius: 999 }}
-                >
-                  {editing ? t('profile.closeEditor', 'Đóng') : t('profile.editProfile', 'Chỉnh sửa')}
-                </Button>
+                <Typography variant="subtitle1" fontWeight={700}>Thông tin xe và GPLX</Typography>
+
               </Stack>
               <Divider sx={{ my: 1.5 }} />
-              <Grid container spacing={2.5}>
-                <Grid item xs={12} md={5}>
-                  <Paper
-                    variant="outlined"
-                    sx={{
-                      p: 1.5,
-                      borderRadius: 3,
-                      borderColor: 'rgba(148,163,184,0.22)',
-                      height: '100%',
-                    }}
-                  >
-                    <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1 }}>
-                      Ảnh xe đối chiếu
-                    </Typography>
-                    {vehiclePreviewUrl ? (
-                      <Box
-                        component="img"
-                        src={vehiclePreviewUrl}
-                        alt="vehicle-preview"
-                        sx={{
-                          width: '100%',
-                          aspectRatio: '4 / 3',
-                          objectFit: 'cover',
-                          display: 'block',
-                          borderRadius: 3,
-                          border: '1px solid #e2e8f0',
-                          bgcolor: '#f8fafc',
-                        }}
-                      />
-                    ) : (
-                      <Stack
-                        spacing={1}
-                        alignItems="center"
-                        justifyContent="center"
-                        sx={{
-                          aspectRatio: '4 / 3',
-                          borderRadius: 3,
-                          border: '1px dashed #cbd5e1',
-                          bgcolor: '#f8fafc',
-                          color: 'text.secondary',
-                          textAlign: 'center',
-                          px: 2,
-                        }}
-                      >
-                        <DirectionsBikeRounded sx={{ fontSize: 38, color: 'primary.main' }} />
-                        <Typography variant="body2" fontWeight={700}>
-                          Chưa cập nhật ảnh xe
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Ảnh xe sẽ hiển thị ở đây để admin đối chiếu biển số và phương tiện.
-                        </Typography>
-                      </Stack>
-                    )}
+              <Grid container spacing={2.5} alignItems="stretch">
+  <Grid item xs={12} md={5}>
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 1.5,
+        borderRadius: 3,
+        borderColor: 'rgba(148,163,184,0.22)',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1 }}>
+        Ảnh xe đối chiếu
+      </Typography>
+      {vehiclePreviewUrl ? (
+        <Box
+          component="img"
+          src={vehiclePreviewUrl}
+          alt="vehicle-preview"
+          sx={{
+            width: '100%',
+            aspectRatio: '4 / 3',
+            objectFit: 'cover',
+            display: 'block',
+            borderRadius: 3,
+            border: '1px solid #e2e8f0',
+            bgcolor: '#f8fafc',
+          }}
+        />
+      ) : (
+        <Stack
+          spacing={1}
+          alignItems="center"
+          justifyContent="center"
+          sx={{
+            flex: 1,
+            minHeight: 160,
+            borderRadius: 3,
+            border: '1px dashed #cbd5e1',
+            bgcolor: '#f8fafc',
+            color: 'text.secondary',
+            textAlign: 'center',
+            px: 2,
+          }}
+        >
+          <DirectionsBikeRounded sx={{ fontSize: 38, color: 'primary.main' }} />
+          <Typography variant="body2" fontWeight={700}>
+            Chưa cập nhật ảnh xe
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Ảnh xe được giữ nguyên theo hồ sơ đã nộp.
+          </Typography>
+        </Stack>
+      )}
+    </Paper>
+  </Grid>
 
-                    {editing && (
-                      <Button
-                        component="label"
-                        variant="outlined"
-                        startIcon={<AddPhotoAlternate />}
-                        disabled={imageUploading}
-                        sx={{ mt: 1.5, borderRadius: 999 }}
-                      >
-                        {imageUploading ? 'Đang xử lý ảnh...' : vehiclePreviewUrl ? 'Đổi ảnh xe' : 'Tải ảnh xe'}
-                        <input hidden accept="image/png,image/jpeg,image/webp" type="file" onChange={handleVehicleImageUpload} />
-                      </Button>
-                    )}
-                  </Paper>
-                </Grid>
-                <Grid item xs={12} md={7}>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25 }}>
-                    {[
-                      { label: 'Hãng xe', value: profile.vehicleMake },
-                      { label: 'Dòng xe', value: profile.vehicleModel },
-                      { label: 'Màu xe', value: profile.vehicleColor },
-                      { label: 'Biển số', value: profile.licensePlate },
-                      { label: 'Hạng GPLX', value: profile.licenseClass },
-                      { label: 'Năm SX', value: profile.vehicleYear?.toString() },
-                      { label: 'Số GPLX', value: profile.licenseNumber },
-                    ].map(({ label, value }) => (
-                      <Box key={label}>
-                        <Typography variant="caption" color="text.secondary">{label}</Typography>
-                        <Typography variant="body2" fontWeight={600}>{value || '—'}</Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                </Grid>
-              </Grid>
-              <Stack direction="row" justifyContent="center" spacing={1.25} sx={{ mt: 2 }}>
-                <Button variant="text" size="small" onClick={fetchProfile} sx={{ borderRadius: 999 }}>
-                  {t('profile.refresh')}
-                </Button>
-              </Stack>
+  <Grid item xs={12} md={7}>
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 1.5,
+        borderRadius: 3,
+        borderColor: 'rgba(148,163,184,0.22)',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+      }}
+    >
+      <Box
+        sx={{
+          width: '100%',
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+          gap: 2,
+        }}
+      >
+        {[
+          { label: 'Hãng xe', value: profile.vehicleMake },
+          { label: 'Dòng xe', value: profile.vehicleModel },
+          { label: 'Màu xe', value: profile.vehicleColor },
+          { label: 'Biển số', value: profile.licensePlate },
+          { label: 'Hạng GPLX', value: profile.licenseClass },
+          { label: 'Năm SX', value: profile.vehicleYear?.toString() },
+          { label: 'Số GPLX', value: profile.licenseNumber },
+        ].map(({ label, value }) => (
+          <Box key={label}>
+            <Typography variant="caption" color="text.secondary">
+              {label}
+            </Typography>
+            <Typography variant="body2" fontWeight={600}>
+              {value || '—'}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+    </Paper>
+  </Grid>
+</Grid>
 
-              {editing && (
-                <Card variant="outlined" sx={{ mt: 2.5, borderRadius: 4 }}>
-                  <CardContent>
-                    <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2 }}>
-                      {t('profile.editSection', 'Cập nhật thông tin xe')}
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} sm={6}>
-                        <TextField select fullWidth label={t('profile.vehicleType', 'Loại xe')} value={formData.vehicleType} onChange={handleChange('vehicleType')}>
-                          <MenuItem value="MOTORBIKE">Xe máy</MenuItem>
-                          <MenuItem value="SCOOTER">Xe ga</MenuItem>
-                          <MenuItem value="CAR_4">Ô tô 4 chỗ</MenuItem>
-                          <MenuItem value="CAR_7">Ô tô 7 chỗ</MenuItem>
-                        </TextField>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField fullWidth label={t('profile.year', 'Năm sản xuất')} type="number" value={formData.vehicleYear} onChange={handleChange('vehicleYear')} />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField fullWidth label={t('profile.make', 'Hãng xe')} value={formData.vehicleMake} onChange={handleChange('vehicleMake')} />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField fullWidth label={t('profile.model', 'Dòng xe')} value={formData.vehicleModel} onChange={handleChange('vehicleModel')} />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField fullWidth label={t('profile.color')} value={formData.vehicleColor} onChange={handleChange('vehicleColor')} />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField fullWidth label={t('profile.plate')} value={formData.licensePlate} onChange={handleChange('licensePlate')} />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField select fullWidth label="Hạng GPLX" value={formData.licenseClass} onChange={handleChange('licenseClass')}>
-                          {availableLicenseClasses.map((licenseClass) => (
-                            <MenuItem key={licenseClass} value={licenseClass}>{licenseClass}</MenuItem>
-                          ))}
-                        </TextField>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField fullWidth label={t('profile.licenseNumber', 'Số GPLX')} value={formData.licenseNumber} onChange={handleChange('licenseNumber')} inputProps={{ maxLength: 12, inputMode: 'numeric' }} />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField fullWidth label={t('profile.licenseExpiry', 'Ngày hết hạn GPLX')} type="date" value={formData.licenseExpiryDate} onChange={handleChange('licenseExpiryDate')} InputLabelProps={{ shrink: true }} />
-                      </Grid>
-                    </Grid>
-                    <Stack direction="row" spacing={1.25} justifyContent="center" sx={{ mt: 2.5, flexWrap: 'wrap' }}>
-                      <Button variant="contained" onClick={handleSave} disabled={saving}>
-                        {saving ? <CircularProgress size={20} /> : t('profile.saveProfile', 'Lưu thay đổi')}
-                      </Button>
-                      <Button variant="text" onClick={() => setEditing(false)} disabled={saving}>
-                        {t('profile.cancelEditing', 'Hủy')}
-                      </Button>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              )}
+
             </CardContent>
           </Card>
+
         </>
       )}
     </Box>

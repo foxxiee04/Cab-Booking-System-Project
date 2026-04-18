@@ -27,8 +27,8 @@ const normalizeDuration = (duration: unknown, estimatedDuration: unknown): numbe
     return undefined;
   }
 
-  // Some endpoints still return minutes while others return seconds.
-  return raw <= 180 ? raw * 60 : raw;
+  // Legacy minute-based payloads are small integers; current services return seconds.
+  return raw <= 30 ? raw * 60 : raw;
 };
 
 const normalizeLocation = (rawLocation: any, fallbackLat: any, fallbackLng: any, fallbackAddress?: string) => {
@@ -50,6 +50,8 @@ const normalizeRideHistoryItem = (ride: any) => ({
   duration: normalizeDuration(ride.duration, ride.estimatedDuration),
   estimatedDuration: normalizeDuration(ride.estimatedDuration, ride.duration),
 });
+
+const hydrateRideCustomerSummary = (ride: any) => ride;
 
 const normalizeDriver = (driver: any): Driver => {
   const reviewCount = driver.reviewCount ?? driver.ratingCount ?? 0;
@@ -344,7 +346,7 @@ export const driverApi = {
     return {
       ...response.data,
       data: {
-        rides: (ridesData.rides || []).map(normalizeRideHistoryItem),
+        rides: (ridesData.rides || []).map((ride: any) => hydrateRideCustomerSummary(normalizeRideHistoryItem(ride))),
         total: ridesData.total || 0,
       }
     };

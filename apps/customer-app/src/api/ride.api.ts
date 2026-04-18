@@ -6,6 +6,7 @@ export interface CreateRideRequest {
   dropoff: Location;
   vehicleType?: VehicleType;
   paymentMethod?: PaymentMethod;
+  voucherCode?: string;
 }
 
 export interface RideResponse {
@@ -24,6 +25,69 @@ export interface RidesResponse {
     limit: number;
   };
 }
+
+const normalizeDistanceMeters = (distance: unknown, fallbackDistance?: unknown): number | null => {
+  const raw = typeof distance === 'number' && Number.isFinite(distance)
+    ? distance
+    : typeof fallbackDistance === 'number' && Number.isFinite(fallbackDistance)
+      ? fallbackDistance
+      : null;
+
+  if (raw == null || raw <= 0) {
+    return null;
+  }
+
+  return raw > 100 ? raw : Math.round(raw * 1000);
+};
+
+const normalizeDurationSeconds = (duration: unknown, fallbackDuration?: unknown): number | null => {
+  const raw = typeof duration === 'number' && Number.isFinite(duration)
+    ? duration
+    : typeof fallbackDuration === 'number' && Number.isFinite(fallbackDuration)
+      ? fallbackDuration
+      : null;
+
+  if (raw == null || raw <= 0) {
+    return null;
+  }
+
+  return raw <= 30 ? Math.round(raw * 60) : Math.round(raw);
+};
+
+const hasVisibleDriverIdentity = (driver: any): boolean => Boolean(
+  driver && (
+    `${driver.firstName || ''} ${driver.lastName || ''}`.trim()
+    || driver.phoneNumber
+    || driver.avatar
+    || driver.licensePlate
+  )
+);
+
+const shouldRevealDriverIdentity = (status: unknown): boolean => (
+  ['ASSIGNED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS', 'COMPLETED'].includes(String(status || ''))
+);
+
+const hydrateRideDriver = async (ride: Ride): Promise<Ride> => {
+  if (!ride.driverId || !shouldRevealDriverIdentity(ride.status) || hasVisibleDriverIdentity(ride.driver)) {
+    return ride;
+  }
+
+  try {
+    const response = await axiosInstance.get(`/drivers/${ride.driverId}/profile`);
+    const driver = response.data?.data?.driver;
+
+    if (!driver) {
+      return ride;
+    }
+
+    return {
+      ...ride,
+      driver,
+    };
+  } catch {
+    return ride;
+  }
+};
 
 const normalizeRide = (ride: any): Ride => {
   const rawPickup = ride.pickup || ride.pickupLocation;
@@ -48,10 +112,27 @@ const normalizeRide = (ride: any): Ride => {
     ? { lat: ride.dropoffLat, lng: ride.dropoffLng, address: ride.dropoffAddress || '' }
     : { lat: 0, lng: 0, address: '' };
 
+  const normalizedDistance = normalizeDistanceMeters(ride.distance, ride.estimatedDistance);
+  const normalizedDuration = normalizeDurationSeconds(ride.duration, ride.estimatedDuration);
+  const normalizedEstimatedDistance = normalizeDistanceMeters(ride.estimatedDistance, ride.distance);
+  const normalizedEstimatedDuration = normalizeDurationSeconds(ride.estimatedDuration, ride.duration);
+  const normalizedFare = typeof ride.fare === 'number' && Number.isFinite(ride.fare) && ride.fare > 0
+    ? ride.fare
+    : typeof ride.estimatedFare === 'number' && Number.isFinite(ride.estimatedFare) && ride.estimatedFare > 0
+      ? ride.estimatedFare
+      : null;
+
   return {
     ...ride,
     pickup,
     dropoff,
+    pickupLocation: pickup,
+    dropoffLocation: dropoff,
+    distance: normalizedDistance,
+    duration: normalizedDuration,
+    estimatedDistance: normalizedEstimatedDistance,
+    estimatedDuration: normalizedEstimatedDuration,
+    fare: normalizedFare,
     requestedAt: ride.requestedAt || ride.createdAt || ride.requested_at,
     assignedAt: ride.assignedAt ?? ride.assigned_at ?? null,
     acceptedAt: ride.acceptedAt ?? ride.accepted_at ?? null,
@@ -65,13 +146,15 @@ export const rideApi = {
   createRide: async (data: CreateRideRequest): Promise<RideResponse> => {
     const response = await axiosInstance.post('/rides', data);
     const payload = response.data?.data || response.data;
-    return { ...response.data, data: { ride: normalizeRide(payload.ride) } };
+    const ride = await hydrateRideDriver(normalizeRide(payload.ride));
+    return { ...response.data, data: { ride } };
   },
 
   getRide: async (rideId: string): Promise<RideResponse> => {
     const response = await axiosInstance.get(`/rides/${rideId}`);
     const payload = response.data?.data || response.data;
-    return { ...response.data, data: { ride: normalizeRide(payload.ride) } };
+    const ride = await hydrateRideDriver(normalizeRide(payload.ride));
+    return { ...response.data, data: { ride } };
   },
 
   getActiveRide: async (): Promise<RideResponse | null> => {
@@ -81,7 +164,8 @@ export const rideApi = {
       if (!payload?.ride) {
         return response.data;
       }
-      return { ...response.data, data: { ride: normalizeRide(payload.ride) } };
+      const ride = await hydrateRideDriver(normalizeRide(payload.ride));
+      return { ...response.data, data: { ride } };
     } catch (error: any) {
       if (error.response?.status === 404) {
         return null;
@@ -96,7 +180,7 @@ export const rideApi = {
     });
     const payload = response.data?.data || response.data;
     const meta = response.data?.meta || payload?.meta || {};
-    const rides = (payload?.rides || []).map(normalizeRide);
+    const rides = await Promise.all((payload?.rides || []).map((ride: any) => hydrateRideDriver(normalizeRide(ride))));
     return {
       ...response.data,
       data: {
@@ -111,6 +195,7 @@ export const rideApi = {
   cancelRide: async (rideId: string, reason?: string): Promise<RideResponse> => {
     const response = await axiosInstance.post(`/rides/${rideId}/cancel`, { reason });
     const payload = response.data?.data || response.data;
-    return { ...response.data, data: { ride: normalizeRide(payload.ride) } };
+    const ride = await hydrateRideDriver(normalizeRide(payload.ride));
+    return { ...response.data, data: { ride } };
   },
 };

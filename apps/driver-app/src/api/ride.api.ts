@@ -25,37 +25,13 @@ const normalizeRide = (ride: any): Ride => ({
   duration: typeof ride.duration === 'number' ? ride.duration : ride.estimatedDuration,
 });
 
-const hydrateRideCustomer = async (ride: Ride): Promise<Ride> => {
-  if (ride.customer || !ride.customerId) {
-    return ride;
-  }
-
-  try {
-    const response = await axiosInstance.get(`/users/${ride.customerId}`);
-    const customer = response.data?.data?.user;
-
-    if (!customer) {
-      return ride;
-    }
-
-    return {
-      ...ride,
-      customer: {
-        firstName: customer.firstName || '',
-        lastName: customer.lastName || '',
-        phoneNumber: customer.phone || customer.phoneNumber,
-      },
-    };
-  } catch {
-    return ride;
-  }
-};
+const hydrateRideCustomer = (ride: Ride): Ride => ride;
 
 export const rideApi = {
   // Get ride details
   getRide: async (rideId: string): Promise<ApiResponse<{ ride: Ride }>> => {
     const response = await axiosInstance.get(`/rides/${rideId}`);
-    const ride = await hydrateRideCustomer(normalizeRide(response.data.data.ride));
+    const ride = hydrateRideCustomer(normalizeRide(response.data.data.ride));
     return {
       ...response.data,
       data: {
@@ -67,7 +43,7 @@ export const rideApi = {
   // Accept ride
   acceptRide: async (rideId: string): Promise<ApiResponse<{ ride: Ride }>> => {
     const response = await axiosInstance.post(`/drivers/me/rides/${rideId}/accept`, {});
-    const ride = await hydrateRideCustomer(normalizeRide(response.data.data.ride));
+    const ride = hydrateRideCustomer(normalizeRide(response.data.data.ride));
     return {
       ...response.data,
       data: {
@@ -85,7 +61,7 @@ export const rideApi = {
   // Start ride (arrived at pickup, customer on board)
   pickupRide: async (rideId: string): Promise<ApiResponse<{ ride: Ride }>> => {
     const response = await axiosInstance.post(`/rides/${rideId}/pickup`, {});
-    const ride = await hydrateRideCustomer(normalizeRide(response.data.data.ride));
+    const ride = hydrateRideCustomer(normalizeRide(response.data.data.ride));
     return {
       ...response.data,
       data: {
@@ -97,7 +73,7 @@ export const rideApi = {
   // Start ride (arrived at pickup, customer on board)
   startRide: async (rideId: string): Promise<ApiResponse<{ ride: Ride }>> => {
     const response = await axiosInstance.post(`/rides/${rideId}/start`, {});
-    const ride = await hydrateRideCustomer(normalizeRide(response.data.data.ride));
+    const ride = hydrateRideCustomer(normalizeRide(response.data.data.ride));
     return {
       ...response.data,
       data: {
@@ -109,7 +85,7 @@ export const rideApi = {
   // Complete ride
   completeRide: async (rideId: string): Promise<ApiResponse<{ ride: Ride }>> => {
     const response = await axiosInstance.post(`/rides/${rideId}/complete`, {});
-    const ride = await hydrateRideCustomer(normalizeRide(response.data.data.ride));
+    const ride = hydrateRideCustomer(normalizeRide(response.data.data.ride));
     return {
       ...response.data,
       data: {
@@ -128,7 +104,7 @@ export const rideApi = {
   getActiveRide: async (): Promise<ApiResponse<{ ride: Ride | null }>> => {
     const response = await axiosInstance.get('/rides/driver/active');
     const ride = response.data?.data?.ride ?? response.data?.data ?? null;
-    const hydratedRide = ride ? await hydrateRideCustomer(normalizeRide(ride)) : null;
+    const hydratedRide = ride ? hydrateRideCustomer(normalizeRide(ride)) : null;
     return {
       ...response.data,
       data: {

@@ -61,7 +61,7 @@ export function createApp({ driverService, getReadiness }: DriverAppOptions) {
 
   app.get('/internal/drivers/:driverId', async (req, res) => {
     try {
-      const driver = await driverService.getDriverById(req.params.driverId);
+      const driver = await driverService.getEnrichedDriverById(req.params.driverId);
       if (!driver) {
         return res.status(404).json({
           success: false,

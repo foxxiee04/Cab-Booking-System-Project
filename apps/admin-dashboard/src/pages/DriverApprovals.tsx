@@ -253,129 +253,160 @@ const DriverApprovals: React.FC = () => {
                   </Stack>
                 </Box>
 
-                <Box sx={{ p: 2.5 }}>
-                  <Grid container spacing={2.5}>
-                    <Grid item xs={12} lg={4}>
-                      <InfoSection title="Ảnh xe đối chiếu" icon={<DirectionsCarFilledOutlined sx={{ fontSize: 18, color: '#475569' }} />}>
-                        {driver.vehicleImageUrl ? (
-                          <Box>
-                            <Box
-                              component="img"
-                              src={resolveVehicleImageUrl(driver.vehicleImageUrl)}
-                              alt={`${driver.vehicleMake} ${driver.vehicleModel}`.trim() || 'vehicle'}
-                              sx={{
-                                width: '100%',
-                                minHeight: { xs: 240, md: 320 },
-                                maxHeight: 380,
-                                objectFit: 'cover',
-                                borderRadius: 3,
-                                border: '1px solid rgba(148,163,184,0.22)',
-                                bgcolor: '#f8fafc',
-                              }}
-                            />
-                          </Box>
-                        ) : (
-                          <Box
-                            sx={{
-                              minHeight: { xs: 220, md: 300 },
-                              borderRadius: 3,
-                              border: '1px dashed rgba(148,163,184,0.4)',
-                              bgcolor: '#f8fafc',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              px: 2,
-                            }}
-                          >
-                            <Typography variant="body2" color="text.secondary" align="center">
-                              Chưa có ảnh xe để đối chiếu.
-                            </Typography>
-                          </Box>
-                        )}
+<Box sx={{ p: 2.5 }}>
+  <Grid container spacing={2.5} alignItems="stretch">
+    {/* Cột trái: ảnh + thông tin xe */}
+    <Grid item xs={12} lg={4}>
+      <InfoSection
+        title="Ảnh xe đối chiếu"
+        icon={<DirectionsCarFilledOutlined sx={{ fontSize: 18, color: '#475569' }} />}
+      >
+        {driver.vehicleImageUrl ? (
+          <Box
+            component="img"
+            src={resolveVehicleImageUrl(driver.vehicleImageUrl)}
+            alt={`${driver.vehicleMake} ${driver.vehicleModel}`.trim() || 'vehicle'}
+            sx={{
+              width: '100%',
+              aspectRatio: '4 / 3',
+              objectFit: 'cover',
+              borderRadius: 3,
+              border: '1px solid rgba(148,163,184,0.22)',
+              bgcolor: '#f8fafc',
+              display: 'block',
+            }}
+          />
+        ) : (
+          <Stack
+            alignItems="center"
+            justifyContent="center"
+            sx={{
+              aspectRatio: '4 / 3',
+              borderRadius: 3,
+              border: '1px dashed rgba(148,163,184,0.4)',
+              bgcolor: '#f8fafc',
+            }}
+          >
+            <Typography variant="body2" color="text.secondary" align="center">
+              Chưa có ảnh xe để đối chiếu.
+            </Typography>
+          </Stack>
+        )}
 
-                        <Divider sx={{ my: 0.5 }} />
+        <Divider sx={{ my: 1 }} />
 
-                        <DetailRow label="Loại xe" value={VEHICLE_TYPE_LABELS[driver.vehicleType]} emphasize />
-                        <DetailRow label="Dòng xe" value={`${driver.vehicleMake} ${driver.vehicleModel}`.trim() || t('labels.na')} emphasize />
-                        <DetailRow label="Màu sắc" value={driver.vehicleColor || t('labels.na')} />
-                        <DetailRow label="Năm sản xuất" value={driver.vehicleYear || t('labels.na')} />
-                        <DetailRow label="Biển số" value={driver.licensePlate || t('labels.na')} emphasize />
-                      </InfoSection>
-                    </Grid>
+        <DetailRow label="Loại xe" value={VEHICLE_TYPE_LABELS[driver.vehicleType]} emphasize />
+        <DetailRow label="Dòng xe" value={`${driver.vehicleMake} ${driver.vehicleModel}`.trim() || t('labels.na')} emphasize />
+        <DetailRow label="Màu sắc" value={driver.vehicleColor || t('labels.na')} />
+        <DetailRow label="Năm sản xuất" value={driver.vehicleYear || t('labels.na')} />
+        <DetailRow label="Biển số" value={driver.licensePlate || t('labels.na')} emphasize />
+      </InfoSection>
+    </Grid>
 
-                    <Grid item xs={12} lg={8}>
-                      <Grid container spacing={2}>
-                        <Grid item xs={12}>
-                          <InfoSection title="Thông tin tài xế" icon={<BadgeOutlined sx={{ fontSize: 18, color: '#475569' }} />}>
-                            <Grid container spacing={1.5}>
-                              <Grid item xs={12} md={6}>
-                                <DetailRow
-                                  label="Họ và tên"
-                                  value={driver.user ? `${driver.user.firstName} ${driver.user.lastName}` : t('labels.na')}
-                                  emphasize
-                                />
-                              </Grid>
-                              <Grid item xs={12} md={6}>
-                                <DetailRow
-                                  label="Ngày gửi hồ sơ"
-                                  value={<Stack direction="row" spacing={0.75} justifyContent="flex-end" alignItems="center"><CalendarMonthOutlined sx={{ fontSize: 15, color: '#64748b' }} /><span>{formatDateValue(driver.createdAt)}</span></Stack>}
-                                />
-                              </Grid>
-                              <Grid item xs={12} md={6}>
-                                <DetailRow
-                                  label="Email"
-                                  value={<Stack direction="row" spacing={0.75} justifyContent="flex-end" alignItems="center"><MailOutline sx={{ fontSize: 15, color: '#64748b' }} /><span>{driver.user?.email || t('labels.na')}</span></Stack>}
-                                />
-                              </Grid>
-                              <Grid item xs={12} md={6}>
-                                <DetailRow
-                                  label="Số liên hệ"
-                                  value={<Stack direction="row" spacing={0.75} justifyContent="flex-end" alignItems="center"><LocalPhoneOutlined sx={{ fontSize: 15, color: '#64748b' }} /><span>{driver.user?.phoneNumber || t('labels.na')}</span></Stack>}
-                                />
-                              </Grid>
-                            </Grid>
-                          </InfoSection>
-                        </Grid>
-
-                        <Grid item xs={12}>
-                          <InfoSection title="Thông tin giấy phép & phương tiện" icon={<BadgeOutlined sx={{ fontSize: 18, color: '#475569' }} />}>
-                            <Grid container spacing={1.5}>
-                              <Grid item xs={12} md={6}>
-                                <DetailRow label="Mã hồ sơ" value={driver.id.slice(0, 8).toUpperCase()} emphasize />
-                              </Grid>
-                              <Grid item xs={12} md={6}>
-                                <DetailRow label="Trạng thái" value={<Chip label={t('labels.pending')} color="warning" size="small" sx={{ fontWeight: 700 }} />} />
-                              </Grid>
-                              <Grid item xs={12} md={6}>
-                                <DetailRow label="Hạng GPLX" value={driver.licenseClass || t('labels.na')} emphasize />
-                              </Grid>
-                              <Grid item xs={12} md={6}>
-                                <DetailRow label="Số GPLX" value={driver.licenseNumber || t('labels.na')} emphasize />
-                              </Grid>
-                              <Grid item xs={12} md={6}>
-                                <DetailRow label="Ngày hết hạn" value={formatDateValue(driver.licenseExpiryDate)} />
-                              </Grid>
-                              <Grid item xs={12} md={6}>
-                                <DetailRow label="Loại dịch vụ" value={VEHICLE_TYPE_LABELS[driver.vehicleType]} />
-                              </Grid>
-                            </Grid>
-                          </InfoSection>
-                        </Grid>
-                      </Grid>
-                    </Grid>
-                  </Grid>
-
-                  <Divider sx={{ my: 2 }} />
-
-                  <Stack direction="row" spacing={1} justifyContent="center" useFlexGap flexWrap="wrap" sx={{ mt: 0.5 }}>
-                    <Button variant="contained" color="success" onClick={() => openConfirm(driver, 'approve')} sx={{ minWidth: 120, borderRadius: 999 }}>
-                      {t('labels.approve')}
-                    </Button>
-                    <Button variant="outlined" color="error" onClick={() => openConfirm(driver, 'reject')} sx={{ minWidth: 120, borderRadius: 999 }}>
-                      {t('labels.reject')}
-                    </Button>
+    {/* Cột phải: thông tin tài xế + giấy phép */}
+    <Grid item xs={12} lg={8}>
+      <Stack spacing={2} sx={{ height: '100%' }}>
+        <InfoSection
+          title="Thông tin tài xế"
+          icon={<BadgeOutlined sx={{ fontSize: 18, color: '#475569' }} />}
+        >
+          <Grid container spacing={1.5}>
+            <Grid item xs={12} md={6}>
+              <DetailRow
+                label="Họ và tên"
+                value={driver.user ? `${driver.user.firstName} ${driver.user.lastName}` : t('labels.na')}
+                emphasize
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <DetailRow
+                label="Ngày gửi hồ sơ"
+                value={
+                  <Stack direction="row" spacing={0.75} justifyContent="flex-end" alignItems="center">
+                    <CalendarMonthOutlined sx={{ fontSize: 15, color: '#64748b' }} />
+                    <span>{formatDateValue(driver.createdAt)}</span>
                   </Stack>
-                </Box>
+                }
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <DetailRow
+                label="Email"
+                value={
+                  <Stack direction="row" spacing={0.75} justifyContent="flex-end" alignItems="center">
+                    <MailOutline sx={{ fontSize: 15, color: '#64748b' }} />
+                    <span>{driver.user?.email || t('labels.na')}</span>
+                  </Stack>
+                }
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <DetailRow
+                label="Số liên hệ"
+                value={
+                  <Stack direction="row" spacing={0.75} justifyContent="flex-end" alignItems="center">
+                    <LocalPhoneOutlined sx={{ fontSize: 15, color: '#64748b' }} />
+                    <span>{driver.user?.phoneNumber || t('labels.na')}</span>
+                  </Stack>
+                }
+              />
+            </Grid>
+          </Grid>
+        </InfoSection>
+
+        <InfoSection
+          title="Thông tin giấy phép & phương tiện"
+          icon={<BadgeOutlined sx={{ fontSize: 18, color: '#475569' }} />}
+        >
+          <Grid container spacing={1.5}>
+            <Grid item xs={12} md={6}>
+              <DetailRow label="Mã hồ sơ" value={driver.id.slice(0, 8).toUpperCase()} emphasize />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <DetailRow
+                label="Trạng thái"
+                value={<Chip label={t('labels.pending')} color="warning" size="small" sx={{ fontWeight: 700 }} />}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <DetailRow label="Hạng GPLX" value={driver.licenseClass || t('labels.na')} emphasize />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <DetailRow label="Số GPLX" value={driver.licenseNumber || t('labels.na')} emphasize />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <DetailRow label="Ngày hết hạn" value={formatDateValue(driver.licenseExpiryDate)} />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <DetailRow label="Loại dịch vụ" value={VEHICLE_TYPE_LABELS[driver.vehicleType]} />
+            </Grid>
+          </Grid>
+        </InfoSection>
+      </Stack>
+    </Grid>
+  </Grid>
+
+  <Divider sx={{ my: 2 }} />
+
+  <Stack direction="row" spacing={1} justifyContent="center" useFlexGap flexWrap="wrap">
+    <Button
+      variant="contained"
+      color="success"
+      onClick={() => openConfirm(driver, 'approve')}
+      sx={{ minWidth: 120, borderRadius: 999 }}
+    >
+      {t('labels.approve')}
+    </Button>
+    <Button
+      variant="outlined"
+      color="error"
+      onClick={() => openConfirm(driver, 'reject')}
+      sx={{ minWidth: 120, borderRadius: 999 }}
+    >
+      {t('labels.reject')}
+    </Button>
+  </Stack>
+</Box>
               </CardContent>
             </Card>
           </Grid>

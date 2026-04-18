@@ -28,6 +28,7 @@ import {
   AttachMoney,
   TrendingUp,
   Article,
+  LocalOffer,
   Logout,
   AccountCircle,
   AdminPanelSettings,
@@ -49,6 +50,7 @@ import Payments from './pages/Payments';
 import Pricing from './pages/Pricing';
 import Logs from './pages/Logs';
 import Profile from './pages/Profile';
+import Vouchers from './pages/Vouchers';
 
 const DRAWER_WIDTH = 260;
 
@@ -126,6 +128,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     },
     { text: t('menu.customers'), icon: <People />, path: '/customers' },
     { text: t('menu.payments'), icon: <AttachMoney />, path: '/payments' },
+    { text: 'Voucher', icon: <LocalOffer />, path: '/vouchers' },
     { text: t('menu.pricing'), icon: <TrendingUp />, path: '/pricing' },
     { text: t('menu.logs'), icon: <Article />, path: '/logs' },
   ];
@@ -388,6 +391,16 @@ const App: React.FC = () => {
             <ProtectedRoute>
               <Layout>
                 <Payments />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/vouchers"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Vouchers />
               </Layout>
             </ProtectedRoute>
           }
