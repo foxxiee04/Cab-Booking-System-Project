@@ -950,18 +950,89 @@ export class RideService {
       .map(({ distanceKm, ...ride }) => ({
         ...ride,
         distanceFromDriver: parseFloat(distanceKm.toFixed(2)),
+        distanceFromDriverMeters: Math.round(distanceKm * 1000),
+        durationFromDriverSeconds: Math.max(180, Math.round((distanceKm / 24) * 3600)),
       }));
 
     return this.enrichRideCustomers(availableRides as Ride[]);
   }
 
-  async countCompletedRidesForDriver(driverId: string): Promise<number> {
+  async countCompletedRidesForDriver(driverIdOrIds: string | string[]): Promise<number> {
+    const driverIds = Array.isArray(driverIdOrIds) ? driverIdOrIds : [driverIdOrIds];
+    const normalizedDriverIds = [...new Set(
+      driverIds
+        .map((driverId) => driverId?.trim())
+        .filter((driverId): driverId is string => Boolean(driverId))
+    )];
+
+    if (normalizedDriverIds.length === 0) {
+      return 0;
+    }
+
     return this.prisma.ride.count({
       where: {
-        driverId,
+        driverId: normalizedDriverIds.length === 1 ? normalizedDriverIds[0] : { in: normalizedDriverIds },
         status: RideStatus.COMPLETED,
       },
     });
+  }
+
+  async countCompletedRidesForDrivers(driverIds: string[]): Promise<Record<string, number>> {
+    const normalizedDriverIds = [...new Set(
+      driverIds
+        .map((driverId) => driverId?.trim())
+        .filter((driverId): driverId is string => Boolean(driverId))
+    )];
+
+    if (normalizedDriverIds.length === 0) {
+      return {};
+    }
+
+    const groupedCounts = await this.prisma.ride.groupBy({
+      by: ['driverId'],
+      where: {
+        driverId: { in: normalizedDriverIds },
+        status: RideStatus.COMPLETED,
+      },
+      _count: {
+        _all: true,
+      },
+    });
+
+    return groupedCounts.reduce<Record<string, number>>((counts, group) => {
+      if (group.driverId) {
+        counts[group.driverId] = group._count._all;
+      }
+      return counts;
+    }, {});
+  }
+
+  async countCompletedRidesForCustomers(customerIds: string[]): Promise<Record<string, number>> {
+    const normalizedCustomerIds = [...new Set(
+      customerIds
+        .map((customerId) => customerId?.trim())
+        .filter((customerId): customerId is string => Boolean(customerId))
+    )];
+
+    if (normalizedCustomerIds.length === 0) {
+      return {};
+    }
+
+    const groupedCounts = await this.prisma.ride.groupBy({
+      by: ['customerId'],
+      where: {
+        customerId: { in: normalizedCustomerIds },
+        status: RideStatus.COMPLETED,
+      },
+      _count: {
+        _all: true,
+      },
+    });
+
+    return groupedCounts.reduce<Record<string, number>>((counts, group) => {
+      counts[group.customerId] = group._count._all;
+      return counts;
+    }, {});
   }
 
   private getCompatibleRideTypesForDriver(vehicleType?: string): VehicleTypeStr[] | undefined {

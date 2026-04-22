@@ -450,6 +450,84 @@ const DRIVER_LOCATION_HUBS = [
   { name: 'Cụm Tân Phú', lat: 10.8018, lng: 106.6187 },
 ];
 
+const FOCUSED_TEST_GROUPS = [
+  {
+    label: 'Bến Thành',
+    hubName: 'Cụm Bến Thành - Quận 1',
+    vehicleType: 'CAR_4',
+    customers: [
+      { index: 0, address: 'Cửa Nam Chợ Bến Thành, Q1, TP.HCM', lat: 10.77255, lng: 106.69815 },
+      { index: 1, address: 'Ga Metro Bến Thành, Q1, TP.HCM', lat: 10.77305, lng: 106.69775 },
+      { index: 2, address: 'Công viên 23/9 - Bến Thành, Q1, TP.HCM', lat: 10.77095, lng: 106.69710 },
+    ],
+    drivers: [
+      { index: 0, lat: 10.77295, lng: 106.69905, ratingAverage: 1, ratingCount: 12 },
+      { index: 1, lat: 10.77195, lng: 106.69855, ratingAverage: 2, ratingCount: 15 },
+      { index: 7, lat: 10.77215, lng: 106.69675, ratingAverage: 3, ratingCount: 18 },
+    ],
+  },
+  {
+    label: 'Tân Sơn Nhất',
+    hubName: 'Cụm Tân Sơn Nhất - Tân Bình',
+    vehicleType: 'CAR_4',
+    customers: [
+      { index: 3, address: 'Ga Quốc Nội - Sân bay Tân Sơn Nhất, TP.HCM', lat: 10.81895, lng: 106.65840 },
+      { index: 4, address: 'Ga Quốc Tế - Sân bay Tân Sơn Nhất, TP.HCM', lat: 10.81785, lng: 106.66455 },
+      { index: 5, address: 'Đường Trường Sơn - cổng sân bay Tân Sơn Nhất, TP.HCM', lat: 10.81265, lng: 106.66410 },
+    ],
+    drivers: [
+      { index: 10, lat: 10.81925, lng: 106.65795, ratingAverage: 1, ratingCount: 12 },
+      { index: 14, lat: 10.81745, lng: 106.66085, ratingAverage: 2, ratingCount: 15 },
+      { index: 18, lat: 10.81325, lng: 106.66295, ratingAverage: 3, ratingCount: 18 },
+    ],
+  },
+] as const;
+
+const FOCUSED_DRIVER_OVERRIDES = new Map<number, {
+  label: string;
+  hubName: string;
+  vehicleType: string;
+  lat: number;
+  lng: number;
+  ratingAverage: number;
+  ratingCount: number;
+}>();
+
+const FOCUSED_CUSTOMER_REFERENCES = new Map<number, {
+  label: string;
+  hubName: string;
+  address: string;
+  lat: number;
+  lng: number;
+}>();
+
+const FOCUSED_REVIEW_RATINGS: number[] = [];
+
+for (const group of FOCUSED_TEST_GROUPS) {
+  for (const customer of group.customers) {
+    FOCUSED_CUSTOMER_REFERENCES.set(customer.index, {
+      label: group.label,
+      hubName: group.hubName,
+      address: customer.address,
+      lat: customer.lat,
+      lng: customer.lng,
+    });
+  }
+
+  for (const driver of group.drivers) {
+    FOCUSED_DRIVER_OVERRIDES.set(driver.index, {
+      label: group.label,
+      hubName: group.hubName,
+      vehicleType: group.vehicleType,
+      lat: driver.lat,
+      lng: driver.lng,
+      ratingAverage: driver.ratingAverage,
+      ratingCount: driver.ratingCount,
+    });
+    FOCUSED_REVIEW_RATINGS.push(driver.ratingAverage);
+  }
+}
+
 function seededDriverLocation(index: number) {
   const hub = DRIVER_LOCATION_HUBS[index % DRIVER_LOCATION_HUBS.length];
   const ring = 0.003 + (index % 7) * 0.0016;
@@ -717,6 +795,47 @@ const RIDE_SEEDS = [
   },
 ];
 
+const FOCUSED_COMPLETED_RIDE_SEEDS: typeof RIDE_SEEDS = [
+  {
+    customerIndex: 0, driverIndex: 0, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
+    pickupAddress: 'Cửa Nam Chợ Bến Thành, Q1, TP.HCM', pickupLat: 10.77255, pickupLng: 106.69815,
+    dropoffAddress: 'Dinh Độc Lập, Q1, TP.HCM', dropoffLat: 10.77930, dropoffLng: 106.69570,
+    distance: 1.1, duration: 360, fare: 26000, paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
+  },
+  {
+    customerIndex: 1, driverIndex: 1, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'MOMO',
+    pickupAddress: 'Ga Metro Bến Thành, Q1, TP.HCM', pickupLat: 10.77305, pickupLng: 106.69775,
+    dropoffAddress: 'Saigon Centre, Q1, TP.HCM', dropoffLat: 10.77210, dropoffLng: 106.70020,
+    distance: 1.4, duration: 420, fare: 30000, paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
+  },
+  {
+    customerIndex: 2, driverIndex: 7, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'VNPAY',
+    pickupAddress: 'Công viên 23/9 - Bến Thành, Q1, TP.HCM', pickupLat: 10.77095, pickupLng: 106.69710,
+    dropoffAddress: 'Hồ Con Rùa, Q3, TP.HCM', dropoffLat: 10.77930, dropoffLng: 106.69570,
+    distance: 2.0, duration: 540, fare: 38000, paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
+  },
+  {
+    customerIndex: 3, driverIndex: 10, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
+    pickupAddress: 'Ga Quốc Nội - Sân bay Tân Sơn Nhất, TP.HCM', pickupLat: 10.81895, pickupLng: 106.65840,
+    dropoffAddress: 'Công viên Hoàng Văn Thụ, Tân Bình, TP.HCM', dropoffLat: 10.80130, dropoffLng: 106.65710,
+    distance: 2.3, duration: 600, fare: 34000, paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
+  },
+  {
+    customerIndex: 4, driverIndex: 14, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'MOMO',
+    pickupAddress: 'Ga Quốc Tế - Sân bay Tân Sơn Nhất, TP.HCM', pickupLat: 10.81785, pickupLng: 106.66455,
+    dropoffAddress: 'Lăng Cha Cả, Tân Bình, TP.HCM', dropoffLat: 10.80455, dropoffLng: 106.65635,
+    distance: 2.8, duration: 720, fare: 38000, paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
+  },
+  {
+    customerIndex: 5, driverIndex: 18, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'VNPAY',
+    pickupAddress: 'Đường Trường Sơn - cổng sân bay Tân Sơn Nhất, TP.HCM', pickupLat: 10.81265, pickupLng: 106.66410,
+    dropoffAddress: 'E.Town Cộng Hòa, Tân Bình, TP.HCM', dropoffLat: 10.80120, dropoffLng: 106.65320,
+    distance: 3.1, duration: 780, fare: 42000, paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
+  },
+];
+
+RIDE_SEEDS.splice(0, FOCUSED_COMPLETED_RIDE_SEEDS.length, ...FOCUSED_COMPLETED_RIDE_SEEDS);
+
 function hoursAgo(hours: number) {
   return new Date(Date.now() - hours * 60 * 60 * 1000);
 }
@@ -764,6 +883,15 @@ function getNearestDriverHub(lat: number, lng: number) {
 }
 
 function getCustomerReference(index: number) {
+  const focusedReference = FOCUSED_CUSTOMER_REFERENCES.get(index);
+  if (focusedReference) {
+    return {
+      address: focusedReference.address,
+      lat: focusedReference.lat,
+      lng: focusedReference.lng,
+    };
+  }
+
   const rideSeed = RIDE_SEEDS.find((item) => item.customerIndex === index);
   if (rideSeed) {
     return {
@@ -892,6 +1020,7 @@ async function generateSeedReferenceReport(
       const driver = driversById.get(driverId) as any;
       const authUser = driverUsersById.get(driver?.userId || driverUserIds[index]);
       const nearestHub = getNearestDriverHub(driver.lastLocationLat, driver.lastLocationLng);
+      const focusedDriver = FOCUSED_DRIVER_OVERRIDES.get(index);
 
       return {
         index: index + 1,
@@ -906,16 +1035,20 @@ async function generateSeedReferenceReport(
         vehicleName: `${driver.vehicleBrand} ${driver.vehicleModel}`,
         plate: driver.vehiclePlate,
         imageUrl: driver.vehicleImageUrl,
+        ratingAverage: Number(driver.ratingAverage || 0),
+        ratingCount: Number(driver.ratingCount || 0),
         lat: Number(driver.lastLocationLat),
         lng: Number(driver.lastLocationLng),
         nearestHubName: nearestHub.name,
         nearestHubDistanceKm: nearestHub.distanceKm,
+        focusedScenarioLabel: focusedDriver?.label || null,
       };
     });
 
     const customerRows = customerIds.map((customerId, index) => {
       const authUser = customerUsersById.get(customerId) as any;
       const reference = getCustomerReference(index);
+      const focusedCustomer = FOCUSED_CUSTOMER_REFERENCES.get(index);
 
       return {
         index: index + 1,
@@ -926,8 +1059,12 @@ async function generateSeedReferenceReport(
         address: reference.address,
         lat: reference.lat,
         lng: reference.lng,
+        focusedScenarioLabel: focusedCustomer?.label || null,
       };
     });
+
+    const driverRowsByIndex = new Map(driverRows.map((driver) => [driver.index - 1, driver]));
+    const customerRowsByIndex = new Map(customerRows.map((customer) => [customer.index - 1, customer]));
 
     const clusterRows = DRIVER_LOCATION_HUBS.map((hub) => {
       const driversInCluster = driverRows.filter((driver) => driver.nearestHubName === hub.name);
@@ -964,12 +1101,39 @@ async function generateSeedReferenceReport(
     lines.push('- Password chung: Password@1');
     lines.push(`- Admin userId: ${adminId}`);
     lines.push('');
+    lines.push('## Tài khoản test trọng điểm');
+    lines.push('');
+    lines.push('- 6 tài xế ưu tiên đều dùng chung loại xe Ô tô 4 chỗ để test ghép chuyến và popup khoảng cách.');
+    lines.push('- Bộ rating trọng điểm theo từng cụm là 1 sao, 2 sao, 3 sao.');
+    lines.push('');
+    for (const group of FOCUSED_TEST_GROUPS) {
+      lines.push(`### ${group.label}`);
+      lines.push('');
+      lines.push('| Vai trò | Họ tên | Điện thoại | Email | Rating | Ghi chú |');
+      lines.push('| --- | --- | --- | --- | --- | --- |');
+
+      for (let i = 0; i < group.drivers.length; i++) {
+        const driver = driverRowsByIndex.get(group.drivers[i].index);
+        const customer = customerRowsByIndex.get(group.customers[i].index);
+
+        if (driver) {
+          lines.push(`| Driver ${i + 1} | ${driver.name} | ${driver.phone} | ${driver.email} | ${driver.ratingAverage.toFixed(1)} (${driver.ratingCount}) | ${driver.vehicleName} - ${driver.plate} |`);
+        }
+
+        if (customer) {
+          lines.push(`| Customer ${i + 1} | ${customer.name} | ${customer.phone} | ${customer.email} | ${group.drivers[i].ratingAverage} sao | ${customer.address} |`);
+        }
+      }
+
+      lines.push('');
+    }
+
     lines.push('## Driver Accounts');
     lines.push('');
-    lines.push('| # | Tài xế | Điện thoại | Trạng thái | Loại xe | Xe | Biển số | Ảnh | Vị trí hiện tại | Cụm gần nhất |');
-    lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+    lines.push('| # | Tài xế | Điện thoại | Trạng thái | Loại xe | Xe | Biển số | Rating | Ảnh | Vị trí hiện tại | Cụm gần nhất |');
+    lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
     for (const driver of driverRows) {
-      lines.push(`| ${driver.index} | ${driver.name} | ${driver.phone} | ${driver.status} / ${driver.availabilityStatus} | ${driver.vehicleLabel} | ${driver.vehicleName} | ${driver.plate} | ${driver.imageUrl} | ${formatCoordinate(driver.lat, driver.lng)} | ${driver.nearestHubName} (${driver.nearestHubDistanceKm.toFixed(2)} km) |`);
+      lines.push(`| ${driver.index} | ${driver.name} | ${driver.phone} | ${driver.status} / ${driver.availabilityStatus} | ${driver.vehicleLabel} | ${driver.vehicleName} | ${driver.plate} | ${driver.ratingAverage.toFixed(1)} (${driver.ratingCount}) | ${driver.imageUrl} | ${formatCoordinate(driver.lat, driver.lng)} | ${driver.nearestHubName} (${driver.nearestHubDistanceKm.toFixed(2)} km) |`);
     }
     lines.push('');
     lines.push('## Customer Accounts');
@@ -1171,12 +1335,15 @@ async function seedDriverDB(driverUserIds: string[]) {
 
     for (let i = 0; i < driverUserIds.length; i++) {
       const d = DRIVERS[i];
-      const location = seededDriverLocation(i);
+      const focusedDriver = FOCUSED_DRIVER_OVERRIDES.get(i);
+      const location = focusedDriver
+        ? { lat: focusedDriver.lat, lng: focusedDriver.lng }
+        : seededDriverLocation(i);
       const seedPendingApproval = i >= driverUserIds.length - 3;
-      const availabilityStatus = seedPendingApproval ? 'OFFLINE' : (i % 9 === 0 ? 'OFFLINE' : 'ONLINE');
+      const availabilityStatus = seedPendingApproval ? 'OFFLINE' : (focusedDriver ? 'ONLINE' : (i % 9 === 0 ? 'OFFLINE' : 'ONLINE'));
       const status = seedPendingApproval ? 'PENDING' : 'APPROVED';
-      const ratingAverage = seedPendingApproval ? 0 : 4.3 + (i % 7) * 0.08;
-      const ratingCount = seedPendingApproval ? 0 : 25 + i * 3;
+      const ratingAverage = seedPendingApproval ? 0 : (focusedDriver?.ratingAverage ?? (4.3 + (i % 7) * 0.08));
+      const ratingCount = seedPendingApproval ? 0 : (focusedDriver?.ratingCount ?? (25 + i * 3));
 
       const driver = await prisma.driver.upsert({
         where: { userId: driverUserIds[i] },
@@ -1803,6 +1970,11 @@ async function seedMongoDB(rides: Array<{ id: string; status: string }>, booking
       'Chuyến đi tuyệt vời, không gian xe thoải mái.',
       'Tài xế biết đường, không đi vòng. Giá hợp lý.',
     ];
+    const criticalComments = [
+      'Tài xế đến muộn và hỗ trợ chưa tốt.',
+      'Chuyến đi chưa ổn, tài xế cần cải thiện thái độ phục vụ.',
+      'Xe chưa sạch và lộ trình chưa tối ưu.',
+    ];
     const neutralComments = [
       'Chuyến đi bình thường, không có gì đặc biệt.',
       'Tài xế tạm ổn, xe cũ một chút nhưng an toàn.',
@@ -1811,11 +1983,17 @@ async function seedMongoDB(rides: Array<{ id: string; status: string }>, booking
     for (let i = 0; i < completedRideIds.length && i < 15; i++) {
       const custIdx = i % customerIds.length;
       const drvIdx = i % driverIds.length;
-      const rating = i % 5 === 0 ? 4 : i % 7 === 0 ? 3 : 5;
-      const comment = rating >= 5 ? positiveComments[i % positiveComments.length] : neutralComments[i % neutralComments.length];
+      const rating = FOCUSED_REVIEW_RATINGS[i] ?? (i % 5 === 0 ? 4 : i % 7 === 0 ? 3 : 5);
+      const comment = rating >= 5
+        ? positiveComments[i % positiveComments.length]
+        : rating <= 2
+          ? criticalComments[i % criticalComments.length]
+          : neutralComments[i % neutralComments.length];
       const tags = rating >= 5
         ? ['professional', 'safe_driving', 'clean_car'].slice(0, (i % 3) + 1)
-        : ['on_time'];
+        : rating <= 2
+          ? ['late_pickup', 'service_issue', 'vehicle_cleanliness'].slice(0, (i % 3) + 1)
+          : ['on_time'];
       // Customer → Driver review
       reviewRecords.push({
         rideId: completedRideIds[i],
@@ -1830,7 +2008,7 @@ async function seedMongoDB(rides: Array<{ id: string; status: string }>, booking
         tags,
       });
       // Driver → Customer review (for every other ride)
-      if (i % 2 === 0) {
+      if (i % 2 === 0 || i < FOCUSED_REVIEW_RATINGS.length) {
         reviewRecords.push({
           rideId: completedRideIds[i],
           bookingId: bookingIds[i % bookingIds.length],
@@ -1839,17 +2017,29 @@ async function seedMongoDB(rides: Array<{ id: string; status: string }>, booking
           reviewerName: driverNames[drvIdx] || `Driver ${drvIdx + 1}`,
           revieweeId: customerIds[custIdx],
           revieweeName: customerNames[custIdx] || `Customer ${custIdx + 1}`,
-          rating: rating >= 5 ? 5 : 4,
-          comment: 'Khách hàng lịch sự, đúng giờ.',
-          tags: ['friendly', 'punctual'],
+          rating: i < FOCUSED_REVIEW_RATINGS.length ? rating : (rating >= 5 ? 5 : 4),
+          comment: i < FOCUSED_REVIEW_RATINGS.length
+            ? (rating <= 2 ? 'Khách hàng đổi điểm đón hoặc phản hồi chậm trong chuyến seed kiểm thử.' : 'Khách hàng phối hợp ổn, phù hợp kịch bản rating seed.')
+            : 'Khách hàng lịch sự, đúng giờ.',
+          tags: i < FOCUSED_REVIEW_RATINGS.length
+            ? (rating <= 2 ? ['slow_response', 'route_change'] : ['cooperative', 'punctual'])
+            : ['friendly', 'punctual'],
         });
       }
     }
     await Review.create(reviewRecords);
     console.log(`    ${reviewRecords.length} reviews created`);
     await reviewConn.close();
+    return {
+      notificationCount: notifRecords.length,
+      reviewCount: reviewRecords.length,
+    };
   } catch (error: any) {
     console.log(`    MongoDB seed skipped: ${error.message}`);
+    return {
+      notificationCount: 0,
+      reviewCount: 0,
+    };
   }
 }
 
@@ -1881,7 +2071,7 @@ async function main() {
     await syncDriverRideAssignments(driverIds, rides);
 
     // 6. Seed MongoDB (notifications + reviews)
-    await seedMongoDB(rides, bookingIds, customerIds, driverIds);
+    const mongoSeedSummary = await seedMongoDB(rides, bookingIds, customerIds, driverIds);
     await generateSeedReferenceReport(adminId, customerIds, driverUserIds, driverIds);
 
     console.log('');
@@ -1896,14 +2086,16 @@ async function main() {
     console.log(`   Bookings:    ${bookingIds.length}`);
     console.log(`   Rides:       ${rides.length}`);
     console.log(`   Payments:    ${RIDE_SEEDS.length}`);
-    console.log(`   Notifications: 2 (sample)`);
-    console.log(`   Reviews:     2 (sample)`);
+    console.log(`   Notifications: ${mongoSeedSummary.notificationCount}`);
+    console.log(`   Reviews:     ${mongoSeedSummary.reviewCount}`);
     console.log('');
     console.log(' Test credentials:');
   console.log('   All users password: Password@1');
   console.log('   Admin: admin@cabbooking.com / 0900000001');
   console.log('   Customers: 0901234561 – 0901234570');
   console.log('   Drivers:   0911234561 – 0911234570, plus 30 seeded phones (prefix 0919xxxxxx)');
+  console.log('   Focused Ben Thanh drivers: 0911234561, 0911234562, 0911234568');
+  console.log('   Focused Tan Son Nhat drivers: 0919100000, 0919100004, 0919100008');
   console.log(`   Seed report: ${SEED_REFERENCE_OUTPUT}`);
     console.log('');
   } catch (error: any) {

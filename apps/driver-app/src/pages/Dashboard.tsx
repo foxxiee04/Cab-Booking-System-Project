@@ -104,6 +104,20 @@ const normalizeDurationSeconds = (duration?: number, estimatedDuration?: number)
 };
 
 const getRideMetrics = (ride: Ride) => {
+  const distanceFromDriverMeters = typeof ride.distanceFromDriverMeters === 'number' && ride.distanceFromDriverMeters > 0
+    ? ride.distanceFromDriverMeters
+    : undefined;
+  const durationFromDriverSeconds = typeof ride.durationFromDriverSeconds === 'number' && ride.durationFromDriverSeconds > 0
+    ? ride.durationFromDriverSeconds
+    : undefined;
+
+  if (distanceFromDriverMeters || durationFromDriverSeconds) {
+    return {
+      distanceMeters: distanceFromDriverMeters,
+      durationSeconds: durationFromDriverSeconds,
+    };
+  }
+
   const distanceMeters = normalizeDistanceMeters(ride.distance);
   const durationSeconds = normalizeDurationSeconds(ride.duration, ride.estimatedDuration);
 

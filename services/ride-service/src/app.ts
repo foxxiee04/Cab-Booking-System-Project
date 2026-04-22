@@ -14,6 +14,26 @@ interface RideAppOptions {
   getReadiness: () => Promise<Record<string, boolean>>;
 }
 
+const parseIdsQuery = (value: unknown): string[] => {
+  const values = Array.isArray(value) ? value : [value];
+  const ids: string[] = [];
+
+  values.forEach((entry) => {
+    if (typeof entry !== 'string') {
+      return;
+    }
+
+    entry.split(',').forEach((rawId) => {
+      const normalizedId = rawId.trim();
+      if (normalizedId) {
+        ids.push(normalizedId);
+      }
+    });
+  });
+
+  return [...new Set(ids)];
+};
+
 export function createApp({ rideService, getReadiness }: RideAppOptions) {
   const app = express();
 
@@ -77,6 +97,46 @@ export function createApp({ rideService, getReadiness }: RideAppOptions) {
       return res.status(400).json({
         success: false,
         error: { code: 'ASSIGN_FAILED', message },
+      });
+    }
+  });
+
+  app.get('/internal/drivers/stats', async (req, res) => {
+    try {
+      const driverIds = parseIdsQuery(req.query.ids);
+      const counts = await rideService.countCompletedRidesForDrivers(driverIds);
+
+      return res.json({
+        success: true,
+        data: {
+          counts,
+        },
+      });
+    } catch (err) {
+      logger.error('Internal get driver stats batch error:', err);
+      return res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get driver stats' },
+      });
+    }
+  });
+
+  app.get('/internal/customers/stats', async (req, res) => {
+    try {
+      const customerIds = parseIdsQuery(req.query.ids);
+      const counts = await rideService.countCompletedRidesForCustomers(customerIds);
+
+      return res.json({
+        success: true,
+        data: {
+          counts,
+        },
+      });
+    } catch (err) {
+      logger.error('Internal get customer stats batch error:', err);
+      return res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get customer stats' },
       });
     }
   });

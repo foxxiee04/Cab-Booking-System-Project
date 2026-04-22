@@ -9,6 +9,26 @@ const normalizeDistance = (distance: unknown): number | undefined => {
   return distance > 100 ? distance : distance * 1000;
 };
 
+const normalizeDistanceFromDriver = (distance: unknown): number | undefined => {
+  if (typeof distance !== 'number' || Number.isNaN(distance) || distance < 0) {
+    return undefined;
+  }
+
+  return distance > 100 ? distance : Math.round(distance * 1000);
+};
+
+const normalizeDurationFromDriver = (durationSeconds: unknown, etaMinutes: unknown): number | undefined => {
+  if (typeof durationSeconds === 'number' && durationSeconds > 0) {
+    return Math.round(durationSeconds);
+  }
+
+  if (typeof etaMinutes === 'number' && etaMinutes > 0) {
+    return Math.round(etaMinutes * 60);
+  }
+
+  return undefined;
+};
+
 const normalizeRide = (ride: any): Ride => ({
   ...ride,
   pickupLocation: ride.pickupLocation || ride.pickup || {
@@ -23,6 +43,9 @@ const normalizeRide = (ride: any): Ride => ({
   },
   distance: normalizeDistance(ride.distance),
   duration: typeof ride.duration === 'number' ? ride.duration : ride.estimatedDuration,
+  distanceFromDriverMeters: normalizeDistanceFromDriver(ride.distanceFromDriverMeters ?? ride.distanceFromDriver),
+  durationFromDriverSeconds: normalizeDurationFromDriver(ride.durationFromDriverSeconds, ride.etaMinutes),
+  etaMinutes: typeof ride.etaMinutes === 'number' && ride.etaMinutes > 0 ? ride.etaMinutes : undefined,
 });
 
 const hydrateRideCustomer = (ride: Ride): Ride => ride;

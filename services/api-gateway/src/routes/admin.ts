@@ -115,6 +115,54 @@ async function callHttpServiceWithBody<T = any>(
   return payload;
 }
 
+async function callInternalHttpService<T = any>(
+  service: keyof typeof config.services,
+  path: string,
+  query: Record<string, unknown> = {},
+): Promise<T> {
+  const url = new URL(path, config.services[service]);
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((entry) => {
+        if (entry !== undefined && entry !== null) {
+          url.searchParams.append(key, String(entry));
+        }
+      });
+      return;
+    }
+
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, String(value));
+    }
+  });
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      'x-internal-token': config.internalServiceToken,
+    },
+  });
+
+  const text = await response.text();
+  let payload: T;
+
+  try {
+    payload = (text ? JSON.parse(text) : {}) as T;
+  } catch {
+    payload = text as T;
+  }
+
+  if (!response.ok) {
+    const error = new Error(`Internal HTTP service ${service} responded with status ${response.status}`) as Error & { statusCode?: number; body?: unknown };
+    error.statusCode = response.status;
+    error.body = payload;
+    throw error;
+  }
+
+  return payload;
+}
+
 router.get('/rides', async (req: Request, res: Response) => {
   try {
     const { limit, page } = getPaging(req);
@@ -148,13 +196,26 @@ router.get('/drivers', async (req: Request, res: Response) => {
 
     const [driverResponse, userResponse] = await Promise.all([
       callHttpService<any>('driver', req, '/api/drivers', { page, limit, status }),
-      callHttpService<any>('auth', req, '/api/auth/users', { page: 1, limit: userLimit }),
+      callHttpService<any>('auth', req, '/api/auth/users', { page: 1, limit: userLimit, role: 'DRIVER' }),
     ]);
 
     const payload = unwrapPayload<any>(driverResponse);
     let rawDrivers = Array.isArray(payload.drivers) ? payload.drivers : [];
     const usersPayload = unwrapPayload<any>(userResponse);
     let users = Array.isArray(usersPayload.users) ? usersPayload.users : [];
+    const driverActorIds: string[] = rawDrivers.reduce((ids: string[], driver: any) => {
+      if (driver.id) {
+        ids.push(driver.id);
+      }
+      if (driver.userId) {
+        ids.push(driver.userId);
+      }
+      return ids;
+    }, []);
+    const driverStatsResponse = driverActorIds.length > 0
+      ? await callInternalHttpService<any>('ride', '/internal/drivers/stats', { ids: driverActorIds.join(',') })
+      : null;
+    const driverRideCounts = driverStatsResponse ? unwrapPayload<any>(driverStatsResponse)?.counts || {} : {};
 
     const usersById = new Map(
       users.map((user: any) => [
@@ -185,7 +246,7 @@ router.get('/drivers', async (req: Request, res: Response) => {
       licenseExpiryDate: driver.licenseExpiryDate,
       reviewCount: driver.ratingCount ?? driver.reviewCount ?? 0,
       rating: (driver.ratingCount ?? driver.reviewCount ?? 0) > 0 ? (driver.ratingAverage ?? driver.rating ?? 0) : 0,
-      totalRides: driver.totalRides ?? 0,
+      totalRides: (driverRideCounts[driver.id] ?? 0) + (driver.userId ? driverRideCounts[driver.userId] ?? 0 : 0),
       isOnline: ['ONLINE', 'BUSY'].includes(driver.availabilityStatus),
       isAvailable: driver.availabilityStatus === 'ONLINE',
       currentLocation:
@@ -238,26 +299,33 @@ router.get('/customers', async (req: Request, res: Response) => {
   try {
     const { limit, page } = getPaging(req);
 
-    const response = await callHttpService<any>('auth', req, '/api/auth/users', { page, limit });
+    const response = await callHttpService<any>('auth', req, '/api/auth/users', { page, limit, role: 'CUSTOMER' });
 
     const payload = unwrapPayload<any>(response);
     const users = payload.users || [];
+    const customerIds = users
+      .map((user: any) => typeof user.id === 'string' ? user.id : '')
+      .filter(Boolean);
+    const customerStatsResponse = customerIds.length > 0
+      ? await callInternalHttpService<any>('ride', '/internal/customers/stats', { ids: customerIds.join(',') })
+      : null;
+    const customerRideCounts = customerStatsResponse ? unwrapPayload<any>(customerStatsResponse)?.counts || {} : {};
 
-    const customers = users
-      .filter((user: any) => user.role === 'CUSTOMER')
-      .map((user: any) => ({
+    const customers = users.map((user: any) => ({
         id: user.id,
         email: user.email,
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         phoneNumber: user.phone || user.phoneNumber || '',
-        totalRides: 0,
+        totalRides: customerRideCounts[user.id] ?? 0,
         rating: 0,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       }));
 
-    res.json({ success: true, data: { customers, total: customers.length } });
+    const total = response?.meta?.total ?? customers.length;
+
+    res.json({ success: true, data: { customers, total } });
   } catch (error: any) {
     res.status(error.statusCode || error.response?.status || 500).json({
       success: false,

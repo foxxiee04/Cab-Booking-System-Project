@@ -72,7 +72,7 @@ const normalizeDriver = (driver: any): Driver => {
     status: driver.status,
     rating: reviewCount > 0 ? (driver.rating ?? driver.ratingAverage ?? 0) : 0,
     reviewCount,
-    totalRides: driver.totalRides ?? driver.ratingCount ?? 0,
+    totalRides: typeof driver.totalRides === 'number' ? driver.totalRides : 0,
     isOnline: driver.isOnline ?? ['ONLINE', 'BUSY'].includes(driver.availabilityStatus),
     isAvailable: driver.isAvailable ?? driver.availabilityStatus === 'ONLINE',
     currentLocation:
@@ -205,7 +205,7 @@ export const driverApi = {
       const earningsResponse = await axiosInstance.get('/payments/driver/earnings', {
         params: { page: 1, limit: 200 },
       });
-      const { earnings: earningsRows, summary } = earningsResponse.data.data;
+      const { earnings: earningsRows, total, summary } = earningsResponse.data.data;
 
       // Also fetch ride history for pickup/dropoff addresses (not stored in DriverEarnings)
       let ridesMap: Record<string, any> = {};
@@ -293,7 +293,7 @@ export const driverApi = {
             today: sumNet(todayTrips),
             week: sumNet(weekTrips),
             month: sumNet(monthTrips),
-            totalRides: recentTrips.length,
+            totalRides: typeof total === 'number' ? total : recentTrips.length,
             grossTotal: summary?.totalGrossFare || 0,
             commissionTotal: summary?.totalPlatformFee || 0,
             bonusTotal: summary?.totalBonus || 0,

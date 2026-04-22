@@ -143,7 +143,7 @@ describe('AuthController', () => {
 
     await controller.getUsers(req, res);
 
-    expect(authService.getUsers).toHaveBeenCalledWith(2, 5);
+    expect(authService.getUsers).toHaveBeenCalledWith(2, 5, undefined);
     expect(res.json).toHaveBeenCalledWith({
       success: true,
       data: { users: [{ id: 'user-1' }] },

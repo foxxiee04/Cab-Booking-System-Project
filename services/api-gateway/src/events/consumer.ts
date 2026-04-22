@@ -592,6 +592,8 @@ export class EventConsumer {
       for (const candidate of offeredDrivers) {
         this.socketServer.emitToDriver(candidate.userId, 'NEW_RIDE_AVAILABLE', {
           ...baseNotification,
+          distanceFromDriverMeters: Math.round(candidate.distanceKm * 1000),
+          durationFromDriverSeconds: Math.max(60, Math.round(candidate.etaMinutes * 60)),
           etaMinutes: candidate.etaMinutes,
           etaText: candidate.etaText,
           driverScore: candidate.score.toFixed(3),

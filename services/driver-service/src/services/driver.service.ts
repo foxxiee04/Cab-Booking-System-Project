@@ -147,20 +147,48 @@ export class DriverService {
     return this.fetchUserProfileFromAuthService(userId);
   }
 
-  private async getDriverCompletedRideCount(driverId: string): Promise<number> {
+  private normalizeIds(ids: Array<string | null | undefined>): string[] {
+    return [...new Set(
+      ids
+        .map((id) => id?.trim())
+        .filter((id): id is string => Boolean(id))
+    )];
+  }
+
+  private async getDriverCompletedRideCounts(driverIds: string[]): Promise<Record<string, number>> {
+    const normalizedDriverIds = this.normalizeIds(driverIds);
+
+    if (normalizedDriverIds.length === 0) {
+      return {};
+    }
+
     try {
-      const response = await axios.get(`${config.services.ride}/internal/drivers/${driverId}/stats`, {
+      const response = await axios.get(`${config.services.ride}/internal/drivers/stats`, {
         timeout: 3000,
         headers: {
           'x-internal-token': config.internalServiceToken,
         },
+        params: {
+          ids: normalizedDriverIds.join(','),
+        },
       });
 
-      return response.data?.data?.totalCompletedRides ?? 0;
+      return response.data?.data?.counts ?? {};
     } catch (error) {
-      logger.warn(`Failed to hydrate completed ride count for driver ${driverId}:`, error);
-      return 0;
+      logger.warn(`Failed to hydrate completed ride counts for drivers ${normalizedDriverIds.join(', ')}:`, error);
+      return {};
     }
+  }
+
+  private async getDriverCompletedRideCount(driverId: string, fallbackDriverIds: Array<string | null | undefined> = []): Promise<number> {
+    const actorIds = this.normalizeIds([driverId, ...fallbackDriverIds]);
+    const rideCounts = await this.getDriverCompletedRideCounts(actorIds);
+
+    return actorIds.reduce((total, actorId) => total + (rideCounts[actorId] ?? 0), 0);
+  }
+
+  private getDriverTotalRides(driver: { id: string; userId?: string | null }, rideCounts: Record<string, number>): number {
+    return (rideCounts[driver.id] ?? 0) + (driver.userId ? rideCounts[driver.userId] ?? 0 : 0);
   }
 
   async getEnrichedDriverById(driverId: string): Promise<any | null> {
@@ -194,7 +222,7 @@ export class DriverService {
       return null;
     }
 
-    const totalCompletedRides = await this.getDriverCompletedRideCount(driver.id);
+    const totalCompletedRides = await this.getDriverCompletedRideCount(driver.id, [driver.userId]);
 
     return {
       id: driver.id,
@@ -482,13 +510,27 @@ export class DriverService {
     status?: DriverStatus;
     availabilityStatus?: AvailabilityStatus;
   }): Promise<any[]> {
-    return prisma.driver.findMany({
+    const drivers = await prisma.driver.findMany({
       where: {
         status: filters?.status,
         availabilityStatus: filters?.availabilityStatus,
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    const rideActorIds = drivers.reduce<string[]>((ids, driver) => {
+      ids.push(driver.id);
+      if (driver.userId) {
+        ids.push(driver.userId);
+      }
+      return ids;
+    }, []);
+    const rideCounts = await this.getDriverCompletedRideCounts(rideActorIds);
+
+    return drivers.map((driver) => ({
+      ...driver,
+      totalRides: this.getDriverTotalRides(driver, rideCounts),
+    }));
   }
 }
 

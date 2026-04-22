@@ -16,6 +16,7 @@ import {
   registerCompleteSchema,
 } from '../validators/auth.validator';
 import { updateProfileSchema } from '../dto/auth.dto';
+import { UserRole } from '../generated/prisma-client';
 import { logger } from '../utils/logger';
 
 export class AuthController {
@@ -475,8 +476,12 @@ export class AuthController {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
+      const roleParam = typeof req.query.role === 'string' ? req.query.role.toUpperCase() : undefined;
+      const role = roleParam === 'CUSTOMER' || roleParam === 'DRIVER' || roleParam === 'ADMIN'
+        ? roleParam as UserRole
+        : undefined;
 
-      const { users, total } = await this.authService.getUsers(page, limit);
+      const { users, total } = await this.authService.getUsers(page, limit, role);
 
       res.json({
         success: true,

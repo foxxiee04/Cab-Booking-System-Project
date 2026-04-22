@@ -126,7 +126,7 @@ class DriverSocketService {
     });
 
     // Listen for new ride requests - match backend event name
-    this.socket.on('NEW_RIDE_AVAILABLE', (data: { rideId: string; customerId: string; pickup: any; dropoff: any; estimatedFare?: number; vehicleType?: string; distance?: number; duration?: number; timeoutSeconds?: number; customer?: any }) => {
+    this.socket.on('NEW_RIDE_AVAILABLE', (data: { rideId: string; customerId: string; pickup: any; dropoff: any; estimatedFare?: number; vehicleType?: string; distance?: number; duration?: number; distanceFromDriverMeters?: number; durationFromDriverSeconds?: number; etaMinutes?: number; timeoutSeconds?: number; customer?: any }) => {
       console.log('🚗 New ride available:', data);
 
       if (!data?.rideId || !data?.customerId) {
@@ -153,6 +153,9 @@ class DriverSocketService {
         distance: data.distance,
         duration: data.duration,
         estimatedDuration: data.duration,
+        distanceFromDriverMeters: data.distanceFromDriverMeters,
+        durationFromDriverSeconds: data.durationFromDriverSeconds,
+        etaMinutes: data.etaMinutes,
         status: 'PENDING',
         customer: data.customer ? {
           firstName: data.customer.firstName || '',

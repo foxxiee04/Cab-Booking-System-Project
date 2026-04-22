@@ -101,6 +101,9 @@ export interface Ride {
   distance?: number;
   duration?: number;
   estimatedDuration?: number;
+  distanceFromDriverMeters?: number;
+  durationFromDriverSeconds?: number;
+  etaMinutes?: number;
   paymentMethod?: PaymentMethod;
   paymentStatus?: 'PENDING' | 'COMPLETED' | 'FAILED';
   createdAt?: string;
