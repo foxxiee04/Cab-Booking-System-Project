@@ -406,11 +406,6 @@ const Dashboard: React.FC = () => {
     } catch (error: any) {
       const errorMessage = error.response?.data?.error?.message || t('dashboard.statusChangeFailed');
       setError(errorMessage);
-      
-      // Check if error is due to approval status
-      if (errorMessage.includes('approved') || errorMessage.includes('PENDING')) {
-        setError(t('dashboard.needApproval'));
-      }
     } finally {
       setLoading(false);
     }
@@ -621,9 +616,9 @@ const Dashboard: React.FC = () => {
                         {ride.fare != null && ride.fare > 0 ? (
                           <>
                             <Chip size="small" color="success" variant="outlined" icon={<AttachMoneyRounded />}
-                              label={`Tổng: ${formatCurrency(ride.fare)}`} sx={{ fontWeight: 700 }} />
+                              label={`Cước: ${formatCurrency(ride.fare)}`} sx={{ fontWeight: 700 }} />
                             <Chip size="small" color="primary" variant="filled" icon={<RouteRounded />}
-                              label={`Hoa hồng: ${formatCurrency(Math.round(ride.fare * 0.85))}`} sx={{ fontWeight: 700 }} />
+                              label={`Nhận: ${formatCurrency(Math.round(ride.fare * 0.8))}`} sx={{ fontWeight: 700 }} />
                           </>
                         ) : (
                           <Chip size="small" icon={<AttachMoneyRounded />} label="Giá đang tải..." variant="outlined" />

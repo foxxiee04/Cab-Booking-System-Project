@@ -1,12 +1,13 @@
 import { Request, Response } from 'express';
 import { notificationService } from '../services/notification.service';
 import { NotificationType, NotificationPriority } from '../models/notification.model';
+import { AuthenticatedRequest } from '../middleware/auth';
 
 export const notificationController = {
   // Get user notifications
-  async getUserNotifications(req: Request, res: Response) {
+  async getUserNotifications(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = req.headers['x-user-id'] as string;
+      const userId = req.user?.userId;
       if (!userId) {
         return res.status(401).json({ error: 'Unauthorized' });
       }

@@ -241,6 +241,7 @@ services:
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
       RIDE_SERVICE_URL: http://ride-service:3002
       PAYMENT_SERVICE_URL: http://payment-service:3004
+      WALLET_SERVICE_URL: http://wallet-service:3006
       USER_SERVICE_URL: http://user-service:3007
       AUTH_SERVICE_URL: http://auth-service:3001
     depends_on:

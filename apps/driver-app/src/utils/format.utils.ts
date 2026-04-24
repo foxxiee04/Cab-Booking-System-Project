@@ -27,6 +27,27 @@ export const formatPhoneNumber = (phone: string): string => {
   return phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3');
 };
 
+const LICENSE_PLATE_REGEX = /^\d{2}[A-Z]{1,2}[-.\s]?\d{5}(\.[0-9]{2})?$/;
+
+export const sanitizeLicensePlateInput = (licensePlate: string): string => {
+  const normalized = licensePlate.toUpperCase().replace(/\s+/g, '');
+  return normalized.replace(/[^0-9A-Z.-]/g, '').slice(0, 12);
+};
+
+export const isValidLicensePlate = (licensePlate: string): boolean => {
+  return LICENSE_PLATE_REGEX.test(licensePlate.trim().toUpperCase());
+};
+
+export const normalizeLicensePlate = (licensePlate: string): string => {
+  const raw = sanitizeLicensePlateInput(licensePlate).trim();
+  const match = raw.match(/^(\d{2}[A-Z]{1,2})[-.\s]?(\d{5})(\.[0-9]{2})?$/);
+  if (!match) {
+    return raw.replace(/\s+/g, '');
+  }
+  const [, prefix, digits, suffix] = match;
+  return `${prefix}-${digits}${suffix ?? ''}`;
+};
+
 // Get vehicle type label
 export const getVehicleTypeLabel = (type?: VehicleType): string => {
   if (!type) return i18n.t('vehicle.CAR_4');

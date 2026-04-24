@@ -37,16 +37,16 @@ describe('CommissionService — base rates', () => {
     expect(result.platformFee).toBe(20_000);
   });
 
-  it('applies COMFORT rate (18 %)', () => {
+  it('applies COMFORT rate (20 %)', () => {
     const result = svc.calculateCommission(100_000, ctx({ vehicleType: 'COMFORT' }));
-    expect(result.baseCommissionRate).toBeCloseTo(0.18);
-    expect(result.platformFee).toBe(18_000);
+    expect(result.baseCommissionRate).toBeCloseTo(0.20);
+    expect(result.platformFee).toBe(20_000);
   });
 
-  it('applies PREMIUM rate (15 %)', () => {
+  it('applies PREMIUM rate (20 %)', () => {
     const result = svc.calculateCommission(100_000, ctx({ vehicleType: 'PREMIUM' }));
-    expect(result.baseCommissionRate).toBeCloseTo(0.15);
-    expect(result.platformFee).toBe(15_000);
+    expect(result.baseCommissionRate).toBeCloseTo(0.20);
+    expect(result.platformFee).toBe(20_000);
   });
 
   it('falls back to ECONOMY rate for unknown vehicle type', () => {
@@ -60,29 +60,29 @@ describe('CommissionService — base rates', () => {
 describe('CommissionService — dynamic rate modifier', () => {
   const svc = makeSvc();
 
-  it('no adjustment when surge = 1.0', () => {
+  it('keeps a flat rate when surge = 1.0', () => {
     const result = svc.calculateCommission(100_000, ctx({ surgeMultiplier: 1.0 }));
     expect(result.breakdown.dynamicAdjustment).toBe(0);
     expect(result.commissionRate).toBeCloseTo(0.20);
   });
 
-  it('−1 pp at surge 1.1', () => {
+  it('keeps a flat rate when surge = 1.1', () => {
     const result = svc.calculateCommission(100_000, ctx({ surgeMultiplier: 1.1 }));
-    expect(result.breakdown.dynamicAdjustment).toBeCloseTo(-0.01);
-    expect(result.commissionRate).toBeCloseTo(0.19);
-    expect(result.platformFee).toBe(19_000);
+    expect(result.breakdown.dynamicAdjustment).toBe(0);
+    expect(result.commissionRate).toBeCloseTo(0.20);
+    expect(result.platformFee).toBe(20_000);
   });
 
-  it('−2 pp at surge 1.3', () => {
+  it('keeps a flat rate when surge = 1.3', () => {
     const result = svc.calculateCommission(100_000, ctx({ surgeMultiplier: 1.3 }));
-    expect(result.breakdown.dynamicAdjustment).toBeCloseTo(-0.02);
-    expect(result.commissionRate).toBeCloseTo(0.18);
+    expect(result.breakdown.dynamicAdjustment).toBe(0);
+    expect(result.commissionRate).toBeCloseTo(0.20);
   });
 
-  it('−3 pp at surge 1.5', () => {
+  it('keeps a flat rate when surge = 1.5', () => {
     const result = svc.calculateCommission(100_000, ctx({ surgeMultiplier: 1.5 }));
-    expect(result.breakdown.dynamicAdjustment).toBeCloseTo(-0.03);
-    expect(result.commissionRate).toBeCloseTo(0.17);
+    expect(result.breakdown.dynamicAdjustment).toBe(0);
+    expect(result.commissionRate).toBeCloseTo(0.20);
   });
 
   it('effective rate is clamped to minimum 5 %', () => {
@@ -297,9 +297,9 @@ describe('CommissionService — end-to-end scenario', () => {
       },
     });
 
-    // Effective rate: 15 % − 3 pp = 12 %
-    expect(result.commissionRate).toBeCloseTo(0.12);
-    expect(result.platformFee).toBe(Math.round(300_000 * 0.12));
+    // Flat rate 20 % across vehicle types
+    expect(result.commissionRate).toBeCloseTo(0.20);
+    expect(result.platformFee).toBe(Math.round(300_000 * 0.20));
 
     // Bonuses: highRating + highAcceptance
     const inc = DEFAULT_COMMISSION_CONFIG.incentive;

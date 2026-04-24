@@ -8,6 +8,10 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Grid,
   List,
   ListItem,
@@ -28,12 +32,13 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { authApi } from '../api/auth.api';
 import { driverApi } from '../api/driver.api';
 import { updateUser } from '../store/auth.slice';
-import { setProfile } from '../store/driver.slice';
-import { getVehicleTypeLabel } from '../utils/format.utils';
+import { setOnlineStatus, setProfile } from '../store/driver.slice';
+import { walletApi, WalletBalance } from '../api/wallet.api';
+import { formatCurrency, getVehicleTypeLabel } from '../utils/format.utils';
 
 const APPROVAL_META: Record<string, { label: string; color: 'success' | 'warning' | 'error' | 'default' }> = {
-  APPROVED: { label: 'Trạng thái: Đã duyệt', color: 'success' },
-  PENDING: { label: 'Trạng thái: Chờ duyệt', color: 'warning' },
+  APPROVED: { label: 'Trạng thái: Sẵn sàng hoạt động', color: 'success' },
+  PENDING: { label: 'Trạng thái: Hồ sơ đang được theo dõi', color: 'warning' },
   REJECTED: { label: 'Trạng thái: Cần bổ sung', color: 'error' },
   SUSPENDED: { label: 'Trạng thái: Tạm khóa', color: 'default' },
 };
@@ -42,7 +47,7 @@ const Account: React.FC = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { user } = useAppSelector((state) => state.auth);
-  const { profile } = useAppSelector((state) => state.driver);
+  const { profile, isOnline } = useAppSelector((state) => state.driver);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -51,6 +56,9 @@ const Account: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [passwordEditing, setPasswordEditing] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [walletSummary, setWalletSummary] = useState<WalletBalance | null>(null);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deactivateLoading, setDeactivateLoading] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -68,11 +76,16 @@ const Account: React.FC = () => {
     setError('');
 
     try {
-      const [meResult, profileResult] = await Promise.all([authApi.getMe(), driverApi.getProfile()]);
+      const [meResult, profileResult, walletResult] = await Promise.all([
+        authApi.getMe(),
+        driverApi.getProfile(),
+        walletApi.getBalance(),
+      ]);
       if (meResult.success) {
         dispatch(updateUser(meResult.data.user));
       }
       dispatch(setProfile(profileResult.data.driver));
+      setWalletSummary(walletResult.data?.data ?? (walletResult.data as any));
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể tải thông tin tài khoản.');
     } finally {
@@ -105,6 +118,12 @@ const Account: React.FC = () => {
   const vehicleSummary = [profile?.vehicleModel]
     .filter(Boolean)
     .join(' ');
+  const settlementPreview = Math.max(
+    0,
+    Number(walletSummary?.lockedBalance ?? 0)
+      + Number(walletSummary?.availableBalance ?? 0)
+      - Number(walletSummary?.debt ?? 0),
+  );
 
   const handleChange = (field: keyof typeof formData) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({ ...prev, [field]: event.target.value }));
@@ -176,6 +195,31 @@ const Account: React.FC = () => {
       setError(err.response?.data?.error?.message || 'Không thể cập nhật mật khẩu.');
     } finally {
       setPasswordSaving(false);
+    }
+  };
+
+  const handleDeactivateDriver = async () => {
+    setError('');
+    setSuccess('');
+    setDeactivateLoading(true);
+
+    try {
+      if (isOnline) {
+        const offlineResponse = await driverApi.goOffline();
+        dispatch(setProfile(offlineResponse.data.driver));
+        dispatch(setOnlineStatus(false));
+      }
+
+      const response = await walletApi.deactivate();
+      const result = response.data?.data ?? (response.data as any);
+      setDeactivateOpen(false);
+      await refreshAccount();
+      setSuccess(`Đã ngừng hoạt động tài xế. Hệ thống đã đối soát và hoàn trả ${formatCurrency(result.refundedAmount || 0)}.`);
+      navigate('/wallet');
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.response?.data?.error?.message || 'Không thể ngừng hoạt động tài xế.');
+    } finally {
+      setDeactivateLoading(false);
     }
   };
 
@@ -281,14 +325,14 @@ const Account: React.FC = () => {
                 <ListItemIcon><DirectionsCarRounded color="primary" /></ListItemIcon>
                 <ListItemText
                   primary={`Loại xe: ${vehicleSummary || 'Thông tin phương tiện'}`}
-secondary={profile?.licensePlate ? `Biển số ${profile.licensePlate}` : 'Bổ sung thông tin xe, GPLX và trạng thái duyệt hồ sơ.'}
+secondary={profile?.licensePlate ? `Biển số ${profile.licensePlate}` : 'Bổ sung thông tin xe, GPLX và trạng thái hồ sơ tài xế.'}
                 />
               </ListItem>
               <ListItem disableGutters>
                 <ListItemIcon><ShieldRounded color="primary" /></ListItemIcon>
                 <ListItemText
                   primary={approvalMeta.label}
-                  secondary={profile?.vehicleType ? `Loại xe: ${getVehicleTypeLabel(profile.vehicleType)}` : 'Theo dõi trạng thái duyệt hồ sơ và hồ sơ xe.'}
+                  secondary={profile?.vehicleType ? `Loại xe: ${getVehicleTypeLabel(profile.vehicleType)}` : 'Theo dõi trạng thái hồ sơ và ví tài xế.'}
                 />
               </ListItem>
             </List>
@@ -319,6 +363,39 @@ secondary={profile?.licensePlate ? `Biển số ${profile.licensePlate}` : 'Bổ
                 />
               </ListItem>
             </List>
+          </CardContent>
+        </Card>
+
+        <Card sx={{ borderRadius: 5, border: '1px solid #fecaca', bgcolor: '#fff7f7' }}>
+          <CardContent>
+            <Typography variant="h6" fontWeight={800} sx={{ mb: 0.75 }}>
+              Ngừng làm tài xế
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              Khi ngừng hoạt động, hệ thống sẽ đối soát tự động theo công thức: ký quỹ + số dư khả dụng - công nợ. Không cần admin duyệt.
+            </Typography>
+            <Stack spacing={0.75} sx={{ mb: 2 }}>
+              {[
+                ['Ký quỹ đang giữ', formatCurrency(Number(walletSummary?.lockedBalance ?? 0))],
+                ['Số dư khả dụng', formatCurrency(Number(walletSummary?.availableBalance ?? 0))],
+                ['Công nợ hiện tại', `-${formatCurrency(Number(walletSummary?.debt ?? 0))}`],
+                ['Hoàn dự kiến', formatCurrency(settlementPreview)],
+              ].map(([label, value]) => (
+                <Stack key={label} direction="row" justifyContent="space-between">
+                  <Typography variant="body2" color="text.secondary">{label}</Typography>
+                  <Typography variant="body2" fontWeight={800}>{value}</Typography>
+                </Stack>
+              ))}
+            </Stack>
+            <Button
+              variant="outlined"
+              color="error"
+              sx={{ borderRadius: 3 }}
+              disabled={deactivateLoading || loading}
+              onClick={() => setDeactivateOpen(true)}
+            >
+              Ngừng hoạt động tài xế
+            </Button>
           </CardContent>
         </Card>
 
@@ -402,6 +479,31 @@ secondary={profile?.licensePlate ? `Biển số ${profile.licensePlate}` : 'Bổ
           </CardContent>
         </Card>
       </Stack>
+
+      <Dialog open={deactivateOpen} onClose={() => !deactivateLoading && setDeactivateOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800 }}>Xác nhận ngừng hoạt động</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.2} sx={{ pt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              Hệ thống sẽ tự động đối soát ví của bạn và hoàn trả phần còn lại về tài khoản cá nhân sau khi trừ công nợ.
+            </Typography>
+            <Alert severity="info" sx={{ borderRadius: 2 }}>
+              Số tiền hoàn dự kiến: <strong>{formatCurrency(settlementPreview)}</strong>
+            </Alert>
+            {isOnline && (
+              <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                Tài khoản đang trực tuyến. Hệ thống sẽ tự chuyển sang ngoại tuyến trước khi đối soát.
+              </Alert>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setDeactivateOpen(false)} disabled={deactivateLoading}>Hủy</Button>
+          <Button color="error" variant="contained" onClick={handleDeactivateDriver} disabled={deactivateLoading}>
+            {deactivateLoading ? <CircularProgress size={20} color="inherit" /> : 'Xác nhận ngừng hoạt động'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

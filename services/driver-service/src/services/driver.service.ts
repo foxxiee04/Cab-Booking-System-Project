@@ -75,7 +75,7 @@ export class DriverService {
     const driver = await prisma.driver.create({
       data: {
         userId: input.userId,
-        status: DriverStatus.PENDING,
+        status: DriverStatus.APPROVED,
         availabilityStatus: AvailabilityStatus.OFFLINE,
         vehicleType: input.vehicle.type as VehicleType,
         vehicleBrand: input.vehicle.brand,
@@ -256,11 +256,12 @@ export class DriverService {
     }
 
     // Check if driver is approved
-    if (driver.status !== DriverStatus.APPROVED) {
-      throw new Error(`Driver must be approved before going online. Current status: ${driver.status}`);
+    if (driver.status === DriverStatus.REJECTED || driver.status === DriverStatus.SUSPENDED) {
+      throw new Error(`Driver account is not allowed to go online. Current status: ${driver.status}`);
     }
 
-    const walletResponse = await axios.get(`${config.services.payment}/api/wallet/driver/${driver.id}/status`, {
+    // Check wallet status via wallet-service (keyed by userId, the authoritative wallet)
+    const walletResponse = await axios.get(`${config.services.wallet}/internal/driver/${userId}/can-accept`, {
       timeout: 5000,
       headers: {
         'x-internal-token': config.internalServiceToken,
@@ -446,35 +447,35 @@ export class DriverService {
     }
 
     const updateData: Record<string, any> = {};
-    let needsReapproval = false;
+    let shouldResetAvailability = false;
 
     if (data.vehicleType !== undefined) {
       updateData.vehicleType = data.vehicleType;
-      needsReapproval = true;
+      shouldResetAvailability = true;
     }
     if (data.vehicleMake !== undefined) {
       updateData.vehicleBrand = data.vehicleMake;
-      needsReapproval = true;
+      shouldResetAvailability = true;
     }
     if (data.vehicleModel !== undefined) {
       updateData.vehicleModel = data.vehicleModel;
-      needsReapproval = true;
+      shouldResetAvailability = true;
     }
     if (data.vehicleColor !== undefined) {
       updateData.vehicleColor = data.vehicleColor;
-      needsReapproval = true;
+      shouldResetAvailability = true;
     }
     if (data.vehicleYear !== undefined) {
       updateData.vehicleYear = data.vehicleYear;
-      needsReapproval = true;
+      shouldResetAvailability = true;
     }
     if (data.licensePlate !== undefined) {
       updateData.vehiclePlate = data.licensePlate;
-      needsReapproval = true;
+      shouldResetAvailability = true;
     }
     if (data.vehicleImageUrl !== undefined) {
       updateData.vehicleImageUrl = data.vehicleImageUrl;
-      needsReapproval = true;
+      shouldResetAvailability = true;
     }
     if (data.licenseClass !== undefined) {
       const normalizedLicenseClass = normalizeLicenseClass(data.licenseClass);
@@ -482,19 +483,18 @@ export class DriverService {
         throw new Error('License class is invalid');
       }
       updateData.licenseClass = normalizedLicenseClass;
-      needsReapproval = true;
+      shouldResetAvailability = true;
     }
     if (data.licenseNumber !== undefined) {
       updateData.licenseNumber = data.licenseNumber;
-      needsReapproval = true;
+      shouldResetAvailability = true;
     }
     if (data.licenseExpiryDate !== undefined) {
       updateData.licenseExpiryDate = new Date(data.licenseExpiryDate);
-      needsReapproval = true;
+      shouldResetAvailability = true;
     }
 
-    if (needsReapproval) {
-      updateData.status = DriverStatus.PENDING;
+    if (shouldResetAvailability) {
       updateData.availabilityStatus = AvailabilityStatus.OFFLINE;
       updateData.licenseVerified = false;
       updateData.currentRideId = null;

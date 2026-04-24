@@ -3,26 +3,21 @@ import {
   Alert,
   Avatar,
   Box,
-  Button,
   Card,
   CardContent,
   Chip,
   CircularProgress,
   Divider,
   Grid,
-  MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import {
   BadgeRounded,
   DirectionsBikeRounded,
-  EditRounded,
   StarRounded,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { driverApi } from '../api/driver.api';
 import { setProfile } from '../store/driver.slice';
@@ -70,7 +65,6 @@ type ProfileFormData = {
 
 const Profile: React.FC = () => {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const { profile } = useAppSelector((state) => state.driver);
   const user = useAppSelector((state) => state.auth.user);
   const { t } = useTranslation();
@@ -78,8 +72,6 @@ const Profile: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState<ProfileFormData>({
     vehicleType: 'CAR_4',
     vehicleMake: '',
@@ -142,61 +134,7 @@ const Profile: React.FC = () => {
       ? { color: 'error' as const, label: 'Bị từ chối' }
       : approvalStatus === 'SUSPENDED'
         ? { color: 'default' as const, label: 'Tạm khóa' }
-        : { color: 'warning' as const, label: 'Chờ duyệt hồ sơ' };
-
-  const handleChange = (field: keyof ProfileFormData) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    let value: ProfileFormData[keyof ProfileFormData];
-
-    if (field === 'vehicleYear') {
-      value = Number(event.target.value);
-    } else if (field === 'vehicleType') {
-      value = event.target.value as VehicleType;
-    } else if (field === 'licenseClass') {
-      value = event.target.value as LicenseClass;
-    } else {
-      value = event.target.value;
-    }
-
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleSave = async () => {
-    setError('');
-    setSuccess('');
-
-    if (!formData.vehicleMake.trim() || !formData.vehicleModel.trim() || !formData.vehicleColor.trim() || !formData.licensePlate.trim() || !formData.licenseNumber.trim() || !formData.licenseExpiryDate || !formData.licenseClass) {
-      setError(t('profile.fillRequired', 'Vui lòng nhập đầy đủ các trường hồ sơ xe.'));
-      return;
-    }
-
-    if (!/^\d{12}$/.test(formData.licenseNumber.trim())) {
-      setError(t('profile.licenseNumberInvalid', 'Số GPLX phải gồm đúng 12 chữ số.'));
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const response = await driverApi.updateProfile({
-        vehicleType: formData.vehicleType as any,
-        vehicleMake: formData.vehicleMake.trim(),
-        vehicleModel: formData.vehicleModel.trim(),
-        vehicleColor: formData.vehicleColor.trim(),
-        vehicleYear: formData.vehicleYear,
-        licensePlate: formData.licensePlate.trim(),
-        licenseClass: formData.licenseClass,
-        licenseNumber: formData.licenseNumber.trim(),
-        licenseExpiryDate: formData.licenseExpiryDate,
-      });
-
-      dispatch(setProfile(response.data.driver));
-      setEditing(false);
-      setSuccess(t('profile.saveSuccess', 'Đã cập nhật hồ sơ tài xế.'));
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || t('profile.saveFailed', 'Không thể cập nhật hồ sơ tài xế.'));
-    } finally {
-      setSaving(false);
-    }
-  };
+        : { color: 'warning' as const, label: 'Hồ sơ đang được theo dõi' };
 
   useEffect(() => {
     if (!availableLicenseClasses.includes(formData.licenseClass)) {

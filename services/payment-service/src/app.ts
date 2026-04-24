@@ -43,7 +43,7 @@ export function createApp({ prisma, eventPublisher, getReadiness }: PaymentAppOp
   });
 
   app.use('/api/payments', createPaymentRoutes(paymentService));
-  app.use('/api/wallet', createWalletRoutes(prisma));
+  app.use('/api/wallet', createWalletRoutes(prisma, eventPublisher));
   app.use('/api/voucher', createVoucherRoutes(prisma));
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

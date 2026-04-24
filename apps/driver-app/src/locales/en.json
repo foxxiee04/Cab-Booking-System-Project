@@ -41,7 +41,7 @@
     "licenseExpiry": "License Expiry Date",
     "info": "All information will be verified before you can accept rides. Make sure all details are accurate.",
     "submit": "Complete Profile",
-    "successMessage": "Profile completed successfully! Your profile is pending admin approval. You will be notified once approved."
+    "successMessage": "Profile completed successfully. Next, top up at least 300,000 VND to activate your driver wallet and go online."
   },
   "dashboard": {
     "title": "Driver Dashboard",
@@ -62,7 +62,7 @@
     "gpsError": "Failed to get location. Please enable GPS.",
     "statusChangeFailed": "Failed to change status",
     "acceptRideFailed": "Failed to accept ride",
-    "needApproval": "Your driver profile is pending admin approval. You cannot go online until approved. Please wait for admin notification."
+    "needApproval": "Your driver account is not eligible to go online yet. Please review your profile and wallet status."
   },
   "rideRequest": {
     "title": "New Ride Request",
@@ -128,7 +128,7 @@
     "saveSuccess": "Driver profile updated successfully.",
     "saveFailed": "Failed to update driver profile.",
     "fillRequired": "Please fill in all vehicle profile fields.",
-    "pendingApproval": "Pending approval",
+    "pendingApproval": "Profile under review",
     "approved": "Approved",
     "rejected": "Rejected",
     "suspended": "Suspended",

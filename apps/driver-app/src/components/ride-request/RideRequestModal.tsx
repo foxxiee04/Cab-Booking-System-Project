@@ -67,16 +67,12 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
   loading = false,
 }) => {
   const { t } = useTranslation();
-  const { currentLocation, earnings } = useAppSelector((state) => state.driver);
+  const { currentLocation } = useAppSelector((state) => state.driver);
   const [timeLeft, setTimeLeft] = useState(timeoutSeconds);
   const [mapKey, setMapKey] = useState(0);
   const timeoutHandledForRideRef = useRef<string | null>(null);
 
-  // Derive driver share from average commission rate of recent trips
-  const avgCommissionRate = earnings?.recentTrips?.length
-    ? earnings.recentTrips.reduce((s, t) => s + (t.commissionRate || 0.2), 0) / earnings.recentTrips.length
-    : 0.2;
-  const driverShare = 1 - avgCommissionRate;
+  const driverShare = 0.8;
 
   useEffect(() => {
     if (open && ride) {

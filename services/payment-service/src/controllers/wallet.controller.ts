@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { Request, Response, NextFunction } from 'express';
 import { WalletService } from '../services/wallet.service';
 import { IncentiveService } from '../services/incentive.service';
@@ -7,12 +8,53 @@ import { momoGateway } from '../services/momo.gateway';
 import { vnpayGateway } from '../services/vnpay.gateway';
 import { logger } from '../utils/logger';
 import { resolveDriverId } from '../utils/resolve-driver-id';
+import { EventPublisher } from '../events/publisher';
+import { config } from '../config';
 
 export class WalletController {
   constructor(
     private readonly walletService: WalletService,
     private readonly incentiveService: IncentiveService,
+    private readonly eventPublisher?: EventPublisher,
   ) {}
+
+  /**
+   * Activate wallet-service (wallet_db) after a top-up is confirmed.
+   * Uses a direct HTTP call as the primary path (reliable), with RabbitMQ as backup.
+   * Both paths are idempotent — calling twice with the same orderId is safe.
+   */
+  private async publishTopUpCompleted(
+    driverId: string,
+    amount: number,
+    orderId: string,
+    provider: string,
+    gatewayTxnId?: string,
+  ): Promise<void> {
+    // Primary: direct synchronous HTTP call to wallet-service
+    try {
+      await axios.post(
+        `${config.services.wallet}/internal/topup-completed`,
+        { driverId, amount, orderId, provider, gatewayTxnId },
+        {
+          timeout: 5000,
+          headers: { 'x-internal-token': config.internalServiceToken },
+        },
+      );
+      logger.info(`wallet-service activated directly for orderId=${orderId} driverId=${driverId}`);
+    } catch (err: any) {
+      logger.error('Direct wallet activation failed (will fall back to event):', err?.message);
+    }
+
+    // Secondary: RabbitMQ event for eventual consistency / redundancy
+    if (!this.eventPublisher) return;
+    try {
+      await this.eventPublisher.publish('wallet.topup.completed', {
+        orderId, driverId, amount, provider, gatewayTxnId,
+      }, orderId);
+    } catch (err) {
+      logger.error('Failed to publish wallet.topup.completed event:', err);
+    }
+  }
 
   private extractTopUpIdFromVnpayOrderInfo(orderInfo?: string): string {
     if (!orderInfo) {
@@ -67,6 +109,10 @@ export class WalletController {
         transactionId || `${order.provider}_RETURN_${Date.now()}`,
         JSON.stringify(gatewayMetadata),
       );
+      // Publish event so wallet-service (wallet_db) credits the driver's balance.
+      // IPN handlers do the same — publishTopUpCompleted uses orderId as idempotency key
+      // so a duplicate event (if IPN also fires) is safely de-duped by the consumer.
+      await this.publishTopUpCompleted(order.driverId, confirmed.amount, order.orderId, order.provider, transactionId);
       const walletStatus = await this.walletService.getDriverWalletStatus(order.driverId);
       return {
         paid: true,
@@ -222,7 +268,10 @@ export class WalletController {
    */
   initTopUp = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const driverId = await resolveDriverId(req.user!.userId);
+      // NOTE: wallet-service (wallet_db) is keyed by auth userId (JWT sub) today.
+      // Using resolveDriverId() here would credit a different wallet row and make
+      // the driver-app balance look "stuck" after top-up.
+      const driverId = req.user!.userId;
       const amount = Number(req.body?.amount);
       const provider = String(req.body?.provider ?? '').toUpperCase() as 'MOMO' | 'VNPAY';
       const returnUrl = String(req.body?.returnUrl ?? '');
@@ -290,11 +339,12 @@ export class WalletController {
       if (resultCode === 0) {
         // Success
         const transId = String(body?.transId ?? body?.requestId ?? '');
-        await this.walletService.confirmTopUp(
+        const confirmed = await this.walletService.confirmTopUp(
           orderId,
           transId,
           JSON.stringify(body),
         );
+        await this.publishTopUpCompleted(confirmed.driverId, confirmed.amount, orderId, 'MOMO', transId);
         logger.info(`MoMo top-up IPN: success orderId=${orderId} transId=${transId}`);
       } else {
         // Failure
@@ -424,11 +474,12 @@ export class WalletController {
       }
 
       if (result.success) {
-        await this.walletService.confirmTopUp(
+        const confirmed = await this.walletService.confirmTopUp(
           order.orderId,
           result.transactionId,
           JSON.stringify(query),
         );
+        await this.publishTopUpCompleted(confirmed.driverId, confirmed.amount, order.orderId, 'VNPAY', result.transactionId);
         logger.info(`VNPay top-up IPN: success orderId=${order.orderId} transId=${result.transactionId}`);
       } else {
         await this.walletService.failTopUp(
@@ -544,7 +595,7 @@ export class WalletController {
         });
       }
 
-      const driverId = await resolveDriverId(req.user!.userId);
+      const driverId = req.user!.userId; // wallet orders are keyed by userId, not driverId
       const { topUpId, success: paid } = req.body;
 
       if (!topUpId) {
@@ -575,6 +626,7 @@ export class WalletController {
           `SANDBOX_MOCK_${Date.now()}`,
           JSON.stringify({ sandbox: true, confirmedAt: new Date().toISOString() }),
         );
+        await this.publishTopUpCompleted(result.driverId, result.amount, order.orderId, order.provider, result.topUpId);
         logger.info(`Sandbox top-up confirmed: topUpId=${topUpId} amount=${order.amount}`);
         return res.json({ success: true, data: result });
       } else {
@@ -605,8 +657,8 @@ export class WalletController {
         });
       }
 
-      // Only the owning driver can check status
-      const driverId = await resolveDriverId(req.user!.userId);
+      // Only the owning driver can check status; orders are keyed by userId
+      const driverId = req.user!.userId;
       if (order.driverId !== driverId) {
         return res.status(403).json({
           success: false,

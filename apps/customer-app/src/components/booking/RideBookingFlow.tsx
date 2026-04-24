@@ -15,7 +15,6 @@ import {
   Drawer,
   FormControl,
   FormControlLabel,
-  Grid,
   InputAdornment,
   Paper,
   Radio,
@@ -572,118 +571,93 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
         return (
           <Box>
             <Typography variant="h6" gutterBottom fontWeight={800}>
-              Chọn loại xe phù hợp
+              Chọn loại xe
             </Typography>
             {loadingMore && (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                Đang tải thêm giá cho các loại xe còn lại. Bạn vẫn có thể tiếp tục với lựa chọn hiện tại.
+              <Alert severity="info" icon={false} sx={{ mb: 1.5, py: 0.5, borderRadius: 3, fontSize: '0.82rem' }}>
+                Đang tải giá các loại xe còn lại...
               </Alert>
             )}
-            <Grid container spacing={1.4}>
+            <Stack spacing={1.2}>
               {vehicleOptions.map((vehicle) => {
                 const estimate = priceEstimates[vehicle.type];
+                const isSelected = selectedVehicle === vehicle.type;
                 return (
-                  <Grid item xs={12} key={vehicle.type}>
-                    <Card
-                      variant={selectedVehicle === vehicle.type ? 'elevation' : 'outlined'}
-                      sx={{
-                        cursor: estimate ? 'pointer' : 'not-allowed',
-                        opacity: estimate ? 1 : 0.68,
-                        border: selectedVehicle === vehicle.type ? 2 : 1,
-                        borderColor: selectedVehicle === vehicle.type ? 'primary.main' : 'divider',
-                        borderRadius: 4,
-                        boxShadow: selectedVehicle === vehicle.type ? '0 10px 28px rgba(37,99,235,0.18)' : undefined,
-                        transition: 'border-color 160ms ease, box-shadow 180ms ease, transform 180ms ease',
-                        '&:hover': estimate ? {
-                          borderColor: selectedVehicle === vehicle.type ? 'primary.main' : 'primary.light',
-                          transform: 'translateY(-1px)',
-                        } : undefined,
-                      }}
-                      onClick={() => {
-                        if (estimate) {
-                          setSelectedVehicle(vehicle.type);
-                        }
-                      }}
-                    >
-                      <CardContent>
-                        <Box display="flex" alignItems="center" justifyContent="space-between">
-                          <Box display="flex" alignItems="center" gap={2}>
-                            <Box
-                              sx={{
-                                width: 68,
-                                height: 68,
-                                borderRadius: 3,
-                                overflow: 'hidden',
-                                bgcolor: 'grey.100',
-                                border: '1px solid',
-                                borderColor: selectedVehicle === vehicle.type ? 'primary.main' : 'divider',
-                                flexShrink: 0,
-                              }}
-                            >
-                              <Box
-                                component="img"
-                                src={vehicle.imageSrc}
-                                alt={vehicle.name}
-                                sx={{
-                                  width: '100%',
-                                  height: '100%',
-                                  objectFit: 'cover',
-                                  display: 'block',
-                                }}
-                              />
-                            </Box>
-                            <Box>
-                              <Typography variant="h6" fontWeight={800}>{vehicle.name}</Typography>
-                              <Typography variant="body2" color="text.secondary">
-                                {vehicle.description} • {vehicle.capacity} chỗ
-                              </Typography>
-                              {estimate && (
-                                <Stack spacing={0.45} sx={{ mt: 0.75 }}>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Lộ trình dự kiến: {formatEstimateDistance(estimate.distance)} • Di chuyển {formatEstimateDuration(estimate.duration)}
+                  <Card
+                    key={vehicle.type}
+                    variant={isSelected ? 'elevation' : 'outlined'}
+                    sx={{
+                      cursor: estimate ? 'pointer' : 'not-allowed',
+                      opacity: estimate ? 1 : 0.6,
+                      border: isSelected ? 2 : 1,
+                      borderColor: isSelected ? 'primary.main' : 'divider',
+                      borderRadius: 3,
+                      boxShadow: isSelected ? '0 6px 20px rgba(37,99,235,0.16)' : 'none',
+                      transition: 'border-color 140ms ease, box-shadow 160ms ease',
+                      '&:hover': estimate ? { borderColor: 'primary.light' } : undefined,
+                    }}
+                    onClick={() => estimate && setSelectedVehicle(vehicle.type)}
+                  >
+                    <CardContent sx={{ p: '12px 14px !important' }}>
+                      <Box display="flex" alignItems="center" gap={1.5}>
+                        <Box
+                          sx={{
+                            width: 60,
+                            height: 60,
+                            borderRadius: 2.5,
+                            overflow: 'hidden',
+                            bgcolor: 'grey.100',
+                            flexShrink: 0,
+                            border: '1px solid',
+                            borderColor: isSelected ? 'primary.main' : 'divider',
+                          }}
+                        >
+                          <Box
+                            component="img"
+                            src={vehicle.imageSrc}
+                            alt={vehicle.name}
+                            sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                          />
+                        </Box>
+
+                        <Box flexGrow={1} minWidth={0}>
+                          <Box display="flex" alignItems="center" justifyContent="space-between">
+                            <Typography variant="subtitle1" fontWeight={700} lineHeight={1.2}>
+                              {vehicle.name}
+                            </Typography>
+                            <Box textAlign="right" flexShrink={0} ml={1}>
+                              {estimate ? (
+                                <>
+                                  <Typography variant="subtitle1" color="primary" fontWeight={700} lineHeight={1.2}>
+                                    {formatCurrency(estimate.fare)}
                                   </Typography>
-                                  {estimate.estimatedWaitMinutes != null && (
-                                    <Chip
-                                      size="small"
-                                      label={`Ghép tài xế ${Math.max(1, Math.round(estimate.estimatedWaitMinutes))} phút`}
-                                      color={estimate.estimatedWaitMinutes > 8 ? 'warning' : 'default'}
-                                      sx={{ height: 18, fontSize: '0.68rem' }}
-                                    />
+                                  {estimate.surgeMultiplier > 1 && (
+                                    <Chip size="small" label={`×${estimate.surgeMultiplier}`} color="error" sx={{ height: 16, fontSize: '0.65rem', mt: 0.25 }} />
                                   )}
-                                  <Typography variant="caption" color="text.secondary">
-                                    Cước và quãng đường dựa trên tuyến đường hiện tại; thời gian ghép tài xế dựa trên mật độ tài xế gần điểm đón.
-                                  </Typography>
-                                </Stack>
+                                </>
+                              ) : (
+                                <CircularProgress size={16} />
                               )}
                             </Box>
                           </Box>
-                          <Box textAlign="right">
-                            {estimate ? (
-                              <>
-                                <Typography variant="h6" color="primary">
-                                  {formatCurrency(estimate.fare)}
-                                </Typography>
-                                {estimate.surgeMultiplier > 1 && (
-                                  <Chip
-                                    size="small"
-                                    label={`Tăng giá ${estimate.surgeMultiplier}x`}
-                                    color="error"
-                                  />
-                                )}
-                              </>
-                            ) : (
-                              <Typography variant="body2" color="text.secondary">
-                                Tạm thời chưa có giá
-                              </Typography>
-                            )}
-                          </Box>
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.3 }}>
+                            {vehicle.description} • {vehicle.capacity} chỗ
+                          </Typography>
+                          {estimate && (
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.2 }}>
+                              {formatEstimateDistance(estimate.distance)} · {formatEstimateDuration(estimate.duration)}
+                            </Typography>
+                          )}
                         </Box>
-                      </CardContent>
-                    </Card>
-                  </Grid>
+                      </Box>
+                    </CardContent>
+                  </Card>
                 );
               })}
-            </Grid>
+            </Stack>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5, textAlign: 'center' }}>
+              Giá cước ước tính theo tuyến đường hiện tại, có thể thay đổi khi hoàn thành chuyến đi.
+            </Typography>
           </Box>
         );
 

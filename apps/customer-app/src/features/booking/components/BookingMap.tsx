@@ -3,6 +3,7 @@ import {
   Autocomplete,
   Box,
   Chip,
+  CircularProgress,
   IconButton,
   InputAdornment,
   ListItem,
@@ -11,6 +12,7 @@ import {
   Skeleton,
   Stack,
   TextField,
+  Tooltip,
 } from '@mui/material';
 import {
   MyLocationRounded,
@@ -424,9 +426,11 @@ export const BookingMap: React.FC<BookingMapProps> = ({
   const [dropoffOptions, setDropoffOptions] = useState<PlacePredictionOption[]>([]);
   const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [predictionLoading, setPredictionLoading] = useState<Record<SearchField, boolean>>({ pickup: false, dropoff: false });
   const [animatedDriverPosition, setAnimatedDriverPosition] = useState<google.maps.LatLngLiteral | null>(null);
   const [driverHeading, setDriverHeading] = useState(0);
+  const leafletMapRef = useRef<any>(null);
   const searchContextLabel = useMemo(() => getSearchContextLabel(pickup?.address, dropoff?.address), [dropoff?.address, pickup?.address]);
   const visibleNearbyDrivers = nearbyDrivers;
   const showReferenceMarkers = Boolean(pickup || dropoff);
@@ -744,24 +748,39 @@ export const BookingMap: React.FC<BookingMapProps> = ({
   }, [animatedDriverPosition, mode, pickup]);
 
   const handleLocateMe = useCallback(() => {
+    if (locating) return;
+    setLocating(true);
     void (async () => {
       try {
-        const currentLocation = await getCurrentLocation();
+        const currentLocation = await getCurrentLocation({ preferFresh: true });
         const resolvedAddress = await reverseGeocode(currentLocation.lat, currentLocation.lng);
         const location = {
           ...currentLocation,
           address: resolvedAddress || 'Vị trí hiện tại',
         };
 
-        mapRef.current?.panTo(location);
-        mapRef.current?.setZoom(16);
+        // Pan Google Maps if available
+        if (mapRef.current) {
+          mapRef.current.panTo(location);
+          mapRef.current.setZoom(16);
+        }
+        // Pan Leaflet map if available
+        if (leafletMapRef.current) {
+          leafletMapRef.current.setView([location.lat, location.lng], 16, { animate: true });
+        }
+
         commitLocation('pickup', location);
         setPickupInput(location.address || 'Vị trí hiện tại');
-      } catch {
-        onError?.('Không lấy được vị trí hiện tại của bạn. Hãy kiểm tra GPS hoặc nhập địa chỉ thủ công.');
+      } catch (err: any) {
+        const isPermissionDenied = err?.code === 1;
+        onError?.(isPermissionDenied
+          ? 'Bạn đã từ chối quyền truy cập vị trí. Vui lòng bật GPS trong cài đặt trình duyệt.'
+          : 'Không lấy được vị trí hiện tại. Hãy kiểm tra GPS hoặc nhập địa chỉ thủ công.');
+      } finally {
+        setLocating(false);
       }
     })();
-  }, [commitLocation, onError]);
+  }, [commitLocation, locating, onError]);
 
   const searchPanel = (
     <Paper
@@ -892,6 +911,7 @@ export const BookingMap: React.FC<BookingMapProps> = ({
       style={{ width: '100%', height: '100%' }}
       zoomControl
       scrollWheelZoom
+      ref={leafletMapRef}
     >
       <LeafletTileLayer
         attribution={leafletAttribution}
@@ -958,20 +978,32 @@ export const BookingMap: React.FC<BookingMapProps> = ({
         ) : leafletMap}
 
         <Box sx={{ position: 'absolute', right: 16, bottom: 16, zIndex: 2 }}>
-          <IconButton
-            onClick={handleLocateMe}
-            sx={{
-              width: 52,
-              height: 52,
-              backgroundColor: themeMode === 'dark' ? 'rgba(17, 24, 39, 0.9)' : '#ffffff',
-              boxShadow: 4,
-              '&:hover': {
-                backgroundColor: themeMode === 'dark' ? 'rgba(31, 41, 55, 0.95)' : '#f8fafc',
-              },
-            }}
-          >
-            <MyLocationRounded color="primary" />
-          </IconButton>
+          <Tooltip title={locating ? 'Đang định vị...' : 'Vị trí của tôi'} placement="left">
+            <span>
+              <IconButton
+                onClick={handleLocateMe}
+                disabled={locating}
+                sx={{
+                  width: 52,
+                  height: 52,
+                  backgroundColor: themeMode === 'dark' ? 'rgba(17, 24, 39, 0.9)' : '#ffffff',
+                  boxShadow: 4,
+                  '&:hover': {
+                    backgroundColor: themeMode === 'dark' ? 'rgba(31, 41, 55, 0.95)' : '#f8fafc',
+                  },
+                  '&.Mui-disabled': {
+                    backgroundColor: themeMode === 'dark' ? 'rgba(17, 24, 39, 0.7)' : '#f1f5f9',
+                  },
+                }}
+              >
+                {locating ? (
+                  <CircularProgress size={22} color="primary" />
+                ) : (
+                  <MyLocationRounded color="primary" />
+                )}
+              </IconButton>
+            </span>
+          </Tooltip>
         </Box>
 
         {summaryPanel}

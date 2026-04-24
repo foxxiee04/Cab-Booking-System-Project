@@ -323,7 +323,7 @@ const History: React.FC = () => {
                     {getCustomerName(ride)}
                   </Typography>
                   <Typography variant="caption" fontWeight={700} color="primary.main">
-                    {ride.fare ? formatCurrency(ride.fare) : '—'}
+                    {ride.fare ? `Cước: ${formatCurrency(ride.fare)}` : '—'}
                   </Typography>
                   {metrics.distanceMeters && (
                     <Typography variant="caption" color="text.secondary">{formatDistance(metrics.distanceMeters)}</Typography>

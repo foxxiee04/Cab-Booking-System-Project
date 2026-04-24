@@ -534,4 +534,15 @@ export class WalletService {
   async getTopUpOrderByOrderId(orderId: string) {
     return this.prisma.walletTopUpOrder.findUnique({ where: { orderId } });
   }
+
+  /** Fetch the wallet row for a driver (or null if not found). */
+  async getDriverWallet(driverId: string) {
+    return this.prisma.driverWallet.findUnique({ where: { driverId } });
+  }
+
+  /** Adjust driver wallet balance by delta (positive = credit, negative = debit). */
+  async adjustDriverWalletBalance(driverId: string, delta: number): Promise<void> {
+    const type = delta >= 0 ? WalletTransactionType.TOP_UP : WalletTransactionType.COMMISSION;
+    await this.applyDelta(driverId, delta, type, delta >= 0 ? 'Điều chỉnh số dư (đồng bộ)' : 'Rút tiền (đồng bộ từ ví)');
+  }
 }

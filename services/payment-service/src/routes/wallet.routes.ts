@@ -3,14 +3,15 @@ import { PrismaClient } from '../generated/prisma-client';
 import { WalletService } from '../services/wallet.service';
 import { IncentiveService } from '../services/incentive.service';
 import { WalletController } from '../controllers/wallet.controller';
+import { EventPublisher } from '../events/publisher';
 import { authMiddleware } from '../middleware/auth';
 
-export function createWalletRoutes(prisma: PrismaClient): Router {
+export function createWalletRoutes(prisma: PrismaClient, eventPublisher?: EventPublisher): Router {
   const router = Router();
 
   const walletService = new WalletService(prisma);
   const incentiveService = new IncentiveService(prisma, walletService);
-  const controller = new WalletController(walletService, incentiveService);
+  const controller = new WalletController(walletService, incentiveService, eventPublisher);
 
   // ─── Driver self-service (JWT required) ─────────────────────────────────
   router.get('/', authMiddleware, controller.getWallet);

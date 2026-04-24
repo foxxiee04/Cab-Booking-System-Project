@@ -25,15 +25,14 @@ import {
   DirectionsCar,
   People,
   DriveEta,
-  AttachMoney,
   TrendingUp,
-  Article,
   LocalOffer,
   Logout,
   AccountCircle,
   AdminPanelSettings,
   FactCheck,
   Notifications as NotificationsIcon,
+  AccountBalanceWallet,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector, useAppDispatch } from './store/hooks';
@@ -46,12 +45,10 @@ import Rides from './pages/Rides';
 import Drivers from './pages/Drivers';
 import DriverApprovals from './pages/DriverApprovals';
 import Customers from './pages/Customers';
-import Payments from './pages/Payments';
 import Pricing from './pages/Pricing';
-import Logs from './pages/Logs';
 import Profile from './pages/Profile';
 import Vouchers from './pages/Vouchers';
-
+import MerchantWallet from './pages/MerchantWallet';
 const DRAWER_WIDTH = 260;
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -114,7 +111,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const menuItems = [
     { text: t('menu.dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
-    { text: t('menu.profile'), icon: <AccountCircle />, path: '/profile' },
     { text: t('menu.rides'), icon: <DirectionsCar />, path: '/rides' },
     { text: t('menu.drivers'), icon: <DriveEta />, path: '/drivers' },
     {
@@ -127,10 +123,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       path: '/driver-approvals',
     },
     { text: t('menu.customers'), icon: <People />, path: '/customers' },
-    { text: t('menu.payments'), icon: <AttachMoney />, path: '/payments' },
-    { text: 'Voucher', icon: <LocalOffer />, path: '/vouchers' },
-    { text: t('menu.pricing'), icon: <TrendingUp />, path: '/pricing' },
-    { text: t('menu.logs'), icon: <Article />, path: '/logs' },
+    { text: 'Khuyến mãi', icon: <LocalOffer />, path: '/vouchers' },
+    { text: 'Giá cước', icon: <TrendingUp />, path: '/pricing' },
+    { text: 'Tài chính', icon: <AccountBalanceWallet />, path: '/merchant-wallet' },
   ];
 
   return (
@@ -386,16 +381,6 @@ const App: React.FC = () => {
           }
         />
         <Route
-          path="/payments"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <Payments />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/vouchers"
           element={
             <ProtectedRoute>
@@ -416,11 +401,11 @@ const App: React.FC = () => {
           }
         />
         <Route
-          path="/logs"
+          path="/merchant-wallet"
           element={
             <ProtectedRoute>
               <Layout>
-                <Logs />
+                <MerchantWallet />
               </Layout>
             </ProtectedRoute>
           }

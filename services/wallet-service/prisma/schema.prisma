@@ -1,0 +1,303 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ─────────────────────────────────────────────────────────────────
+
+enum WalletStatus {
+  INACTIVE  // awaiting initial 300,000 VND security deposit
+  ACTIVE
+  BLOCKED
+}
+
+enum TransactionType {
+  EARN        // online ride net earnings credited to driver
+  COMMISSION  // cash ride commission debited from driver
+  BONUS       // incentive bonus credited to driver
+  WITHDRAW    // driver withdrawal debited
+  REFUND      // refund credited (ride cancelled after online payment)
+  TOP_UP      // driver wallet top-up credited
+}
+
+enum TransactionDirection {
+  CREDIT
+  DEBIT
+}
+
+enum WithdrawalStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum MerchantLedgerType {
+  IN
+  OUT
+}
+
+enum MerchantLedgerCategory {
+  PAYMENT    // customer payment received (gross fare)
+  PAYOUT     // net earnings paid out to driver (liability settled)
+  COMMISSION // platform commission kept from cash ride
+  WITHDRAW   // driver withdrawal paid out
+  BONUS      // bonus paid to driver
+  VOUCHER    // voucher discount absorbed by platform
+  REFUND     // customer refund paid by platform
+  TOP_UP     // driver top-up received (cash in)
+}
+
+enum IncentiveRuleType {
+  TRIP_COUNT
+  DISTANCE_KM
+  PEAK_HOUR
+}
+
+enum TopUpProvider {
+  MOMO
+  VNPAY
+}
+
+enum TopUpStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum BankAccountType {
+  SETTLEMENT_ACCOUNT // receives funds from payment gateways (MoMo/VNPay)
+  PAYOUT_ACCOUNT     // sends funds to driver bank accounts on withdrawal
+}
+
+enum BankTransactionType {
+  PAYMENT    // customer pays → MAIN_ACCOUNT (online ride completed)
+  PAYOUT     // PAYOUT_ACCOUNT → driver bank (driver withdrawal)
+  TOP_UP     // driver bank → MAIN_ACCOUNT (driver tops up wallet)
+  REFUND     // MAIN_ACCOUNT → customer bank (ride refunded)
+}
+
+enum BankTransactionStatus {
+  SUCCESS
+  FAILED
+}
+
+// ─── Driver Wallet ──────────────────────────────────────────────────────────
+
+model DriverWallet {
+  id                         String       @id @default(uuid())
+  driverId                   String       @unique
+  balance                    Float        @default(0)
+  availableBalance           Float        @default(0)   // balance - pending withdrawals (excludes lockedBalance)
+  lockedBalance              Float        @default(0)   // security deposit (ký quỹ), locked until driver deactivates
+  debt                       Float        @default(0)   // absolute debt amount when balance < 0
+  status                     WalletStatus @default(INACTIVE)
+  initialActivationCompleted Boolean      @default(false)
+  createdAt                  DateTime     @default(now())
+  updatedAt                  DateTime     @updatedAt
+
+  transactions WalletTransaction[]
+  withdrawals  WithdrawalRequest[]
+  topUpOrders  WalletTopUpOrder[]
+
+  @@index([driverId])
+  @@map("driver_wallets")
+}
+
+// ─── Wallet Transactions (immutable ledger) ─────────────────────────────────
+
+model WalletTransaction {
+  id             String               @id @default(uuid())
+  driverId       String
+  type           TransactionType
+  direction      TransactionDirection
+  amount         Float                // always positive
+  balanceAfter   Float
+  description    String?
+  referenceId    String?              // rideId, paymentId, orderId, etc.
+  idempotencyKey String?              @unique
+  metadata       Json?
+  createdAt      DateTime             @default(now())
+
+  wallet DriverWallet @relation(fields: [driverId], references: [driverId])
+
+  @@index([driverId, createdAt(sort: Desc)])
+  @@index([referenceId])
+  @@map("wallet_transactions")
+}
+
+// ─── Withdrawal Requests ────────────────────────────────────────────────────
+
+model WithdrawalRequest {
+  id             String           @id @default(uuid())
+  driverId       String
+  amount         Float
+  status         WithdrawalStatus @default(PENDING)
+  bankName       String?
+  accountNumber  String?
+  accountHolder  String?
+  idempotencyKey String?          @unique
+  processedAt    DateTime?
+  failureReason  String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  wallet DriverWallet @relation(fields: [driverId], references: [driverId])
+
+  @@index([driverId, createdAt(sort: Desc)])
+  @@index([status])
+  @@map("withdrawal_requests")
+}
+
+// ─── Merchant Ledger (platform account, append-only) ───────────────────────
+
+model MerchantLedger {
+  id             String                 @id @default(uuid())
+  type           MerchantLedgerType
+  category       MerchantLedgerCategory
+  amount         Float                  // always positive (VND)
+  referenceId    String?                // rideId, paymentId, orderId, etc.
+  description    String?
+  idempotencyKey String?                @unique
+  metadata       Json?
+  createdAt      DateTime               @default(now())
+
+  @@index([category])
+  @@index([type])
+  @@index([createdAt(sort: Desc)])
+  @@map("merchant_ledger")
+}
+
+// ─── Merchant Balance Snapshot (singleton, id=1) ────────────────────────────
+// Updated atomically with every merchant_ledger write for O(1) reads.
+// Falls back to reconciliation SUM if row missing.
+
+model MerchantBalance {
+  id        Int      @id @default(1)
+  balance   Float    @default(0)   // totalIn - totalOut
+  totalIn   Float    @default(0)
+  totalOut  Float    @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("merchant_balance")
+}
+
+// ─── Wallet Top-Up Orders ───────────────────────────────────────────────────
+
+model WalletTopUpOrder {
+  id              String        @id @default(uuid())
+  driverId        String
+  amount          Float
+  provider        TopUpProvider
+  status          TopUpStatus   @default(PENDING)
+  orderId         String        @unique
+  gatewayTxnId    String?
+  gatewayResponse Json?
+  createdAt       DateTime      @default(now())
+  completedAt     DateTime?
+  failedAt        DateTime?
+
+  wallet DriverWallet @relation(fields: [driverId], references: [driverId])
+
+  @@index([driverId, createdAt(sort: Desc)])
+  @@map("wallet_topup_orders")
+}
+
+// ─── Incentive Rules ────────────────────────────────────────────────────────
+
+model IncentiveRule {
+  id             String            @id @default(uuid())
+  type           IncentiveRuleType
+  conditionValue Float
+  rewardAmount   Float
+  isActive       Boolean           @default(true)
+  description    String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@map("incentive_rules")
+}
+
+// ─── Driver Daily Stats ─────────────────────────────────────────────────────
+
+model DriverDailyStats {
+  id             String   @id @default(uuid())
+  driverId       String
+  date           DateTime @db.Date
+  tripsCompleted Int      @default(0)
+  distanceKm     Float    @default(0)
+  peakTrips      Int      @default(0)
+  bonusAwarded   Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([driverId, date])
+  @@index([driverId, date(sort: Desc)])
+  @@map("driver_daily_stats")
+}
+
+// ─── Outbox Events (reliable publishing) ───────────────────────────────────
+
+model OutboxEvent {
+  id            String    @id @default(uuid())
+  eventType     String
+  payload       String
+  correlationId String?
+  createdAt     DateTime  @default(now())
+  publishedAt   DateTime?
+
+  @@index([publishedAt])
+  @@map("outbox_events")
+}
+
+// ─── Bank Simulation Layer ──────────────────────────────────────────────────
+// These tables model the representative system bank accounts and mock
+// inter-bank transfers so dòng tiền is visible in the admin dashboard.
+// Principle 10.1: Ledger (WalletTransaction + MerchantLedger) is the source
+//   of truth for balances.
+// Principle 10.2: BankTransaction writes are fire-and-forget — a failure here
+//   must NEVER roll back the ledger.
+// Principle 10.3: Set BANK_SIMULATION_ENABLED=false to disable entirely in
+//   production if a real banking integration is wired up.
+
+model SystemBankAccount {
+  id            String          @id   // e.g. "MAIN_ACCOUNT", "PAYOUT_ACCOUNT"
+  bankName      String
+  accountNumber String
+  accountHolder String          @default("Cab Booking System Co., Ltd.")
+  type          BankAccountType
+  description   String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+
+  @@map("system_bank_accounts")
+}
+
+model BankTransaction {
+  id          String                @id @default(uuid())
+  // fromAccount / toAccount are system account IDs ("MAIN_ACCOUNT",
+  // "PAYOUT_ACCOUNT") or virtual external labels ("CUSTOMER_BANK",
+  // "DRIVER_BANK").  No FK so external counterparties are free-form strings.
+  fromAccount String
+  toAccount   String
+  amount      Float
+  type        BankTransactionType
+  status      BankTransactionStatus @default(SUCCESS)
+  referenceId String?               // rideId | withdrawalId | orderId
+  description String?
+  metadata    Json?
+  createdAt   DateTime              @default(now())
+
+  @@index([referenceId])
+  @@index([type])
+  @@index([fromAccount])
+  @@index([toAccount])
+  @@index([createdAt(sort: Desc)])
+  @@map("bank_transactions")
+}

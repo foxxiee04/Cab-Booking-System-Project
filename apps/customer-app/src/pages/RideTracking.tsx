@@ -699,11 +699,6 @@ const RideTracking: React.FC = () => {
   const driverVehicleLabel = [displayedDriver?.vehicleMake, displayedDriver?.vehicleModel, displayedDriver?.vehicleColor]
     .filter(Boolean)
     .join(' ');
-  const commissionAmount = Number(payment?.driverEarnings?.platformFee || 0);
-  const commissionRatePercent = payment?.driverEarnings?.commissionRate
-    ? Math.round(payment.driverEarnings.commissionRate * 100)
-    : null;
-
   if (loading && !currentRide) {
     return (
       <Box sx={{ minHeight: '100%', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -1016,12 +1011,6 @@ const RideTracking: React.FC = () => {
                   <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thanh toán</Typography><Typography variant="body2" fontWeight={600}>{getPaymentMethodLabel(currentRide.paymentMethod || 'CASH')}</Typography></Stack>
                   <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Quãng đường</Typography><Typography variant="body2" fontWeight={600}>{formatRideDistance(currentRide.distance)}</Typography></Stack>
                   <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Thời lượng</Typography><Typography variant="body2" fontWeight={600}>{formatRideDuration(currentRide.duration)}</Typography></Stack>
-                  {commissionAmount > 0 && (
-                    <Stack direction="row" justifyContent="space-between">
-                      <Typography variant="body2" color="text.secondary">Hoa hồng{commissionRatePercent ? ` (${commissionRatePercent}%)` : ''}</Typography>
-                      <Typography variant="body2" fontWeight={600}>{formatCurrency(commissionAmount)}</Typography>
-                    </Stack>
-                  )}
                   <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Cước phí</Typography><Typography variant="body2" fontWeight={800}>{formatCurrency(payment?.finalAmount || currentRide.fare || 0)}</Typography></Stack>
                 </Stack>
 
@@ -1123,12 +1112,6 @@ const RideTracking: React.FC = () => {
                             <Typography className="info-value" textAlign="right" sx={{ color: '#166534' }}>-{formatCurrency(payment?.discountAmount || 0)}</Typography>
                           </Stack>
                         </>
-                      )}
-                      {commissionAmount > 0 && (
-                        <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
-                          <Typography className="info-label">Hoa hồng nền tảng{commissionRatePercent ? ` (${commissionRatePercent}%)` : ''}</Typography>
-                          <Typography className="info-value" textAlign="right">{formatCurrency(commissionAmount)}</Typography>
-                        </Stack>
                       )}
                       <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
                         <Typography className="info-label">Phương thức</Typography>

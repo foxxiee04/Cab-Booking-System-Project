@@ -93,16 +93,10 @@ export interface CommissionConfig {
 export const DEFAULT_COMMISSION_CONFIG: CommissionConfig = {
   rates: {
     economy: parseFloat(process.env.COMMISSION_RATE_ECONOMY ?? '0.20'),
-    comfort:  parseFloat(process.env.COMMISSION_RATE_COMFORT  ?? '0.18'),
-    premium:  parseFloat(process.env.COMMISSION_RATE_PREMIUM  ?? '0.15'),
+    comfort:  parseFloat(process.env.COMMISSION_RATE_COMFORT  ?? '0.20'),
+    premium:  parseFloat(process.env.COMMISSION_RATE_PREMIUM  ?? '0.20'),
   },
-  // Sort order matters: list from highest threshold down so the first match wins
-  dynamicModifiers: [
-    { surgeThreshold: 1.5, rateAdjustment: -0.03 }, // high demand  → −3 pp
-    { surgeThreshold: 1.3, rateAdjustment: -0.02 }, // medium-high  → −2 pp
-    { surgeThreshold: 1.1, rateAdjustment: -0.01 }, // low-medium   → −1 pp
-    // surge < 1.1 → no adjustment (rate stays at base)
-  ],
+  dynamicModifiers: [],
   incentive: {
     peakHourBonus:         parseInt(process.env.INCENTIVE_PEAK_HOUR_BONUS          ?? '15000', 10),
     tripMilestoneBonus:    parseInt(process.env.INCENTIVE_TRIP_MILESTONE_BONUS      ?? '50000', 10),

@@ -101,6 +101,7 @@ services:
       - DRIVER_GRPC_ADDRESS=driver-service:50055
       - PAYMENT_SERVICE_URL=http://payment-service:3004
       - PAYMENT_GRPC_ADDRESS=payment-service:50056
+      - WALLET_SERVICE_URL=http://wallet-service:3006
       - NOTIFICATION_SERVICE_URL=http://notification-service:3005
       - NOTIFICATION_GRPC_ADDRESS=notification-service:50058
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
@@ -140,6 +141,8 @@ services:
       driver-service:
         condition: service_started
       payment-service:
+        condition: service_started
+      wallet-service:
         condition: service_started
       notification-service:
         condition: service_started
@@ -261,6 +264,7 @@ services:
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
       - RIDE_SERVICE_URL=http://ride-service:3002
       - PAYMENT_SERVICE_URL=http://payment-service:3004
+      - WALLET_SERVICE_URL=http://wallet-service:3006
       - USER_SERVICE_URL=http://user-service:3007
       - AUTH_SERVICE_URL=http://auth-service:3001
     depends_on:
@@ -291,7 +295,35 @@ services:
       - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
       - DRIVER_SERVICE_URL=http://driver-service:3003
-      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-change-me}
+      - WALLET_SERVICE_URL=http://wallet-service:3006
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  wallet-service:
+    build:
+      context: .
+      dockerfile: ./services/wallet-service/Dockerfile
+    image: cab-wallet-service:latest
+    container_name: cab-wallet-service
+    ports:
+      - "3006:3006"
+    environment:
+      - NODE_ENV=development
+      - PORT=3006
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/wallet_db?schema=public
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
+      - PAYMENT_SERVICE_URL=http://payment-service:3004
+      - DEBT_LIMIT=-200000
+      - WARNING_THRESHOLD=-100000
+      - INITIAL_ACTIVATION_BALANCE=300000
+      - MIN_WITHDRAWAL=50000
     depends_on:
       postgres:
         condition: service_healthy

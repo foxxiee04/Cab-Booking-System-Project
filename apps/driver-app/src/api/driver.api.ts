@@ -46,6 +46,8 @@ const normalizeRideHistoryItem = (ride: any) => ({
   ...ride,
   pickupLocation: normalizeLocation(ride.pickupLocation || ride.pickup, ride.pickupLat, ride.pickupLng, ride.pickupAddress),
   dropoffLocation: normalizeLocation(ride.dropoffLocation || ride.dropoff, ride.dropoffLat, ride.dropoffLng, ride.dropoffAddress),
+  // Prefer finalFare (confirmed amount) over fare (which may be estimated)
+  fare: ride.finalFare ?? ride.fare,
   distance: normalizeDistance(ride.distance),
   duration: normalizeDuration(ride.duration, ride.estimatedDuration),
   estimatedDuration: normalizeDuration(ride.estimatedDuration, ride.duration),

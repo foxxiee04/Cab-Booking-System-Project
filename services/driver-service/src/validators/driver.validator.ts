@@ -22,7 +22,7 @@ const isFutureDate = (value: string) => {
   return parsed > today;
 };
 
-const isValidVehiclePlate = (value: string) => /^\d{2}[A-Z]{1,2}-?\d{4,5}$/i.test(value.trim());
+const isValidVehiclePlate = (value: string) => /^\d{2}[A-Z]{1,2}[-.\s]?\d{5}(\.[0-9]{2})?$/i.test(value.trim());
 // Vietnamese GPLX is exactly 12 digits
 const isValidLicenseNumber = (value: string) => /^\d{12}$/.test(value.trim());
 const isValidVehicleImageUrl = (value: string) => {

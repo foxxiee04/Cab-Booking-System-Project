@@ -398,13 +398,18 @@ export class PaymentService {
         return;
       }
 
-      // Calculate fare with vehicle type
-      const fareDetails = this.calculateFare(
-        distance || 0,
-        duration || 0,
-        surgeMultiplier,
-        vehicleType
-      );
+      // Use the fare already calculated by pricing-service when available.
+      // Fall back to calculateFare() only if the event didn't include it.
+      const fareDetails = payload.fare && payload.fare > 0
+        ? {
+            baseFare:        0,
+            distanceFare:    0,
+            timeFare:        0,
+            surgeMultiplier,
+            totalFare:       payload.fare,
+            vehicleType,
+          }
+        : this.calculateFare(distance || 0, duration || 0, surgeMultiplier, vehicleType);
 
       // Calculate driver commission & earnings
       const now = new Date();
@@ -604,6 +609,26 @@ export class PaymentService {
         // (idempotency: only credit when DriverEarnings was just created)
         if (mappedMethod !== PaymentMethod.CASH && driverId && !existingDriverEarnings) {
           await this.walletService.creditEarning(driverId, earnings.netEarnings, rideId);
+        }
+      }
+
+      // Notify wallet-service of the settled earnings (idempotent via rideId key)
+      if (driverId) {
+        try {
+          await this.eventPublisher.publish('driver.earning.settled', {
+            rideId,
+            driverId,
+            paymentMethod: mappedMethod,
+            grossFare:     earnings.grossFare,
+            commissionRate: earnings.commissionRate,
+            platformFee:   earnings.platformFee,
+            netEarnings:   earnings.netEarnings,
+            cashDebt:      earnings.cashDebt,
+            bonus:         earnings.bonus,
+            voucherDiscount: discountAmount,
+          }, rideId);
+        } catch (publishError) {
+          logger.error(`Failed to publish driver.earning.settled for ride ${rideId}:`, publishError);
         }
       }
 
@@ -1164,6 +1189,24 @@ export class PaymentService {
       logger.warn(`ZaloPay refund attempted for payment ${payment.id} — ZaloPay integration removed`);
     }
 
+    // Fetch driver earnings BEFORE publishing the event so we have the correct refundAmount
+    let driverEarnings = null;
+    if (payment.driverId) {
+      try {
+        driverEarnings = await this.prisma.driverEarnings.findUnique({
+          where: { rideId: payment.rideId },
+        });
+      } catch (err) {
+        logger.warn(`Could not fetch driverEarnings for refund on ride ${rideId}:`, err);
+      }
+    }
+
+    // For online rides: refundAmount = netEarnings (what was credited to driver)
+    // For cash rides: refundAmount = platformFee (commission that was debited)
+    const refundAmount = driverEarnings
+      ? (payment.method === PaymentMethod.CASH ? driverEarnings.platformFee : driverEarnings.netEarnings)
+      : 0;
+
     const gatewayResponse = this.buildGatewayResponseEnvelope(payment.gatewayResponse);
     const nextGatewayResponse = JSON.stringify({
       ...gatewayResponse,
@@ -1187,7 +1230,9 @@ export class PaymentService {
             paymentId: payment.id,
             rideId: payment.rideId,
             customerId: payment.customerId,
+            driverId: payment.driverId,
             amount: payment.amount,
+            refundAmount,
             reason,
             refund: refundMetadata,
           }),
@@ -1200,34 +1245,31 @@ export class PaymentService {
       paymentId: payment.id,
       rideId: payment.rideId,
       customerId: payment.customerId,
+      driverId: payment.driverId,
       amount: payment.amount,
+      refundAmount,
       reason,
       refund: refundMetadata,
     }, payment.rideId);
 
-    // Reverse wallet entry for the driver
-    if (payment.driverId) {
+    // Reverse wallet entry for the driver (updates payment-service internal wallet)
+    if (payment.driverId && driverEarnings) {
       try {
-        const driverEarnings = await this.prisma.driverEarnings.findUnique({
-          where: { rideId: payment.rideId },
-        });
-        if (driverEarnings) {
-          if (payment.method === PaymentMethod.CASH) {
-            // For cash rides: reverse the commission deduction → credit commission back
-            await this.walletService.creditBonus(
-              payment.driverId,
-              driverEarnings.platformFee,
-              `Hoàn hoa hồng (huỷ chuyến cash)`,
-              payment.rideId,
-            );
-          } else {
-            // For online rides: reverse the net-earnings credit → debit netEarnings
-            await this.walletService.reverseEarning(
-              payment.driverId,
-              driverEarnings.netEarnings,
-              payment.rideId,
-            );
-          }
+        if (payment.method === PaymentMethod.CASH) {
+          // For cash rides: reverse the commission deduction → credit commission back
+          await this.walletService.creditBonus(
+            payment.driverId,
+            driverEarnings.platformFee,
+            `Hoàn hoa hồng (huỷ chuyến cash)`,
+            payment.rideId,
+          );
+        } else {
+          // For online rides: reverse the net-earnings credit → debit netEarnings
+          await this.walletService.reverseEarning(
+            payment.driverId,
+            driverEarnings.netEarnings,
+            payment.rideId,
+          );
         }
       } catch (walletError) {
         logger.error(`Wallet reversal failed for refund on ride ${rideId}:`, walletError);
@@ -1305,45 +1347,42 @@ export class PaymentService {
   }
 
   private calculateFare(
-    distanceKm: number, 
-    durationSeconds: number, 
-    surgeMultiplier: number, 
-    vehicleType: string = 'ECONOMY'
+    distanceKm: number,
+    durationSeconds: number,
+    surgeMultiplier: number,
+    vehicleType: string = 'MOTORBIKE',
   ) {
-    // Vehicle type pricing
-    let baseFare: number;
-    let perKmRate: number;
-    
-    switch (vehicleType.toUpperCase()) {
-      case 'COMFORT':
-        baseFare = 25000;  // 25k base for COMFORT
-        perKmRate = 18000;  // 18k per km
-        break;
-      case 'PREMIUM':
-        baseFare = 35000;  // 35k base for PREMIUM
-        perKmRate = 25000;  // 25k per km
-        break;
-      case 'ECONOMY':
-      default:
-        baseFare = 15000;  // 15k base for ECONOMY
-        perKmRate = 12000;  // 12k per km
-        break;
-    }
-    
-    const perMinuteRate = 500; // 500 VND per minute (all vehicle types)
-    
-    const distanceFare = distanceKm * perKmRate;
-    const timeFare = (durationSeconds / 60) * perMinuteRate;
-    const subtotal = baseFare + distanceFare + timeFare;
-    const totalFare = Math.round(subtotal * surgeMultiplier);
+    // Rates aligned with pricing-service/src/config/index.ts
+    // ECONOMY/MOTORBIKE alias kept for backward-compat with legacy events
+    const RATES: Record<string, { base: number; km: number; min: number }> = {
+      MOTORBIKE: { base: 10_000, km: 6_200,  min: 450   },
+      SCOOTER:   { base: 14_000, km: 8_400,  min: 700   },
+      CAR_4:     { base: 24_000, km: 15_000, min: 1_900 },
+      CAR_7:     { base: 32_000, km: 18_500, min: 2_400 },
+    };
+
+    // Map legacy / aliased names
+    const ALIAS: Record<string, string> = {
+      ECONOMY:  'MOTORBIKE',
+      COMFORT:  'CAR_4',
+      PREMIUM:  'CAR_7',
+    };
+
+    const canonical = ALIAS[vehicleType.toUpperCase()] ?? vehicleType.toUpperCase();
+    const rate = RATES[canonical] ?? RATES.MOTORBIKE;
+
+    const distanceFare = distanceKm * rate.km;
+    const timeFare     = (durationSeconds / 60) * rate.min;
+    const subtotal     = rate.base + distanceFare + timeFare;
+    const totalFare    = Math.max(15_000, Math.round(subtotal * surgeMultiplier));
 
     return {
-      baseFare,
-      distanceFare: Math.round(distanceFare),
-      timeFare: Math.round(timeFare),
+      baseFare:        rate.base,
+      distanceFare:    Math.round(distanceFare),
+      timeFare:        Math.round(timeFare),
       surgeMultiplier,
       totalFare,
-      vehicleType,
+      vehicleType:     canonical,
     };
   }
 
@@ -1717,5 +1756,13 @@ export class PaymentService {
         await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
       }
     }
+  }
+
+  async getDriverWallet(driverId: string) {
+    return this.walletService.getDriverWallet(driverId);
+  }
+
+  async adjustDriverWalletBalance(driverId: string, delta: number): Promise<void> {
+    return this.walletService.adjustDriverWalletBalance(driverId, delta);
   }
 }

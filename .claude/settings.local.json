@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Read(//tmp/**)",
+      "Bash(node -e ' *)",
+      "Bash(docker compose *)",
+      "Bash(docker context *)",
+      "Bash(docker --context default ps)",
+      "Bash(docker exec *)",
+      "Bash(docker image *)",
+      "Bash(docker-compose down *)",
+      "Bash(docker-compose up *)"
+    ]
+  }
+}

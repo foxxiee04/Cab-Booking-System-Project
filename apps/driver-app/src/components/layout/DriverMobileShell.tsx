@@ -111,7 +111,7 @@ const getApprovalStatusTone = (status?: string) => {
       return { color: 'default' as const, labelKey: 'profile.suspended', fallback: 'Tam khoa' };
     case 'PENDING':
     default:
-      return { color: 'warning' as const, labelKey: 'profile.pendingApproval', fallback: 'Cho duyet ho so' };
+      return { color: 'info' as const, labelKey: 'profile.pendingApproval', fallback: 'Ho so dang duoc theo doi' };
   }
 };
 
@@ -365,10 +365,11 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
         ]);
 
         if (isMounted) {
-          const walletData = balanceResponse.data.data;
+          const walletData = balanceResponse.data?.data ?? (balanceResponse.data as any);
           setWalletState(walletData);
 
-          const latestTransaction = transactionsResponse.data.data.transactions?.[0];
+          const txPayload = transactionsResponse.data?.data ?? (transactionsResponse.data as any);
+          const latestTransaction = txPayload?.transactions?.[0];
           if (
             user?.id
             && latestTransaction?.type === 'COMMISSION'
@@ -401,12 +402,14 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
   }, [accessToken, dispatch, location.pathname, user?.id]);
 
   const walletBalance = walletState ? Number(walletState.balance ?? 0) : null;
+  const walletOperationalBalance = walletState ? Number(walletState.operationalBalance ?? walletState.availableBalance ?? walletState.balance ?? 0) : null;
   const activationThreshold = walletState?.activationThreshold ?? 300_000;
   const warningThreshold = walletState?.warningThreshold ?? -100_000;
   const debtLimit = walletState?.debtLimit ?? -200_000;
+  const hasDriverBlockingStatus = ['REJECTED', 'SUSPENDED'].includes(profile?.status || '');
 
   useEffect(() => {
-    if (profile?.status !== 'APPROVED' || !user?.id || walletBalance === null || !walletState?.activationRequired) {
+    if (hasDriverBlockingStatus || !user?.id || walletBalance === null || !walletState?.activationRequired) {
       return;
     }
 
@@ -425,20 +428,20 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
         : 'Ví tài xế chưa đạt điều kiện kích hoạt. Vui lòng kiểm tra lại số dư ví.',
       persistMs: 7000,
     }));
-  }, [activationThreshold, dispatch, profile?.status, user?.id, walletBalance, walletState?.activationRequired]);
+  }, [activationThreshold, dispatch, hasDriverBlockingStatus, user?.id, walletBalance, walletState?.activationRequired]);
 
   useEffect(() => {
     if (
-      profile?.status !== 'APPROVED'
+      hasDriverBlockingStatus
       || !user?.id
-      || walletBalance === null
+      || walletOperationalBalance === null
       || !walletState?.warningThresholdReached
       || walletState.canAcceptRide === false
     ) {
       return;
     }
 
-    const warningKey = `wallet:debt-warning:${user.id}:${walletBalance}`;
+    const warningKey = `wallet:debt-warning:${user.id}:${walletOperationalBalance}`;
     if (sessionStorage.getItem(warningKey)) {
       return;
     }
@@ -447,10 +450,10 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
     dispatch(showNotification({
       type: 'warning',
       title: 'Ví sắp chạm ngưỡng khóa',
-      message: `Số dư hiện tại là ${formatCurrency(walletBalance)}. Tài khoản vẫn hoạt động, nhưng bạn nên nạp thêm trước khi chạm mốc khóa ${formatCurrency(debtLimit)}.`,
+      message: `Số dư vận hành hiện tại là ${formatCurrency(walletOperationalBalance)}. Tài khoản vẫn hoạt động, nhưng bạn nên nạp thêm trước khi chạm mốc khóa ${formatCurrency(debtLimit)}.`,
       persistMs: 7000,
     }));
-  }, [debtLimit, dispatch, profile?.status, user?.id, walletBalance, walletState?.canAcceptRide, walletState?.warningThresholdReached]);
+  }, [debtLimit, dispatch, hasDriverBlockingStatus, user?.id, walletOperationalBalance, walletState?.canAcceptRide, walletState?.warningThresholdReached]);
 
   const notifStyle = notification ? NOTIFICATION_STYLES[notification.type] : null;
   const handleNotifClose = (_: React.SyntheticEvent | Event, reason?: string) => {
@@ -543,7 +546,7 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
           WebkitOverflowScrolling: 'touch',
         }}
       >
-        {profile?.status && profile.status !== 'APPROVED' && (
+        {profile?.status && hasDriverBlockingStatus && (
           <Box
             sx={{
               width: shellMaxWidth,
@@ -552,17 +555,17 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
               px: 2,
               py: 1,
               borderRadius: 2,
-              bgcolor: approvalStatusTone.color === 'error' ? '#fef2f2' : approvalStatusTone.color === 'warning' ? '#fffbeb' : '#f0f9ff',
-              border: `1px solid ${approvalStatusTone.color === 'error' ? '#fca5a5' : approvalStatusTone.color === 'warning' ? '#fcd34d' : '#93c5fd'}`,
+              bgcolor: approvalStatusTone.color === 'error' ? '#fef2f2' : approvalStatusTone.color === 'default' ? '#f8fafc' : '#f0f9ff',
+              border: `1px solid ${approvalStatusTone.color === 'error' ? '#fca5a5' : approvalStatusTone.color === 'default' ? '#cbd5e1' : '#93c5fd'}`,
               textAlign: 'center',
             }}
           >
-            <Typography variant="body2" fontWeight={700} sx={{ color: approvalStatusTone.color === 'error' ? '#b91c1c' : approvalStatusTone.color === 'warning' ? '#92400e' : '#1e40af' }}>
+            <Typography variant="body2" fontWeight={700} sx={{ color: approvalStatusTone.color === 'error' ? '#b91c1c' : approvalStatusTone.color === 'default' ? '#334155' : '#1e40af' }}>
               {t(approvalStatusTone.labelKey, approvalStatusTone.fallback)}
             </Typography>
           </Box>
         )}
-        {profile?.status === 'APPROVED' && walletState?.activationRequired && walletBalance !== null && (
+        {!hasDriverBlockingStatus && walletState?.activationRequired && walletBalance !== null && (
           <Alert
             severity="warning"
             sx={{ width: shellMaxWidth, mx: 'auto', mb: 1.5, borderRadius: 3 }}
@@ -575,7 +578,7 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
             Tài khoản tài xế chưa được kích hoạt. Số dư hiện tại là {formatCurrency(walletBalance)}. Bạn cần đạt tối thiểu {formatCurrency(activationThreshold)} để bật nhận cuốc.
           </Alert>
         )}
-        {profile?.status === 'APPROVED' && !walletState?.activationRequired && walletState?.warningThresholdReached && walletState?.canAcceptRide !== false && walletBalance !== null && (
+        {!hasDriverBlockingStatus && !walletState?.activationRequired && walletState?.warningThresholdReached && walletState?.canAcceptRide !== false && walletOperationalBalance !== null && (
           <Alert
             severity="warning"
             sx={{ width: shellMaxWidth, mx: 'auto', mb: 1.5, borderRadius: 3 }}
@@ -585,10 +588,10 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
               </Button>
             }
           >
-            Ví đã âm quá {formatCurrency(Math.abs(warningThreshold))}. Tài khoản vẫn hoạt động nhưng bạn nên nạp thêm trước khi chạm mốc khóa {formatCurrency(debtLimit)}.
+            Số dư vận hành đã âm quá {formatCurrency(Math.abs(warningThreshold))}. Tài khoản vẫn hoạt động nhưng bạn nên nạp thêm trước khi chạm mốc khóa {formatCurrency(debtLimit)}.
           </Alert>
         )}
-        {profile?.status === 'APPROVED' && !walletState?.activationRequired && walletState?.canAcceptRide === false && walletBalance !== null && (
+        {!hasDriverBlockingStatus && !walletState?.activationRequired && walletState?.canAcceptRide === false && walletOperationalBalance !== null && (
           <Alert
             severity="error"
             sx={{ width: shellMaxWidth, mx: 'auto', mb: 1.5, borderRadius: 3 }}
@@ -598,7 +601,7 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
               </Button>
             }
           >
-            Ví đã chạm mốc khóa nhận cuốc {formatCurrency(debtLimit)}. Số dư hiện tại là {formatCurrency(walletBalance)}. Bạn cần nạp thêm để bật lại nhận chuyến.
+            Ví đã chạm mốc khóa nhận cuốc {formatCurrency(debtLimit)}. Số dư vận hành hiện tại là {formatCurrency(walletOperationalBalance)}. Bạn cần nạp thêm để bật lại nhận chuyến.
           </Alert>
         )}
         <Box sx={{ minHeight: '100%', width: shellMaxWidth, mx: 'auto' }}>{children}</Box>

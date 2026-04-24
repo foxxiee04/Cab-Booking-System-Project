@@ -309,9 +309,6 @@ const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
         <Divider />
         {notificationHistory.length === 0 ? (
           <Box sx={{ px: 2.5, py: 4 }}>
-            <Typography variant="body2" color="text.secondary">
-              Tất cả cập nhật chuyến đi, thông báo thanh toán và cảnh báo tài khoản sẽ được lưu ở đây để xem lại.
-            </Typography>
           </Box>
         ) : (
           <List sx={{ py: 0 }}>

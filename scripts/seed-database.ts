@@ -909,8 +909,6 @@ function getCustomerReference(index: number) {
   };
 }
 
-const SEED_DRIVER_INITIAL_WALLET_BALANCE = 450_000;
-
 function getSeedRideTimeline(index: number, rideSeed: typeof RIDE_SEEDS[number]) {
   const requestedAt = hoursAgo(24 - index * 3);
   const assignedAt = rideSeed.driverIndex !== undefined ? new Date(requestedAt.getTime() + 5 * 60 * 1000) : null;
@@ -935,10 +933,10 @@ function getSeedRideTimeline(index: number, rideSeed: typeof RIDE_SEEDS[number])
 
 function getSeedCommissionRate(vehicleType: string) {
   switch (vehicleType) {
-    case 'CAR_7':
-      return 0.18;
-    default:
-      return 0.2;
+    case 'CAR_7':    return 0.15;
+    case 'CAR_4':    return 0.18;
+    case 'SCOOTER':  return 0.18;
+    default:         return 0.20; // MOTORBIKE
   }
 }
 
@@ -1603,11 +1601,514 @@ async function seedRideDB(customerIds: string[], driverIds: string[]) {
   }
 }
 
+// ─── Seed wallet-service (wallet_db) ─────────────────────────────────────────
+// Seeds the wallet-service database for the deposit-based wallet model,
+// including driver wallets, top-up orders, merchant ledger snapshot,
+// bank simulation data, incentive rules, and daily stats.
+async function seedWalletDB(driverIds: string[]) {
+  console.log('  Seeding wallet_db (wallet-service)...');
+  const prisma = createServicePrismaClient('wallet-service', 'wallet_db');
+
+  const ACTIVATION_BALANCE = 300_000;
+  const DEMO_WITHDRAWABLE_BALANCE = 150_000;
+  const DEMO_NET_EARNINGS = DEMO_WITHDRAWABLE_BALANCE;
+  const DEMO_COMMISSION_RATE = 0.2;
+  const DEMO_GROSS_FARE = Math.round(DEMO_NET_EARNINGS / (1 - DEMO_COMMISSION_RATE));
+  const DEMO_PLATFORM_FEE = DEMO_GROSS_FARE - DEMO_NET_EARNINGS;
+
+  const systemBankAccounts = [
+    {
+      id: 'MAIN_ACCOUNT',
+      bankName: 'Techcombank',
+      accountNumber: '8000511204',
+      accountHolder: 'CONG TY TNHH CAB BOOKING SYSTEM',
+      type: 'SETTLEMENT_ACCOUNT',
+      description: 'Tài khoản nhận thanh toán online và nạp ví tài xế',
+      isActive: true,
+    },
+    {
+      id: 'PAYOUT_ACCOUNT',
+      bankName: 'Techcombank',
+      accountNumber: '8000511204',
+      accountHolder: 'CONG TY TNHH CAB BOOKING SYSTEM',
+      type: 'PAYOUT_ACCOUNT',
+      description: 'Tài khoản chi trả khi tài xế rút tiền',
+      isActive: true,
+    },
+  ];
+
+  const rules = [
+    { type: 'TRIP_COUNT', conditionValue: 10, rewardAmount: 50_000, isActive: true, description: 'Chạy >= 10 cuốc/ngày thưởng 50.000 đ' },
+    { type: 'TRIP_COUNT', conditionValue: 20, rewardAmount: 120_000, isActive: true, description: 'Chạy >= 20 cuốc/ngày thưởng 120.000 đ' },
+    { type: 'DISTANCE_KM', conditionValue: 50, rewardAmount: 30_000, isActive: true, description: 'Đạt >= 50 km/ngày thưởng 30.000 đ' },
+    { type: 'PEAK_HOUR', conditionValue: 0, rewardAmount: 10_000, isActive: true, description: 'Mỗi cuốc trong giờ cao điểm thưởng 10.000 đ' },
+  ];
+
+  try {
+    const upsertSeedBankTransaction = async (data: {
+      fromAccount: string;
+      toAccount: string;
+      amount: number;
+      type: string;
+      referenceId: string;
+      description: string;
+      metadata?: Record<string, unknown>;
+      createdAt: Date;
+    }) => {
+      const existing = await (prisma as any).bankTransaction.findFirst({
+        where: {
+          referenceId: data.referenceId,
+          type: data.type,
+        },
+      });
+
+      if (existing) {
+        await (prisma as any).bankTransaction.update({
+          where: { id: existing.id },
+          data,
+        });
+        return;
+      }
+
+      await (prisma as any).bankTransaction.create({ data });
+    };
+
+    const upsertSeedIncentiveRule = async (rule: typeof rules[number]) => {
+      const existingRules = await (prisma as any).incentiveRule.findMany({
+        where: {
+          type: rule.type,
+          conditionValue: rule.conditionValue,
+          rewardAmount: rule.rewardAmount,
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      if (existingRules.length === 0) {
+        await (prisma as any).incentiveRule.create({ data: rule });
+        return;
+      }
+
+      await (prisma as any).incentiveRule.update({
+        where: { id: existingRules[0].id },
+        data: {
+          isActive: rule.isActive,
+          description: rule.description,
+          conditionValue: rule.conditionValue,
+          rewardAmount: rule.rewardAmount,
+        },
+      });
+
+      if (existingRules.length > 1) {
+        await (prisma as any).incentiveRule.deleteMany({
+          where: {
+            id: {
+              in: existingRules.slice(1).map((item: any) => item.id),
+            },
+          },
+        });
+      }
+    };
+
+    for (const account of systemBankAccounts) {
+      await (prisma as any).systemBankAccount.upsert({
+        where: { id: account.id },
+        create: account,
+        update: {
+          bankName: account.bankName,
+          accountNumber: account.accountNumber,
+          accountHolder: account.accountHolder,
+          type: account.type,
+          description: account.description,
+          isActive: account.isActive,
+        },
+      });
+    }
+
+    for (const rule of rules) {
+      await upsertSeedIncentiveRule(rule);
+    }
+
+    for (const [index, driverId] of driverIds.entries()) {
+      const provider = index % 2 === 0 ? 'MOMO' : 'VNPAY';
+      const activationOrderId = `seed_wallet_activation_order_${driverId}`;
+      const activationGatewayTxnId = `SEED_${provider}_${driverId.slice(0, 8).toUpperCase()}`;
+      const activationCreatedAt = hoursAgo(120 - Math.min(index, 48));
+      const activationCompletedAt = new Date(activationCreatedAt.getTime() + 5 * 60 * 1000);
+      const earningReferenceId = `seed_wallet_earning_${driverId}`;
+      const earningCreatedAt = hoursAgo(24 - (index % 6));
+      const totalBalance = ACTIVATION_BALANCE + DEMO_WITHDRAWABLE_BALANCE;
+      const statsDate = getVietnamCalendarDate(earningCreatedAt);
+
+      await prisma.$transaction(async (tx: any) => {
+        await tx.driverWallet.upsert({
+          where: { driverId },
+          update: {
+            balance: totalBalance,
+            availableBalance: totalBalance,
+            lockedBalance: ACTIVATION_BALANCE,
+            debt: 0,
+            status: 'ACTIVE',
+            initialActivationCompleted: true,
+          },
+          create: {
+            driverId,
+            balance: totalBalance,
+            availableBalance: totalBalance,
+            lockedBalance: ACTIVATION_BALANCE,
+            debt: 0,
+            status: 'ACTIVE',
+            initialActivationCompleted: true,
+          },
+        });
+
+        await tx.walletTopUpOrder.upsert({
+          where: { orderId: activationOrderId },
+          update: {
+            driverId,
+            amount: ACTIVATION_BALANCE,
+            provider,
+            status: 'COMPLETED',
+            gatewayTxnId: activationGatewayTxnId,
+            gatewayResponse: {
+              seeded: true,
+              source: 'seed-database',
+              provider,
+            },
+            completedAt: activationCompletedAt,
+            failedAt: null,
+            createdAt: activationCreatedAt,
+          },
+          create: {
+            driverId,
+            amount: ACTIVATION_BALANCE,
+            provider,
+            status: 'COMPLETED',
+            orderId: activationOrderId,
+            gatewayTxnId: activationGatewayTxnId,
+            gatewayResponse: {
+              seeded: true,
+              source: 'seed-database',
+              provider,
+            },
+            createdAt: activationCreatedAt,
+            completedAt: activationCompletedAt,
+          },
+        });
+
+        await tx.walletTransaction.upsert({
+          where: { idempotencyKey: `seed_wallet_activation_${driverId}` },
+          update: {
+            driverId,
+            type: 'TOP_UP',
+            direction: 'CREDIT',
+            amount: ACTIVATION_BALANCE,
+            balanceAfter: ACTIVATION_BALANCE,
+            description: 'Nạp ký quỹ kích hoạt tài khoản tài xế',
+            referenceId: activationOrderId,
+            metadata: {
+              seeded: true,
+              source: 'seed-database',
+              provider,
+              activation: true,
+            },
+            createdAt: activationCompletedAt,
+          },
+          create: {
+            driverId,
+            type: 'TOP_UP',
+            direction: 'CREDIT',
+            amount: ACTIVATION_BALANCE,
+            balanceAfter: ACTIVATION_BALANCE,
+            description: 'Nạp ký quỹ kích hoạt tài khoản tài xế',
+            referenceId: activationOrderId,
+            idempotencyKey: `seed_wallet_activation_${driverId}`,
+            metadata: {
+              seeded: true,
+              source: 'seed-database',
+              provider,
+              activation: true,
+            },
+            createdAt: activationCompletedAt,
+          },
+        });
+
+        await tx.walletTransaction.upsert({
+          where: { idempotencyKey: `seed_wallet_earn_${driverId}` },
+          update: {
+            driverId,
+            type: 'EARN',
+            direction: 'CREDIT',
+            amount: DEMO_NET_EARNINGS,
+            balanceAfter: totalBalance,
+            description: 'Thu nhập cuốc xe online mẫu cho ví tài xế',
+            referenceId: earningReferenceId,
+            metadata: {
+              seeded: true,
+              source: 'seed-database',
+              grossFare: DEMO_GROSS_FARE,
+              platformFee: DEMO_PLATFORM_FEE,
+            },
+            createdAt: earningCreatedAt,
+          },
+          create: {
+            driverId,
+            type: 'EARN',
+            direction: 'CREDIT',
+            amount: DEMO_NET_EARNINGS,
+            balanceAfter: totalBalance,
+            description: 'Thu nhập cuốc xe online mẫu cho ví tài xế',
+            referenceId: earningReferenceId,
+            idempotencyKey: `seed_wallet_earn_${driverId}`,
+            metadata: {
+              seeded: true,
+              source: 'seed-database',
+              grossFare: DEMO_GROSS_FARE,
+              platformFee: DEMO_PLATFORM_FEE,
+            },
+            createdAt: earningCreatedAt,
+          },
+        });
+
+        await tx.merchantLedger.upsert({
+          where: { idempotencyKey: `seed_wallet_ledger_topup_${driverId}` },
+          update: {
+            type: 'IN',
+            category: 'TOP_UP',
+            amount: ACTIVATION_BALANCE,
+            referenceId: activationOrderId,
+            description: 'Nạp tiền ký quỹ tài xế',
+            metadata: {
+              seeded: true,
+              source: 'seed-database',
+              provider,
+            },
+            createdAt: activationCompletedAt,
+          },
+          create: {
+            type: 'IN',
+            category: 'TOP_UP',
+            amount: ACTIVATION_BALANCE,
+            referenceId: activationOrderId,
+            description: 'Nạp tiền ký quỹ tài xế',
+            idempotencyKey: `seed_wallet_ledger_topup_${driverId}`,
+            metadata: {
+              seeded: true,
+              source: 'seed-database',
+              provider,
+            },
+            createdAt: activationCompletedAt,
+          },
+        });
+
+        await tx.merchantLedger.upsert({
+          where: { idempotencyKey: `seed_wallet_ledger_payment_${driverId}` },
+          update: {
+            type: 'IN',
+            category: 'PAYMENT',
+            amount: DEMO_GROSS_FARE,
+            referenceId: earningReferenceId,
+            description: 'Khách thanh toán chuyến đi online mẫu',
+            metadata: {
+              seeded: true,
+              source: 'seed-database',
+              grossFare: DEMO_GROSS_FARE,
+              platformFee: DEMO_PLATFORM_FEE,
+              netEarnings: DEMO_NET_EARNINGS,
+              voucherDiscount: 0,
+            },
+            createdAt: earningCreatedAt,
+          },
+          create: {
+            type: 'IN',
+            category: 'PAYMENT',
+            amount: DEMO_GROSS_FARE,
+            referenceId: earningReferenceId,
+            description: 'Khách thanh toán chuyến đi online mẫu',
+            idempotencyKey: `seed_wallet_ledger_payment_${driverId}`,
+            metadata: {
+              seeded: true,
+              source: 'seed-database',
+              grossFare: DEMO_GROSS_FARE,
+              platformFee: DEMO_PLATFORM_FEE,
+              netEarnings: DEMO_NET_EARNINGS,
+              voucherDiscount: 0,
+            },
+            createdAt: earningCreatedAt,
+          },
+        });
+
+        await tx.merchantLedger.upsert({
+          where: { idempotencyKey: `seed_wallet_ledger_payout_${driverId}` },
+          update: {
+            type: 'OUT',
+            category: 'PAYOUT',
+            amount: DEMO_NET_EARNINGS,
+            referenceId: earningReferenceId,
+            description: 'Chi trả thu nhập tài xế mẫu',
+            metadata: {
+              seeded: true,
+              source: 'seed-database',
+            },
+            createdAt: earningCreatedAt,
+          },
+          create: {
+            type: 'OUT',
+            category: 'PAYOUT',
+            amount: DEMO_NET_EARNINGS,
+            referenceId: earningReferenceId,
+            description: 'Chi trả thu nhập tài xế mẫu',
+            idempotencyKey: `seed_wallet_ledger_payout_${driverId}`,
+            metadata: {
+              seeded: true,
+              source: 'seed-database',
+            },
+            createdAt: earningCreatedAt,
+          },
+        });
+
+        await tx.driverDailyStats.upsert({
+          where: {
+            driverId_date: {
+              driverId,
+              date: statsDate,
+            },
+          },
+          update: {
+            tripsCompleted: 8 + (index % 5),
+            distanceKm: Number((42 + index * 1.35).toFixed(1)),
+            peakTrips: 1 + (index % 3),
+            bonusAwarded: 0,
+          },
+          create: {
+            driverId,
+            date: statsDate,
+            tripsCompleted: 8 + (index % 5),
+            distanceKm: Number((42 + index * 1.35).toFixed(1)),
+            peakTrips: 1 + (index % 3),
+            bonusAwarded: 0,
+          },
+        });
+      });
+
+      await upsertSeedBankTransaction({
+        fromAccount: `DRIVER_${provider}`,
+        toAccount: 'MAIN_ACCOUNT',
+        amount: ACTIVATION_BALANCE,
+        type: 'TOP_UP',
+        referenceId: activationOrderId,
+        description: `Tài xế nạp tiền ví qua ${provider}`,
+        metadata: {
+          seeded: true,
+          source: 'seed-database',
+          driverId,
+          provider,
+          gatewayTxnId: activationGatewayTxnId,
+        },
+        createdAt: activationCompletedAt,
+      });
+
+      await upsertSeedBankTransaction({
+        fromAccount: 'CUSTOMER_BANK',
+        toAccount: 'MAIN_ACCOUNT',
+        amount: DEMO_GROSS_FARE,
+        type: 'PAYMENT',
+        referenceId: earningReferenceId,
+        description: 'Khách thanh toán chuyến đi online mẫu',
+        metadata: {
+          seeded: true,
+          source: 'seed-database',
+          driverId,
+          grossFare: DEMO_GROSS_FARE,
+          platformFee: DEMO_PLATFORM_FEE,
+          netEarnings: DEMO_NET_EARNINGS,
+        },
+        createdAt: earningCreatedAt,
+      });
+    }
+
+    const [merchantInAgg, merchantOutAgg] = await Promise.all([
+      (prisma as any).merchantLedger.aggregate({ where: { type: 'IN' }, _sum: { amount: true } }),
+      (prisma as any).merchantLedger.aggregate({ where: { type: 'OUT' }, _sum: { amount: true } }),
+    ]);
+
+    const totalIn = merchantInAgg._sum.amount ?? 0;
+    const totalOut = merchantOutAgg._sum.amount ?? 0;
+
+    await (prisma as any).merchantBalance.upsert({
+      where: { id: 1 },
+      create: {
+        id: 1,
+        balance: totalIn - totalOut,
+        totalIn,
+        totalOut,
+      },
+      update: {
+        balance: totalIn - totalOut,
+        totalIn,
+        totalOut,
+      },
+    });
+
+    console.log(`    ${driverIds.length} driver wallets synchronized`);
+    console.log(`    ${driverIds.length} activation top-up orders synchronized`);
+    console.log(`    ${driverIds.length * 2} wallet transactions synchronized`);
+    console.log(`    ${driverIds.length * 3} merchant ledger entries synchronized`);
+    console.log(`    ${driverIds.length * 2} bank transactions synchronized`);
+    console.log(`    ${driverIds.length} driver daily stats synchronized`);
+    console.log(`    ${rules.length} incentive rules synchronized`);
+    console.log(`    ${systemBankAccounts.length} system bank accounts synchronized`);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+// Initial wallet balance seeded in payment_db (mirrors ACTIVATION_BALANCE + DEMO_WITHDRAWABLE_BALANCE in wallet_db)
+const SEED_DRIVER_INITIAL_WALLET_BALANCE = 450_000;
+
 async function seedPaymentDB(rides: Array<{ id: string; status: string }>, customerIds: string[], driverIds: string[]) {
   console.log('  Seeding payment_db...');
   const prisma = createServicePrismaClient('payment-service', 'payment_db');
 
   try {
+    const upsertPaymentWalletTransaction = async (input: {
+      driverId: string;
+      type: 'TOP_UP' | 'COMMISSION' | 'EARN';
+      amount: number;
+      balanceAfter: number;
+      description: string;
+      createdAt: Date;
+      rideId?: string | null;
+    }) => {
+      const transactionData = {
+        driverId: input.driverId,
+        type: input.type,
+        amount: input.amount,
+        balanceAfter: input.balanceAfter,
+        description: input.description,
+        rideId: input.rideId ?? null,
+        createdAt: input.createdAt,
+      };
+
+      const existing = await prisma.walletTransaction.findFirst({
+        where: {
+          driverId: input.driverId,
+          type: input.type,
+          rideId: input.rideId ?? null,
+          description: input.description,
+        },
+      });
+
+      if (existing) {
+        await prisma.walletTransaction.update({
+          where: { id: existing.id },
+          data: transactionData,
+        });
+        return;
+      }
+
+      await prisma.walletTransaction.create({ data: transactionData });
+    };
+
     const walletBalances = new Map<string, number>();
     const dailyStats = new Map<string, {
       driverId: string;
@@ -1632,15 +2133,13 @@ async function seedPaymentDB(rides: Array<{ id: string; status: string }>, custo
         },
       });
 
-      await prisma.walletTransaction.create({
-        data: {
-          driverId,
-          type: 'TOP_UP',
-          amount: SEED_DRIVER_INITIAL_WALLET_BALANCE,
-          balanceAfter: SEED_DRIVER_INITIAL_WALLET_BALANCE,
-          description: 'So du khoi tao seed driver wallet',
-          createdAt: hoursAgo(96),
-        },
+      await upsertPaymentWalletTransaction({
+        driverId,
+        type: 'TOP_UP',
+        amount: SEED_DRIVER_INITIAL_WALLET_BALANCE,
+        balanceAfter: SEED_DRIVER_INITIAL_WALLET_BALANCE,
+        description: 'So du khoi tao seed driver wallet',
+        createdAt: hoursAgo(96),
       });
 
       seededWalletTransactionCount += 1;
@@ -1652,8 +2151,20 @@ async function seedPaymentDB(rides: Array<{ id: string; status: string }>, custo
       const initiatedAt = hoursAgo(23 - index * 3);
       const timeline = getSeedRideTimeline(index, rideSeed);
 
-      await prisma.fare.create({
-        data: {
+      await prisma.fare.upsert({
+        where: { rideId: ride.id },
+        update: {
+          rideId: ride.id,
+          baseFare: Math.round(rideSeed.fare * 0.45),
+          distanceFare: Math.round(rideSeed.fare * 0.4),
+          timeFare: Math.round(rideSeed.fare * 0.15),
+          surgeMultiplier: rideSeed.status === 'FINDING_DRIVER' ? 1.2 : 1,
+          totalFare: rideSeed.fare,
+          distanceKm: rideSeed.distance,
+          durationMinutes: Math.max(1, Math.round(rideSeed.duration / 60)),
+          currency: 'VND',
+        },
+        create: {
           rideId: ride.id,
           baseFare: Math.round(rideSeed.fare * 0.45),
           distanceFare: Math.round(rideSeed.fare * 0.4),
@@ -1666,8 +2177,30 @@ async function seedPaymentDB(rides: Array<{ id: string; status: string }>, custo
         },
       });
 
-      await prisma.payment.create({
-        data: {
+      await prisma.payment.upsert({
+        where: { rideId: ride.id },
+        update: {
+          rideId: ride.id,
+          customerId: customerIds[rideSeed.customerIndex],
+          driverId: rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null,
+          amount: rideSeed.fare,
+          currency: 'VND',
+          method: rideSeed.paymentMethod,
+          provider: rideSeed.paymentProvider,
+          status: rideSeed.paymentStatus,
+          transactionId: rideSeed.paymentStatus === 'COMPLETED' ? `TXN-${ride.id.slice(0, 8).toUpperCase()}` : null,
+          paymentIntentId: `PI-${ride.id.slice(0, 12)}`,
+          initiatedAt,
+          completedAt: rideSeed.paymentCompleted ? new Date(initiatedAt.getTime() + 7 * 60 * 1000) : null,
+          failedAt: rideSeed.paymentStatus === 'FAILED' ? new Date(initiatedAt.getTime() + 5 * 60 * 1000) : null,
+          failureReason: rideSeed.paymentStatus === 'FAILED' ? 'Khách hàng hủy thanh toán tại cổng' : null,
+          metadata: {
+            seeded: true,
+            source: 'seed-database',
+            rideStatus: ride.status,
+          },
+        },
+        create: {
           rideId: ride.id,
           customerId: customerIds[rideSeed.customerIndex],
           driverId: rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null,
@@ -1695,8 +2228,27 @@ async function seedPaymentDB(rides: Array<{ id: string; status: string }>, custo
         const completedAt = timeline.completedAt || new Date(initiatedAt.getTime() + rideSeed.duration * 1000);
         const earnings = getSeedDriverEarnings(index, rideSeed);
 
-        await prisma.driverEarnings.create({
-          data: {
+        await prisma.driverEarnings.upsert({
+          where: { rideId: ride.id },
+          update: {
+            rideId: ride.id,
+            driverId,
+            grossFare: earnings.grossFare,
+            commissionRate: earnings.commissionRate,
+            platformFee: earnings.platformFee,
+            bonus: earnings.bonus,
+            penalty: earnings.penalty,
+            netEarnings: earnings.netEarnings,
+            paymentMethod: rideSeed.paymentMethod,
+            driverCollected: earnings.driverCollected,
+            cashDebt: earnings.cashDebt,
+            isPaid: true,
+            paidAt: completedAt,
+            bonusBreakdown: earnings.bonus > 0 ? { seededPerformanceBonus: earnings.bonus } : null,
+            penaltyBreakdown: earnings.penalty > 0 ? { seededAdjustment: earnings.penalty } : null,
+            createdAt: completedAt,
+          },
+          create: {
             rideId: ride.id,
             driverId,
             grossFare: earnings.grossFare,
@@ -1722,31 +2274,27 @@ async function seedPaymentDB(rides: Array<{ id: string; status: string }>, custo
         if (earnings.driverCollected) {
           if (earnings.cashDebt > 0) {
             currentBalance -= earnings.cashDebt;
-            await prisma.walletTransaction.create({
-              data: {
-                driverId,
-                type: 'COMMISSION',
-                amount: earnings.cashDebt,
-                balanceAfter: currentBalance,
-                description: 'Khau tru cong no cuoc tien mat seed',
-                rideId: ride.id,
-                createdAt: completedAt,
-              },
+            await upsertPaymentWalletTransaction({
+              driverId,
+              type: 'COMMISSION',
+              amount: earnings.cashDebt,
+              balanceAfter: currentBalance,
+              description: 'Khau tru cong no cuoc tien mat seed',
+              rideId: ride.id,
+              createdAt: completedAt,
             });
             seededWalletTransactionCount += 1;
           }
         } else if (earnings.netEarnings > 0) {
           currentBalance += earnings.netEarnings;
-          await prisma.walletTransaction.create({
-            data: {
-              driverId,
-              type: 'EARN',
-              amount: earnings.netEarnings,
-              balanceAfter: currentBalance,
-              description: 'Thu nhap cuoc online seed',
-              rideId: ride.id,
-              createdAt: completedAt,
-            },
+          await upsertPaymentWalletTransaction({
+            driverId,
+            type: 'EARN',
+            amount: earnings.netEarnings,
+            balanceAfter: currentBalance,
+            description: 'Thu nhap cuoc online seed',
+            rideId: ride.id,
+            createdAt: completedAt,
           });
           seededWalletTransactionCount += 1;
         }
@@ -1780,8 +2328,20 @@ async function seedPaymentDB(rides: Array<{ id: string; status: string }>, custo
     }
 
     for (const stats of dailyStats.values()) {
-      await prisma.driverDailyStats.create({
-        data: {
+      await prisma.driverDailyStats.upsert({
+        where: {
+          driverId_date: {
+            driverId: stats.driverId,
+            date: stats.date,
+          },
+        },
+        update: {
+          tripsCompleted: stats.tripsCompleted,
+          distanceKm: Number(stats.distanceKm.toFixed(2)),
+          peakTrips: stats.peakTrips,
+          bonusAwarded: stats.bonusAwarded,
+        },
+        create: {
           driverId: stats.driverId,
           date: stats.date,
           tripsCompleted: stats.tripsCompleted,
@@ -1792,11 +2352,100 @@ async function seedPaymentDB(rides: Array<{ id: string; status: string }>, custo
       });
     }
 
-    console.log(`    ${RIDE_SEEDS.length} fares created`);
-    console.log(`    ${RIDE_SEEDS.length} payments created`);
-    console.log(`    ${seededDriverEarningsCount} driver earnings rows created`);
-    console.log(`    ${seededWalletTransactionCount} wallet transactions created`);
-    console.log(`    ${dailyStats.size} driver daily stats rows created`);
+    console.log(`    ${RIDE_SEEDS.length} fares synchronized`);
+    console.log(`    ${RIDE_SEEDS.length} payments synchronized`);
+    console.log(`    ${seededDriverEarningsCount} driver earnings rows synchronized`);
+    console.log(`    ${seededWalletTransactionCount} wallet transactions synchronized`);
+    console.log(`    ${dailyStats.size} driver daily stats rows synchronized`);
+
+    // Seed vouchers
+    const now = new Date();
+    const past30 = new Date(now.getTime() - 30 * 86_400_000);
+    const future30 = new Date(now.getTime() + 30 * 86_400_000);
+    const future7 = new Date(now.getTime() + 7 * 86_400_000);
+    const voucherSeeds = [
+      {
+        code: 'WELCOME20',
+        description: 'Giảm 20% tối đa 50.000đ cho khách mới',
+        audienceType: 'NEW_CUSTOMERS' as const,
+        discountType: 'PERCENT' as const,
+        discountValue: 20,
+        maxDiscount: 50_000,
+        minFare: 0,
+        startTime: past30,
+        endTime: future30,
+        usageLimit: 200,
+        perUserLimit: 1,
+        isActive: true,
+      },
+      {
+        code: 'FLAT30K',
+        description: 'Giảm thẳng 30.000đ cho chuyến từ 80.000đ',
+        audienceType: 'ALL_CUSTOMERS' as const,
+        discountType: 'FIXED' as const,
+        discountValue: 30_000,
+        maxDiscount: null,
+        minFare: 80_000,
+        startTime: past30,
+        endTime: future30,
+        usageLimit: 500,
+        perUserLimit: 3,
+        isActive: true,
+      },
+      {
+        code: 'NEWUSER50',
+        description: 'Ưu đãi 50% tối đa 100.000đ dành riêng khách mới',
+        audienceType: 'NEW_CUSTOMERS' as const,
+        discountType: 'PERCENT' as const,
+        discountValue: 50,
+        maxDiscount: 100_000,
+        minFare: 0,
+        startTime: past30,
+        endTime: future30,
+        usageLimit: 100,
+        perUserLimit: 1,
+        isActive: true,
+      },
+      {
+        code: 'WEEKEND10',
+        description: 'Giảm 10% cuối tuần (tối đa 30.000đ)',
+        audienceType: 'ALL_CUSTOMERS' as const,
+        discountType: 'PERCENT' as const,
+        discountValue: 10,
+        maxDiscount: 30_000,
+        minFare: 0,
+        startTime: past30,
+        endTime: future7,
+        usageLimit: 1000,
+        perUserLimit: 5,
+        isActive: true,
+      },
+      {
+        code: 'OLDUSER15',
+        description: 'Tri ân khách hàng thân thiết: giảm 15% (tối đa 40.000đ)',
+        audienceType: 'RETURNING_CUSTOMERS' as const,
+        discountType: 'PERCENT' as const,
+        discountValue: 15,
+        maxDiscount: 40_000,
+        minFare: 50_000,
+        startTime: past30,
+        endTime: future30,
+        usageLimit: 300,
+        perUserLimit: 2,
+        isActive: true,
+      },
+    ];
+    let voucherCount = 0;
+    for (const v of voucherSeeds) {
+      await prisma.voucher.upsert({
+        where: { code: v.code },
+        update: { ...v },
+        create: { ...v },
+      });
+      voucherCount += 1;
+    }
+    console.log(`    ${voucherCount} vouchers seeded`);
+
     await prisma.$disconnect();
   } catch (error) {
     await prisma.$disconnect();
@@ -2062,15 +2711,18 @@ async function main() {
     // 3. Seed driver database
     const { driverIds } = await seedDriverDB(driverUserIds);
 
-    // 4. Seed bookings
+    // 4. Seed wallet database (keyed by auth user IDs, NOT driver profile IDs)
+    await seedWalletDB(driverUserIds);
+
+    // 5. Seed bookings
     const bookingIds = await seedBookingDB(customerIds);
 
-    // 5. Seed rides + payment lifecycle data
+    // 6. Seed rides + payment lifecycle data
     const rides = await seedRideDB(customerIds, driverIds);
     await seedPaymentDB(rides, customerIds, driverIds);
     await syncDriverRideAssignments(driverIds, rides);
 
-    // 6. Seed MongoDB (notifications + reviews)
+    // 7. Seed MongoDB (notifications + reviews)
     const mongoSeedSummary = await seedMongoDB(rides, bookingIds, customerIds, driverIds);
     await generateSeedReferenceReport(adminId, customerIds, driverUserIds, driverIds);
 

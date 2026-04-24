@@ -32,6 +32,7 @@ export const config = {
 
   services: {
     driver: process.env.DRIVER_SERVICE_URL || 'http://localhost:3003',
+    wallet: process.env.WALLET_SERVICE_URL || 'http://localhost:3006',
   },
 
   internalServiceToken: process.env.INTERNAL_SERVICE_TOKEN || 'change-me',
@@ -51,8 +52,8 @@ export const config = {
   commission: {
     // Base rates per vehicle class (0.0–1.0)
     rateEconomy: parseFloat(process.env.COMMISSION_RATE_ECONOMY || '0.20'),
-    rateComfort:  parseFloat(process.env.COMMISSION_RATE_COMFORT  || '0.18'),
-    ratePremium:  parseFloat(process.env.COMMISSION_RATE_PREMIUM  || '0.15'),
+    rateComfort:  parseFloat(process.env.COMMISSION_RATE_COMFORT  || '0.20'),
+    ratePremium:  parseFloat(process.env.COMMISSION_RATE_PREMIUM  || '0.20'),
     // Incentive bonuses (VND)
     peakHourBonus:         parseInt(process.env.INCENTIVE_PEAK_HOUR_BONUS         || '15000', 10),
     tripMilestoneBonus:    parseInt(process.env.INCENTIVE_TRIP_MILESTONE_BONUS    || '50000', 10),

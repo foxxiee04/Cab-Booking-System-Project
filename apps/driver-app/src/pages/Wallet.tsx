@@ -11,7 +11,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  InputAdornment,
+  Divider,
   LinearProgress,
   Paper,
   Skeleton,
@@ -23,54 +23,83 @@ import {
   Tabs,
   TextField,
   Typography,
+  InputAdornment,
+  ToggleButtonGroup,
+  ToggleButton,
 } from '@mui/material';
 import {
-  AccountBalanceWalletRounded,
   AccountBalanceRounded,
-  ArrowDownwardRounded,
-  ArrowUpwardRounded,
+  AccountBalanceWalletRounded,
   CheckCircleRounded,
   EmojiEventsRounded,
+  HourglassTopRounded,
   InfoOutlined,
   LocalFireDepartmentRounded,
+  LockRounded,
   RouteRounded,
   TwoWheelerRounded,
-  AddRounded,
   WarningAmberRounded,
-  HourglassTopRounded,
+  LockOpenRounded,
+  BlockRounded,
+  ArrowForwardIosRounded,
+  MonetizationOnRounded,
+  ReceiptLongRounded,
+  SavingsRounded,
+  TrendingDownRounded,
 } from '@mui/icons-material';
 import { walletApi, WalletTransaction, DailyStats, IncentiveRule } from '../api/wallet.api';
 import { formatCurrency, formatDate } from '../utils/format.utils';
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+
 const MIN_WITHDRAW = 50_000;
 
+const DEFAULT_BUSINESS_ACCOUNTS = {
+  topUpAccount: {
+    bankName: 'Techcombank',
+    accountNumber: '8000 511 204',
+    accountHolder: 'Cab Booking System Co., Ltd.',
+    description: 'Tai khoan doanh nghiep nhan tien nap vi, ky quy kich hoat va doi soat cong no.',
+    note: 'NAPKYQUY [SO_DIEN_THOAI_TAI_XE]',
+  },
+  payoutAccount: {
+    bankName: 'Techcombank',
+    accountNumber: '8000 511 204',
+    accountHolder: 'Cab Booking System Co., Ltd.',
+    description: 'Tai khoan doanh nghiep chuyen tien rut vi ve ngan hang ca nhan cua tai xe.',
+  },
+} as const;
+
 const BANK_OPTIONS = [
-  { name: 'Vietcombank', short: 'VCB', accent: '#16a34a', minDigits: 8, maxDigits: 14, helper: 'STK 8-14 số' },
-  { name: 'BIDV', short: 'BIDV', accent: '#1d4ed8', minDigits: 10, maxDigits: 14, helper: 'STK 10-14 số' },
-  { name: 'Techcombank', short: 'TCB', accent: '#dc2626', minDigits: 10, maxDigits: 14, helper: 'STK 10-14 số' },
-  { name: 'MB Bank', short: 'MB', accent: '#0f172a', minDigits: 8, maxDigits: 16, helper: 'STK 8-16 số' },
-  { name: 'ACB', short: 'ACB', accent: '#2563eb', minDigits: 8, maxDigits: 13, helper: 'STK 8-13 số' },
+  { name: 'Vietcombank', short: 'VCB', color: '#16a34a', minDigits: 8,  maxDigits: 14 },
+  { name: 'BIDV',        short: 'BIDV', color: '#1d4ed8', minDigits: 10, maxDigits: 14 },
+  { name: 'Techcombank', short: 'TCB', color: '#dc2626', minDigits: 10, maxDigits: 14 },
+  { name: 'MB Bank',     short: 'MB',  color: '#0f172a', minDigits: 8,  maxDigits: 16 },
+  { name: 'ACB',         short: 'ACB', color: '#2563eb', minDigits: 8,  maxDigits: 13 },
+  { name: 'VPBank',      short: 'VPB', color: '#059669', minDigits: 10, maxDigits: 14 },
 ];
 
-const digitsOnly = (value: string) => value.replace(/\D/g, '');
-
-const formatDigitGroups = (value: string) => digitsOnly(value).replace(/(\d{4})(?=\d)/g, '$1 ');
-
-const formatMoneyInput = (value: string) => {
-  const digits = digitsOnly(value);
-  return digits ? Number(digits).toLocaleString('vi-VN') : '';
-};
+type TxFilter = 'ALL' | 'EARN' | 'DEBT' | 'WITHDRAW';
 
 const TX_TYPE_META: Record<
   WalletTransaction['type'],
-  { label: string; color: 'success' | 'error' | 'warning' | 'info' | 'default'; sign: '+' | '-' }
+  { label: string; color: 'success' | 'error' | 'warning' | 'info' | 'default'; sign: '+' | '-'; filterKey: TxFilter }
 > = {
-  EARN:       { label: 'Thu nhập online',    color: 'success', sign: '+' },
-  COMMISSION: { label: 'Hoa hồng platform',  color: 'error',   sign: '-' },
-  BONUS:      { label: 'Thưởng',             color: 'warning',  sign: '+' },
-  WITHDRAW:   { label: 'Rút tiền',           color: 'default',  sign: '-' },
-  REFUND:     { label: 'Hoàn tiền',          color: 'info',     sign: '-' },
-  TOP_UP:     { label: 'Nạp ví',            color: 'success',  sign: '+' },
+  EARN:       { label: 'Thu nhập online',  color: 'success', sign: '+', filterKey: 'EARN'     },
+  COMMISSION: { label: 'Công nợ tiền mặt', color: 'error',   sign: '-', filterKey: 'DEBT'     },
+  BONUS:      { label: 'Thưởng',           color: 'warning', sign: '+', filterKey: 'EARN'     },
+  WITHDRAW:   { label: 'Doanh nghiệp chuyển khoản', color: 'default', sign: '-', filterKey: 'WITHDRAW' },
+  REFUND:     { label: 'Hoàn tiền',        color: 'info',    sign: '-', filterKey: 'WITHDRAW' },
+  TOP_UP:     { label: 'Nạp vào tài khoản doanh nghiệp', color: 'success', sign: '+', filterKey: 'EARN' },
+};
+
+const TX_TYPE_ICONS: Record<WalletTransaction['type'], React.ReactNode> = {
+  EARN:       <MonetizationOnRounded fontSize="small" />,
+  COMMISSION: <TrendingDownRounded fontSize="small" />,
+  BONUS:      <EmojiEventsRounded fontSize="small" />,
+  WITHDRAW:   <AccountBalanceRounded fontSize="small" />,
+  REFUND:     <ReceiptLongRounded fontSize="small" />,
+  TOP_UP:     <SavingsRounded fontSize="small" />,
 };
 
 const RULE_ICONS: Record<IncentiveRule['type'], React.ReactNode> = {
@@ -85,32 +114,76 @@ const RULE_TYPE_LABELS: Record<IncentiveRule['type'], string> = {
   PEAK_HOUR:   'Giờ cao điểm',
 };
 
+const TX_PAGE = 15;
+
+const digitsOnly = (v: string) => v.replace(/\D/g, '');
+const formatDigitGroups = (v: string) => digitsOnly(v).replace(/(\d{4})(?=\d)/g, '$1 ');
+const formatMoneyInput  = (v: string) => { const d = digitsOnly(v); return d ? Number(d).toLocaleString('vi-VN') : ''; };
+
+// ─── Wallet state type ────────────────────────────────────────────────────────
+
+interface WalletState {
+  balance: number;
+  operationalBalance: number;
+  availableBalance: number;
+  lockedBalance: number;
+  withdrawableBalance: number;
+  debt: number;
+  status: 'INACTIVE' | 'ACTIVE' | 'BLOCKED';
+  initialActivationCompleted: boolean;
+  activationRequired: boolean;
+  warningThresholdReached: boolean;
+  canAcceptRide: boolean;
+  activationThreshold: number;
+  warningThreshold: number;
+  debtLimit: number;
+  reason?: string;
+  businessAccounts?: {
+    topUpAccount?: {
+      bankName: string;
+      accountNumber: string;
+      accountHolder: string;
+      description?: string;
+      note?: string;
+    } | null;
+    payoutAccount?: {
+      bankName: string;
+      accountNumber: string;
+      accountHolder: string;
+      description?: string;
+    } | null;
+  };
+}
+
+// ─── Gradient helpers per wallet status ──────────────────────────────────────
+
+const CARD_GRADIENT: Record<'INACTIVE' | 'ACTIVE' | 'BLOCKED', string> = {
+  INACTIVE: 'linear-gradient(135deg, #1e293b 0%, #334155 60%, #475569 100%)',
+  ACTIVE:   'linear-gradient(135deg, #1e40af 0%, #2563eb 55%, #3b82f6 100%)',
+  BLOCKED:  'linear-gradient(135deg, #7f1d1d 0%, #b91c1c 60%, #dc2626 100%)',
+};
+
+const STATUS_CHIP: Record<'INACTIVE' | 'ACTIVE' | 'BLOCKED', { label: string; bg: string }> = {
+  INACTIVE: { label: 'Chưa kích hoạt', bg: 'rgba(251,191,36,0.25)' },
+  ACTIVE:   { label: 'Hoạt động',      bg: 'rgba(34,197,94,0.25)'  },
+  BLOCKED:  { label: 'Bị khoá',        bg: 'rgba(239,68,68,0.3)'   },
+};
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
 export default function WalletPage() {
   const [tab, setTab] = useState(0);
 
-  // Balance
-  const [balance, setBalance] = useState<number | null>(null);
-  const [walletState, setWalletState] = useState<{
-    initialActivationCompleted?: boolean;
-    activationRequired?: boolean;
-    warningThresholdReached?: boolean;
-    canAcceptRide?: boolean;
-    activationThreshold?: number;
-    warningThreshold?: number;
-    debtLimit?: number;
-    reason?: string;
-  } | null>(null);
+  const [walletState, setWalletState] = useState<WalletState | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [balanceError, setBalanceError] = useState('');
 
-  // Transactions
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [txTotal, setTxTotal] = useState(0);
   const [txOffset, setTxOffset] = useState(0);
   const [txLoading, setTxLoading] = useState(false);
-  const TX_PAGE = 15;
+  const [txFilter, setTxFilter] = useState<TxFilter>('ALL');
 
-  // Incentive
   const [rules, setRules] = useState<IncentiveRule[]>([]);
   const [stats, setStats] = useState<DailyStats[]>([]);
   const [incentiveLoading, setIncentiveLoading] = useState(false);
@@ -121,11 +194,10 @@ export default function WalletPage() {
   const [withdrawBankName, setWithdrawBankName] = useState('');
   const [withdrawAccountNumber, setWithdrawAccountNumber] = useState('');
   const [withdrawAccountHolder, setWithdrawAccountHolder] = useState('');
-  const [withdrawStep, setWithdrawStep] = useState<0 | 1 | 2>(0); // 0=form, 1=pending, 2=success
+  const [withdrawStep, setWithdrawStep] = useState<0 | 1 | 2>(0);
   const [withdrawalId, setWithdrawalId] = useState('');
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [withdrawError, setWithdrawError] = useState('');
-  const [withdrawSuccess, setWithdrawSuccess] = useState('');
 
   // Top-up dialog
   const [topUpOpen, setTopUpOpen] = useState(false);
@@ -133,7 +205,7 @@ export default function WalletPage() {
   const [topUpProvider, setTopUpProvider] = useState<'MOMO' | 'VNPAY' | null>(null);
   const [topUpLoading, setTopUpLoading] = useState(false);
   const [topUpError, setTopUpError] = useState('');
-  const [topUpSuccess, setTopUpSuccess] = useState('');
+  const [globalSuccess, setGlobalSuccess] = useState('');
 
   // ─── Loaders ─────────────────────────────────────────────────────────────
 
@@ -142,8 +214,25 @@ export default function WalletPage() {
     setBalanceError('');
     try {
       const res = await walletApi.getBalance();
-      setBalance(res.data.data.balance);
-      setWalletState(res.data.data);
+      const p = res.data?.data ?? (res.data as any);
+      setWalletState(p ? {
+        balance:                    p.balance ?? 0,
+        operationalBalance:         p.operationalBalance ?? p.availableBalance ?? 0,
+        availableBalance:           p.availableBalance ?? 0,
+        lockedBalance:              p.lockedBalance ?? 0,
+        withdrawableBalance:        p.withdrawableBalance ?? 0,
+        debt:                       p.debt ?? 0,
+        status:                     p.status ?? 'INACTIVE',
+        initialActivationCompleted: p.initialActivationCompleted ?? false,
+        activationRequired:         p.activationRequired ?? false,
+        warningThresholdReached:    p.warningThresholdReached ?? false,
+        canAcceptRide:              p.canAcceptRide ?? false,
+        activationThreshold:        p.activationThreshold ?? 300_000,
+        warningThreshold:           p.warningThreshold ?? -100_000,
+        debtLimit:                  p.debtLimit ?? -200_000,
+        reason:                     p.reason,
+        businessAccounts:           p.businessAccounts ?? undefined,
+      } : null);
     } catch (err: any) {
       setBalanceError(err.response?.data?.error?.message || 'Không thể tải số dư ví');
     } finally {
@@ -151,21 +240,20 @@ export default function WalletPage() {
     }
   }, []);
 
-  const loadTransactions = useCallback(
-    async (offset: number, append = false) => {
-      setTxLoading(true);
-      try {
-        const res = await walletApi.getTransactions(TX_PAGE, offset);
-        const { transactions: newTx, total } = res.data.data;
-        setTransactions((prev) => (append ? [...prev, ...newTx] : newTx));
-        setTxTotal(total);
-        setTxOffset(offset);
-      } finally {
-        setTxLoading(false);
-      }
-    },
-    [],
-  );
+  const loadTransactions = useCallback(async (offset: number, append = false) => {
+    setTxLoading(true);
+    try {
+      const res = await walletApi.getTransactions(TX_PAGE, offset);
+      const payload = (res.data?.data ?? res.data) as any;
+      const newTx = Array.isArray(payload?.transactions) ? payload.transactions : [];
+      const total = typeof payload?.total === 'number' ? payload.total : newTx.length;
+      setTransactions((prev) => (append ? [...prev, ...newTx] : newTx));
+      setTxTotal(total);
+      setTxOffset(offset);
+    } finally {
+      setTxLoading(false);
+    }
+  }, []);
 
   const loadIncentive = useCallback(async () => {
     setIncentiveLoading(true);
@@ -174,8 +262,10 @@ export default function WalletPage() {
         walletApi.getIncentiveRules(),
         walletApi.getDailyStats(7),
       ]);
-      setRules(rulesRes.data.data);
-      setStats(statsRes.data.data);
+      const rulesPayload = (rulesRes.data?.data ?? rulesRes.data) as any;
+      const statsPayload = (statsRes.data?.data ?? statsRes.data) as any;
+      setRules(Array.isArray(rulesPayload) ? rulesPayload : []);
+      setStats(Array.isArray(statsPayload) ? statsPayload : (statsPayload ? [statsPayload] : []));
     } finally {
       setIncentiveLoading(false);
     }
@@ -188,85 +278,64 @@ export default function WalletPage() {
   }, [loadBalance, loadTransactions, loadIncentive]);
 
   const selectedWithdrawBank = useMemo(
-    () => BANK_OPTIONS.find((bank) => bank.name === withdrawBankName) || null,
+    () => BANK_OPTIONS.find((b) => b.name === withdrawBankName) ?? null,
     [withdrawBankName],
   );
 
-  // ─── Withdraw ─────────────────────────────────────────────────────────────
+  const walletStatus = walletState?.status ?? 'INACTIVE';
+  const operationalBalance = walletState?.operationalBalance ?? walletState?.availableBalance ?? 0;
+  const lockedBalance = walletState?.lockedBalance ?? 0;
+  const withdrawableBalance = walletState?.withdrawableBalance ?? 0;
+  const debt = walletState?.debt ?? 0;
+  const activationThreshold = walletState?.activationThreshold ?? 300_000;
+  const businessAccounts = walletState?.businessAccounts ?? DEFAULT_BUSINESS_ACCOUNTS;
+  const topUpBusinessAccount = businessAccounts.topUpAccount ?? DEFAULT_BUSINESS_ACCOUNTS.topUpAccount;
+  const payoutBusinessAccount = businessAccounts.payoutAccount ?? topUpBusinessAccount;
+  const todayStats = stats[0];
+
+  const filteredTxs = useMemo(
+    () => txFilter === 'ALL' ? transactions : transactions.filter((t) => TX_TYPE_META[t.type]?.filterKey === txFilter),
+    [transactions, txFilter],
+  );
+
+  // ─── Withdraw handler ─────────────────────────────────────────────────────
 
   const handleWithdraw = async () => {
     const amount = Number(digitsOnly(withdrawAmount));
     const accountNumberDigits = digitsOnly(withdrawAccountNumber);
     setWithdrawError('');
 
-    if (!amount || amount <= 0) {
-      setWithdrawError('Vui lòng nhập số tiền hợp lệ');
+    if (!amount || amount < MIN_WITHDRAW) {
+      setWithdrawError(`Số tiền tối thiểu là ${formatCurrency(MIN_WITHDRAW)}`);
       return;
     }
-    if (amount < MIN_WITHDRAW) {
-      setWithdrawError(`Số tiền rút tối thiểu là ${formatCurrency(MIN_WITHDRAW)}`);
+    if (amount > withdrawableBalance) {
+      setWithdrawError(`Số dư khả dụng chỉ còn ${formatCurrency(withdrawableBalance)} (không tính ký quỹ ${formatCurrency(lockedBalance)})`);
       return;
     }
-    if (balance !== null && amount > balance) {
-      setWithdrawError(
-        `Số dư không đủ. Số dư hiện tại: ${formatCurrency(balance)}`,
-      );
+    if (!withdrawBankName) { setWithdrawError('Vui lòng chọn ngân hàng nhận'); return; }
+    if (!selectedWithdrawBank) { setWithdrawError('Ngân hàng chưa được hỗ trợ'); return; }
+    if (!accountNumberDigits || accountNumberDigits.length < selectedWithdrawBank.minDigits || accountNumberDigits.length > selectedWithdrawBank.maxDigits) {
+      setWithdrawError(`STK ${selectedWithdrawBank.name} phải từ ${selectedWithdrawBank.minDigits}–${selectedWithdrawBank.maxDigits} chữ số`);
       return;
     }
-    if (!withdrawBankName) {
-      setWithdrawError('Vui lòng chọn ngân hàng');
-      return;
-    }
-    if (!selectedWithdrawBank) {
-      setWithdrawError('Ngân hàng nhận tiền chưa được hỗ trợ');
-      return;
-    }
-    if (
-      !accountNumberDigits
-      || accountNumberDigits.length < selectedWithdrawBank.minDigits
-      || accountNumberDigits.length > selectedWithdrawBank.maxDigits
-    ) {
-      setWithdrawError(`Số tài khoản ${selectedWithdrawBank.name} phải có ${selectedWithdrawBank.minDigits}-${selectedWithdrawBank.maxDigits} chữ số`);
-      return;
-    }
-    if (!withdrawAccountHolder.trim()) {
-      setWithdrawError('Vui lòng nhập tên chủ tài khoản');
-      return;
-    }
-    if (!/^[A-Za-zÀ-ỹ\s]+$/u.test(withdrawAccountHolder.trim())) {
-      setWithdrawError('Tên chủ tài khoản chỉ nên chứa chữ cái và khoảng trắng');
-      return;
-    }
+    if (!withdrawAccountHolder.trim()) { setWithdrawError('Vui lòng nhập tên chủ tài khoản'); return; }
 
     setWithdrawLoading(true);
     try {
-      const bankInfo = {
+      const res = await walletApi.withdraw(amount, {
         bankName: withdrawBankName,
         accountNumber: accountNumberDigits,
         accountHolder: withdrawAccountHolder.trim().toUpperCase(),
-      };
-      const res = await walletApi.withdraw(amount, bankInfo);
-      const { newBalance, withdrawalId: wdId, status } = res.data.data;
-      setBalance(newBalance);
+      });
+      const { withdrawalId: wdId, status } = res.data.data;
       setWithdrawalId(wdId);
-
-      if (status === 'PENDING') {
-        // Show pending step
-        setWithdrawStep(1);
-        // Simulate bank processing: auto-confirm after 3 seconds
-        setTimeout(() => {
-          setWithdrawStep(2);
-        }, 3000);
-      } else {
-        setWithdrawStep(2);
-      }
-
-      // Reload transactions
-      loadTransactions(0);
+      setWithdrawStep(status === 'PENDING' ? 1 : 2);
+      if (status === 'PENDING') setTimeout(() => setWithdrawStep(2), 3000);
+      await loadBalance();
+      await loadTransactions(0);
     } catch (err: any) {
-      setWithdrawError(
-        err.response?.data?.error?.message || 'Rút tiền thất bại, vui lòng thử lại',
-      );
+      setWithdrawError(err.response?.data?.message || err.response?.data?.error?.message || 'Rút tiền thất bại');
     } finally {
       setWithdrawLoading(false);
     }
@@ -274,6 +343,7 @@ export default function WalletPage() {
 
   const closeWithdrawDialog = () => {
     if (withdrawLoading) return;
+    if (withdrawStep === 2) setGlobalSuccess(`Rút tiền thành công! Mã: ${withdrawalId}`);
     setWithdrawOpen(false);
     setWithdrawStep(0);
     setWithdrawAmount('');
@@ -281,218 +351,352 @@ export default function WalletPage() {
     setWithdrawAccountNumber('');
     setWithdrawAccountHolder('');
     setWithdrawError('');
-    if (withdrawStep === 2) {
-      setWithdrawSuccess(`Rút tiền thành công! Mã giao dịch: ${withdrawalId}`);
-    }
+  };
+
+  // ─── Top-up handler ───────────────────────────────────────────────────────
+
+  const openTopUp = (preset?: number) => {
+    setTopUpOpen(true);
+    setTopUpError('');
+    setTopUpAmount(preset ? String(preset) : '');
+    setTopUpProvider(null);
   };
 
   const handleTopUp = async () => {
-    const amount = parseFloat(topUpAmount.replace(/[.,]/g, ''));
+    const amount = Number(digitsOnly(topUpAmount));
     setTopUpError('');
-
-    if (!amount || amount <= 0) {
-      setTopUpError('Vui lòng nhập số tiền hợp lệ');
-      return;
-    }
-    if (!topUpProvider) {
-      setTopUpError('Vui lòng chọn phương thức thanh toán');
-      return;
-    }
+    if (!amount || amount < 10_000) { setTopUpError('Số tiền nạp tối thiểu 10.000 VND'); return; }
+    if (!topUpProvider) { setTopUpError('Vui lòng chọn phương thức thanh toán'); return; }
 
     setTopUpLoading(true);
     try {
-      // Return URL: driver app callback page
       const returnUrl = `${window.location.origin}/wallet/topup/return`;
       const res = await walletApi.initTopUp(amount, topUpProvider, returnUrl);
       const { payUrl, topUpId } = res.data.data;
-
-      // Save topUpId + provider to sessionStorage so the return page can poll status
       if (topUpId) {
         sessionStorage.setItem('wallet:pendingTopUpId', topUpId);
         sessionStorage.setItem('wallet:pendingTopUpProvider', topUpProvider);
       }
-
-      // Close dialog and redirect to gateway
       setTopUpOpen(false);
-      setTopUpAmount('');
-      setTopUpProvider(null);
       window.location.href = payUrl;
     } catch (err: any) {
-      setTopUpError(
-        err.response?.data?.error?.message || 'Không thể khởi tạo thanh toán, vui lòng thử lại',
-      );
+      setTopUpError(err.response?.data?.message || err.response?.data?.error?.message || 'Không thể khởi tạo thanh toán');
     } finally {
       setTopUpLoading(false);
     }
   };
 
-  const todayStats = stats[0];
-  const activationThreshold = walletState?.activationThreshold ?? 300_000;
-  const warningThreshold = walletState?.warningThreshold ?? -100_000;
-  const debtLimit = walletState?.debtLimit ?? -200_000;
-  const activationTopUpNeeded = walletState?.activationRequired && balance !== null
-    ? Math.max(activationThreshold - balance, 10_000)
-    : 0;
+  // ─── Render: Hero wallet card (status-aware) ──────────────────────────────
 
-  // ─── Render helpers ───────────────────────────────────────────────────────
+  const renderBalanceCard = () => {
+    const gradient = CARD_GRADIENT[walletStatus];
+    const chip     = STATUS_CHIP[walletStatus];
 
-  const renderBalance = () => (
-    <Card
-      elevation={0}
-      sx={{
-        background: 'linear-gradient(135deg, #1e40af 0%, #2563eb 60%, #3b82f6 100%)',
-        color: '#fff',
-        borderRadius: 4,
-        mb: 3,
-      }}
-    >
-      <CardContent sx={{ p: 3 }}>
-        <Stack direction="row" alignItems="center" spacing={1.5} mb={1}>
-          <AccountBalanceWalletRounded sx={{ fontSize: 28, opacity: 0.9 }} />
-          <Typography variant="subtitle1" sx={{ opacity: 0.85, fontWeight: 600 }}>
-            Số dư ví
-          </Typography>
-        </Stack>
+    return (
+      <Card elevation={0} sx={{ background: gradient, color: '#fff', borderRadius: 4 }}>
+        <CardContent sx={{ p: 3 }}>
 
-        {balanceLoading ? (
-          <Skeleton variant="text" width={180} height={52} sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
-        ) : balanceError ? (
-          <Typography color="error.light">{balanceError}</Typography>
-        ) : (
-          <Typography variant="h4" fontWeight={800} letterSpacing={-0.5}>
-            {formatCurrency(balance ?? 0)}
-          </Typography>
-        )}
+          {/* Header row */}
+          <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2.5}>
+            <Stack direction="row" alignItems="center" spacing={1.5}>
+              <AccountBalanceWalletRounded sx={{ fontSize: 24, opacity: 0.9 }} />
+              <Typography variant="subtitle1" sx={{ opacity: 0.85, fontWeight: 700 }}>
+                Ví tài xế
+              </Typography>
+            </Stack>
+            <Chip
+              icon={
+                walletStatus === 'INACTIVE' ? <LockRounded sx={{ fontSize: '14px !important', color: '#fff !important' }} /> :
+                walletStatus === 'BLOCKED'  ? <BlockRounded sx={{ fontSize: '14px !important', color: '#fff !important' }} /> :
+                <LockOpenRounded sx={{ fontSize: '14px !important', color: '#fff !important' }} />
+              }
+              label={chip.label}
+              size="small"
+              sx={{ bgcolor: chip.bg, color: '#fff', fontWeight: 700, fontSize: '0.68rem', border: '1px solid rgba(255,255,255,0.2)' }}
+            />
+          </Stack>
 
-        {balance !== null && balance < 0 && (
-          <Chip
-            label={`Nợ platform: ${formatCurrency(Math.abs(balance))}`}
-            color="error"
-            size="small"
-            sx={{ mt: 1, fontWeight: 700, bgcolor: 'rgba(239,68,68,0.25)', border: '1px solid rgba(239,68,68,0.4)' }}
-          />
-        )}
+          {balanceLoading ? (
+            <Stack spacing={1.5}>
+              <Skeleton variant="rounded" height={44} sx={{ bgcolor: 'rgba(255,255,255,0.15)', borderRadius: 2 }} />
+              <Skeleton variant="rounded" height={44} sx={{ bgcolor: 'rgba(255,255,255,0.1)',  borderRadius: 2 }} />
+            </Stack>
+          ) : balanceError ? (
+            <Typography color="error.light" variant="body2">{balanceError}</Typography>
+          ) : walletStatus === 'INACTIVE' ? (
 
-        {walletState?.canAcceptRide === false && walletState?.activationRequired !== true && balance !== null && (
-          <Alert
-            severity="error"
-            sx={{
-              mt: 1.5,
-              bgcolor: 'rgba(239,68,68,0.15)',
-              color: '#fca5a5',
-              border: '1px solid rgba(239,68,68,0.3)',
-              '& .MuiAlert-icon': { color: '#f87171' },
-            }}
-          >
-            Số dư đã chạm mốc khóa {formatCurrency(debtLimit)}. Bạn tạm thời không thể nhận cuốc mới.
-          </Alert>
-        )}
+            // ── INACTIVE: activation prompt ──────────────────────────────
+            <Stack spacing={2}>
+              <Box sx={{ bgcolor: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 3, p: 2 }}>
+                <Typography variant="h6" fontWeight={800} sx={{ mb: 0.5 }}>
+                  Nạp ký quỹ để kích hoạt
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.85, mb: 1.5 }}>
+                  Tài khoản cần ký quỹ <strong>{formatCurrency(activationThreshold)}</strong> để bắt đầu nhận cuốc.
+                  Khoản này được giữ ở tài khoản doanh nghiệp như tiền ký quỹ và sẽ được hoàn trả khi bạn ngừng hoạt động.
+                </Typography>
+                <Stack direction="row" justifyContent="space-between" sx={{ bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 2, px: 2, py: 1.2 }}>
+                  <Typography variant="caption" sx={{ opacity: 0.7 }}>Cần nạp tối thiểu</Typography>
+                  <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#fcd34d' }}>
+                    {formatCurrency(activationThreshold)}
+                  </Typography>
+                </Stack>
+              </Box>
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => openTopUp(activationThreshold)}
+                endIcon={<ArrowForwardIosRounded fontSize="small" />}
+                sx={{
+                  bgcolor: '#f59e0b',
+                  '&:hover': { bgcolor: '#d97706' },
+                  color: '#1c1917',
+                  fontWeight: 800,
+                  borderRadius: 3,
+                  py: 1.4,
+                  fontSize: '0.95rem',
+                }}
+              >
+                Kích hoạt ngay
+              </Button>
+            </Stack>
 
-        <Stack direction="row" spacing={1.5} mt={2.5}>
-          <Button
-            variant="contained"
-            startIcon={<AddRounded />}
-            onClick={() => { setTopUpOpen(true); setTopUpError(''); setTopUpAmount(''); }}
-            sx={{
-              bgcolor: 'rgba(255,255,255,0.2)',
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' },
-              color: '#fff',
-              fontWeight: 700,
-              borderRadius: 3,
-              flex: 1,
-            }}
-          >
-            Nạp tiền
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<ArrowUpwardRounded />}
-            onClick={() => { setWithdrawOpen(true); setWithdrawError(''); setWithdrawAmount(''); setWithdrawStep(0); setWithdrawBankName(''); setWithdrawAccountNumber(''); setWithdrawAccountHolder(''); }}
-            disabled={!balance || balance < MIN_WITHDRAW}
-            sx={{
-              bgcolor: 'rgba(255,255,255,0.2)',
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' },
-              color: '#fff',
-              fontWeight: 700,
-              borderRadius: 3,
-              flex: 1,
-            }}
-          >
-            Rút tiền
-          </Button>
-        </Stack>
-      </CardContent>
-    </Card>
+          ) : (
+
+            // ── ACTIVE / BLOCKED: 3-section balance ─────────────────────
+            <>
+              <Stack spacing={1} mb={2.5}>
+
+                {/* Section 1: Security deposit (locked) */}
+                <Box sx={{
+                  bgcolor: 'rgba(255,255,255,0.1)',
+                  borderRadius: 2.5, px: 2, py: 1.2,
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <LockRounded sx={{ fontSize: 15, opacity: 0.65 }} />
+                    <Box>
+                      <Typography variant="caption" sx={{ opacity: 0.7, display: 'block', lineHeight: 1.1 }}>
+                        Ký quỹ (đảm bảo)
+                      </Typography>
+                      <Typography variant="caption" sx={{ opacity: 0.45, fontSize: '0.62rem' }}>
+                        Hoàn trả khi ngừng hoạt động
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  <Typography variant="subtitle2" fontWeight={700}>
+                    {formatCurrency(lockedBalance)}
+                  </Typography>
+                </Box>
+
+                {/* Section 2: Available balance */}
+                <Box sx={{
+                  bgcolor: 'rgba(255,255,255,0.18)',
+                  borderRadius: 2.5, px: 2, py: 1.4,
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <Box>
+                    <Typography variant="caption" sx={{ opacity: 0.75, display: 'block', lineHeight: 1.1 }}>
+                      Số dư khả dụng
+                    </Typography>
+                    <Typography variant="caption" sx={{ opacity: 0.5, fontSize: '0.62rem' }}>
+                      Doanh nghiệp sẽ chuyển về ngân hàng cá nhân của bạn
+                    </Typography>
+                  </Box>
+                  <Typography variant="h5" fontWeight={800}>
+                    {formatCurrency(withdrawableBalance)}
+                  </Typography>
+                </Box>
+
+                {/* Section 3: Debt (only if > 0) */}
+                {debt > 0 && (
+                  <Box sx={{
+                    bgcolor: 'rgba(239,68,68,0.2)',
+                    border: '1px solid rgba(239,68,68,0.4)',
+                    borderRadius: 2.5, px: 2, py: 1.2,
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  }}>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: '#fca5a5', display: 'block', lineHeight: 1.1, fontWeight: 700 }}>
+                        Công nợ platform
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: '#fca5a5', opacity: 0.7, fontSize: '0.62rem' }}>
+                        Phí cuốc tiền mặt chưa thanh toán
+                      </Typography>
+                    </Box>
+                    <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#f87171' }}>
+                      -{formatCurrency(debt)}
+                    </Typography>
+                  </Box>
+                )}
+              </Stack>
+
+              {/* Action buttons */}
+              <Stack direction="row" spacing={1.5}>
+                <Button
+                  variant="contained" fullWidth
+                  onClick={() => openTopUp()}
+                  sx={{ bgcolor: 'rgba(255,255,255,0.2)', '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' }, color: '#fff', fontWeight: 700, borderRadius: 3, py: 1.1 }}
+                >
+                  + Nạp vào doanh nghiệp
+                </Button>
+                <Button
+                  variant="contained" fullWidth
+                  onClick={() => { setWithdrawOpen(true); setWithdrawError(''); setWithdrawAmount(''); setWithdrawStep(0); setWithdrawBankName(''); setWithdrawAccountNumber(''); setWithdrawAccountHolder(''); }}
+                  disabled={walletStatus !== 'ACTIVE' || withdrawableBalance < MIN_WITHDRAW}
+                  sx={{
+                    bgcolor: 'rgba(255,255,255,0.2)', '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' },
+                    color: '#fff', fontWeight: 700, borderRadius: 3, py: 1.1,
+                    '&.Mui-disabled': { bgcolor: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.3)' },
+                  }}
+                >
+                  ↑ Rút về ngân hàng
+                </Button>
+              </Stack>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // ─── Render: Status alerts ────────────────────────────────────────────────
+
+  const renderAlerts = () => (
+    <Stack spacing={1}>
+      {globalSuccess && (
+        <Alert severity="success" onClose={() => setGlobalSuccess('')} sx={{ borderRadius: 2 }}>
+          {globalSuccess}
+        </Alert>
+      )}
+      {walletStatus === 'BLOCKED' && (
+        <Alert severity="error" icon={<BlockRounded />} sx={{ borderRadius: 2 }}
+          action={<Button size="small" color="error" onClick={() => openTopUp()}>Nạp tiền</Button>}>
+          Tài khoản bị khoá nhận cuốc. Số dư vận hành hiện tại là <strong>{formatCurrency(operationalBalance)}</strong>. Nạp thêm để mở khoá.
+        </Alert>
+      )}
+      {walletState?.warningThresholdReached && walletStatus === 'ACTIVE' && (
+        <Alert severity="warning" icon={<WarningAmberRounded />} sx={{ borderRadius: 2 }}>
+          Số dư vận hành đang âm ({formatCurrency(operationalBalance)}). Tài khoản sẽ bị khoá khi chạm {formatCurrency(walletState.debtLimit)}.
+        </Alert>
+      )}
+    </Stack>
   );
+
+  // ─── Render: Activation info card (shown below balance when INACTIVE) ─────
+
+  const renderActivationCard = () => {
+    if (walletStatus !== 'INACTIVE') return null;
+    return (
+      <Card variant="outlined" sx={{ borderRadius: 3, borderColor: '#fcd34d', bgcolor: '#fffbeb' }}>
+        <CardContent sx={{ p: 2.5 }}>
+          <Typography variant="subtitle2" fontWeight={800} color="#92400e" gutterBottom>
+            Tài khoản nhận ký quỹ
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Tài xế có thể chuyển khoản trực tiếp tới tài khoản doanh nghiệp hoặc chọn nạp qua MoMo / VNPay để kích hoạt ví.
+          </Typography>
+          <Stack spacing={0.8}>
+            {([
+              ['Ngân hàng',   topUpBusinessAccount.bankName],
+              ['Số tài khoản', topUpBusinessAccount.accountNumber],
+              ['Chủ tài khoản', topUpBusinessAccount.accountHolder],
+              ['Nội dung CK', topUpBusinessAccount.note || DEFAULT_BUSINESS_ACCOUNTS.topUpAccount.note],
+              ['Số tiền',     `${formatCurrency(activationThreshold)} (tối thiểu)`],
+            ] as const).map(([k, v]) => (
+              <Stack key={k} direction="row" justifyContent="space-between" alignItems="flex-start">
+                <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>{k}</Typography>
+                <Typography variant="caption" fontWeight={700}
+                  sx={{ textAlign: 'right', ml: 1, color: k === 'Số tài khoản' ? 'primary.main' : k === 'Số tiền' ? 'success.dark' : 'text.primary' }}>
+                  {v}
+                </Typography>
+              </Stack>
+            ))}
+          </Stack>
+          <Divider sx={{ my: 1.5 }}>
+            <Typography variant="caption" color="text.secondary">hoặc thanh toán trực tuyến</Typography>
+          </Divider>
+          <Button
+            variant="contained" fullWidth color="warning"
+            onClick={() => openTopUp(activationThreshold)}
+            sx={{ borderRadius: 3, fontWeight: 700, py: 1.2 }}
+          >
+            Nạp ký quỹ qua MoMo / VNPay
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // ─── Render: Transaction filter + list ───────────────────────────────────
 
   const renderTxList = () => (
     <Box>
-      {txLoading && transactions.length === 0 ? (
-        <Stack spacing={1.5}>
-          {[1, 2, 3, 4].map((k) => (
-            <Skeleton key={k} variant="rounded" height={68} />
-          ))}
+      {/* Filter bar */}
+      <ToggleButtonGroup
+        value={txFilter}
+        exclusive
+        onChange={(_e, v) => { if (v) setTxFilter(v); }}
+        size="small"
+        fullWidth
+        sx={{ mb: 1.5, '& .MuiToggleButton-root': { borderRadius: '20px !important', border: '1px solid', py: 0.5, fontWeight: 700, fontSize: '0.72rem' } }}
+      >
+        <ToggleButton value="ALL">Tất cả</ToggleButton>
+        <ToggleButton value="EARN" sx={{ color: 'success.main', '&.Mui-selected': { bgcolor: '#f0fdf4', color: 'success.dark' } }}>Thu nhập</ToggleButton>
+        <ToggleButton value="DEBT" sx={{ color: 'error.main',   '&.Mui-selected': { bgcolor: '#fef2f2', color: 'error.dark'   } }}>Công nợ</ToggleButton>
+        <ToggleButton value="WITHDRAW" sx={{ color: 'text.secondary', '&.Mui-selected': { bgcolor: 'action.selected' } }}>Rút tiền</ToggleButton>
+      </ToggleButtonGroup>
+
+      {txLoading && filteredTxs.length === 0 ? (
+        <Stack spacing={1.2}>
+          {[1, 2, 3, 4].map((k) => <Skeleton key={k} variant="rounded" height={68} sx={{ borderRadius: 3 }} />)}
         </Stack>
-      ) : transactions.length === 0 ? (
-        <Paper
-          variant="outlined"
-          sx={{ p: 4, textAlign: 'center', borderRadius: 3, mt: 1 }}
-        >
+      ) : filteredTxs.length === 0 ? (
+        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
           <InfoOutlined sx={{ fontSize: 36, color: 'text.disabled', mb: 1 }} />
           <Typography color="text.secondary">Chưa có giao dịch nào</Typography>
         </Paper>
       ) : (
-        <Stack spacing={1.2}>
-          {transactions.map((tx) => {
+        <Stack spacing={1}>
+          {filteredTxs.map((tx) => {
             const meta = TX_TYPE_META[tx.type];
             const isCredit = meta.sign === '+';
+            const iconBg = isCredit
+              ? tx.type === 'BONUS' ? 'rgba(251,191,36,0.12)' : 'rgba(22,163,74,0.1)'
+              : tx.type === 'COMMISSION' ? 'rgba(239,68,68,0.1)' : 'rgba(100,116,139,0.1)';
+            const iconColor = isCredit
+              ? tx.type === 'BONUS' ? 'warning.main' : 'success.main'
+              : tx.type === 'COMMISSION' ? 'error.main' : 'text.secondary';
+
             return (
-              <Card key={tx.id} variant="outlined" sx={{ borderRadius: 3 }}>
-                <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+              <Card key={tx.id} variant="outlined" sx={{ borderRadius: 3, '&:hover': { boxShadow: 1 } }}>
+                <CardContent sx={{ py: 1.4, px: 2, '&:last-child': { pb: 1.4 } }}>
                   <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Stack direction="row" alignItems="center" spacing={1.5}>
-                      <Box
-                        sx={{
-                          width: 38,
-                          height: 38,
-                          borderRadius: '50%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          bgcolor: isCredit ? 'success.50' : 'error.50',
-                          color: isCredit ? 'success.main' : 'error.main',
-                        }}
-                      >
-                        {isCredit ? (
-                          <ArrowDownwardRounded fontSize="small" />
-                        ) : (
-                          <ArrowUpwardRounded fontSize="small" />
-                        )}
+                    <Stack direction="row" alignItems="center" spacing={1.5} flex={1} minWidth={0}>
+                      <Box sx={{
+                        width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        bgcolor: iconBg, color: iconColor,
+                      }}>
+                        {TX_TYPE_ICONS[tx.type]}
                       </Box>
-                      <Box>
-                        <Stack direction="row" alignItems="center" spacing={0.75}>
-                          <Typography variant="body2" fontWeight={700}>
+                      <Box minWidth={0}>
+                        <Stack direction="row" alignItems="center" spacing={0.6} flexWrap="wrap">
+                          <Typography variant="body2" fontWeight={700} noWrap>
                             {tx.description || meta.label}
                           </Typography>
-                          <Chip
-                            label={meta.label}
-                            color={meta.color}
-                            size="small"
-                            sx={{ height: 16, fontSize: '0.62rem', px: 0.5 }}
-                          />
+                          <Chip label={meta.label} color={meta.color} size="small"
+                            sx={{ height: 15, fontSize: '0.6rem', display: { xs: 'none', sm: 'flex' } }} />
                         </Stack>
                         <Typography variant="caption" color="text.secondary">
                           {formatDate(tx.createdAt)}
-                          {tx.rideId && ` • Cuốc ${tx.rideId.slice(-6)}`}
+                          {tx.rideId ? ` · #${tx.rideId.slice(-6)}` : ''}
                         </Typography>
                       </Box>
                     </Stack>
-                    <Box textAlign="right">
-                      <Typography
-                        variant="subtitle2"
-                        fontWeight={800}
-                        color={isCredit ? 'success.main' : 'error.main'}
-                      >
+                    <Box textAlign="right" flexShrink={0} ml={1}>
+                      <Typography variant="subtitle2" fontWeight={800}
+                        color={isCredit ? (tx.type === 'BONUS' ? 'warning.dark' : 'success.main') : (tx.type === 'COMMISSION' ? 'error.main' : 'text.secondary')}>
                         {meta.sign}{formatCurrency(tx.amount)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -505,15 +709,10 @@ export default function WalletPage() {
             );
           })}
 
-          {transactions.length < txTotal && (
-            <Button
-              variant="outlined"
-              fullWidth
-              onClick={() => loadTransactions(txOffset + TX_PAGE, true)}
-              disabled={txLoading}
-              sx={{ mt: 1, borderRadius: 3 }}
-            >
-              {txLoading ? <CircularProgress size={20} /> : 'Tải thêm'}
+          {transactions.length < txTotal && txFilter === 'ALL' && (
+            <Button variant="outlined" fullWidth onClick={() => loadTransactions(txOffset + TX_PAGE, true)}
+              disabled={txLoading} sx={{ mt: 0.5, borderRadius: 3 }}>
+              {txLoading ? <CircularProgress size={18} /> : 'Tải thêm'}
             </Button>
           )}
         </Stack>
@@ -521,248 +720,107 @@ export default function WalletPage() {
     </Box>
   );
 
+  // ─── Render: Incentive ────────────────────────────────────────────────────
+
   const renderIncentive = () => {
     if (incentiveLoading) {
-      return (
-        <Stack spacing={1.5}>
-          {[1, 2, 3].map((k) => <Skeleton key={k} variant="rounded" height={72} />)}
-        </Stack>
-      );
+      return <Stack spacing={1.2}>{[1, 2, 3].map((k) => <Skeleton key={k} variant="rounded" height={72} sx={{ borderRadius: 3 }} />)}</Stack>;
     }
-
     return (
       <Stack spacing={2}>
-        {/* Today summary */}
         {todayStats && (
-          <Card
-            variant="outlined"
-            sx={{ borderRadius: 3, bgcolor: 'success.50', borderColor: 'success.200' }}
-          >
+          <Card variant="outlined" sx={{ borderRadius: 3, bgcolor: '#f0fdf4', borderColor: '#bbf7d0' }}>
             <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
               <Typography variant="subtitle2" fontWeight={700} color="success.dark" gutterBottom>
                 Hôm nay
               </Typography>
               <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Số cuốc</Typography>
-                  <Typography fontWeight={700}>{todayStats.tripsCompleted}</Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Quãng đường</Typography>
-                  <Typography fontWeight={700}>{todayStats.distanceKm.toFixed(1)} km</Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Cuốc cao điểm</Typography>
-                  <Typography fontWeight={700}>{todayStats.peakTrips}</Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Thưởng nhận</Typography>
-                  <Typography fontWeight={700} color="success.dark">
-                    {formatCurrency(todayStats.bonusAwarded)}
-                  </Typography>
-                </Box>
+                {[
+                  { label: 'Số cuốc',     value: todayStats.tripsCompleted },
+                  { label: 'Quãng đường', value: `${todayStats.distanceKm.toFixed(1)} km` },
+                  { label: 'Cao điểm',    value: todayStats.peakTrips },
+                  { label: 'Thưởng',      value: formatCurrency(todayStats.bonusAwarded), color: 'success.dark' },
+                ].map((item) => (
+                  <Box key={item.label}>
+                    <Typography variant="caption" color="text.secondary" display="block">{item.label}</Typography>
+                    <Typography fontWeight={700} color={item.color}>{item.value}</Typography>
+                  </Box>
+                ))}
               </Stack>
             </CardContent>
           </Card>
         )}
 
-        <Typography variant="subtitle1" fontWeight={700}>
-          Quy tắc thưởng hiện hành
-        </Typography>
-
-        {rules.length === 0 ? (
-          <Typography color="text.secondary">Chưa có quy tắc thưởng nào.</Typography>
-        ) : (
-          rules.filter((r) => r.isActive).map((rule) => {
-            // Progress for today
-            let progress = 0;
-            let progressLabel = '';
-            if (todayStats) {
-              if (rule.type === 'TRIP_COUNT' && rule.conditionValue > 0) {
-                progress = Math.min(100, (todayStats.tripsCompleted / rule.conditionValue) * 100);
-                progressLabel = `${todayStats.tripsCompleted}/${rule.conditionValue} cuốc`;
-              } else if (rule.type === 'DISTANCE_KM' && rule.conditionValue > 0) {
-                progress = Math.min(100, (todayStats.distanceKm / rule.conditionValue) * 100);
-                progressLabel = `${todayStats.distanceKm.toFixed(1)}/${rule.conditionValue} km`;
-              } else if (rule.type === 'PEAK_HOUR') {
-                progressLabel = `${todayStats.peakTrips} cuốc giờ cao điểm`;
-                progress = Math.min(100, todayStats.peakTrips * 10);
-              }
+        <Typography variant="subtitle1" fontWeight={700}>Quy tắc thưởng</Typography>
+        {rules.filter((r) => r.isActive).length === 0 ? (
+          <Typography color="text.secondary" variant="body2">Chưa có quy tắc thưởng nào đang hoạt động.</Typography>
+        ) : rules.filter((r) => r.isActive).map((rule) => {
+          let progress = 0;
+          let progressLabel = '';
+          if (todayStats) {
+            if (rule.type === 'TRIP_COUNT' && rule.conditionValue > 0) {
+              progress = Math.min(100, (todayStats.tripsCompleted / rule.conditionValue) * 100);
+              progressLabel = `${todayStats.tripsCompleted}/${rule.conditionValue} cuốc`;
+            } else if (rule.type === 'DISTANCE_KM' && rule.conditionValue > 0) {
+              progress = Math.min(100, (todayStats.distanceKm / rule.conditionValue) * 100);
+              progressLabel = `${todayStats.distanceKm.toFixed(1)}/${rule.conditionValue} km`;
+            } else if (rule.type === 'PEAK_HOUR') {
+              progressLabel = `${todayStats.peakTrips} cuốc giờ cao điểm hôm nay`;
             }
-
-            return (
-              <Card key={rule.id} variant="outlined" sx={{ borderRadius: 3 }}>
-                <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-                  <Stack direction="row" alignItems="flex-start" spacing={1.5}>
-                    <Box
-                      sx={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        bgcolor: 'warning.50',
-                        color: 'warning.dark',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {RULE_ICONS[rule.type]}
-                    </Box>
-                    <Box flex={1} minWidth={0}>
-                      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-                        <Box>
-                          <Typography variant="body2" fontWeight={700}>
-                            {rule.description || RULE_TYPE_LABELS[rule.type]}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {rule.type === 'PEAK_HOUR'
-                              ? 'Mỗi cuốc trong giờ cao điểm (6–9h, 16–19h)'
-                              : rule.type === 'TRIP_COUNT'
-                              ? `Đạt ≥ ${rule.conditionValue} cuốc/ngày`
-                              : `Đạt ≥ ${rule.conditionValue} km/ngày`}
-                          </Typography>
-                        </Box>
-                        <Chip
-                          icon={<EmojiEventsRounded fontSize="small" />}
-                          label={`+${formatCurrency(rule.rewardAmount)}`}
-                          color="warning"
-                          size="small"
-                          sx={{ fontWeight: 800, ml: 1 }}
-                        />
-                      </Stack>
-
-                      {progressLabel && rule.type !== 'PEAK_HOUR' && (
-                        <Box mt={1}>
-                          <Stack direction="row" justifyContent="space-between">
-                            <Typography variant="caption" color="text.secondary">
-                              {progressLabel}
-                            </Typography>
-                            {progress >= 100 && (
-                              <Chip
-                                icon={<CheckCircleRounded />}
-                                label="Đã đạt"
-                                color="success"
-                                size="small"
-                                sx={{ height: 18, fontSize: '0.62rem' }}
-                              />
-                            )}
-                          </Stack>
-                          <LinearProgress
-                            variant="determinate"
-                            value={progress}
-                            color={progress >= 100 ? 'success' : 'warning'}
-                            sx={{ height: 6, borderRadius: 3, mt: 0.5 }}
-                          />
-                        </Box>
-                      )}
-
-                      {rule.type === 'PEAK_HOUR' && progressLabel && (
-                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                          {progressLabel} hôm nay
+          }
+          return (
+            <Card key={rule.id} variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+                <Stack direction="row" spacing={1.5}>
+                  <Box sx={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#fffbeb', color: 'warning.dark' }}>
+                    {RULE_ICONS[rule.type]}
+                  </Box>
+                  <Box flex={1}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                      <Box>
+                        <Typography variant="body2" fontWeight={700}>{rule.description || RULE_TYPE_LABELS[rule.type]}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {rule.type === 'PEAK_HOUR'    ? 'Mỗi cuốc giờ cao điểm (6–9h, 16–19h)' :
+                           rule.type === 'TRIP_COUNT'   ? `≥ ${rule.conditionValue} cuốc/ngày` :
+                                                          `≥ ${rule.conditionValue} km/ngày`}
                         </Typography>
-                      )}
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
-            );
-          })
-        )}
+                      </Box>
+                      <Chip icon={<EmojiEventsRounded fontSize="small" />} label={`+${formatCurrency(rule.rewardAmount)}`}
+                        color="warning" size="small" sx={{ fontWeight: 800, ml: 1, flexShrink: 0 }} />
+                    </Stack>
+                    {progressLabel && rule.type !== 'PEAK_HOUR' && (
+                      <Box mt={1}>
+                        <Stack direction="row" justifyContent="space-between" mb={0.3}>
+                          <Typography variant="caption" color="text.secondary">{progressLabel}</Typography>
+                          {progress >= 100 && <Chip icon={<CheckCircleRounded />} label="Đã đạt" color="success" size="small" sx={{ height: 18, fontSize: '0.6rem' }} />}
+                        </Stack>
+                        <LinearProgress variant="determinate" value={progress} color={progress >= 100 ? 'success' : 'warning'} sx={{ height: 5, borderRadius: 3 }} />
+                      </Box>
+                    )}
+                    {rule.type === 'PEAK_HOUR' && progressLabel && (
+                      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>{progressLabel}</Typography>
+                    )}
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          );
+        })}
       </Stack>
     );
   };
 
+  // ─── Main render ──────────────────────────────────────────────────────────
+
   return (
-    <Box
-      sx={{
-        pt: 1.5,
-        pb: 1.5,
-        minHeight: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 1.5,
-      }}
-    >
-      {/* Balance card */}
-      {renderBalance()}
+    <Box sx={{ pt: 1.5, pb: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
 
-      {/* Activation banner — shown when balance has never exceeded 300k (new driver) */}
-      {walletState?.activationRequired && balance !== null && (
-        <Alert
-          severity="info"
-          icon={<AccountBalanceWalletRounded />}
-          action={
-            <Button
-              color="inherit"
-              size="small"
-              sx={{ fontWeight: 700 }}
-              onClick={() => {
-                setTopUpOpen(true);
-                setTopUpError('');
-                setTopUpAmount(String(activationTopUpNeeded));
-              }}
-            >
-              Nạp ngay
-            </Button>
-          }
-          sx={{ mb: 2, borderRadius: 2 }}
-        >
-          <strong>Kích hoạt tài khoản tài xế:</strong> Nạp thêm tối thiểu <strong>{formatCurrency(activationTopUpNeeded)}</strong> vào ví
-          để đạt ngưỡng <strong>{formatCurrency(activationThreshold)}</strong> trước khi bật nhận cuốc. Số dư hiện tại: {formatCurrency(balance)}.
-        </Alert>
-      )}
+      {renderBalanceCard()}
+      {renderActivationCard()}
+      {renderAlerts()}
 
-      {/* Withdraw success */}
-      {withdrawSuccess && (
-        <Alert
-          severity="success"
-          onClose={() => setWithdrawSuccess('')}
-          sx={{ mb: 2, borderRadius: 2 }}
-        >
-          {withdrawSuccess}
-        </Alert>
-      )}
-
-      {/* Top-up success */}
-      {topUpSuccess && (
-        <Alert
-          severity="success"
-          onClose={() => setTopUpSuccess('')}
-          sx={{ mb: 2, borderRadius: 2 }}
-        >
-          {topUpSuccess}
-        </Alert>
-      )}
-
-      {/* Negative balance warning */}
-      {walletState?.warningThresholdReached && walletState?.canAcceptRide !== false && balance !== null && (
-        <Alert
-          severity="warning"
-          icon={<WarningAmberRounded />}
-          sx={{ mb: 2, borderRadius: 2 }}
-        >
-          Số dư ví đã âm quá {formatCurrency(Math.abs(warningThreshold))} ({formatCurrency(balance)}). Tài khoản vẫn hoạt động nhưng bạn nên nạp thêm trước khi chạm mốc khóa {formatCurrency(debtLimit)}.
-        </Alert>
-      )}
-
-      {walletState?.canAcceptRide === false && walletState?.activationRequired !== true && balance !== null && (
-        <Alert
-          severity="error"
-          icon={<WarningAmberRounded />}
-          sx={{ mb: 2, borderRadius: 2 }}
-        >
-          Số dư ví đã xuống {formatCurrency(balance)} và tài khoản đang bị chặn nhận cuốc mới. Hãy nạp thêm tiền để mở lại.
-        </Alert>
-      )}
-
-      {/* Tabs */}
-      <Tabs
-        value={tab}
-        onChange={(_e, v) => setTab(v)}
-        variant="fullWidth"
-        sx={{ mb: 2, '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' } }}
-      >
+      <Tabs value={tab} onChange={(_e, v) => setTab(v)} variant="fullWidth"
+        sx={{ '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' } }}>
         <Tab label="Giao dịch" />
         <Tab label="Thưởng" />
       </Tabs>
@@ -770,127 +828,90 @@ export default function WalletPage() {
       {tab === 0 && renderTxList()}
       {tab === 1 && renderIncentive()}
 
-      {/* Withdraw Dialog — Bank info + Pending/Success flow */}
-      <Dialog
-        open={withdrawOpen}
-        onClose={closeWithdrawDialog}
-        PaperProps={{ sx: { borderRadius: 4, mx: 2, width: '100%', maxWidth: 480 } }}
-      >
+      {/* ── Withdrawal Dialog ── */}
+      <Dialog open={withdrawOpen} onClose={closeWithdrawDialog}
+        PaperProps={{ sx: { borderRadius: 4, mx: 2, width: '100%', maxWidth: 480 } }}>
         <DialogTitle sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
           <AccountBalanceRounded /> Rút tiền về ngân hàng
         </DialogTitle>
         <DialogContent>
-          {/* Stepper */}
           <Stepper activeStep={withdrawStep} sx={{ mb: 2.5, mt: 0.5 }}>
-            <Step completed={withdrawStep > 0}><StepLabel>Nhập thông tin</StepLabel></Step>
-            <Step completed={withdrawStep > 1}><StepLabel>Đang xử lý</StepLabel></Step>
-            <Step completed={withdrawStep > 1}><StepLabel>Hoàn tất</StepLabel></Step>
+            <Step><StepLabel>Nhập thông tin</StepLabel></Step>
+            <Step><StepLabel>Đang xử lý</StepLabel></Step>
+            <Step><StepLabel>Hoàn tất</StepLabel></Step>
           </Stepper>
 
-          {/* Step 0: Form */}
           {withdrawStep === 0 && (
             <Stack spacing={2}>
-              <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'grey.50' }}>
+              {/* Source account info */}
+              <Card variant="outlined" sx={{ borderRadius: 2.5, bgcolor: '#eff6ff', borderColor: '#bfdbfe' }}>
                 <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }}>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">
-                        Số dư khả dụng
-                      </Typography>
-                      <Typography fontWeight={800} variant="h6" color="primary">
-                        {formatCurrency(balance ?? 0)}
-                      </Typography>
-                    </Box>
-                    <Chip label="Chỉ hỗ trợ ngân hàng đã cấu hình" sx={{ borderRadius: 999, fontWeight: 700, bgcolor: '#eff6ff', color: '#1d4ed8' }} />
+                  <Typography variant="caption" color="primary.dark" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1 }}>
+                    Nguồn chuyển tiền (tài khoản doanh nghiệp)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                    Hệ thống sẽ chuyển tiền từ tài khoản doanh nghiệp về ngân hàng cá nhân mà bạn khai báo.
+                  </Typography>
+                  <Stack spacing={0.6}>
+                    {[
+                      ['Ngân hàng', payoutBusinessAccount.bankName],
+                      ['Số TK', payoutBusinessAccount.accountNumber],
+                      ['Chủ TK', payoutBusinessAccount.accountHolder],
+                      ['Số dư khả dụng', formatCurrency(withdrawableBalance)],
+                      ...(lockedBalance > 0 ? [['Ký quỹ (khoá)', formatCurrency(lockedBalance)]] as const : []),
+                    ].map(([k, v]) => (
+                      <Stack key={k} direction="row" justifyContent="space-between">
+                        <Typography variant="caption" color="text.secondary">{k}</Typography>
+                        <Typography variant="caption" fontWeight={700} color={k === 'Số dư khả dụng' ? 'success.dark' : 'inherit'}>{v}</Typography>
+                      </Stack>
+                    ))}
                   </Stack>
                 </CardContent>
               </Card>
 
+              {/* Quick preset */}
               <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75, display: 'block' }}>
-                  Chọn nhanh số tiền
-                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" mb={0.75}>Chọn nhanh</Typography>
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  {[50_000, 100_000, 200_000, 500_000].map((preset) => (
-                    <Chip
-                      key={preset}
-                      label={formatCurrency(preset)}
+                  {[100_000, 200_000, 500_000, 1_000_000].filter((p) => p <= withdrawableBalance).map((preset) => (
+                    <Chip key={preset} label={formatCurrency(preset)}
                       onClick={() => setWithdrawAmount(String(preset))}
                       color={digitsOnly(withdrawAmount) === String(preset) ? 'primary' : 'default'}
                       variant={digitsOnly(withdrawAmount) === String(preset) ? 'filled' : 'outlined'}
-                      sx={{ fontWeight: 700 }}
-                    />
+                      sx={{ fontWeight: 700 }} />
                   ))}
                 </Stack>
               </Box>
 
               <TextField
-                label="Số tiền rút (VND)"
-                type="text"
-                fullWidth
+                label="Số tiền rút (VND)" type="text" fullWidth
                 value={formatMoneyInput(withdrawAmount)}
                 onChange={(e) => setWithdrawAmount(digitsOnly(e.target.value))}
                 inputProps={{ inputMode: 'numeric' }}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
-                      <Button
-                        size="small"
-                        onClick={() => setWithdrawAmount(String(balance ?? 0))}
-                        sx={{ fontWeight: 700 }}
-                      >
-                        Tất cả
-                      </Button>
+                      <Button size="small" sx={{ fontWeight: 700 }} onClick={() => setWithdrawAmount(String(Math.floor(withdrawableBalance)))}>Tất cả</Button>
                     </InputAdornment>
                   ),
                 }}
-                helperText={`Tối thiểu ${formatCurrency(MIN_WITHDRAW)}`}
+                helperText={`Tối thiểu ${formatCurrency(MIN_WITHDRAW)} · Khả dụng: ${formatCurrency(withdrawableBalance)}`}
               />
 
+              {/* Bank selection */}
               <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75, display: 'block' }}>
-                  Ngân hàng nhận tiền
-                </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1.25 }}>
+                <Typography variant="caption" color="text.secondary" display="block" mb={0.75}>Ngân hàng nhận tiền của bạn</Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
                   {BANK_OPTIONS.map((bank) => {
-                    const selected = withdrawBankName === bank.name;
-
+                    const sel = withdrawBankName === bank.name;
                     return (
-                      <Card
-                        key={bank.name}
-                        variant="outlined"
-                        onClick={() => setWithdrawBankName(bank.name)}
-                        sx={{
-                          cursor: 'pointer',
-                          borderRadius: 3,
-                          border: '2px solid',
-                          borderColor: selected ? bank.accent : 'rgba(148,163,184,0.22)',
-                          bgcolor: selected ? `${bank.accent}10` : '#fff',
-                          transition: 'all 0.15s ease',
-                        }}
-                      >
-                        <CardContent sx={{ p: 1.4, '&:last-child': { pb: 1.4 } }}>
-                          <Stack spacing={1} alignItems="center" textAlign="center">
-                            <Box
-                              sx={{
-                                width: 40,
-                                height: 40,
-                                borderRadius: '50%',
-                                display: 'grid',
-                                placeItems: 'center',
-                                bgcolor: bank.accent,
-                                color: '#fff',
-                                fontWeight: 800,
-                                fontSize: '0.8rem',
-                              }}
-                            >
-                              {bank.short}
-                            </Box>
-                            <Box>
-                              <Typography variant="body2" fontWeight={700}>{bank.name}</Typography>
-                              <Typography variant="caption" color="text.secondary">{bank.helper}</Typography>
-                            </Box>
-                          </Stack>
+                      <Card key={bank.name} variant="outlined" onClick={() => setWithdrawBankName(bank.name)}
+                        sx={{ cursor: 'pointer', borderRadius: 2.5, border: '2px solid', borderColor: sel ? bank.color : 'divider', bgcolor: sel ? `${bank.color}14` : '#fff', transition: 'all 0.12s' }}>
+                        <CardContent sx={{ p: 1, '&:last-child': { pb: 1 }, textAlign: 'center' }}>
+                          <Box sx={{ width: 34, height: 34, borderRadius: '50%', bgcolor: bank.color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.72rem', mx: 'auto', mb: 0.4 }}>
+                            {bank.short}
+                          </Box>
+                          <Typography variant="caption" fontWeight={700} display="block" lineHeight={1.1}>{bank.name}</Typography>
                         </CardContent>
                       </Card>
                     );
@@ -898,250 +919,184 @@ export default function WalletPage() {
                 </Box>
               </Box>
 
-              <TextField
-                label="Số tài khoản"
-                fullWidth
+              <TextField label="Số tài khoản nhận" fullWidth
                 value={formatDigitGroups(withdrawAccountNumber)}
                 onChange={(e) => setWithdrawAccountNumber(digitsOnly(e.target.value))}
                 inputProps={{ maxLength: 24, inputMode: 'numeric' }}
-                helperText={selectedWithdrawBank ? `${selectedWithdrawBank.name}: ${selectedWithdrawBank.helper}` : 'Chỉ nhập chữ số, không dấu cách'}
-              />
+                helperText={selectedWithdrawBank ? `${selectedWithdrawBank.name}: ${selectedWithdrawBank.minDigits}–${selectedWithdrawBank.maxDigits} chữ số` : 'Nhập STK không có dấu cách'} />
 
-              <TextField
-                label="Tên chủ tài khoản"
-                fullWidth
+              <TextField label="Tên chủ tài khoản" fullWidth
                 value={withdrawAccountHolder}
                 onChange={(e) => setWithdrawAccountHolder(e.target.value.toUpperCase())}
-                helperText="Dùng đúng tên trên tài khoản ngân hàng"
-              />
+                helperText="Nhập đúng tên trên thẻ/sổ ngân hàng (in hoa)" />
 
-              <Card variant="outlined" sx={{ borderRadius: 3, bgcolor: '#f8fafc' }}>
+              {/* Preview */}
+              <Card variant="outlined" sx={{ borderRadius: 2.5, bgcolor: '#f8fafc' }}>
                 <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-                    Xem trước giao dịch
-                  </Typography>
-                  <Stack spacing={0.85} sx={{ mt: 1 }}>
-                    <Stack direction="row" justifyContent="space-between" spacing={2}>
-                      <Typography variant="body2" color="text.secondary">Ngân hàng</Typography>
-                      <Typography variant="body2" fontWeight={700}>{withdrawBankName || 'Chưa chọn'}</Typography>
-                    </Stack>
-                    <Stack direction="row" justifyContent="space-between" spacing={2}>
-                      <Typography variant="body2" color="text.secondary">Số tài khoản</Typography>
-                      <Typography variant="body2" fontWeight={700}>{formatDigitGroups(withdrawAccountNumber) || 'Chưa nhập'}</Typography>
-                    </Stack>
-                    <Stack direction="row" justifyContent="space-between" spacing={2}>
-                      <Typography variant="body2" color="text.secondary">Chủ tài khoản</Typography>
-                      <Typography variant="body2" fontWeight={700}>{withdrawAccountHolder || 'Chưa nhập'}</Typography>
-                    </Stack>
-                    <Stack direction="row" justifyContent="space-between" spacing={2}>
-                      <Typography variant="body2" color="text.secondary">Số tiền nhận</Typography>
-                      <Typography variant="body2" fontWeight={800} color="primary">{formatCurrency(Number(digitsOnly(withdrawAmount)) || 0)}</Typography>
-                    </Stack>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Xem trước</Typography>
+                  <Stack spacing={0.7} mt={1}>
+                    {[
+                      ['Từ', `${payoutBusinessAccount.bankName} · ${payoutBusinessAccount.accountNumber}`],
+                      ['Đến', withdrawBankName || 'Chưa chọn'],
+                      ['STK', formatDigitGroups(withdrawAccountNumber) || 'Chưa nhập'],
+                      ['Chủ TK', withdrawAccountHolder || 'Chưa nhập'],
+                      ['Số tiền', formatCurrency(Number(digitsOnly(withdrawAmount)) || 0)],
+                    ].map(([k, v]) => (
+                      <Stack key={k} direction="row" justifyContent="space-between">
+                        <Typography variant="caption" color="text.secondary">{k}</Typography>
+                        <Typography variant="caption" fontWeight={700} sx={{ textAlign: 'right', maxWidth: '65%' }}>{v}</Typography>
+                      </Stack>
+                    ))}
                   </Stack>
                 </CardContent>
               </Card>
 
-              {withdrawError && <Alert severity="error">{withdrawError}</Alert>}
+              {withdrawError && <Alert severity="error" sx={{ borderRadius: 2 }}>{withdrawError}</Alert>}
             </Stack>
           )}
 
-          {/* Step 1: Pending */}
           {withdrawStep === 1 && (
-            <Stack spacing={3} alignItems="center" sx={{ py: 4 }}>
-              <HourglassTopRounded sx={{ fontSize: 64, color: 'warning.main', animation: 'spin 2s linear infinite', '@keyframes spin': { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } } }} />
-              <Typography variant="h6" fontWeight={700} color="warning.main">
-                Đang xử lý rút tiền...
+            <Stack spacing={3} alignItems="center" py={4}>
+              <HourglassTopRounded sx={{ fontSize: 60, color: 'warning.main', animation: 'spin 2s linear infinite', '@keyframes spin': { from: { transform: 'rotate(0deg)' }, to: { transform: 'rotate(360deg)' } } }} />
+              <Typography variant="h6" fontWeight={700} color="warning.main">Đang xử lý...</Typography>
+              <Typography variant="body2" color="text.secondary" textAlign="center">
+                Chúng tôi đang chuyển tiền từ tài khoản doanh nghiệp đến ngân hàng của bạn.
               </Typography>
-              <Card variant="outlined" sx={{ borderRadius: 2, width: '100%' }}>
-                <CardContent>
-                  <Stack spacing={0.5}>
-                    <Typography variant="body2">Mã giao dịch: <strong>{withdrawalId}</strong></Typography>
-                    <Typography variant="body2">Số tiền: <strong>{formatCurrency(Number(digitsOnly(withdrawAmount)) || 0)}</strong></Typography>
-                    <Typography variant="body2">Ngân hàng: <strong>{withdrawBankName}</strong></Typography>
-                    <Typography variant="body2">STK: <strong>****{digitsOnly(withdrawAccountNumber).slice(-4)}</strong></Typography>
-                    <Typography variant="body2">Chủ TK: <strong>{withdrawAccountHolder.toUpperCase()}</strong></Typography>
-                  </Stack>
-                </CardContent>
-              </Card>
               <LinearProgress sx={{ width: '100%', borderRadius: 3 }} />
             </Stack>
           )}
 
-          {/* Step 2: Success */}
           {withdrawStep === 2 && (
-            <Stack spacing={3} alignItems="center" sx={{ py: 4 }}>
-              <CheckCircleRounded sx={{ fontSize: 64, color: 'success.main' }} />
-              <Typography variant="h6" fontWeight={700} color="success.main">
-                Rút tiền thành công!
-              </Typography>
-              <Card variant="outlined" sx={{ borderRadius: 2, width: '100%', bgcolor: 'success.50' }}>
+            <Stack spacing={2.5} alignItems="center" py={3}>
+              <CheckCircleRounded sx={{ fontSize: 60, color: 'success.main' }} />
+              <Typography variant="h6" fontWeight={700} color="success.main">Rút tiền thành công!</Typography>
+              <Card variant="outlined" sx={{ borderRadius: 3, width: '100%', bgcolor: '#f0fdf4' }}>
                 <CardContent>
-                  <Stack spacing={0.5}>
-                    <Typography variant="body2">Mã giao dịch: <strong>{withdrawalId}</strong></Typography>
-                    <Typography variant="body2">Số tiền: <strong>{formatCurrency(Number(digitsOnly(withdrawAmount)) || 0)}</strong></Typography>
-                    <Typography variant="body2">Ngân hàng: <strong>{withdrawBankName}</strong></Typography>
-                    <Typography variant="body2">STK: <strong>****{digitsOnly(withdrawAccountNumber).slice(-4)}</strong></Typography>
-                    <Typography variant="body2">Số dư còn lại: <strong>{formatCurrency(balance ?? 0)}</strong></Typography>
+                  <Stack spacing={0.6}>
+                    {[
+                      ['Mã giao dịch', withdrawalId.slice(-8).toUpperCase()],
+                      ['Số tiền', formatCurrency(Number(digitsOnly(withdrawAmount)) || 0)],
+                      ['Ngân hàng nhận', withdrawBankName],
+                      ['STK', `****${digitsOnly(withdrawAccountNumber).slice(-4)}`],
+                    ].map(([k, v]) => (
+                      <Stack key={k} direction="row" justifyContent="space-between">
+                        <Typography variant="body2" color="text.secondary">{k}</Typography>
+                        <Typography variant="body2" fontWeight={700}
+                          color={k === 'Số tiền' ? 'success.dark' : 'inherit'}>{v}</Typography>
+                      </Stack>
+                    ))}
                   </Stack>
                 </CardContent>
               </Card>
-
             </Stack>
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
           {withdrawStep === 0 && (
             <>
-              <Button
-                variant="outlined"
-                onClick={closeWithdrawDialog}
-                disabled={withdrawLoading}
-                sx={{ borderRadius: 3, flex: 1 }}
-              >
-                Huỷ
-              </Button>
-              <Button
-                variant="contained"
-                onClick={handleWithdraw}
-                disabled={withdrawLoading}
-                sx={{ borderRadius: 3, fontWeight: 700, flex: 1 }}
-              >
-                {withdrawLoading ? <CircularProgress size={20} /> : 'Xác nhận rút'}
+              <Button variant="outlined" onClick={closeWithdrawDialog} disabled={withdrawLoading} sx={{ borderRadius: 3, flex: 1 }}>Huỷ</Button>
+              <Button variant="contained" onClick={handleWithdraw} disabled={withdrawLoading} sx={{ borderRadius: 3, fontWeight: 700, flex: 2 }}>
+                {withdrawLoading ? <CircularProgress size={20} /> : 'Xác nhận rút tiền'}
               </Button>
             </>
           )}
-          {withdrawStep === 1 && (
-            <Typography variant="caption" color="text.secondary" sx={{ mx: 'auto' }}>
-              Đang chờ xử lý...
-            </Typography>
-          )}
+          {withdrawStep === 1 && <Typography variant="caption" color="text.secondary" mx="auto">Vui lòng chờ...</Typography>}
           {withdrawStep === 2 && (
-            <Button
-              variant="contained"
-              fullWidth
-              onClick={closeWithdrawDialog}
-              sx={{ borderRadius: 3, fontWeight: 700 }}
-            >
-              Đóng
-            </Button>
+            <Button variant="contained" fullWidth onClick={closeWithdrawDialog} sx={{ borderRadius: 3, fontWeight: 700 }}>Đóng</Button>
           )}
         </DialogActions>
       </Dialog>
 
-      {/* Top-up Dialog — MoMo / VNPay gateway */}
-      <Dialog
-        open={topUpOpen}
+      {/* ── Top-up / Deposit Dialog ── */}
+      <Dialog open={topUpOpen}
         onClose={() => !topUpLoading && (setTopUpOpen(false), setTopUpProvider(null), setTopUpAmount(''), setTopUpError(''))}
-        PaperProps={{ sx: { borderRadius: 4, mx: 2, width: '100%', maxWidth: 420 } }}
-      >
-        <DialogTitle sx={{ fontWeight: 800 }}>Nạp tiền ví</DialogTitle>
+        PaperProps={{ sx: { borderRadius: 4, mx: 2, width: '100%', maxWidth: 440 } }}>
+        <DialogTitle sx={{ fontWeight: 800 }}>
+          {walletStatus === 'INACTIVE' ? 'Nạp ký quỹ kích hoạt tài khoản' : 'Nạp tiền vào tài khoản doanh nghiệp'}
+        </DialogTitle>
         <DialogContent>
-          <Stack spacing={2.5} sx={{ pt: 0.5 }}>
-            <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'grey.50' }}>
+          <Stack spacing={2.5} pt={0.5}>
+            {/* Business account info */}
+            <Card variant="outlined" sx={{ borderRadius: 2.5, bgcolor: '#f0fdf4', borderColor: '#bbf7d0' }}>
               <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-                <Typography variant="caption" color="text.secondary">Số dư hiện tại</Typography>
-                <Typography fontWeight={800} variant="h6" color="primary">
-                  {formatCurrency(balance ?? 0)}
+                <Typography variant="caption" color="success.dark" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1 }}>
+                  Tài khoản của doanh nghiệp
                 </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                  Tài khoản này nhận tiền ký quỹ kích hoạt, tiền nạp ví và tiền tài xế dùng để thanh toán công nợ chuyến tiền mặt.
+                </Typography>
+                <Stack spacing={0.6}>
+                  {([
+                    ['Ngân hàng',   topUpBusinessAccount.bankName],
+                    ['Số tài khoản', topUpBusinessAccount.accountNumber],
+                    ['Chủ tài khoản', topUpBusinessAccount.accountHolder],
+                    ['Nội dung',    topUpBusinessAccount.note || DEFAULT_BUSINESS_ACCOUNTS.topUpAccount.note],
+                  ] as const).map(([k, v]) => (
+                    <Stack key={k} direction="row" justifyContent="space-between" alignItems="flex-start">
+                      <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>{k}</Typography>
+                      <Typography variant="caption" fontWeight={700} sx={{ textAlign: 'right', ml: 1, color: k === 'Số tài khoản' ? 'primary.main' : 'inherit' }}>{v}</Typography>
+                    </Stack>
+                  ))}
+                </Stack>
               </CardContent>
             </Card>
 
-            {/* Quick-select amounts */}
+            <Divider><Typography variant="caption" color="text.secondary">Hoặc thanh toán qua ví điện tử</Typography></Divider>
+
+            {/* Quick amounts */}
             <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75, display: 'block' }}>
-                Chọn nhanh
+              <Typography variant="caption" color="text.secondary" display="block" mb={0.75}>
+                {walletStatus === 'INACTIVE'
+                  ? `Cần nạp tối thiểu ${formatCurrency(activationThreshold)} để kích hoạt`
+                  : 'Chọn nhanh số tiền muốn chuyển vào tài khoản doanh nghiệp'}
               </Typography>
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                {[50_000, 100_000, 200_000, 500_000].map((preset) => (
-                  <Chip
-                    key={preset}
-                    label={formatCurrency(preset)}
+                {(walletStatus === 'INACTIVE' ? [300_000, 500_000, 1_000_000] : [100_000, 200_000, 300_000, 500_000]).map((preset) => (
+                  <Chip key={preset} label={formatCurrency(preset)}
                     onClick={() => setTopUpAmount(String(preset))}
-                    color={topUpAmount === String(preset) ? 'primary' : 'default'}
-                    variant={topUpAmount === String(preset) ? 'filled' : 'outlined'}
-                    sx={{ fontWeight: 700 }}
-                  />
+                    color={digitsOnly(topUpAmount) === String(preset) ? 'primary' : 'default'}
+                    variant={digitsOnly(topUpAmount) === String(preset) ? 'filled' : 'outlined'}
+                    sx={{ fontWeight: 700 }} />
                 ))}
               </Stack>
             </Box>
 
-            <TextField
-              label="Số tiền nạp (VND)"
-              type="number"
-              fullWidth
-              value={topUpAmount}
-              onChange={(e) => setTopUpAmount(e.target.value)}
-              inputProps={{ min: 10000, step: 10000 }}
-              helperText="Tối thiểu 10.000 VND"
-              error={!!topUpError && !topUpProvider}
-            />
+            <TextField label="Số tiền nạp (VND)" type="text" fullWidth
+              value={formatMoneyInput(topUpAmount)}
+              onChange={(e) => setTopUpAmount(digitsOnly(e.target.value))}
+              inputProps={{ inputMode: 'numeric' }}
+              helperText={walletStatus === 'INACTIVE'
+                ? `Tối thiểu ${formatCurrency(activationThreshold)} để kích hoạt tài khoản`
+                : 'Tối thiểu 10.000 đ · Dùng để nạp ví hoặc tất toán công nợ tiền mặt'} />
 
             {/* Payment method */}
-            <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75, display: 'block' }}>
-                Phương thức thanh toán
-              </Typography>
-              <Stack direction="row" spacing={1.5}>
-                <Card
-                  variant="outlined"
-                  onClick={() => setTopUpProvider('MOMO')}
-                  sx={{
-                    flex: 1,
-                    borderRadius: 3,
-                    cursor: 'pointer',
-                    border: '2px solid',
-                    borderColor: topUpProvider === 'MOMO' ? '#ae2070' : 'divider',
-                    bgcolor: topUpProvider === 'MOMO' ? '#fdf0f5' : 'background.paper',
-                    textAlign: 'center',
-                    py: 1.5,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  <Typography fontWeight={800} sx={{ color: '#ae2070', fontSize: '0.9rem' }}>MoMo</Typography>
-                  <Typography variant="caption" color="text.secondary">Ví MoMo</Typography>
+            <Stack direction="row" spacing={1.5}>
+              {[
+                { id: 'MOMO'  as const, label: 'MoMo',  sublabel: 'Ví MoMo',        color: '#ae2070', bg: '#fdf0f5' },
+                { id: 'VNPAY' as const, label: 'VNPay', sublabel: 'ATM / QR Code',  color: '#0066cc', bg: '#f0f5ff' },
+              ].map((p) => (
+                <Card key={p.id} variant="outlined" onClick={() => setTopUpProvider(p.id)}
+                  sx={{ flex: 1, borderRadius: 3, cursor: 'pointer', border: '2px solid', borderColor: topUpProvider === p.id ? p.color : 'divider', bgcolor: topUpProvider === p.id ? p.bg : 'background.paper', transition: 'all 0.12s', textAlign: 'center', py: 1.5 }}>
+                  <Typography fontWeight={800} sx={{ color: p.color, fontSize: '1rem' }}>{p.label}</Typography>
+                  <Typography variant="caption" color="text.secondary">{p.sublabel}</Typography>
                 </Card>
-                <Card
-                  variant="outlined"
-                  onClick={() => setTopUpProvider('VNPAY')}
-                  sx={{
-                    flex: 1,
-                    borderRadius: 3,
-                    cursor: 'pointer',
-                    border: '2px solid',
-                    borderColor: topUpProvider === 'VNPAY' ? '#0066cc' : 'divider',
-                    bgcolor: topUpProvider === 'VNPAY' ? '#f0f5ff' : 'background.paper',
-                    textAlign: 'center',
-                    py: 1.5,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  <Typography fontWeight={800} sx={{ color: '#0066cc', fontSize: '0.9rem' }}>VNPay</Typography>
-                  <Typography variant="caption" color="text.secondary">ATM / QR</Typography>
-                </Card>
-              </Stack>
-            </Box>
+              ))}
+            </Stack>
 
-            {topUpError && <Alert severity="error">{topUpError}</Alert>}
+            {topUpError && <Alert severity="error" sx={{ borderRadius: 2 }}>{topUpError}</Alert>}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
-          <Button
-            variant="outlined"
+          <Button variant="outlined"
             onClick={() => { setTopUpOpen(false); setTopUpProvider(null); setTopUpAmount(''); setTopUpError(''); }}
-            disabled={topUpLoading}
-            sx={{ borderRadius: 3, flex: 1 }}
-          >
-            Huỷ
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleTopUp}
+            disabled={topUpLoading} sx={{ borderRadius: 3, flex: 1 }}>Huỷ</Button>
+          <Button variant="contained" onClick={handleTopUp}
             disabled={topUpLoading || !topUpProvider}
-            sx={{ borderRadius: 3, fontWeight: 700, flex: 2,
+            sx={{
+              borderRadius: 3, fontWeight: 700, flex: 2,
               bgcolor: topUpProvider === 'MOMO' ? '#ae2070' : topUpProvider === 'VNPAY' ? '#0066cc' : undefined,
               '&:hover': { bgcolor: topUpProvider === 'MOMO' ? '#8c1858' : topUpProvider === 'VNPAY' ? '#0055aa' : undefined },
-            }}
-          >
+            }}>
             {topUpLoading
               ? <CircularProgress size={20} sx={{ color: '#fff' }} />
               : topUpProvider

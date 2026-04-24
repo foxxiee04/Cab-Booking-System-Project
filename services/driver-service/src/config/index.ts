@@ -29,6 +29,7 @@ export const config = {
     auth: process.env.AUTH_SERVICE_URL || 'http://localhost:3001',
     ride: process.env.RIDE_SERVICE_URL || 'http://localhost:3002',
     payment: process.env.PAYMENT_SERVICE_URL || 'http://localhost:3004',
+    wallet: process.env.WALLET_SERVICE_URL || 'http://localhost:3006',
     user: process.env.USER_SERVICE_URL || 'http://localhost:3007',
   },
   

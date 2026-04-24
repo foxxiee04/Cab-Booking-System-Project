@@ -41,7 +41,7 @@
     "licenseExpiry": "Ngày hết hạn GPLX",
     "info": "Tất cả thông tin sẽ được xác minh trước khi nhận chuyến. Vui lòng nhập chính xác.",
     "submit": "Hoàn tất",
-    "successMessage": "Hồ sơ đã được hoàn tất! Hồ sơ của bạn đang chờ admin phê duyệt. Bạn sẽ được thông báo khi được phê duyệt."
+    "successMessage": "Hồ sơ đã được hoàn tất. Tiếp theo, bạn cần nạp tối thiểu 300.000 đ vào ví tài xế để kích hoạt tài khoản và bật nhận cuốc."
   },
   "dashboard": {
     "title": "Bảng điều khiển",
@@ -62,7 +62,7 @@
     "gpsError": "Không lấy được vị trí. Vui lòng bật GPS.",
     "statusChangeFailed": "Không thể thay đổi trạng thái",
     "acceptRideFailed": "Không thể nhận chuyến",
-    "needApproval": "Hồ sơ tài xế của bạn đang chờ admin phê duyệt. Bạn không thể trực tuyến cho đến khi được phê duyệt. Vui lòng chờ thông báo từ admin."
+    "needApproval": "Tài khoản tài xế hiện chưa đủ điều kiện để trực tuyến. Vui lòng kiểm tra lại hồ sơ và trạng thái ví."
   },
   "rideRequest": {
     "title": "Yêu cầu chuyến mới",
@@ -128,7 +128,7 @@
     "saveSuccess": "Đã cập nhật hồ sơ tài xế.",
     "saveFailed": "Không thể cập nhật hồ sơ tài xế.",
     "fillRequired": "Vui lòng nhập đầy đủ các trường hồ sơ xe.",
-    "pendingApproval": "Chờ duyệt hồ sơ",
+    "pendingApproval": "Hồ sơ đang được theo dõi",
     "approved": "Đã được duyệt",
     "rejected": "Bị từ chối",
     "suspended": "Tạm khóa",

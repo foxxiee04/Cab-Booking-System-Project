@@ -31,6 +31,7 @@ export class EventConsumer {
       // Bind to relevant events
       await this.channel.bindQueue(this.queue, this.exchange, 'ride.completed');
       await this.channel.bindQueue(this.queue, this.exchange, 'ride.cancelled');
+      await this.channel.bindQueue(this.queue, this.exchange, 'driver.wallet.withdrawn');
       
       await this.channel.prefetch(1);
       
@@ -61,6 +62,9 @@ export class EventConsumer {
             break;
           case 'ride.cancelled':
             await this.handleRideCancelled(payload);
+            break;
+          case 'driver.wallet.withdrawn':
+            await this.handleDriverWalletWithdrawn(payload);
             break;
           default:
             logger.warn(`Unknown event type: ${eventType}`);
@@ -101,5 +105,18 @@ export class EventConsumer {
     if (this.channel) await this.channel.close();
     if (this.connection) await this.connection.close();
     logger.info('Payment Service consumer disconnected from RabbitMQ');
+  }
+
+  private async handleDriverWalletWithdrawn(payload: { driverId: string; amount: number }): Promise<void> {
+    const { driverId, amount } = payload;
+    logger.info(`Syncing withdrawal of ${amount} VND for driver ${driverId} to payment wallet`);
+    try {
+      const wallet = await this.paymentService.getDriverWallet(driverId);
+      if (wallet) {
+        await this.paymentService.adjustDriverWalletBalance(driverId, -amount);
+      }
+    } catch (error) {
+      logger.error(`handleDriverWalletWithdrawn error for driver ${driverId}:`, error);
+    }
   }
 }

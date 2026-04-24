@@ -6,6 +6,12 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api
 export interface WalletBalance {
   driverId: string;
   balance: number;
+  operationalBalance?: number;
+  availableBalance: number;
+  lockedBalance: number;        // security deposit (ký quỹ), cannot be withdrawn
+  withdrawableBalance: number;  // balance - lockedBalance, what driver can actually withdraw
+  debt: number;
+  status: 'INACTIVE' | 'ACTIVE' | 'BLOCKED';
   initialActivationCompleted?: boolean;
   activationRequired?: boolean;
   warningThresholdReached?: boolean;
@@ -14,6 +20,21 @@ export interface WalletBalance {
   warningThreshold?: number;
   debtLimit?: number;
   reason?: string;
+  businessAccounts?: {
+    topUpAccount?: {
+      bankName: string;
+      accountNumber: string;
+      accountHolder: string;
+      description?: string;
+      note?: string;
+    } | null;
+    payoutAccount?: {
+      bankName: string;
+      accountNumber: string;
+      accountHolder: string;
+      description?: string;
+    } | null;
+  };
 }
 
 export interface WalletTransaction {
@@ -58,6 +79,14 @@ export interface WithdrawalResult {
   bankInfo?: { bankName: string; accountNumber: string; accountHolder: string };
 }
 
+export interface WalletDeactivateResult {
+  refundedAmount: number;
+  depositRefunded: number;
+  availableRefunded: number;
+  debtSettled: number;
+  status: 'INACTIVE';
+}
+
 export interface TopUpInitResult {
   topUpId: string;
   orderId: string;
@@ -94,15 +123,20 @@ export interface TopUpGatewayReturnResponse {
 
 export const walletApi = {
   getBalance: () =>
-    axiosInstance.get<{ success: boolean; data: WalletBalance }>('/wallet'),
+    axiosInstance.get<{ success: boolean; data: WalletBalance }>('/wallet/balance'),
 
-  getTransactions: (limit = 20, offset = 0) =>
-    axiosInstance.get<{ success: boolean; data: WalletTransactionsResponse }>(
-      `/wallet/transactions?limit=${limit}&offset=${offset}`,
-    ),
+  getTransactions: (limit = 20, offset = 0) => {
+    const page = Math.floor(offset / Math.max(1, limit)) + 1;
+    return axiosInstance.get<{ success: boolean; data: WalletTransactionsResponse }>(
+      `/wallet/transactions?limit=${limit}&page=${page}`,
+    );
+  },
 
   withdraw: (amount: number, bankInfo?: { bankName: string; accountNumber: string; accountHolder: string }) =>
     axiosInstance.post<{ success: boolean; data: WithdrawalResult }>('/wallet/withdraw', { amount, bankInfo }),
+
+  deactivate: () =>
+    axiosInstance.post<{ success: boolean; data: WalletDeactivateResult }>('/wallet/deactivate'),
 
   /** Legacy simulated top-up (kept for fallback if gateways not configured). */
   topUp: (amount: number) =>
@@ -141,8 +175,8 @@ export const walletApi = {
     ),
 
   getDailyStats: (days = 7) =>
-    axiosInstance.get<{ success: boolean; data: DailyStats[] }>(`/wallet/daily-stats?days=${days}`),
+    axiosInstance.get<{ success: boolean; data: DailyStats | DailyStats[] }>(`/wallet/daily-stats?days=${days}`),
 
   getIncentiveRules: () =>
-    axiosInstance.get<{ success: boolean; data: IncentiveRule[] }>('/wallet/admin/rules'),
+    axiosInstance.get<{ success: boolean; data: IncentiveRule[] }>('/wallet/incentive-rules'),
 };

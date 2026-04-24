@@ -1,32 +1,32 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Box,
   Button,
-  ButtonGroup,
   Typography,
   Card,
   CardContent,
   Alert,
   Stack,
   Skeleton,
+  Tab,
+  Tabs,
+  Divider,
 } from '@mui/material';
 import {
   AttachMoneyRounded,
-  TrendingUpRounded,
   DriveEtaRounded,
   PercentRounded,
   EmojiEventsRounded,
-  WarningAmberRounded,
-  HistoryRounded,
+  MoneyOffRounded,
+  BarChartRounded,
+  AssessmentRounded,
 } from '@mui/icons-material';
+
 import {
   BarChart,
   Bar,
   LineChart,
   Line,
-  PieChart,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -35,15 +35,12 @@ import {
   Legend,
 } from 'recharts';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { useNavigate } from 'react-router-dom';
 import { driverApi } from '../api/driver.api';
 import { setEarnings } from '../store/driver.slice';
 import { formatCurrency } from '../utils/format.utils';
 import { useTranslation } from 'react-i18next';
 
-
-
-const PIE_COLORS = ['#16a34a', '#f59e0b', '#ef4444', '#6366f1'];
+// ─── Constants ─────────────────────────────────────────────────────────────
 
 const formatVND = (value: number) => {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -51,70 +48,63 @@ const formatVND = (value: number) => {
   return String(value);
 };
 
-type ChartView = 'revenue' | 'trend' | 'trips' | 'pie';
-
-const CHART_TABS: { value: ChartView; label: string }[] = [
-  { value: 'revenue', label: 'Doanh thu' },
-  { value: 'trend', label: 'Xu hướng' },
-  { value: 'trips', label: 'Số chuyến' },
-  { value: 'pie', label: 'Cơ cấu' },
-];
+// ─── Component ─────────────────────────────────────────────────────────────
 
 const Earnings: React.FC = () => {
   const dispatch = useAppDispatch();
   const { earnings } = useAppSelector((state) => state.driver);
   const { t } = useTranslation();
-  const navigate = useNavigate();
+
+  const [tab, setTab] = useState(0);
+  const [period, setPeriod] = useState<'today' | 'week' | 'month'>('week');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [chartView, setChartView] = useState<ChartView>('revenue');
 
-
-  useEffect(() => {
-    const fetchEarnings = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const response = await driverApi.getEarnings();
-        dispatch(setEarnings(response.data.earnings));
-      } catch (err: any) {
-        setError(err.response?.data?.error?.message || t('errors.loadEarnings'));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEarnings();
+  const fetchEarnings = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await driverApi.getEarnings();
+      dispatch(setEarnings(response.data.earnings));
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || t('errors.loadEarnings'));
+    } finally {
+      setLoading(false);
+    }
   }, [dispatch, t]);
 
-  // ── Derived data ──
+  useEffect(() => { fetchEarnings(); }, [fetchEarnings]);
 
-  const pieData = useMemo(() => {
-    if (!earnings) return [];
-    const net = earnings.netTotal;
-    const commission = earnings.commissionTotal;
-    const bonus = earnings.bonusTotal;
-    const penalty = earnings.penaltyTotal;
-    return [
-      { name: 'Thực nhận', value: net },
-      { name: 'Thưởng', value: bonus },
-      { name: 'Hoa hồng', value: commission },
-      { name: 'Phạt', value: penalty },
-    ].filter((d) => d.value > 0);
-  }, [earnings]);
+  // ── Derived data ─────────────────────────────────────────────────────
 
-  const weekTrips = useMemo(() => {
+  const periodNet = useMemo(() => {
     if (!earnings) return 0;
-    return earnings.daily.reduce((sum, d) => sum + d.rides, 0);
-  }, [earnings]);
+    return period === 'today' ? earnings.today : period === 'week' ? earnings.week : earnings.month;
+  }, [earnings, period]);
 
+  const periodTrips = useMemo(() => {
+    const trips = earnings?.recentTrips ?? [];
+    if (!trips.length) return [];
+    const now = new Date();
+    const boundaries = {
+      today: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+      week: new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000),
+      month: new Date(now.getFullYear(), now.getMonth(), 1),
+    };
+    return trips.filter((t) => new Date(t.completedAt) >= boundaries[period]);
+  }, [earnings, period]);
 
+  const weekTrips = useMemo(() => earnings?.daily?.reduce((s, d) => s + d.rides, 0) ?? 0, [earnings]);
+  const avgFare   = useMemo(() => {
+    if (!periodTrips.length) return 0;
+    return periodTrips.reduce((s, t) => s + t.net, 0) / periodTrips.length;
+  }, [periodTrips]);
 
-  // ── Loading / Error ──
+  // ── Loading / Error ──────────────────────────────────────────────────
 
   if (loading && !earnings) {
     return (
-      <Box sx={{ py: 4, px: 1 }}>
+      <Box sx={{ py: 2, px: 0.5 }}>
         <Skeleton variant="text" width={200} height={40} sx={{ mb: 2 }} />
         <Stack spacing={2}>
           {[1, 2, 3, 4].map((k) => (
@@ -128,223 +118,245 @@ const Earnings: React.FC = () => {
   if (error && !earnings) {
     return (
       <Box sx={{ py: 4, px: 1 }}>
-        <Alert severity="error">{error}</Alert>
+        <Alert severity="error" action={<Button onClick={fetchEarnings}>Thử lại</Button>}>
+          {error}
+        </Alert>
       </Box>
     );
   }
 
   if (!earnings) return null;
 
-  // ── Summary stats ──
-  const statsRow = [
-    { label: 'Hôm nay', value: formatCurrency(earnings.today), icon: <AttachMoneyRounded fontSize="small" />, color: '#16a34a', bg: '#f0fdf4' },
-    { label: '7 ngày', value: formatCurrency(earnings.week), icon: <TrendingUpRounded fontSize="small" />, color: '#2563eb', bg: '#eff6ff' },
-    { label: 'Chuyến/tuần', value: String(weekTrips), icon: <DriveEtaRounded fontSize="small" />, color: '#7c3aed', bg: '#f5f3ff' },
-    { label: 'Hoa hồng', value: formatCurrency(earnings.commissionTotal), icon: <PercentRounded fontSize="small" />, color: '#dc2626', bg: '#fef2f2' },
-    { label: 'Thưởng', value: formatCurrency(earnings.bonusTotal), icon: <EmojiEventsRounded fontSize="small" />, color: '#d97706', bg: '#fffbeb' },
-  ];
-  const hasCashSettlementTrips = earnings.recentTrips.some((trip) => trip.driverCollected && trip.paymentMethod === 'CASH');
+  // ── Period selector ──────────────────────────────────────────────────
 
-  return (
-    <Box
-      sx={{
-        pt: 1.5,
-        pb: 1.5,
-        minHeight: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 1.5,
-      }}
-    >
-      {error && <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>{error}</Alert>}
+  const renderPeriodSelector = () => (
+    <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+      {(['today', 'week', 'month'] as const).map((p) => (
+        <Button
+          key={p}
+          variant={period === p ? 'contained' : 'outlined'}
+          size="small"
+          disableElevation
+          onClick={() => setPeriod(p)}
+          sx={{ flex: 1, borderRadius: 3, fontWeight: 700, fontSize: '0.78rem' }}
+        >
+          {p === 'today' ? 'Hôm nay' : p === 'week' ? '7 ngày' : 'Tháng'}
+        </Button>
+      ))}
+    </Stack>
+  );
 
-      {/* Highlight card — net this week */}
-      <Card
-        elevation={0}
-        sx={{
-          background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
-          color: '#fff',
-          borderRadius: 4,
-          mb: 2,
-        }}
-      >
-        <CardContent sx={{ p: 3 }}>
-  {/* Title */}
-  <Typography
-    variant="caption"
-    sx={{
-      opacity: 0.7,
-      fontWeight: 600,
-      letterSpacing: '0.06em',
-      textTransform: 'uppercase',
-      display: 'block',
-      textAlign: 'center',
-    }}
-  >
-    Thực nhận tuần này
-  </Typography>
+  // ── Tab 1: Tổng quan ─────────────────────────────────────────────────
 
-  {/* Main number */}
-  <Typography
-    variant="h3"
-    sx={{
-      fontWeight: 800,
-      textAlign: 'center',
-      mt: 1,
-      mb: 2.5,
-    }}
-  >
-    {formatCurrency(earnings.week)}
-  </Typography>
+  const renderOverview = () => (
+    <Stack spacing={2}>
+      {renderPeriodSelector()}
 
-</CardContent>
+      {/* Main earning card */}
+      <Card elevation={0} sx={{ background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)', color: '#fff', borderRadius: 4 }}>
+        <CardContent sx={{ p: 2.5 }}>
+          <Typography variant="caption" sx={{ opacity: 0.7, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', textAlign: 'center' }}>
+            Thực nhận {period === 'today' ? 'hôm nay' : period === 'week' ? '7 ngày' : 'tháng này'}
+          </Typography>
+          <Typography variant="h3" sx={{ fontWeight: 800, textAlign: 'center', mt: 0.5, mb: 1.5 }}>
+            {formatCurrency(periodNet)}
+          </Typography>
+          <Stack direction="row" justifyContent="center" spacing={2} flexWrap="wrap" useFlexGap>
+            <Stack alignItems="center">
+              <Typography variant="caption" sx={{ opacity: 0.7 }}>Số chuyến</Typography>
+              <Typography variant="subtitle1" fontWeight={800}>{periodTrips.length}</Typography>
+            </Stack>
+            <Stack alignItems="center">
+              <Typography variant="caption" sx={{ opacity: 0.7 }}>Trung bình/cuốc</Typography>
+              <Typography variant="subtitle1" fontWeight={800}>{formatCurrency(avgFare)}</Typography>
+            </Stack>
+            <Stack alignItems="center">
+              <Typography variant="caption" sx={{ opacity: 0.7 }}>Thưởng</Typography>
+              <Typography variant="subtitle1" fontWeight={800}>{formatCurrency(earnings.bonusTotal)}</Typography>
+            </Stack>
+          </Stack>
+        </CardContent>
       </Card>
 
-      {/* Stats row */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(3, 1fr)', sm: 'repeat(5, 1fr)' }, gap: 1, mb: 2 }}>
-        {statsRow.map((s) => (
-          <Card key={s.label} elevation={0} sx={{ borderRadius: 3, bgcolor: s.bg, border: 'none' }}>
-            <CardContent sx={{ py: 1.5, px: 1, '&:last-child': { pb: 1.5 }, textAlign: 'center' }}>
-              <Box sx={{ color: s.color, display: 'flex', justifyContent: 'center', mb: 0.5 }}>{s.icon}</Box>
-              <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>
-                {s.label}
-              </Typography>
-              <Typography variant="body2" fontWeight={800} sx={{ color: s.color, mt: 0.25 }}>
-                {s.value}
-              </Typography>
+      {/* Stats grid */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1.5 }}>
+        {[
+          { icon: <AttachMoneyRounded fontSize="small" />, label: 'Tổng cước (gộp)', value: formatCurrency(earnings.grossTotal), color: '#16a34a', bg: '#f0fdf4' },
+          { icon: <PercentRounded fontSize="small" />, label: 'Phí nền tảng', value: formatCurrency(earnings.commissionTotal), color: '#dc2626', bg: '#fef2f2' },
+          { icon: <EmojiEventsRounded fontSize="small" />, label: 'Tổng thưởng', value: formatCurrency(earnings.bonusTotal), color: '#d97706', bg: '#fffbeb' },
+          { icon: <DriveEtaRounded fontSize="small" />, label: 'Cuốc 7 ngày', value: String(weekTrips), color: '#7c3aed', bg: '#f5f3ff' },
+        ].map((s) => (
+          <Card key={s.label} elevation={0} sx={{ borderRadius: 3, bgcolor: s.bg }}>
+            <CardContent sx={{ py: 1.5, px: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Box sx={{ color: s.color, mb: 0.5 }}>{s.icon}</Box>
+              <Typography variant="caption" color="text.secondary" display="block" lineHeight={1.2}>{s.label}</Typography>
+              <Typography variant="body2" fontWeight={800} sx={{ color: s.color, mt: 0.25 }}>{s.value}</Typography>
             </CardContent>
           </Card>
         ))}
       </Box>
 
+      {earnings.unpaidCashDebt > 0 && (
+        <Alert severity="warning" icon={<MoneyOffRounded />} sx={{ borderRadius: 3 }}>
+          <strong>Nợ tiền mặt chưa thanh toán: {formatCurrency(earnings.unpaidCashDebt)}</strong>
+          <br />Số tiền hoa hồng còn thiếu từ các cuốc xe tiền mặt
+        </Alert>
+      )}
 
+      {/* Trend chart */}
+      {earnings.daily.length > 0 && (
+        <Card variant="outlined" sx={{ borderRadius: 3 }}>
+          <CardContent sx={{ p: 2 }}>
+            <Typography variant="subtitle2" fontWeight={700} mb={1} color="text.secondary">Xu hướng thu nhập 7 ngày</Typography>
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={earnings.daily} margin={{ top: 0, right: 4, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                <YAxis tickFormatter={formatVND} tick={{ fontSize: 9 }} />
+                <Tooltip formatter={(value: any) => [formatCurrency(Number(value)), 'Thực nhận']} />
+                <Line type="monotone" dataKey="net" stroke="#16a34a" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="gross" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Chart section */}
+      {/* Trip statistics */}
       <Card variant="outlined" sx={{ borderRadius: 3 }}>
         <CardContent sx={{ p: 2 }}>
-          {/* Chart toggle */}
-          <ButtonGroup fullWidth size="small" sx={{ mb: 2 }}>
-            {CHART_TABS.map((ct) => (
-              <Button
-                key={ct.value}
-                variant={chartView === ct.value ? 'contained' : 'outlined'}
-                onClick={() => setChartView(ct.value)}
-                disableElevation
-                sx={{ fontWeight: 700, fontSize: '0.72rem', borderRadius: ct.value === 'revenue' ? '12px 0 0 12px !important' : ct.value === 'pie' ? '0 12px 12px 0 !important' : undefined }}
-              >
-                {ct.label}
-              </Button>
+          <Stack direction="row" alignItems="center" spacing={1} mb={1.5}>
+            <AssessmentRounded color="primary" fontSize="small" />
+            <Typography variant="subtitle1" fontWeight={700}>Thống kê chuyến đi</Typography>
+          </Stack>
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5 }}>
+            {[
+              { label: 'Tổng cuốc', value: String(earnings.totalRides), color: '#2563eb' },
+              { label: 'Cuốc tuần', value: String(weekTrips), color: '#7c3aed' },
+              { label: 'TB/cuốc', value: formatCurrency(earnings.totalRides > 0 ? earnings.netTotal / earnings.totalRides : 0), color: '#16a34a' },
+            ].map((s) => (
+              <Box key={s.label} sx={{ textAlign: 'center', p: 1, bgcolor: '#f8fafc', borderRadius: 2 }}>
+                <Typography variant="h6" fontWeight={800} sx={{ color: s.color }}>{s.value}</Typography>
+                <Typography variant="caption" color="text.secondary">{s.label}</Typography>
+              </Box>
             ))}
-          </ButtonGroup>
-
-          {earnings.daily.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" textAlign="center" py={4}>
-              Chưa có dữ liệu
-            </Typography>
-          ) : (
-            <>
-              {chartView === 'revenue' && (
-                <>
-                  <Typography variant="subtitle2" fontWeight={700} mb={1} color="text.secondary">Doanh thu theo ngày</Typography>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={earnings.daily} margin={{ top: 0, right: 4, left: -16, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
-                      <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                      <YAxis tickFormatter={formatVND} tick={{ fontSize: 10 }} />
-                      <Tooltip
-                        formatter={(value: any, name: any) => {
-                          const labels: Record<string, string> = { net: 'Thực nhận', commission: 'Hoa hồng', bonus: 'Thưởng' };
-                          return [formatCurrency(Number(value)), labels[name] || name];
-                        }}
-                      />
-                      <Legend formatter={(v: string) => {
-                        const m: Record<string, string> = { net: 'Thực nhận', commission: 'Hoa hồng', bonus: 'Thưởng' };
-                        return m[v] || v;
-                      }} />
-                      <Bar dataKey="net" fill="#16a34a" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="commission" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="bonus" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </>
-              )}
-
-              {chartView === 'trend' && (
-                <>
-                  <Typography variant="subtitle2" fontWeight={700} mb={1} color="text.secondary">Xu hướng thu nhập</Typography>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={earnings.daily} margin={{ top: 0, right: 4, left: -16, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
-                      <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                      <YAxis tickFormatter={formatVND} tick={{ fontSize: 10 }} />
-                      <Tooltip formatter={(value: any) => [formatCurrency(Number(value)), 'Thực nhận']} />
-                      <Line type="monotone" dataKey="net" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 4, fill: '#2563eb' }} activeDot={{ r: 6 }} />
-                      <Line type="monotone" dataKey="gross" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </>
-              )}
-
-              {chartView === 'trips' && (
-                <>
-                  <Typography variant="subtitle2" fontWeight={700} mb={1} color="text.secondary">Số chuyến theo ngày</Typography>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={earnings.daily} margin={{ top: 0, right: 4, left: -24, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
-                      <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                      <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
-                      <Tooltip formatter={(value: any) => [`${Number(value)} chuyến`, 'Số chuyến']} />
-                      <Bar dataKey="rides" fill="#7c3aed" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </>
-              )}
-
-              {chartView === 'pie' && (
-                <>
-                  <Typography variant="subtitle2" fontWeight={700} mb={1} color="text.secondary">Cơ cấu thu nhập</Typography>
-                  {pieData.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary" textAlign="center" py={4}>Chưa có dữ liệu</Typography>
-                  ) : (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
-                      <ResponsiveContainer width={160} height={160}>
-                        <PieChart>
-                          <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={68} paddingAngle={3} dataKey="value">
-                            {pieData.map((_e, i) => (
-                              <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <Stack spacing={0.75}>
-                        {pieData.map((entry, i) => (
-                          <Stack key={entry.name} direction="row" alignItems="center" spacing={1}>
-                            <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: PIE_COLORS[i % PIE_COLORS.length], flexShrink: 0 }} />
-                            <Typography variant="body2">{entry.name}</Typography>
-                            <Typography variant="body2" fontWeight={700}>{formatCurrency(entry.value)}</Typography>
-                          </Stack>
-                        ))}
-                      </Stack>
-                    </Box>
-                  )}
-                </>
-              )}
-            </>
+          </Box>
+          {earnings.daily.length > 0 && (
+            <Box mt={1.5}>
+              <ResponsiveContainer width="100%" height={120}>
+                <BarChart data={earnings.daily} margin={{ top: 0, right: 4, left: -24, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 9 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 9 }} />
+                  <Tooltip formatter={(v: any) => [`${Number(v)} cuốc`, 'Số chuyến']} />
+                  <Bar dataKey="rides" fill="#7c3aed" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Box>
           )}
         </CardContent>
       </Card>
+    </Stack>
+  );
 
-      {/* Link to trip history */}
-      <Button
-        variant="outlined"
-        fullWidth
-        startIcon={<HistoryRounded />}
-        onClick={() => navigate('/history')}
-        sx={{ borderRadius: 3, fontWeight: 700, py: 1.2, mt: 2 }}
-      >
-        Xem lịch sử chuyến đi
-      </Button>
+  // ── Tab 2: Chi tiết thu nhập ─────────────────────────────────────────
+
+  const renderIncome = () => (
+    <Stack spacing={2}>
+      {renderPeriodSelector()}
+
+      {/* Revenue stacked bar chart */}
+      {earnings.daily.length > 0 && (
+        <Card variant="outlined" sx={{ borderRadius: 3 }}>
+          <CardContent sx={{ p: 2 }}>
+            <Typography variant="subtitle2" fontWeight={700} mb={1} color="text.secondary">Doanh thu theo ngày</Typography>
+            <ResponsiveContainer width="100%" height={190}>
+              <BarChart data={earnings.daily} margin={{ top: 0, right: 4, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                <YAxis tickFormatter={formatVND} tick={{ fontSize: 9 }} />
+                <Tooltip
+                  formatter={(value: any, name: any) => {
+                    const labels: Record<string, string> = { net: 'Thực nhận', commission: 'Phí nền tảng', bonus: 'Thưởng' };
+                    return [formatCurrency(Number(value)), labels[name] || name];
+                  }}
+                />
+                <Legend formatter={(v: string) => ({ net: 'Thực nhận', commission: 'Phí nền tảng', bonus: 'Thưởng' } as Record<string, string>)[v] || v} />
+                <Bar dataKey="net" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="commission" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="bonus" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Income breakdown */}
+      <Card variant="outlined" sx={{ borderRadius: 3 }}>
+        <CardContent sx={{ p: 2 }}>
+          <Stack direction="row" alignItems="center" spacing={1} mb={1.5}>
+            <BarChartRounded color="primary" fontSize="small" />
+            <Typography variant="subtitle1" fontWeight={700}>Cơ cấu thu nhập (toàn kỳ)</Typography>
+          </Stack>
+          <Stack spacing={1.2}>
+            {[
+              { label: 'Tổng cước gộp', value: earnings.grossTotal, color: '#2563eb', icon: <AttachMoneyRounded fontSize="small" />, sign: '+' },
+              { label: 'Thưởng', value: earnings.bonusTotal, color: '#d97706', icon: <EmojiEventsRounded fontSize="small" />, sign: '+' },
+              { label: 'Phí nền tảng', value: earnings.commissionTotal, color: '#dc2626', icon: <PercentRounded fontSize="small" />, sign: '-' },
+              { label: 'Phạt', value: earnings.penaltyTotal, color: '#7c3aed', icon: <MoneyOffRounded fontSize="small" />, sign: '-' },
+            ].map((item) => (
+              <Stack key={item.label} direction="row" alignItems="center" justifyContent="space-between">
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Box sx={{ color: item.color, display: 'flex' }}>{item.icon}</Box>
+                  <Typography variant="body2" color="text.secondary">{item.label}</Typography>
+                </Stack>
+                <Typography variant="body2" fontWeight={700} sx={{ color: item.color }}>
+                  {item.sign}{formatCurrency(item.value)}
+                </Typography>
+              </Stack>
+            ))}
+            <Divider />
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Typography variant="body2" fontWeight={700}>Thực nhận</Typography>
+              <Typography variant="subtitle2" fontWeight={800} color="success.main">
+                {formatCurrency(earnings.netTotal)}
+              </Typography>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+    </Stack>
+  );
+
+  // ── Main render ──────────────────────────────────────────────────────
+
+  return (
+    <Box sx={{ pt: 1, pb: 2, minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
+      {error && <Alert severity="warning" sx={{ mb: 2, borderRadius: 2, mx: 0.5 }}>{error}</Alert>}
+
+      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+        <Typography variant="h6" fontWeight={800}>Thu nhập tài xế</Typography>
+        <Button size="small" variant="outlined" onClick={fetchEarnings} disabled={loading} sx={{ borderRadius: 2, fontSize: '0.72rem' }}>
+          {loading ? 'Đang tải...' : 'Làm mới'}
+        </Button>
+      </Stack>
+
+      <Card variant="outlined" sx={{ borderRadius: 3, mb: 2 }}>
+        <Tabs
+          value={tab}
+          onChange={(_e, v) => setTab(v)}
+          variant="fullWidth"
+          sx={{ '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' }, minHeight: 44 }}
+        >
+          <Tab label="Tổng quan" sx={{ fontSize: '0.78rem', minHeight: 44, fontWeight: 700 }} />
+          <Tab label="Chi tiết thu nhập" sx={{ fontSize: '0.78rem', minHeight: 44, fontWeight: 700 }} />
+        </Tabs>
+      </Card>
+
+      <Box sx={{ flex: 1 }}>
+        {tab === 0 && renderOverview()}
+        {tab === 1 && renderIncome()}
+      </Box>
     </Box>
   );
 };

@@ -68,6 +68,11 @@ const shouldForwardOverHttp = (
     return true;
   }
 
+  // wallet-service does not expose gRPC — always use HTTP
+  if (service === 'wallet') {
+    return true;
+  }
+
   if (service !== 'driver') {
     return false;
   }
@@ -158,7 +163,11 @@ router.use('/api/auth', (req, res) => void forward('auth', req, res));
 router.use('/api/rides', (req, res) => void forward('ride', req, res));
 router.use('/api/drivers', (req, res) => void forward('driver', req, res));
 router.use('/api/payments', (req, res) => void forward('payment', req, res));
-router.use('/api/wallet', (req, res) => void forward('payment', req, res));
+// Wallet top-up routes (initiate, IPN callbacks, browser returns, status) live in payment-service
+// because they reuse the same MoMo/VNPay gateway code.  This rule must come BEFORE /api/wallet.
+router.use('/api/wallet/top-up', (req, res) => void forward('payment', req, res));
+router.use('/api/admin/wallet', (req, res) => void forward('wallet', req, res));
+router.use('/api/wallet', (req, res) => void forward('wallet', req, res));
 router.use('/api/voucher', (req, res) => void forward('payment', req, res));
 router.use('/api/bookings', (req, res) => void forward('booking', req, res));
 router.use('/api/pricing', (req, res) => void forward('pricing', req, res));

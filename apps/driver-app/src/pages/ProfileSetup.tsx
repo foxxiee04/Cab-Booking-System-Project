@@ -32,6 +32,7 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { setProfile } from '../store/driver.slice';
 import { driverApi } from '../api/driver.api';
 import { DriverRegistration, LicenseClass, VehicleType } from '../types';
+import { isValidLicensePlate, normalizeLicensePlate, sanitizeLicensePlateInput } from '../utils/format.utils';
 import { useTranslation } from 'react-i18next';
 
 const VEHICLE_OPTIONS_BY_TYPE: Record<VehicleType, Record<string, string[]>> = {
@@ -141,27 +142,19 @@ const ProfileSetup: React.FC = () => {
   const [imageUploading, setImageUploading] = useState(false);
 
   const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    // vehicleYear comes from a MUI Select so e.target.value is already a number.
     const nextValue = field === 'vehicleYear'
       ? Number(e.target.value)
       : field === 'licenseNumber'
         ? formatLicenseNumberInput(e.target.value)
-      : e.target.value;
-
-    setFormData({ ...formData, [field]: nextValue });
-    setFieldErrors((prev) => ({ ...prev, [field]: '' }));
-  };
-
-  const handleVehicleMakeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const nextMake = e.target.value;
-    const nextModels = VEHICLE_OPTIONS_BY_TYPE[formData.vehicleType][nextMake] || [];
+        : field === 'licensePlate'
+          ? sanitizeLicensePlateInput(e.target.value)
+          : e.target.value;
 
     setFormData((prev) => ({
       ...prev,
-      vehicleMake: nextMake,
-      vehicleModel: nextModels.includes(prev.vehicleModel) ? prev.vehicleModel : '',
+      [field]: nextValue,
     }));
-    setFieldErrors((prev) => ({ ...prev, vehicleMake: '', vehicleModel: '' }));
+    setFieldErrors((prev) => ({ ...prev, [field]: '' }));
   };
 
   const handleVehicleTypeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -187,12 +180,23 @@ const ProfileSetup: React.FC = () => {
     setFieldErrors((prev) => ({ ...prev, vehicleType: '', vehicleMake: '', vehicleModel: '', licenseClass: '' }));
   };
 
+  const handleVehicleMakeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const nextMake = e.target.value;
+    const models = VEHICLE_OPTIONS_BY_TYPE[formData.vehicleType][nextMake] || [];
+
+    setFormData((prev) => ({
+      ...prev,
+      vehicleMake: nextMake,
+      vehicleModel: models.includes(prev.vehicleModel) ? prev.vehicleModel : models[0] || '',
+    }));
+
+    setFieldErrors((prev) => ({ ...prev, vehicleMake: '', vehicleModel: '' }));
+  };
+
   const validateForm = () => {
     const nextErrors: Record<string, string> = {};
-    const normalizedPlate = formData.licensePlate.trim().toUpperCase();
     const normalizedLicense = formData.licenseNumber.trim();
     const licenseDigits = normalizedLicense.replace(/\s+/g, '');
-    const plateRegex = /^\d{2}[A-Z]{1,2}-?\d{4,5}$/;
     const licenseRegex = /^\d{3}\s\d{3}\s\d{3}\s\d{3}$/;
 
     if (formData.vehicleMake.trim().length < 2) {
@@ -211,7 +215,7 @@ const ProfileSetup: React.FC = () => {
       nextErrors.vehicleYear = t('errors.vehicleYearInvalid');
     }
 
-    if (!plateRegex.test(normalizedPlate)) {
+    if (!isValidLicensePlate(formData.licensePlate)) {
       nextErrors.licensePlate = t('errors.licensePlateInvalid');
     }
 
@@ -278,6 +282,7 @@ const ProfileSetup: React.FC = () => {
       if (!user) throw new Error(t('errors.authRequired'));
       const payload: DriverRegistration = {
         ...formData,
+        licensePlate: normalizeLicensePlate(formData.licensePlate),
         licenseNumber: formData.licenseNumber.replace(/\s+/g, ''),
       };
       const response = await driverApi.registerDriver(payload);
@@ -457,8 +462,9 @@ const ProfileSetup: React.FC = () => {
                     onChange={handleChange('licensePlate')}
                     required
                     error={Boolean(fieldErrors.licensePlate)}
-                    helperText={fieldErrors.licensePlate}
+                    helperText={fieldErrors.licensePlate || 'Định dạng hợp lệ: 29A-12345 hoặc 51H1-678.90'}
                     placeholder="VD: 29A-12345"
+                    inputProps={{ maxLength: 12 }}
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -611,17 +617,17 @@ const ProfileSetup: React.FC = () => {
         </Typography>
 
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-          2. Xét duyệt tài khoản
+          2. Hoàn tất hồ sơ tài xế
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
-          Hồ sơ sẽ được đội ngũ FoxGo xem xét trong vòng 1–3 ngày làm việc. FoxGo có quyền từ chối hồ sơ không đủ tiêu chuẩn mà không cần nêu lý do.
+          Sau khi hoàn tất hồ sơ phương tiện và giấy phép lái xe, tài khoản tài xế được tạo trên hệ thống để tiếp tục kích hoạt ví ký quỹ.
         </Typography>
 
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>
           3. Kích hoạt tài khoản & Ví FoxGo Driver
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
-          Sau khi hồ sơ được duyệt, tài xế cần nạp tối thiểu <strong>300.000 ₫</strong> vào Ví FoxGo Driver để kích hoạt tài khoản và bắt đầu nhận cuốc xe.
+          Tài xế cần nạp tối thiểu <strong>300.000 ₫</strong> vào Ví FoxGo Driver để kích hoạt tài khoản và bắt đầu nhận cuốc xe. Khoản này được ghi nhận là tiền ký quỹ và không dùng để chi tiêu hằng ngày.
         </Typography>
 
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>

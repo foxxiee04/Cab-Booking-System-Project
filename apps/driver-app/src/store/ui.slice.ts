@@ -1,10 +1,34 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { Notification } from '../types';
+import { logout, setCredentials } from './auth.slice';
 
-const NOTIFICATION_HISTORY_STORAGE_KEY = 'driverNotificationHistory';
+const NOTIFICATION_HISTORY_BASE_KEY = 'driverNotificationHistory';
+const ANONYMOUS_NOTIFICATION_HISTORY_KEY = `${NOTIFICATION_HISTORY_BASE_KEY}:anonymous`;
 const MAX_NOTIFICATION_HISTORY = 50;
 
 type NotificationPayload = Omit<Notification, 'id' | 'createdAt' | 'read'>;
+
+const getNotificationHistoryStorageKey = (): string => {
+  if (typeof window === 'undefined') {
+    return ANONYMOUS_NOTIFICATION_HISTORY_KEY;
+  }
+
+  try {
+    const rawUser = localStorage.getItem('user');
+    if (!rawUser) {
+      return ANONYMOUS_NOTIFICATION_HISTORY_KEY;
+    }
+
+    const user = JSON.parse(rawUser);
+    if (user?.id && typeof user.id === 'string') {
+      return `${NOTIFICATION_HISTORY_BASE_KEY}:${user.id}`;
+    }
+  } catch {
+    // ignore malformed user object
+  }
+
+  return ANONYMOUS_NOTIFICATION_HISTORY_KEY;
+};
 
 const loadNotificationHistory = (): Notification[] => {
   if (typeof window === 'undefined') {
@@ -12,7 +36,7 @@ const loadNotificationHistory = (): Notification[] => {
   }
 
   try {
-    const rawValue = localStorage.getItem(NOTIFICATION_HISTORY_STORAGE_KEY);
+    const rawValue = localStorage.getItem(getNotificationHistoryStorageKey());
     if (!rawValue) {
       return [];
     }
@@ -49,7 +73,7 @@ const persistNotificationHistory = (history: Notification[]) => {
 
   try {
     localStorage.setItem(
-      NOTIFICATION_HISTORY_STORAGE_KEY,
+      getNotificationHistoryStorageKey(),
       JSON.stringify(history.slice(0, MAX_NOTIFICATION_HISTORY)),
     );
   } catch {
@@ -120,6 +144,27 @@ const uiSlice = createSlice({
     setSidebarOpen: (state, action: PayloadAction<boolean>) => {
       state.sidebarOpen = action.payload;
     },
+  },
+  extraReducers: (builder) => {
+    builder.addCase(logout, (state) => {
+      state.notification = null;
+      state.notificationHistory = [];
+      persistNotificationHistory(state.notificationHistory);
+    });
+    builder.addCase(setCredentials, (state) => {
+      // auth.slice persists user to localStorage before this runs,
+      // so getNotificationHistoryStorageKey() returns the user-specific key.
+      // Clear in-memory history first to prevent mixing notifications across accounts,
+      // then reload from the user-specific storage key.
+      state.notification = null;
+      state.notificationHistory = [];
+      state.notificationHistory = loadNotificationHistory();
+      // Also wipe the base (non-user-specific) key to prevent cross-account leakage.
+      try {
+        localStorage.removeItem(NOTIFICATION_HISTORY_BASE_KEY);
+        localStorage.removeItem(ANONYMOUS_NOTIFICATION_HISTORY_KEY);
+      } catch { /* ignore */ }
+    });
   },
 });
 
