@@ -63,6 +63,8 @@ export class OtpService {
   private ipLimitKey(ip: string)        { return `otp:rate:ip:${ip}`; }
   private resendKey(phone: string, purpose: string = 'register') { return `otp:resend:${purpose}:${phone}`; }
   private verifiedPhoneKey(phone: string) { return `otp:verified:register:${phone}`; }
+  // Plaintext key — only written in mock mode so devs can retrieve OTP via API
+  private otpPlainKey(phone: string, purpose: string = 'register') { return `otp:plain:${purpose}:${phone}`; }
 
   /**
    * Check both per-phone and per-IP rate limits.
@@ -210,5 +212,22 @@ export class OtpService {
 
   async clearPhoneVerifiedForRegistration(phone: string): Promise<void> {
     await this.redis.del(this.verifiedPhoneKey(phone));
+  }
+
+  /**
+   * Store plaintext OTP for dev/mock retrieval.
+   * ONLY called when OTP_SMS_MODE=mock — never in production.
+   */
+  async storePlainOtp(phone: string, otp: string, purpose: string = 'register'): Promise<void> {
+    await this.redis.setEx(this.otpPlainKey(phone, purpose), config.otp.ttlSeconds, otp);
+  }
+
+  /**
+   * Retrieve the most recently sent plaintext OTP.
+   * Returns null if expired, already verified, or not in mock mode.
+   * Used by the /internal/dev/otp debug endpoint.
+   */
+  async getPlainOtp(phone: string, purpose: string = 'register'): Promise<string | null> {
+    return this.redis.get(this.otpPlainKey(phone, purpose));
   }
 }

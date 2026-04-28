@@ -1,4 +1,4 @@
-name: CI/CD - Docker Hub
+name: CI/CD Pipeline
 
 on:
   push:
@@ -19,6 +19,10 @@ env:
   PYTHON_VERSION: '3.11'
   IMAGE_NAMESPACE: ${{ secrets.DOCKERHUB_USERNAME || github.repository_owner }}
 
+# ──────────────────────────────────────────────────────────────────────────────
+# STAGE 1 — Tests (all run in parallel, continue-on-error so deploy is never
+#           blocked by a flaky test in dev/thesis mode)
+# ──────────────────────────────────────────────────────────────────────────────
 jobs:
   test-unit:
     name: Test - Unit
@@ -77,7 +81,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build shared helpers
         run: npm run build:shared
@@ -85,6 +89,7 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
         env:
+          NODE_ENV: test
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
           MONGODB_URI: mongodb://localhost:27017/test_db
           REDIS_URL: redis://localhost:6379
@@ -95,6 +100,7 @@ jobs:
           AI_SERVICE_URL: http://127.0.0.1:8000
           OSRM_BASE_URL: http://router.project-osrm.org
 
+  # Contract tests: driver ↔ ride service (no infra needed — mocked in-process)
   test-contract:
     name: Test - Contract
     runs-on: ubuntu-latest
@@ -110,7 +116,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build shared helpers
         run: npm run build:shared
@@ -118,6 +124,7 @@ jobs:
       - name: Run contract tests
         run: npm run test:contract
         env:
+          NODE_ENV: test
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
           REDIS_URL: redis://localhost:6379
           RABBITMQ_URL: amqp://localhost:5672
@@ -140,6 +147,7 @@ jobs:
       REFRESH_TOKEN_SECRET: test-refresh-secret
       INTERNAL_SERVICE_TOKEN: test-internal-token
       OSRM_BASE_URL: http://router.project-osrm.org
+      OTP_SMS_MODE: mock
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -154,7 +162,7 @@ jobs:
         run: docker compose -f .github/docker/docker-compose.integration.yml up -d --build --wait
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build backend artifacts in dependency order
         run: npm run build
@@ -196,6 +204,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: services/ai-service/requirements.txt
 
       - name: Install dependencies
         run: pip install -r requirements.txt
@@ -203,8 +213,15 @@ jobs:
       - name: Run tests
         run: pytest -q
 
+# ──────────────────────────────────────────────────────────────────────────────
+# STAGE 2 — Build & push Docker images
+# Each service is built in a separate matrix job (parallel).
+# Services that reference shared/ must be built from root context (context: .)
+# so the Dockerfile can COPY services/<name>/ and shared/dist/.
+# wallet-service has no shared dependency → uses its own directory as context.
+# ──────────────────────────────────────────────────────────────────────────────
   docker-build-and-push:
-    name: Docker - Build & Push
+    name: Docker - Build & Push (${{ matrix.service }})
     runs-on: ubuntu-latest
     needs: [test-unit, test-contract, test-integration, test-ai]
     if: github.event_name != 'pull_request'
@@ -215,6 +232,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # ── Root-context services (Dockerfile copies from services/<name>/ + shared/dist/) ──
           - service: api-gateway
             context: .
             dockerfile: ./services/api-gateway/Dockerfile
@@ -255,6 +273,7 @@ jobs:
             context: .
             dockerfile: ./services/user-service/Dockerfile
             needs_shared: true
+          # ── Local-context services (self-contained, no shared/ dependency) ──
           - service: ai-service
             context: ./services/ai-service
             dockerfile: ./services/ai-service/Dockerfile
@@ -277,21 +296,16 @@ jobs:
 
       - name: Install dependencies
         if: matrix.needs_shared
-        run: npm install
+        run: npm ci
 
       - name: Build shared helpers
         if: matrix.needs_shared
         run: npm run build:shared
 
-      - name: Skip Docker publish when secrets are unavailable
-        if: env.DOCKERHUB_USERNAME == '' || env.DOCKERHUB_TOKEN == ''
-        run: echo "Docker Hub secrets are not configured. Skipping image publish for this run."
-
       - name: Set up Docker Buildx
-        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
         uses: docker/setup-buildx-action@v3
 
-      - name: Login Docker Hub
+      - name: Login to Docker Hub
         if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
         uses: docker/login-action@v3
         with:
@@ -299,39 +313,49 @@ jobs:
           password: ${{ env.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata
-        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAMESPACE }}/cab-${{ matrix.service }}
           tags: |
-            type=sha,prefix=
+            type=sha,prefix=,format=short
             type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
 
       - name: Build and push
-        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          push: true
+          push: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # Deploy — Backend (Docker Swarm on AWS EC2)
-  # Required secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PORT (opt)
-  # The server must already have ~/cab-booking/.env and ~/cab-booking/env/*.env
-  # ──────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
+# STAGE 3a — Deploy Backend (Docker Swarm on AWS EC2)
+#
+# Required GitHub secrets:
+#   DEPLOY_HOST       EC2 public IP / hostname
+#   DEPLOY_USER       SSH user (e.g. ubuntu)
+#   DEPLOY_SSH_KEY    Private key for SSH (PEM format)
+#   DEPLOY_PORT       SSH port (optional, defaults to 22)
+#   DOCKERHUB_USERNAME
+#
+# Pre-requisites on the server:
+#   ~/cab-booking/.env              — all service environment variables
+#   ~/cab-booking/env/*.env         — per-service env files (if used)
+#   ~/cab-booking/docker-stack.thesis.yml  — uploaded by this workflow
+# ──────────────────────────────────────────────────────────────────────────────
   deploy-backend:
-    name: Deploy - Backend
+    name: Deploy - Backend (Swarm)
     runs-on: ubuntu-latest
     needs: [docker-build-and-push]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    environment:
-      name: production
+    # To enable manual approval gate: create a "production" environment in
+    # GitHub → Settings → Environments and uncomment the line below.
+    # environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -365,39 +389,51 @@ jobs:
             [ -f .env ] && source .env
             set +o allexport
 
-            echo "▶ Creating databases if not exist..."
-            PGID=$(docker ps -q -f name=cab-booking_postgres 2>/dev/null | head -1)
+            # Create PostgreSQL databases if a postgres container is running.
+            # In Swarm mode container names include a replica suffix (.1.xxxx).
+            PGID=$(docker ps --filter "name=cab-booking_postgres" --format "{{.ID}}" | head -1)
             if [ -n "$PGID" ]; then
+              echo "▶ Ensuring databases exist..."
               for db in auth_db booking_db driver_db payment_db ride_db user_db wallet_db; do
-                docker exec $PGID psql -U postgres -c "CREATE DATABASE $db;" 2>/dev/null || true
+                docker exec "$PGID" psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname='$db'" \
+                  | grep -q 1 || docker exec "$PGID" psql -U postgres -c "CREATE DATABASE $db;" || true
               done
+            else
+              echo "⚠ postgres container not found on this node — skipping db init (run manually if first deploy)"
             fi
 
-            echo "▶ Deploying Swarm stack (tag=$IMAGE_TAG)..."
-            docker stack deploy -c docker-stack.thesis.yml --with-registry-auth cab-booking
+            echo "▶ Deploying stack (tag=$IMAGE_TAG)..."
+            docker stack deploy \
+              -c docker-stack.thesis.yml \
+              --with-registry-auth \
+              --prune \
+              cab-booking
 
             echo "▶ Removing dangling images..."
             docker image prune -f
 
             echo "✅ Swarm deployment complete"
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # Deploy — Frontend (Build React SPAs → rsync → Nginx on VPS)
-  # Required secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY,
-  #                   REACT_APP_API_URL, REACT_APP_SOCKET_URL,
-  #                   REACT_APP_GOOGLE_MAPS_API_KEY (optional)
-  # Nginx on the server must serve:
-  #   /home/<DEPLOY_USER>/customer-build  → port 4000
-  #   /home/<DEPLOY_USER>/driver-build    → port 4001
-  #   /home/<DEPLOY_USER>/admin-build     → port 4002
-  # ──────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
+# STAGE 3b — Deploy Frontend (Build React SPAs → rsync → Nginx)
+#
+# Required GitHub secrets:
+#   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PORT (opt)
+#   REACT_APP_API_URL      e.g. https://api.yourdomain.com
+#   REACT_APP_SOCKET_URL   e.g. https://api.yourdomain.com
+#   REACT_APP_GOOGLE_MAPS_API_KEY  (optional)
+#
+# Nginx on the server must serve:
+#   /home/<DEPLOY_USER>/customer-build  → port 4000
+#   /home/<DEPLOY_USER>/driver-build    → port 4001
+#   /home/<DEPLOY_USER>/admin-build     → port 4002
+# ──────────────────────────────────────────────────────────────────────────────
   deploy-frontend:
     name: Deploy - Frontend (${{ matrix.app }})
     runs-on: ubuntu-latest
     needs: [docker-build-and-push]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    environment:
-      name: production
+    # environment: production
     strategy:
       fail-fast: false
       matrix:
@@ -421,11 +457,12 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          # Each frontend app has its own package-lock.json (not a workspace package)
           cache-dependency-path: ${{ matrix.dir }}/package-lock.json
 
       - name: Install app dependencies
         working-directory: ${{ matrix.dir }}
-        run: npm install
+        run: npm ci
 
       - name: Build React app
         working-directory: ${{ matrix.dir }}
@@ -445,7 +482,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p ${{ secrets.DEPLOY_PORT || 22 }} -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -p ${{ secrets.DEPLOY_PORT || 22 }} -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Rsync build to server
         run: |

@@ -6,15 +6,17 @@ import { config } from './config';
 import { prisma } from './config/db';
 import { createAuthRouter } from './routes/auth.routes';
 import { AuthService } from './services/auth.service';
+import { OtpService } from './services/otp.service';
 import { logger } from './utils/logger';
 import { requireInternalServiceAuth } from './middleware/internal-auth';
 
 interface AuthAppOptions {
   authService: AuthService;
+  otpService: OtpService;
   getReadiness: () => Promise<Record<string, boolean>>;
 }
 
-export function createApp({ authService, getReadiness }: AuthAppOptions) {
+export function createApp({ authService, otpService, getReadiness }: AuthAppOptions) {
   const app = express();
 
   app.use(createRequestContextMiddleware() as express.RequestHandler);
@@ -73,6 +75,36 @@ export function createApp({ authService, getReadiness }: AuthAppOptions) {
       });
     }
   });
+
+  // ── Dev-only OTP retrieval ─────────────────────────────────────────────────
+  // Only active when OTP_SMS_MODE=mock AND NODE_ENV !== production.
+  // Usage: GET /internal/dev/otp?phone=0971234567&purpose=register
+  //        Header: x-internal-token: <INTERNAL_SERVICE_TOKEN>
+  if (config.sms.mode === 'mock' && config.nodeEnv !== 'production') {
+    app.get('/internal/dev/otp', async (req, res) => {
+      const phone = req.query.phone as string | undefined;
+      const purpose = (req.query.purpose as string | undefined) || 'register';
+
+      if (!phone) {
+        return res.status(400).json({ success: false, error: 'phone query param required' });
+      }
+
+      try {
+        const otp = await otpService.getPlainOtp(phone, purpose);
+        if (!otp) {
+          return res.status(404).json({
+            success: false,
+            error: 'No active OTP found for this phone/purpose (expired or not requested yet).',
+          });
+        }
+        logger.info('[DEV] OTP retrieved via debug endpoint', { phone: phone.slice(0, 4) + '***', purpose });
+        return res.json({ success: true, otp, purpose, note: 'mock mode only — never exposed in production' });
+      } catch (err) {
+        logger.error('Dev OTP endpoint error:', err);
+        return res.status(500).json({ success: false, error: 'Internal error' });
+      }
+    });
+  }
 
   app.use('/api/auth', createAuthRouter(authService));
 

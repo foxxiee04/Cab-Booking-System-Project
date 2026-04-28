@@ -38,6 +38,7 @@ export async function start() {
   });
   const app = createApp({
     authService,
+    otpService,
     getReadiness,
   });
 
