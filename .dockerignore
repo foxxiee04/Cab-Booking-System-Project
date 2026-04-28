@@ -1,0 +1,29 @@
+# Dependencies — installed inside Docker, never needed in build context
+**/node_modules
+
+# Build artifacts for services/apps (not shared/dist which IS needed)
+services/*/dist
+apps/*/build
+apps/*/dist
+apps/*/.next
+
+# Test & coverage
+coverage
+.ci-logs
+**/__tests__
+**/*.test.ts
+**/*.spec.ts
+
+# Environment & secrets
+.env
+*.env
+env/
+
+# Git & CI meta
+.git
+.github
+
+# Editor & OS
+.DS_Store
+Thumbs.db
+*.log

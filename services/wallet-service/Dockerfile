@@ -6,13 +6,14 @@ RUN apt-get update \
 	&& apt-get install -y --no-install-recommends openssl ca-certificates \
 	&& rm -rf /var/lib/apt/lists/*
 
-COPY services/wallet-service/package*.json ./
+COPY package*.json ./
 RUN npm install
 
-COPY services/wallet-service/prisma ./prisma
+COPY prisma ./prisma
 RUN npx prisma generate
 
-COPY services/wallet-service .
+COPY src ./src
+COPY tsconfig.json ./
 
 RUN npm run build && cp -r src/generated dist/
 

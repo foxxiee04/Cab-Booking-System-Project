@@ -1,0 +1,560 @@
+# Docker Swarm Stack - Thesis Demo (2-node: 1 Manager + 1 Worker)
+#
+# Node layout:
+#   Manager  (t3.large)  : infra (postgres, mongodb, redis, rabbitmq)
+#                           api-gateway, monitoring (prometheus, grafana, loki)
+#   Worker-1 (t3.medium) : auth, ride, driver, payment, wallet, ai-service
+#                           user, booking, pricing, notification, review
+#
+# Trước khi deploy, gán label cho worker node:
+#   docker node update --label-add worker=1 <hostname-worker-1>
+#
+# Deploy:
+#   docker stack deploy -c docker-stack.thesis.yml --with-registry-auth cab-booking
+
+services:
+  # ============ Infrastructure (pinned to Manager) ============
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER_FILE: /run/secrets/postgres_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: cab_booking
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    secrets:
+      - postgres_user
+      - postgres_password
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  mongodb:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_user
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_password
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - backend
+    secrets:
+      - mongo_user
+      - mongo_password
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbit}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-rabbit123}
+      RABBITMQ_PROMETHEUS_RETURN_PER_OBJECT_METRICS: "true"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ============ Microservices ============
+  # api-gateway: pinned to Manager (public IP nằm ở đây)
+  api-gateway:
+    image: ${DOCKERHUB_USERNAME}/cab-api-gateway:${IMAGE_TAG:-latest}
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    env_file:
+      - ./env/gateway.env
+    networks:
+      - frontend
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # --- Worker-1: auth, ride, driver, payment, wallet, ai ---
+  auth-service:
+    image: ${DOCKERHUB_USERNAME}/cab-auth-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3001:3001"
+      - "50051:50051"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - GRPC_PORT=50051
+    env_file:
+      - ./env/auth.env
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.worker == 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  ride-service:
+    image: ${DOCKERHUB_USERNAME}/cab-ride-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3002:3002"
+      - "50054:50054"
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - GRPC_PORT=50054
+    env_file:
+      - ./env/ride.env
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.worker == 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  driver-service:
+    image: ${DOCKERHUB_USERNAME}/cab-driver-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3003:3003"
+      - "50055:50055"
+    environment:
+      - NODE_ENV=production
+      - PORT=3003
+      - GRPC_PORT=50055
+    env_file:
+      - ./env/driver.env
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.worker == 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  payment-service:
+    image: ${DOCKERHUB_USERNAME}/cab-payment-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3004:3004"
+      - "50056:50056"
+    environment:
+      - NODE_ENV=production
+      - PORT=3004
+      - GRPC_PORT=50056
+    env_file:
+      - ./env/payment.env
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.worker == 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  wallet-service:
+    image: ${DOCKERHUB_USERNAME}/cab-wallet-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3006:3006"
+    environment:
+      - NODE_ENV=production
+      - PORT=3006
+    env_file:
+      - ./env/wallet.env
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.worker == 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  ai-service:
+    image: ${DOCKERHUB_USERNAME}/cab-ai-service:${IMAGE_TAG:-latest}
+    environment:
+      - DEBUG=False
+      - HOST=0.0.0.0
+      - PORT=8000
+      - MODEL_PATH=app/models/eta_price_model.joblib
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.worker == 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+  # --- Worker-1 (continued): user, booking, pricing, notification, review ---
+  user-service:
+    image: ${DOCKERHUB_USERNAME}/cab-user-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3007:3007"
+      - "50052:50052"
+    environment:
+      - NODE_ENV=production
+      - PORT=3007
+      - GRPC_PORT=50052
+    env_file:
+      - ./env/user.env
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.worker == 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  booking-service:
+    image: ${DOCKERHUB_USERNAME}/cab-booking-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3008:3008"
+      - "50053:50053"
+    environment:
+      - NODE_ENV=production
+      - PORT=3008
+      - GRPC_PORT=50053
+    env_file:
+      - ./env/booking.env
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.worker == 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  pricing-service:
+    image: ${DOCKERHUB_USERNAME}/cab-pricing-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3009:3009"
+      - "50057:50057"
+    environment:
+      - NODE_ENV=production
+      - PORT=3009
+      - GRPC_PORT=50057
+      - AI_SERVICE_URL=http://ai-service:8000
+    env_file:
+      - ./env/pricing.env
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.worker == 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  notification-service:
+    image: ${DOCKERHUB_USERNAME}/cab-notification-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=production
+      - PORT=3005
+    env_file:
+      - ./env/notification.env
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.worker == 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  review-service:
+    image: ${DOCKERHUB_USERNAME}/cab-review-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3010:3010"
+    environment:
+      - NODE_ENV=production
+      - PORT=3010
+    env_file:
+      - ./env/review.env
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.worker == 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # ============ Monitoring (pinned to Manager) ============
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    ports:
+      - "3030:3000"  # 3006 đã dùng bởi wallet-service
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - frontend
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  loki:
+    image: grafana/loki:3.1.1
+    ports:
+      - "3100:3100"
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - backend
+    deploy:
+      mode: global
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    networks:
+      - backend
+    deploy:
+      mode: global
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    ports:
+      - "9100:9100"
+    command:
+      - --path.rootfs=/host
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - backend
+    deploy:
+      mode: global
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
+volumes:
+  postgres_data:
+    name: cab-booking-postgres-data
+    driver: local
+  mongo_data:
+    name: cab-booking-mongo-data
+    driver: local
+  redis_data:
+    name: cab-booking-redis-data
+    driver: local
+  rabbitmq_data:
+    name: cab-booking-rabbitmq-data
+    driver: local
+  prometheus_data:
+    name: cab-booking-prometheus-data
+    driver: local
+  grafana_data:
+    name: cab-booking-grafana-data
+    driver: local
+  loki_data:
+    name: cab-booking-loki-data
+    driver: local
+
+networks:
+  frontend:
+    driver: overlay
+  backend:
+    driver: overlay
+    internal: true
+
+secrets:
+  postgres_user:
+    external: true
+  postgres_password:
+    external: true
+  mongo_user:
+    external: true
+  mongo_password:
+    external: true

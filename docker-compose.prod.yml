@@ -414,6 +414,40 @@ services:
       - cab-network
     restart: unless-stopped
 
+  # Wallet Service
+  wallet-service:
+    image: ${DOCKERHUB_USERNAME}/cab-wallet-service:${IMAGE_TAG:-latest}
+    container_name: cab-wallet-service
+    ports:
+      - "3006:3006"
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      PORT: 3006
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/wallet_db
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+      PAYMENT_SERVICE_URL: http://payment-service:3004
+      DEBT_LIMIT: ${DEBT_LIMIT:--200000}
+      WARNING_THRESHOLD: ${WARNING_THRESHOLD:--100000}
+      INITIAL_ACTIVATION_BALANCE: ${INITIAL_ACTIVATION_BALANCE:-300000}
+      MIN_WITHDRAWAL: ${MIN_WITHDRAWAL:-50000}
+      BANK_SIMULATION_ENABLED: ${BANK_SIMULATION_ENABLED:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cab-network
+    restart: unless-stopped
+
   # ============ AI Service (Production) ============
   ai-service:
     image: ${DOCKERHUB_USERNAME}/cab-ai-service:${IMAGE_TAG:-latest}
