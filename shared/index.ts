@@ -1,4 +1,14 @@
-/**\n * Shared Library - Main Entry Point\n *\n * Exports all types and utilities for use across services and apps\n */\n\n// Export Types & Events\nexport * from './types';\n\n// Export Utilities\nexport * from './utils';\n
+/**
+ * Shared Library - Main Entry Point
+ *
+ * Exports all types and utilities for use across services and apps
+ */
+
+// Export Types & Events
+export * from './types';
+
+// Export Utilities
+export * from './utils';
 
 // Export gRPC helpers
 export * from './grpc';
