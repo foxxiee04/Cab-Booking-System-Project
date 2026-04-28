@@ -10,7 +10,9 @@
       "Bash(docker exec *)",
       "Bash(docker image *)",
       "Bash(docker-compose down *)",
-      "Bash(docker-compose up *)"
+      "Bash(docker-compose up *)",
+      "Bash(npx tsc *)",
+      "Bash(docker-compose build *)"
     ]
   }
 }

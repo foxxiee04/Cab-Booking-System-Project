@@ -6,13 +6,19 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
   Container,
   Divider,
   Stack,
   Typography,
 } from '@mui/material';
-import { ArrowBack as BackIcon } from '@mui/icons-material';
+import {
+  ArrowBackRounded as BackIcon,
+  CheckCircleRounded,
+  LocalOfferRounded,
+  PaymentRounded,
+} from '@mui/icons-material';
 import { paymentApi } from '../api/payment.api';
 import { rideApi } from '../api/ride.api';
 import voucherApi, { ApplyVoucherResult } from '../api/voucher.api';
@@ -221,7 +227,7 @@ const OnlinePaymentPage: React.FC = () => {
             setError('Giao dịch này đã được thanh toán trước đó. Vui lòng kiểm tra trạng thái chuyến đi.');
           } else {
             applySandboxFallback('MOMO');
-            setError('Không lấy được liên kết MoMo sandbox trực tiếp. Hệ thống chuyển sang cổng sandbox nội bộ.');
+            setError('sandbox: Đang dùng cổng thử nghiệm MoMo nội bộ.');
           }
         } else if (selectedMethod === 'VNPAY') {
           const response = await withTimeout(
@@ -248,12 +254,12 @@ const OnlinePaymentPage: React.FC = () => {
             setError('Giao dịch này đã được thanh toán trước đó. Vui lòng kiểm tra trạng thái chuyến đi.');
           } else {
             applySandboxFallback('VNPAY');
-            setError('Không lấy được liên kết VNPay sandbox trực tiếp. Hệ thống chuyển sang cổng sandbox nội bộ.');
+            setError('sandbox: Đang dùng cổng thử nghiệm VNPay nội bộ.');
           }
         }
       } catch (err: any) {
         applySandboxFallback(selectedMethod as 'MOMO' | 'VNPAY');
-        setError('Không thể khởi tạo thanh toán trực tiếp từ sandbox. Hệ thống chuyển sang cổng sandbox nội bộ.');
+        setError('sandbox: Đang dùng cổng thử nghiệm nội bộ.');
         console.error('Payment creation error:', err);
       } finally {
         setProcessing(false);
@@ -287,149 +293,183 @@ const OnlinePaymentPage: React.FC = () => {
     );
   }
 
+  const methodMeta = {
+    MOMO:  { label: 'Ví MoMo',         color: '#ae2070', bg: '#fdf0f5', selectedBg: '#fce7f3' },
+    VNPAY: { label: 'VNPay QR/Ngân hàng', color: '#0066cc', bg: '#f0f5ff', selectedBg: '#dbeafe' },
+  } as const;
+
   return (
-    <Container maxWidth="sm" sx={{ py: 4 }}>
-      <Stack spacing={3}>
-        {/* Header */}
-        <Box display="flex" alignItems="center" gap={1}>
-          <Button
-            variant="text"
-            startIcon={<BackIcon />}
-            onClick={() => navigate(-1)}
-          >
-            Quay lại
-          </Button>
-          <Typography variant="h6" fontWeight={800}>
+    <Box sx={{ minHeight: '100dvh', background: 'linear-gradient(160deg, #0f172a 0%, #1e3a5f 100%)', pb: 4 }}>
+
+      {/* Header */}
+      <Box sx={{ px: 2, pt: 2, pb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Button
+          startIcon={<BackIcon />}
+          onClick={() => navigate(-1)}
+          sx={{ color: '#93c5fd', fontWeight: 700, borderRadius: 3 }}
+        >
+          Quay lại
+        </Button>
+        <Box flex={1} />
+        <Stack direction="row" alignItems="center" spacing={0.75}>
+          <PaymentRounded sx={{ color: '#93c5fd', fontSize: 20 }} />
+          <Typography variant="subtitle1" fontWeight={800} sx={{ color: '#fff' }}>
             Thanh toán trực tuyến
           </Typography>
-        </Box>
+        </Stack>
+        <Box flex={1} />
+      </Box>
 
-        {/* Method Selection */}
-        <Card sx={{ borderRadius: 3 }}>
-          <CardContent>
-            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+      <Container maxWidth="sm" sx={{ pt: 1 }}>
+        <Stack spacing={2.5}>
+
+          {/* Amount card */}
+          <Card elevation={0} sx={{ borderRadius: 4, overflow: 'hidden' }}>
+            <Box sx={{
+              background: voucherPreview
+                ? 'linear-gradient(135deg, #065f46 0%, #059669 100%)'
+                : 'linear-gradient(135deg, #1e40af 0%, #2563eb 100%)',
+              px: 3, py: 2.5, color: '#fff',
+            }}>
+              {voucherPreview ? (
+                <Stack spacing={1}>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <LocalOfferRounded sx={{ fontSize: 18, color: '#a7f3d0' }} />
+                    <Typography variant="caption" sx={{ color: '#a7f3d0', fontWeight: 700 }}>
+                      Đã áp dụng voucher {voucherPreview.code}
+                    </Typography>
+                  </Stack>
+                  <Typography variant="h3" fontWeight={900} lineHeight={1}>
+                    {amount.toLocaleString('vi-VN')}₫
+                  </Typography>
+                  <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
+                    <Box>
+                      <Typography variant="caption" sx={{ opacity: 0.75 }}>Cước gốc</Typography>
+                      <Typography variant="body2" fontWeight={700} sx={{ textDecoration: 'line-through', opacity: 0.8 }}>
+                        {voucherPreview.originalAmount.toLocaleString('vi-VN')}₫
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: '#a7f3d0' }}>Tiết kiệm</Typography>
+                      <Typography variant="body2" fontWeight={800} sx={{ color: '#a7f3d0' }}>
+                        -{voucherPreview.discountAmount.toLocaleString('vi-VN')}₫
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </Stack>
+              ) : (
+                <Stack spacing={0.5}>
+                  <Typography variant="caption" sx={{ opacity: 0.75 }}>Số tiền thanh toán</Typography>
+                  <Typography variant="h3" fontWeight={900} lineHeight={1}>
+                    {amount.toLocaleString('vi-VN')}₫
+                  </Typography>
+                  <Typography variant="caption" sx={{ opacity: 0.6 }}>
+                    Mã chuyến: {rideId?.slice(0, 8).toUpperCase()}
+                  </Typography>
+                </Stack>
+              )}
+            </Box>
+          </Card>
+
+          {/* Payment method selection */}
+          <Card elevation={0} sx={{ borderRadius: 4, p: 2.5 }}>
+            <Typography variant="subtitle2" fontWeight={800} gutterBottom sx={{ mb: 2 }}>
               Chọn phương thức thanh toán
             </Typography>
-            <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-              <Button
-                fullWidth
-                variant={selectedMethod === 'MOMO' ? 'contained' : 'outlined'}
-                onClick={() => setSelectedMethod('MOMO')}
-                disabled={processing}
-              >
-                💰 MoMo
-              </Button>
-              <Button
-                fullWidth
-                variant={selectedMethod === 'VNPAY' ? 'contained' : 'outlined'}
-                onClick={() => setSelectedMethod('VNPAY')}
-                disabled={processing}
-              >
-                🏧 VNPay
-              </Button>
+            <Stack direction="row" spacing={1.5}>
+              {(['MOMO', 'VNPAY'] as const).map((method) => {
+                const meta = methodMeta[method];
+                const selected = selectedMethod === method;
+                return (
+                  <Box
+                    key={method}
+                    onClick={() => !processing && setSelectedMethod(method)}
+                    sx={{
+                      flex: 1,
+                      border: '2px solid',
+                      borderColor: selected ? meta.color : '#e2e8f0',
+                      borderRadius: 3,
+                      p: 2,
+                      textAlign: 'center',
+                      cursor: processing ? 'default' : 'pointer',
+                      bgcolor: selected ? meta.selectedBg : meta.bg,
+                      transition: 'all 0.15s',
+                      opacity: processing ? 0.7 : 1,
+                    }}
+                  >
+                    <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
+                      {selected && <CheckCircleRounded sx={{ fontSize: 16, color: meta.color }} />}
+                      <Typography variant="subtitle2" fontWeight={800} sx={{ color: meta.color }}>
+                        {meta.label}
+                      </Typography>
+                    </Stack>
+                  </Box>
+                );
+              })}
             </Stack>
-          </CardContent>
-        </Card>
+          </Card>
 
-        {/* Amount Display */}
-        <Card sx={{ borderRadius: 3, bgcolor: 'success.light' }}>
-          <CardContent sx={{ textAlign: 'center' }}>
-            {voucherPreview ? (
-              <Stack spacing={1.25}>
-                <Typography variant="body2" color="text.secondary">
-                  Số tiền cần thanh toán sau ưu đãi
+          {/* Error Alert */}
+          {error && (
+            <Alert severity={error.includes('sandbox') ? 'info' : 'error'} onClose={() => setError('')} sx={{ borderRadius: 3 }}>
+              {error}
+            </Alert>
+          )}
+
+          {/* Payment Processing */}
+          {processing && (
+            <Card elevation={0} sx={{ borderRadius: 4, p: 3 }}>
+              <Stack alignItems="center" spacing={2}>
+                <CircularProgress size={36} />
+                <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                  Đang kết nối cổng thanh toán {selectedMethod === 'MOMO' ? 'MoMo' : 'VNPay'}...
                 </Typography>
-                <Typography variant="h4" fontWeight={800} color="success.dark">
-                  {amount.toLocaleString('vi-VN')} ₫
-                </Typography>
-                <Divider />
-                <Stack direction="row" justifyContent="space-between" spacing={2}>
-                  <Typography variant="body2" color="text.secondary">Cước gốc</Typography>
-                  <Typography variant="body2" fontWeight={700}>{voucherPreview.originalAmount.toLocaleString('vi-VN')} ₫</Typography>
-                </Stack>
-                <Stack direction="row" justifyContent="space-between" spacing={2}>
-                  <Typography variant="body2" color="success.dark">Ưu đãi {voucherPreview.code}</Typography>
-                  <Typography variant="body2" fontWeight={700} color="success.dark">-{voucherPreview.discountAmount.toLocaleString('vi-VN')} ₫</Typography>
-                </Stack>
               </Stack>
-            ) : (
-              <>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Số tiền cần thanh toán
-                </Typography>
-                <Typography variant="h4" fontWeight={800} color="success.dark">
-                  {amount.toLocaleString('vi-VN')} ₫
-                </Typography>
-              </>
-            )}
-          </CardContent>
-        </Card>
+            </Card>
+          )}
 
-        {/* Error Alert */}
-        {error && (
-          <Alert severity="error" onClose={() => setError('')}>
-            {error}
-          </Alert>
-        )}
+          {/* QR Code Payment Component */}
+          {!processing && paymentUrl && (
+            <QRCodePayment
+              paymentUrl={paymentUrl}
+              paymentMethod={selectedMethod as 'MOMO' | 'VNPAY'}
+              amount={amount}
+              orderId={rideId}
+              rideId={rideId}
+              deeplink={deeplink}
+              qrCodeUrl={qrCodeUrl}
+              onCancel={() => navigate(-1)}
+              onContinue={() => { window.location.href = paymentUrl; }}
+            />
+          )}
 
-        {/* Payment Processing */}
-        {processing && (
-          <Box display="flex" justifyContent="center" py={4}>
-            <Stack alignItems="center" spacing={2}>
-              <CircularProgress />
-              <Typography variant="body2" color="text.secondary">
-                Đang tạo liên kết thanh toán...
+          {/* Transaction info */}
+          <Card elevation={0} sx={{ borderRadius: 4 }}>
+            <CardContent>
+              <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1.5 }}>
+                Thông tin giao dịch
               </Typography>
-            </Stack>
-          </Box>
-        )}
+              <Stack spacing={1}>
+                {[
+                  ['Mã chuyến', rideId || '—'],
+                  ['Phương thức', selectedMethod === 'MOMO' ? 'Ví điện tử MoMo' : 'VNPay QR / Ngân hàng'],
+                  ['Trạng thái', processing ? 'Đang xử lý...' : paymentUrl ? 'Sẵn sàng thanh toán' : 'Đang tải...'],
+                ].map(([label, value]) => (
+                  <Stack key={label} direction="row" justifyContent="space-between" alignItems="center">
+                    <Typography variant="caption" color="text.secondary">{label}</Typography>
+                    <Typography variant="caption" fontWeight={700}
+                      sx={{ maxWidth: '60%', textAlign: 'right', fontFamily: label === 'Mã chuyến' ? 'monospace' : undefined }}>
+                      {value}
+                    </Typography>
+                  </Stack>
+                ))}
+              </Stack>
+            </CardContent>
+          </Card>
 
-        {/* QR Code Payment Component */}
-        {!processing && paymentUrl && (
-          <QRCodePayment
-            paymentUrl={paymentUrl}
-            paymentMethod={selectedMethod as 'MOMO' | 'VNPAY'}
-            amount={amount}
-            orderId={rideId}
-            rideId={rideId}
-            deeplink={deeplink}
-            qrCodeUrl={qrCodeUrl}
-            onCancel={() => navigate(-1)}
-            onContinue={() => {
-              window.location.href = paymentUrl;
-            }}
-          />
-        )}
-
-        {/* Info Cards */}
-        <Card variant="outlined" sx={{ bgcolor: 'rgba(25, 118, 210, 0.05)' }}>
-          <CardContent>
-            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-              Thông tin giao dịch
-            </Typography>
-            <Stack spacing={1} sx={{ mt: 2, fontSize: '0.875rem' }}>
-              <Box>
-                <Typography variant="caption" display="block" color="text.secondary">
-                  Chuyến đi ID:
-                </Typography>
-                <Typography variant="body2" fontFamily="monospace">
-                  {rideId}
-                </Typography>
-              </Box>
-              <Divider />
-              <Box>
-                <Typography variant="caption" display="block" color="text.secondary">
-                  Phương thức:
-                </Typography>
-                <Typography variant="body2" fontWeight={500}>
-                  {selectedMethod === 'MOMO' ? 'Ví MoMo' : 'VNPay QR/Ngân hàng'}
-                </Typography>
-              </Box>
-            </Stack>
-          </CardContent>
-        </Card>
-      </Stack>
-    </Container>
+        </Stack>
+      </Container>
+    </Box>
   );
 };
 

@@ -14,6 +14,7 @@ import {
   DialogTitle,
   Grid,
   Paper,
+  Snackbar,
   Stack,
   TextField,
   Typography,
@@ -110,6 +111,7 @@ const DriverApprovals: React.FC = () => {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [pendingAction, setPendingAction] = useState<ApprovalAction | null>(null);
   const [reason, setReason] = useState('');
@@ -164,17 +166,25 @@ const DriverApprovals: React.FC = () => {
       return;
     }
 
+    const driverName = selectedDriver.user
+      ? `${selectedDriver.user.firstName} ${selectedDriver.user.lastName}`.trim()
+      : selectedDriver.id.slice(0, 8).toUpperCase();
+
     setLoading(true);
     setError('');
     try {
       if (pendingAction === 'approve') {
         await adminApi.approveDriver(selectedDriver.id);
+        setSuccessMsg(`✅ Đã duyệt hồ sơ tài xế ${driverName}. Tài xế đã được thông báo và có thể bắt đầu nhận cuốc.`);
       } else {
         await adminApi.rejectDriver(selectedDriver.id, reason.trim() || undefined);
+        setSuccessMsg(`Đã từ chối hồ sơ tài xế ${driverName}.`);
       }
 
       closeConfirm();
       await fetchDrivers();
+      // Notify App to refresh the pending count badge immediately
+      window.dispatchEvent(new Event('driver-approval-changed'));
     } catch (err: any) {
       setError(
         err.response?.data?.error?.message
@@ -226,7 +236,7 @@ const DriverApprovals: React.FC = () => {
                 >
                   <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
                     <Stack direction="row" spacing={1.5} alignItems="center">
-                      <Avatar sx={{ bgcolor: '#0f172a', width: 48, height: 48, fontWeight: 800 }}>
+                      <Avatar sx={{ bgcolor: 'primary.dark', width: 48, height: 48, fontWeight: 800 }}>
                         {driver.user?.firstName?.[0] || 'D'}
                       </Avatar>
                       <Box>
@@ -438,6 +448,17 @@ const DriverApprovals: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={!!successMsg}
+        autoHideDuration={5000}
+        onClose={() => setSuccessMsg('')}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSuccessMsg('')} severity="success" variant="filled" sx={{ width: '100%', borderRadius: 3 }}>
+          {successMsg}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

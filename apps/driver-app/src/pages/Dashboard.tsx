@@ -309,9 +309,11 @@ const Dashboard: React.FC = () => {
 
   // Check for active ride on mount
   useEffect(() => {
+    let cancelled = false;
     const checkActiveRide = async () => {
       try {
         const response = await rideApi.getActiveRide();
+        if (cancelled) return;
         if (response?.data?.ride) {
           dispatch(setCurrentRide(response.data.ride));
           navigate('/active-ride');
@@ -319,13 +321,16 @@ const Dashboard: React.FC = () => {
           dispatch(clearCurrentRide());
         }
       } catch (error) {
-        console.error('Failed to check active ride:', error);
-        dispatch(clearCurrentRide());
+        if (!cancelled) {
+          console.error('Failed to check active ride:', error);
+          dispatch(clearCurrentRide());
+        }
       }
     };
 
     checkActiveRide();
-  }, [dispatch, navigate]);
+    return () => { cancelled = true; };
+  }, [dispatch, navigate, user?.id]);
 
   // Fallback polling for available rides when realtime delivery is delayed.
   useEffect(() => {
@@ -485,7 +490,7 @@ const Dashboard: React.FC = () => {
         </Stack>
       </Paper>
 
-      <Box sx={{ position: 'relative', height: { xs: 300, sm: 360, md: 420 }, borderRadius: 6, overflow: 'hidden', background: 'linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)', boxShadow: '0 18px 48px rgba(15,23,42,0.12)', border: '1px solid rgba(59,130,246,0.12)' }}>
+      <Box sx={{ position: 'relative', height: { xs: 300, sm: 360, md: 420 }, borderRadius: 6, overflow: 'hidden', background: (theme: any) => `linear-gradient(180deg, ${theme.palette.primary.light}33 0%, ${theme.palette.primary.light}66 100%)`, boxShadow: '0 18px 48px rgba(15,23,42,0.12)', border: '1px solid', borderColor: 'primary.100' }}>
         <DriverTripMap currentLocation={currentLocation || undefined} mode="request" height="100%" colorMode="light" />
       </Box>
 
@@ -534,6 +539,15 @@ const Dashboard: React.FC = () => {
             <Typography variant="subtitle1" fontWeight={800}>
               {isOnline ? 'Trực tuyến' : 'Ngoại tuyến'}
             </Typography>
+            {profile?.status === 'PENDING' && (
+              <Typography variant="caption" color="info.main">Cần admin duyệt hồ sơ trước</Typography>
+            )}
+            {profile?.status === 'REJECTED' && (
+              <Typography variant="caption" color="error.main">Hồ sơ bị từ chối — không thể bật online</Typography>
+            )}
+            {profile?.status === 'SUSPENDED' && (
+              <Typography variant="caption" color="text.secondary">Tài khoản bị tạm khóa</Typography>
+            )}
           </Grid>
           <Grid item>
             <FormControlLabel
@@ -541,7 +555,7 @@ const Dashboard: React.FC = () => {
                 <Switch
                   checked={Boolean(isOnline)}
                   onChange={handleToggleOnline}
-                  disabled={loading}
+                  disabled={loading || profile?.status !== 'APPROVED'}
                   color="success"
                   inputProps={{ 'data-testid': 'driver-online-toggle' } as any}
                 />
@@ -575,81 +589,167 @@ const Dashboard: React.FC = () => {
           )}
 
           {isOnline && ridesToDisplay.length > 0 && (
-            <Stack spacing={1.2}>
+            <Stack spacing={1.5}>
               {ridesToDisplay.map((ride) => {
                 const metrics = getRideMetrics(ride);
                 const isFreshOffer = pendingRide?.id === ride.id;
                 const rawVehicleType = (ride as any).requestedVehicleType || ride.vehicleType;
                 const rideVehicleType = rawVehicleType ? getVehicleTypeLabel(rawVehicleType as any) : 'N/A';
+                const paymentMethod = (ride as any).paymentMethod as string | undefined;
+                const isCash = paymentMethod === 'CASH';
+
+                // Commission rates must match backend: MOTORBIKE/SCOOTER 20%, CAR_4 18%, CAR_7 15%
+                const commissionRates: Record<string, number> = {
+                  MOTORBIKE: 0.20, SCOOTER: 0.20, CAR_4: 0.18, CAR_7: 0.15,
+                };
+                const commissionRate = commissionRates[rawVehicleType || ''] ?? 0.20;
+                const netEarnings = ride.fare ? Math.round(ride.fare * (1 - commissionRate)) : null;
+
+                // ETA to pickup
+                const etaMins = ride.etaMinutes
+                  ? Math.round(ride.etaMinutes)
+                  : ride.durationFromDriverSeconds
+                    ? Math.round(ride.durationFromDriverSeconds / 60)
+                    : null;
+                const distanceFromDriver = ride.distanceFromDriverMeters ?? null;
+
+                const customerName = ride.customer
+                  ? `${ride.customer.firstName || ''} ${ride.customer.lastName || ''}`.trim() || 'Khách hàng'
+                  : null;
+                const customerRating = ride.customer?.rating;
 
                 return (
-                  <Paper key={ride.id} variant="outlined" sx={{ p: 1.5, borderRadius: 3, borderColor: isFreshOffer ? 'success.main' : undefined, boxShadow: isFreshOffer ? '0 10px 28px rgba(22,163,74,0.12)' : undefined }}>
-                    <Stack spacing={1}>
-                      <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
-                        <Typography variant="subtitle2" fontWeight={800}>
-                          Mã cuốc {ride.id.slice(0, 8).toUpperCase()}
-                        </Typography>
-                        {isFreshOffer && <Chip size="small" color="success" label="Cuốc mới" />}
-                      </Stack>
-
-                      <Stack direction="row" spacing={1} alignItems="flex-start">
-                        <LocationOnRounded color="success" fontSize="small" sx={{ mt: 0.25, flexShrink: 0 }} />
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>Điểm đón</Typography>
-                          <Typography variant="body2">
-                            {ride.pickupLocation?.address || 'Đã có vị trí điểm đón'}
+                  <Paper
+                    key={ride.id}
+                    variant="outlined"
+                    sx={{
+                      borderRadius: 3,
+                      overflow: 'hidden',
+                      borderColor: isFreshOffer ? 'success.main' : 'divider',
+                      boxShadow: isFreshOffer ? '0 4px 20px rgba(22,163,74,0.15)' : '0 1px 4px rgba(0,0,0,0.06)',
+                    }}
+                  >
+                    {/* Top bar: Fresh offer badge + payment method */}
+                    {isFreshOffer && (
+                      <Box sx={{ bgcolor: 'success.main', px: 2, py: 0.6 }}>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between">
+                          <Typography variant="caption" fontWeight={800} sx={{ color: '#fff', letterSpacing: 0.5 }}>
+                            ⚡ YÊU CẦU MỚI — Phản hồi ngay!
                           </Typography>
-                        </Box>
-                      </Stack>
-
-                      <Stack direction="row" spacing={1} alignItems="flex-start">
-                        <FlagRounded color="error" fontSize="small" sx={{ mt: 0.25, flexShrink: 0 }} />
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>Điểm đến</Typography>
-                          <Typography variant="body2">
-                            {ride.dropoffLocation?.address || 'Đã có vị trí điểm đến'}
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.85)' }}>
+                            #{ride.id.slice(0, 6).toUpperCase()}
                           </Typography>
-                        </Box>
-                      </Stack>
+                        </Stack>
+                      </Box>
+                    )}
 
-                      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
-                        {ride.fare != null && ride.fare > 0 ? (
-                          <>
-                            <Chip size="small" color="success" variant="outlined" icon={<AttachMoneyRounded />}
-                              label={`Cước: ${formatCurrency(ride.fare)}`} sx={{ fontWeight: 700 }} />
-                            <Chip size="small" color="primary" variant="filled" icon={<RouteRounded />}
-                              label={`Nhận: ${formatCurrency(Math.round(ride.fare * 0.8))}`} sx={{ fontWeight: 700 }} />
-                          </>
-                        ) : (
-                          <Chip size="small" icon={<AttachMoneyRounded />} label="Giá đang tải..." variant="outlined" />
+                    <Box sx={{ p: 1.5 }}>
+                      <Stack spacing={1.2}>
+                        {/* Row 1: Fare + Net earnings */}
+                        <Stack direction="row" alignItems="center" justifyContent="space-between">
+                          <Stack direction="row" alignItems="baseline" spacing={0.8}>
+                            <Typography variant="h6" fontWeight={900} color={isFreshOffer ? 'success.dark' : 'text.primary'}>
+                              {ride.fare ? formatCurrency(ride.fare) : '—'}
+                            </Typography>
+                            {netEarnings && (
+                              <Typography variant="caption" color="text.secondary">
+                                → nhận ~{formatCurrency(netEarnings)} ({Math.round((1 - commissionRate) * 100)}%)
+                              </Typography>
+                            )}
+                          </Stack>
+                          <Stack direction="row" spacing={0.6} alignItems="center">
+                            {/* Payment method badge */}
+                            <Chip
+                              size="small"
+                              label={isCash ? '💵 Tiền mặt' : paymentMethod === 'MOMO' ? '🟣 MoMo' : paymentMethod === 'VNPAY' ? '🔵 VNPay' : paymentMethod || 'Online'}
+                              sx={{
+                                fontWeight: 700, fontSize: '0.68rem',
+                                bgcolor: isCash ? '#fef3c7' : '#ede9fe',
+                                color: isCash ? '#92400e' : '#5b21b6',
+                              }}
+                            />
+                            {!isFreshOffer && (
+                              <Typography variant="caption" color="text.disabled">#{ride.id.slice(0, 6).toUpperCase()}</Typography>
+                            )}
+                          </Stack>
+                        </Stack>
+
+                        {/* Row 2: Customer info */}
+                        {customerName && (
+                          <Stack direction="row" alignItems="center" spacing={0.8}>
+                            <Avatar sx={{ width: 22, height: 22, fontSize: '0.65rem', bgcolor: 'primary.light' }}>
+                              {customerName[0]?.toUpperCase()}
+                            </Avatar>
+                            <Typography variant="caption" fontWeight={700}>{customerName}</Typography>
+                            {customerRating && customerRating > 0 && (
+                              <Typography variant="caption" color="warning.main">★ {customerRating.toFixed(1)}</Typography>
+                            )}
+                          </Stack>
                         )}
-                        <Chip size="small" icon={<RouteRounded />} label={`${metrics.distanceMeters ? formatDistance(metrics.distanceMeters) : 'Đang cập nhật'}`} />
-                        <Chip size="small" icon={<AccessTimeRounded />} label={`${metrics.durationSeconds ? formatDuration(metrics.durationSeconds) : 'Đang cập nhật'}`} />
-                        <Chip size="small" label={rideVehicleType} />
-                      </Stack>
 
-                      <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        <Button
-                          variant="text"
-                          size="medium"
-                          onClick={() => dismissPendingRide(ride.id)}
-                          disabled={loading}
-                          sx={{ borderRadius: 999, px: 2.5, fontWeight: 700 }}
-                        >
-                          Bỏ qua
-                        </Button>
-                        <Button
-                          variant="contained"
-                          size="medium"
-                          onClick={() => handleAcceptSpecificRide(ride.id)}
-                          disabled={loading}
-                          data-testid="accept-ride-button"
-                          sx={{ alignSelf: 'flex-end', borderRadius: 999, px: 2.5, fontWeight: 700 }}
-                        >
-                          Nhận cuốc này
-                        </Button>
+                        {/* Row 3: Pickup */}
+                        <Stack direction="row" spacing={1} alignItems="flex-start">
+                          <LocationOnRounded sx={{ color: 'success.main', fontSize: 16, mt: 0.2, flexShrink: 0 }} />
+                          <Box flex={1} minWidth={0}>
+                            <Typography variant="caption" color="text.secondary" fontWeight={700}>Điểm đón</Typography>
+                            <Typography variant="body2" sx={{ lineHeight: 1.3 }}>
+                              {ride.pickupLocation?.address || 'Đang cập nhật địa chỉ...'}
+                            </Typography>
+                          </Box>
+                        </Stack>
+
+                        {/* Row 4: Dropoff */}
+                        <Stack direction="row" spacing={1} alignItems="flex-start">
+                          <FlagRounded sx={{ color: 'error.main', fontSize: 16, mt: 0.2, flexShrink: 0 }} />
+                          <Box flex={1} minWidth={0}>
+                            <Typography variant="caption" color="text.secondary" fontWeight={700}>Điểm đến</Typography>
+                            <Typography variant="body2" sx={{ lineHeight: 1.3 }}>
+                              {ride.dropoffLocation?.address || 'Đang cập nhật địa chỉ...'}
+                            </Typography>
+                          </Box>
+                        </Stack>
+
+                        {/* Row 5: Stats chips */}
+                        <Stack direction="row" spacing={0.6} useFlexGap flexWrap="wrap">
+                          {metrics.distanceMeters && (
+                            <Chip size="small" icon={<RouteRounded sx={{ fontSize: '13px !important' }} />}
+                              label={formatDistance(metrics.distanceMeters)} sx={{ fontSize: '0.7rem' }} />
+                          )}
+                          {metrics.durationSeconds && (
+                            <Chip size="small" icon={<AccessTimeRounded sx={{ fontSize: '13px !important' }} />}
+                              label={formatDuration(metrics.durationSeconds)} sx={{ fontSize: '0.7rem' }} />
+                          )}
+                          {(distanceFromDriver != null || etaMins != null) && (
+                            <Chip size="small" icon={<LocationOnRounded sx={{ fontSize: '13px !important' }} />}
+                              label={distanceFromDriver ? `Cách bạn ${formatDistance(distanceFromDriver)}${etaMins ? ` · ~${etaMins} phút đến đón` : ''}` : `Đến đón ~${etaMins} phút`}
+                              color="info" variant="outlined" sx={{ fontSize: '0.7rem' }} />
+                          )}
+                          <Chip size="small" label={rideVehicleType} sx={{ fontSize: '0.7rem' }} />
+                        </Stack>
+
+                        {/* Row 6: Actions */}
+                        <Stack direction="row" spacing={1} pt={0.3}>
+                          <Button
+                            variant="outlined" size="small" color="inherit"
+                            onClick={() => dismissPendingRide(ride.id)}
+                            disabled={loading}
+                            sx={{ borderRadius: 99, flex: 1, fontWeight: 700, fontSize: '0.8rem' }}
+                          >
+                            Bỏ qua
+                          </Button>
+                          <Button
+                            variant="contained" size="small"
+                            onClick={() => handleAcceptSpecificRide(ride.id)}
+                            disabled={loading}
+                            data-testid="accept-ride-button"
+                            color={isFreshOffer ? 'success' : 'primary'}
+                            sx={{ borderRadius: 99, flex: 2, fontWeight: 800, fontSize: '0.88rem' }}
+                          >
+                            {isFreshOffer ? '✓ Nhận ngay' : 'Nhận cuốc'}
+                          </Button>
+                        </Stack>
                       </Stack>
-                    </Stack>
+                    </Box>
                   </Paper>
                 );
               })}

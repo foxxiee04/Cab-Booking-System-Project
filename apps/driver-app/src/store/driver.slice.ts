@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { Driver, Location, Earnings } from '../types';
+import { logout } from './auth.slice';
 
 interface DriverState {
   profile: Driver | null;
@@ -80,6 +81,9 @@ const driverSlice = createSlice({
       state.earnings = null;
       state.error = null;
     },
+  },
+  extraReducers: (builder) => {
+    builder.addCase(logout, () => ({ ...initialState }));
   },
 });
 

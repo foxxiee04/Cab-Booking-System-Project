@@ -29,7 +29,7 @@ const MessageBubble: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
   return (
     <Stack direction="row" justifyContent={isSelf ? 'flex-end' : 'flex-start'} sx={{ mb: 1 }}>
       {!isSelf && (
-        <Avatar sx={{ width: 28, height: 28, mr: 1, bgcolor: '#1d4ed8', fontSize: 12 }}>
+        <Avatar sx={{ width: 28, height: 28, mr: 1, bgcolor: 'primary.main', fontSize: 12 }}>
           {msg.role === 'DRIVER' ? 'TX' : 'KH'}
         </Avatar>
       )}

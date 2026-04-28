@@ -15,6 +15,8 @@ import { EventPublisher } from './publisher';
 interface DriverEarningSettledPayload {
   rideId: string;
   driverId: string;
+  /** Auth userId (wallet key). Added to fix profileId/userId mismatch. Falls back to driverId. */
+  driverUserId?: string;
   paymentMethod: string;    // CASH | MOMO | VNPAY | VISA | CARD | WALLET
   grossFare: number;
   commissionRate: number;
@@ -126,6 +128,7 @@ export class EventConsumer {
     const {
       rideId,
       driverId,
+      driverUserId,
       paymentMethod,
       grossFare,
       platformFee,
@@ -135,19 +138,23 @@ export class EventConsumer {
       voucherDiscount,
     } = payload;
 
-    logger.info(`Processing driver.earning.settled for ride ${rideId}`, { driverId, paymentMethod });
+    // Use driverUserId (auth userId, wallet key) when available.
+    // Falls back to driverId for legacy/seeded data where profileId == userId.
+    const walletOwnerId = driverUserId ?? driverId;
+
+    logger.info(`Processing driver.earning.settled for ride ${rideId}`, { driverId, walletOwnerId, paymentMethod });
 
     const isCash = paymentMethod === 'CASH';
 
     if (isCash) {
       // Cash ride: driver collected fare directly → debit commission owed to platform
       if (cashDebt > 0) {
-        await this.walletService.debitCommission({ driverId, commission: cashDebt, rideId });
+        await this.walletService.debitCommission({ driverId: walletOwnerId, commission: cashDebt, rideId });
       }
     } else {
       // Online ride: platform collected fare → credit driver net earnings
       await this.walletService.creditEarning({
-        driverId,
+        driverId: walletOwnerId,
         netEarnings,
         grossFare,
         platformFee,
@@ -159,7 +166,7 @@ export class EventConsumer {
     // Credit any per-ride bonus
     if (bonus > 0) {
       await this.walletService.creditBonus({
-        driverId,
+        driverId: walletOwnerId,
         amount: bonus,
         description: 'Thưởng chuyến đi',
         rideId,

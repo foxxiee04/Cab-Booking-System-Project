@@ -32,11 +32,14 @@ import {
   AccountBalanceWalletRounded,
   CheckCircleRounded,
   EmojiEventsRounded,
+  ErrorRounded,
   HourglassTopRounded,
   InfoOutlined,
   LocalFireDepartmentRounded,
   LockRounded,
+  RefreshRounded,
   RouteRounded,
+  ScheduleRounded,
   TwoWheelerRounded,
   WarningAmberRounded,
   LockOpenRounded,
@@ -47,7 +50,7 @@ import {
   SavingsRounded,
   TrendingDownRounded,
 } from '@mui/icons-material';
-import { walletApi, WalletTransaction, DailyStats, IncentiveRule } from '../api/wallet.api';
+import { walletApi, WalletTransaction, DailyStats, IncentiveRule, DebtRecord } from '../api/wallet.api';
 import { formatCurrency, formatDate } from '../utils/format.utils';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -126,6 +129,7 @@ interface WalletState {
   balance: number;
   operationalBalance: number;
   availableBalance: number;
+  pendingBalance: number;
   lockedBalance: number;
   withdrawableBalance: number;
   debt: number;
@@ -133,6 +137,7 @@ interface WalletState {
   initialActivationCompleted: boolean;
   activationRequired: boolean;
   warningThresholdReached: boolean;
+  hasOverdueDebt: boolean;
   canAcceptRide: boolean;
   activationThreshold: number;
   warningThreshold: number;
@@ -184,6 +189,9 @@ export default function WalletPage() {
   const [txLoading, setTxLoading] = useState(false);
   const [txFilter, setTxFilter] = useState<TxFilter>('ALL');
 
+  const [debtRecords, setDebtRecords] = useState<DebtRecord[]>([]);
+  const [debtLoading, setDebtLoading] = useState(false);
+
   const [rules, setRules] = useState<IncentiveRule[]>([]);
   const [stats, setStats] = useState<DailyStats[]>([]);
   const [incentiveLoading, setIncentiveLoading] = useState(false);
@@ -219,6 +227,7 @@ export default function WalletPage() {
         balance:                    p.balance ?? 0,
         operationalBalance:         p.operationalBalance ?? p.availableBalance ?? 0,
         availableBalance:           p.availableBalance ?? 0,
+        pendingBalance:             p.pendingBalance ?? 0,
         lockedBalance:              p.lockedBalance ?? 0,
         withdrawableBalance:        p.withdrawableBalance ?? 0,
         debt:                       p.debt ?? 0,
@@ -226,6 +235,7 @@ export default function WalletPage() {
         initialActivationCompleted: p.initialActivationCompleted ?? false,
         activationRequired:         p.activationRequired ?? false,
         warningThresholdReached:    p.warningThresholdReached ?? false,
+        hasOverdueDebt:             p.hasOverdueDebt ?? false,
         canAcceptRide:              p.canAcceptRide ?? false,
         activationThreshold:        p.activationThreshold ?? 300_000,
         warningThreshold:           p.warningThreshold ?? -100_000,
@@ -237,6 +247,17 @@ export default function WalletPage() {
       setBalanceError(err.response?.data?.error?.message || 'Không thể tải số dư ví');
     } finally {
       setBalanceLoading(false);
+    }
+  }, []);
+
+  const loadDebtRecords = useCallback(async () => {
+    setDebtLoading(true);
+    try {
+      const res = await walletApi.getDebtRecords();
+      const records = res.data?.data ?? (res.data as any);
+      setDebtRecords(Array.isArray(records) ? records : []);
+    } finally {
+      setDebtLoading(false);
     }
   }, []);
 
@@ -275,7 +296,8 @@ export default function WalletPage() {
     loadBalance();
     loadTransactions(0);
     loadIncentive();
-  }, [loadBalance, loadTransactions, loadIncentive]);
+    loadDebtRecords();
+  }, [loadBalance, loadTransactions, loadIncentive, loadDebtRecords]);
 
   const selectedWithdrawBank = useMemo(
     () => BANK_OPTIONS.find((b) => b.name === withdrawBankName) ?? null,
@@ -285,13 +307,17 @@ export default function WalletPage() {
   const walletStatus = walletState?.status ?? 'INACTIVE';
   const operationalBalance = walletState?.operationalBalance ?? walletState?.availableBalance ?? 0;
   const lockedBalance = walletState?.lockedBalance ?? 0;
+  const pendingBalance = walletState?.pendingBalance ?? 0;
   const withdrawableBalance = walletState?.withdrawableBalance ?? 0;
   const debt = walletState?.debt ?? 0;
   const activationThreshold = walletState?.activationThreshold ?? 300_000;
+  const hasOverdueDebt = walletState?.hasOverdueDebt ?? false;
   const businessAccounts = walletState?.businessAccounts ?? DEFAULT_BUSINESS_ACCOUNTS;
   const topUpBusinessAccount = businessAccounts.topUpAccount ?? DEFAULT_BUSINESS_ACCOUNTS.topUpAccount;
   const payoutBusinessAccount = businessAccounts.payoutAccount ?? topUpBusinessAccount;
   const todayStats = stats[0];
+  const activeDebtRecords = debtRecords.filter((r) => r.status !== 'SETTLED');
+  const overdueDebtRecords = debtRecords.filter((r) => r.status === 'OVERDUE');
 
   const filteredTxs = useMemo(
     () => txFilter === 'ALL' ? transactions : transactions.filter((t) => TX_TYPE_META[t.type]?.filterKey === txFilter),
@@ -404,16 +430,26 @@ export default function WalletPage() {
                 Ví tài xế
               </Typography>
             </Stack>
-            <Chip
-              icon={
-                walletStatus === 'INACTIVE' ? <LockRounded sx={{ fontSize: '14px !important', color: '#fff !important' }} /> :
-                walletStatus === 'BLOCKED'  ? <BlockRounded sx={{ fontSize: '14px !important', color: '#fff !important' }} /> :
-                <LockOpenRounded sx={{ fontSize: '14px !important', color: '#fff !important' }} />
-              }
-              label={chip.label}
-              size="small"
-              sx={{ bgcolor: chip.bg, color: '#fff', fontWeight: 700, fontSize: '0.68rem', border: '1px solid rgba(255,255,255,0.2)' }}
-            />
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Chip
+                icon={
+                  walletStatus === 'INACTIVE' ? <LockRounded sx={{ fontSize: '14px !important', color: '#fff !important' }} /> :
+                  walletStatus === 'BLOCKED'  ? <BlockRounded sx={{ fontSize: '14px !important', color: '#fff !important' }} /> :
+                  <LockOpenRounded sx={{ fontSize: '14px !important', color: '#fff !important' }} />
+                }
+                label={chip.label}
+                size="small"
+                sx={{ bgcolor: chip.bg, color: '#fff', fontWeight: 700, fontSize: '0.68rem', border: '1px solid rgba(255,255,255,0.2)' }}
+              />
+              <Chip
+                icon={<RefreshRounded sx={{ fontSize: '14px !important', color: '#fff !important' }} />}
+                label={balanceLoading ? '...' : 'Làm mới'}
+                size="small"
+                onClick={() => { loadBalance(); loadDebtRecords(); loadTransactions(0); }}
+                disabled={balanceLoading}
+                sx={{ bgcolor: 'rgba(255,255,255,0.15)', color: '#fff', fontWeight: 700, fontSize: '0.68rem', border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer' }}
+              />
+            </Stack>
           </Stack>
 
           {balanceLoading ? (
@@ -448,8 +484,8 @@ export default function WalletPage() {
                 onClick={() => openTopUp(activationThreshold)}
                 endIcon={<ArrowForwardIosRounded fontSize="small" />}
                 sx={{
-                  bgcolor: '#f59e0b',
-                  '&:hover': { bgcolor: '#d97706' },
+                  bgcolor: 'warning.main',
+                  '&:hover': { bgcolor: 'warning.dark' },
                   color: '#1c1917',
                   fontWeight: 800,
                   borderRadius: 3,
@@ -463,33 +499,11 @@ export default function WalletPage() {
 
           ) : (
 
-            // ── ACTIVE / BLOCKED: 3-section balance ─────────────────────
+            // ── ACTIVE / BLOCKED: 4-section balance ─────────────────────
             <>
               <Stack spacing={1} mb={2.5}>
 
-                {/* Section 1: Security deposit (locked) */}
-                <Box sx={{
-                  bgcolor: 'rgba(255,255,255,0.1)',
-                  borderRadius: 2.5, px: 2, py: 1.2,
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                }}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <LockRounded sx={{ fontSize: 15, opacity: 0.65 }} />
-                    <Box>
-                      <Typography variant="caption" sx={{ opacity: 0.7, display: 'block', lineHeight: 1.1 }}>
-                        Ký quỹ (đảm bảo)
-                      </Typography>
-                      <Typography variant="caption" sx={{ opacity: 0.45, fontSize: '0.62rem' }}>
-                        Hoàn trả khi ngừng hoạt động
-                      </Typography>
-                    </Box>
-                  </Stack>
-                  <Typography variant="subtitle2" fontWeight={700}>
-                    {formatCurrency(lockedBalance)}
-                  </Typography>
-                </Box>
-
-                {/* Section 2: Available balance */}
+                {/* Section 1: Available balance (withdrawable) */}
                 <Box sx={{
                   bgcolor: 'rgba(255,255,255,0.18)',
                   borderRadius: 2.5, px: 2, py: 1.4,
@@ -500,7 +514,7 @@ export default function WalletPage() {
                       Số dư khả dụng
                     </Typography>
                     <Typography variant="caption" sx={{ opacity: 0.5, fontSize: '0.62rem' }}>
-                      Doanh nghiệp sẽ chuyển về ngân hàng cá nhân của bạn
+                      Có thể rút về ngân hàng cá nhân
                     </Typography>
                   </Box>
                   <Typography variant="h5" fontWeight={800}>
@@ -508,27 +522,78 @@ export default function WalletPage() {
                   </Typography>
                 </Box>
 
+                {/* Section 2: Pending balance (T+24h hold) — always visible */}
+                <Box sx={{
+                  bgcolor: pendingBalance > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.07)',
+                  border: `1px solid ${pendingBalance > 0 ? 'rgba(251,191,36,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                  borderRadius: 2.5, px: 2, py: 1.2,
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <ScheduleRounded sx={{ fontSize: 15, color: pendingBalance > 0 ? '#fcd34d' : 'rgba(255,255,255,0.4)' }} />
+                    <Box>
+                      <Typography variant="caption" sx={{ color: pendingBalance > 0 ? '#fde68a' : 'rgba(255,255,255,0.55)', display: 'block', lineHeight: 1.1, fontWeight: 700 }}>
+                        Tiền chờ xử lý
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: pendingBalance > 0 ? '#fde68a' : 'rgba(255,255,255,0.35)', opacity: 0.7, fontSize: '0.62rem' }}>
+                        {pendingBalance > 0 ? 'Thu nhập online — chuyển vào khả dụng sau 24h' : 'Thu nhập online sẽ hiển thị ở đây sau khi hoàn thành chuyến'}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  <Typography variant="subtitle2" fontWeight={800} sx={{ color: pendingBalance > 0 ? '#fcd34d' : 'rgba(255,255,255,0.3)' }}>
+                    {formatCurrency(pendingBalance)}
+                  </Typography>
+                </Box>
+
                 {/* Section 3: Debt (only if > 0) */}
                 {debt > 0 && (
                   <Box sx={{
-                    bgcolor: 'rgba(239,68,68,0.2)',
-                    border: '1px solid rgba(239,68,68,0.4)',
+                    bgcolor: hasOverdueDebt ? 'rgba(220,38,38,0.25)' : 'rgba(239,68,68,0.2)',
+                    border: `1px solid ${hasOverdueDebt ? 'rgba(220,38,38,0.6)' : 'rgba(239,68,68,0.4)'}`,
                     borderRadius: 2.5, px: 2, py: 1.2,
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   }}>
-                    <Box>
-                      <Typography variant="caption" sx={{ color: '#fca5a5', display: 'block', lineHeight: 1.1, fontWeight: 700 }}>
-                        Công nợ platform
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#fca5a5', opacity: 0.7, fontSize: '0.62rem' }}>
-                        Phí cuốc tiền mặt chưa thanh toán
-                      </Typography>
-                    </Box>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      {hasOverdueDebt
+                        ? <ErrorRounded sx={{ fontSize: 15, color: '#f87171' }} />
+                        : <WarningAmberRounded sx={{ fontSize: 15, color: '#fca5a5' }} />
+                      }
+                      <Box>
+                        <Typography variant="caption" sx={{ color: '#fca5a5', display: 'block', lineHeight: 1.1, fontWeight: 700 }}>
+                          Công nợ platform{hasOverdueDebt ? ' (quá hạn)' : ''}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#fca5a5', opacity: 0.7, fontSize: '0.62rem' }}>
+                          {hasOverdueDebt ? 'Vui lòng thanh toán ngay' : 'Phí cuốc tiền mặt chưa thanh toán'}
+                        </Typography>
+                      </Box>
+                    </Stack>
                     <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#f87171' }}>
                       -{formatCurrency(debt)}
                     </Typography>
                   </Box>
                 )}
+
+                {/* Section 4: Security deposit (locked) */}
+                <Box sx={{
+                  bgcolor: 'rgba(255,255,255,0.1)',
+                  borderRadius: 2.5, px: 2, py: 1.2,
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <LockRounded sx={{ fontSize: 15, opacity: 0.65 }} />
+                    <Box>
+                      <Typography variant="caption" sx={{ opacity: 0.7, display: 'block', lineHeight: 1.1 }}>
+                        Ký quỹ (khoá)
+                      </Typography>
+                      <Typography variant="caption" sx={{ opacity: 0.45, fontSize: '0.62rem' }}>
+                        Hoàn trả khi ngừng hoạt động
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  <Typography variant="subtitle2" fontWeight={700}>
+                    {formatCurrency(lockedBalance)}
+                  </Typography>
+                </Box>
               </Stack>
 
               {/* Action buttons */}
@@ -580,6 +645,20 @@ export default function WalletPage() {
           Số dư vận hành đang âm ({formatCurrency(operationalBalance)}). Tài khoản sẽ bị khoá khi chạm {formatCurrency(walletState.debtLimit)}.
         </Alert>
       )}
+      {hasOverdueDebt && walletStatus === 'ACTIVE' && (
+        <Alert severity="error" icon={<ErrorRounded />} sx={{ borderRadius: 2 }}
+          action={<Button size="small" color="error" onClick={() => openTopUp()}>Trả nợ</Button>}>
+          {overdueDebtRecords.length > 0
+            ? <>Bạn có <strong>{overdueDebtRecords.length}</strong> khoản công nợ quá hạn. Thanh toán ngay để tránh bị hạn chế tài khoản.</>
+            : 'Bạn có khoản công nợ quá hạn. Thanh toán ngay để tránh bị hạn chế tài khoản.'
+          }
+        </Alert>
+      )}
+      {pendingBalance > 0 && walletStatus === 'ACTIVE' && (
+        <Alert severity="info" icon={<ScheduleRounded />} sx={{ borderRadius: 2 }}>
+          <strong>{formatCurrency(pendingBalance)}</strong> đang chờ xử lý và sẽ chuyển vào số dư khả dụng sau 24h.
+        </Alert>
+      )}
     </Stack>
   );
 
@@ -588,7 +667,7 @@ export default function WalletPage() {
   const renderActivationCard = () => {
     if (walletStatus !== 'INACTIVE') return null;
     return (
-      <Card variant="outlined" sx={{ borderRadius: 3, borderColor: '#fcd34d', bgcolor: '#fffbeb' }}>
+      <Card variant="outlined" sx={{ borderRadius: 3, borderColor: 'warning.light', bgcolor: 'warning.50' }}>
         <CardContent sx={{ p: 2.5 }}>
           <Typography variant="subtitle2" fontWeight={800} color="#92400e" gutterBottom>
             Tài khoản nhận ký quỹ
@@ -642,8 +721,8 @@ export default function WalletPage() {
         sx={{ mb: 1.5, '& .MuiToggleButton-root': { borderRadius: '20px !important', border: '1px solid', py: 0.5, fontWeight: 700, fontSize: '0.72rem' } }}
       >
         <ToggleButton value="ALL">Tất cả</ToggleButton>
-        <ToggleButton value="EARN" sx={{ color: 'success.main', '&.Mui-selected': { bgcolor: '#f0fdf4', color: 'success.dark' } }}>Thu nhập</ToggleButton>
-        <ToggleButton value="DEBT" sx={{ color: 'error.main',   '&.Mui-selected': { bgcolor: '#fef2f2', color: 'error.dark'   } }}>Công nợ</ToggleButton>
+        <ToggleButton value="EARN" sx={{ color: 'success.main', '&.Mui-selected': { bgcolor: 'success.50', color: 'success.dark' } }}>Thu nhập</ToggleButton>
+        <ToggleButton value="DEBT" sx={{ color: 'error.main',   '&.Mui-selected': { bgcolor: 'error.50', color: 'error.dark'   } }}>Công nợ</ToggleButton>
         <ToggleButton value="WITHDRAW" sx={{ color: 'text.secondary', '&.Mui-selected': { bgcolor: 'action.selected' } }}>Rút tiền</ToggleButton>
       </ToggleButtonGroup>
 
@@ -719,6 +798,141 @@ export default function WalletPage() {
       )}
     </Box>
   );
+
+  // ─── Render: Debt Records ─────────────────────────────────────────────────
+
+  const renderDebtRecords = () => {
+    if (debtLoading) {
+      return <Stack spacing={1.2}>{[1, 2, 3].map((k) => <Skeleton key={k} variant="rounded" height={72} sx={{ borderRadius: 3 }} />)}</Stack>;
+    }
+
+    if (activeDebtRecords.length === 0 && debtRecords.filter((r) => r.status === 'SETTLED').length === 0) {
+      return (
+        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
+          <CheckCircleRounded sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
+          <Typography variant="subtitle2" fontWeight={700} color="success.dark">Không có công nợ</Typography>
+          <Typography variant="body2" color="text.secondary" mt={0.5}>
+            Tất cả các khoản phí tiền mặt đã được thanh toán.
+          </Typography>
+        </Paper>
+      );
+    }
+
+    return (
+      <Stack spacing={2}>
+        {activeDebtRecords.length > 0 && (
+          <Card variant="outlined" sx={{ borderRadius: 3, borderColor: hasOverdueDebt ? 'error.main' : 'warning.main', bgcolor: hasOverdueDebt ? '#fef2f2' : '#fffbeb' }}>
+            <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+                <Typography variant="subtitle2" fontWeight={800} color={hasOverdueDebt ? 'error.dark' : 'warning.dark'}>
+                  {hasOverdueDebt ? `Công nợ quá hạn (${overdueDebtRecords.length} khoản)` : 'Công nợ đang chờ thanh toán'}
+                </Typography>
+                <Button size="small" variant="contained" color={hasOverdueDebt ? 'error' : 'warning'}
+                  onClick={() => openTopUp()} sx={{ borderRadius: 2, fontWeight: 700, fontSize: '0.72rem' }}>
+                  Thanh toán
+                </Button>
+              </Stack>
+              <Stack spacing={1}>
+                {activeDebtRecords.map((rec) => {
+                  const due = new Date(rec.dueDate);
+                  const now = new Date();
+                  const isOverdue = rec.status === 'OVERDUE';
+                  const daysLeft = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                  return (
+                    <Box key={rec.id} sx={{
+                      bgcolor: isOverdue ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.7)',
+                      border: `1px solid ${isOverdue ? 'rgba(239,68,68,0.3)' : 'rgba(0,0,0,0.08)'}`,
+                      borderRadius: 2, px: 1.5, py: 1,
+                    }}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                        <Box>
+                          <Stack direction="row" alignItems="center" spacing={0.6} mb={0.2}>
+                            <Chip
+                              label={isOverdue ? 'Quá hạn' : `Còn ${daysLeft} ngày`}
+                              size="small"
+                              color={isOverdue ? 'error' : 'warning'}
+                              sx={{ height: 16, fontSize: '0.6rem', fontWeight: 700 }}
+                            />
+                            {rec.rideId && (
+                              <Typography variant="caption" color="text.disabled">
+                                #{rec.rideId.slice(-6)}
+                              </Typography>
+                            )}
+                          </Stack>
+                          <Typography variant="caption" color="text.secondary">
+                            Ngày tạo: {formatDate(rec.createdAt)}
+                          </Typography>
+                          <Typography variant="caption" color={isOverdue ? 'error.main' : 'text.secondary'} sx={{ display: 'block' }}>
+                            Hạn: {formatDate(rec.dueDate)}
+                          </Typography>
+                        </Box>
+                        <Box textAlign="right">
+                          <Typography variant="subtitle2" fontWeight={800} color={isOverdue ? 'error.main' : 'warning.dark'}>
+                            -{formatCurrency(rec.remaining)}
+                          </Typography>
+                          {rec.remaining < rec.amount && (
+                            <Typography variant="caption" color="text.disabled">
+                              Còn lại / {formatCurrency(rec.amount)}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Stack>
+                    </Box>
+                  );
+                })}
+              </Stack>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Settled records */}
+        {debtRecords.filter((r) => r.status === 'SETTLED').length > 0 && (
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1 }}>
+              Đã thanh toán
+            </Typography>
+            <Stack spacing={0.8}>
+              {debtRecords.filter((r) => r.status === 'SETTLED').slice(0, 5).map((rec) => (
+                <Box key={rec.id} sx={{
+                  bgcolor: '#f0fdf4', border: '1px solid', borderColor: 'success.100',
+                  borderRadius: 2, px: 1.5, py: 0.8,
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <Stack>
+                    <Stack direction="row" alignItems="center" spacing={0.6}>
+                      <CheckCircleRounded sx={{ fontSize: 14, color: 'success.main' }} />
+                      <Typography variant="caption" fontWeight={700} color="success.dark">Đã tất toán</Typography>
+                      {rec.rideId && <Typography variant="caption" color="text.disabled">#{rec.rideId.slice(-6)}</Typography>}
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary">{formatDate(rec.createdAt)}</Typography>
+                  </Stack>
+                  <Typography variant="caption" fontWeight={700} color="text.secondary">
+                    {formatCurrency(rec.amount)}
+                  </Typography>
+                </Box>
+              ))}
+            </Stack>
+          </Box>
+        )}
+
+        <Card variant="outlined" sx={{ borderRadius: 3, bgcolor: 'primary.50', borderColor: 'primary.100' }}>
+          <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="caption" color="primary.dark" fontWeight={700} sx={{ display: 'block', mb: 0.5 }}>
+              Cách thanh toán công nợ
+            </Typography>
+            <Stack spacing={0.4}>
+              {[
+                'Tự động: trừ khi bạn có thu nhập từ chuyến online',
+                'Thủ công: nạp tiền vào tài khoản doanh nghiệp',
+              ].map((s, i) => (
+                <Typography key={i} variant="caption" color="text.secondary">• {s}</Typography>
+              ))}
+            </Stack>
+          </CardContent>
+        </Card>
+      </Stack>
+    );
+  };
 
   // ─── Render: Incentive ────────────────────────────────────────────────────
 
@@ -822,11 +1036,27 @@ export default function WalletPage() {
       <Tabs value={tab} onChange={(_e, v) => setTab(v)} variant="fullWidth"
         sx={{ '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' } }}>
         <Tab label="Giao dịch" />
+        <Tab
+          label={
+            <Stack direction="row" alignItems="center" spacing={0.5}>
+              <span>Công nợ</span>
+              {activeDebtRecords.length > 0 && (
+                <Chip
+                  label={activeDebtRecords.length}
+                  size="small"
+                  color={hasOverdueDebt ? 'error' : 'warning'}
+                  sx={{ height: 16, fontSize: '0.6rem', fontWeight: 800, minWidth: 20 }}
+                />
+              )}
+            </Stack>
+          }
+        />
         <Tab label="Thưởng" />
       </Tabs>
 
       {tab === 0 && renderTxList()}
-      {tab === 1 && renderIncentive()}
+      {tab === 1 && renderDebtRecords()}
+      {tab === 2 && renderIncentive()}
 
       {/* ── Withdrawal Dialog ── */}
       <Dialog open={withdrawOpen} onClose={closeWithdrawDialog}

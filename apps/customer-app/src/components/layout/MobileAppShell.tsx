@@ -148,7 +148,7 @@ const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
         height: '100vh',
         display: 'flex',
         flexDirection: 'column',
-        background: 'linear-gradient(180deg, #f8fbff 0%, #eef6ff 42%, #ffffff 100%)',
+        background: (theme: any) => `linear-gradient(180deg, ${theme.palette.background.default} 0%, ${theme.palette.background.paper} 100%)`,
       }}
     >
       <AppBar
@@ -283,7 +283,7 @@ const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
         PaperProps={{
           sx: {
             width: { xs: 'min(92vw, 360px)', sm: 380 },
-            background: 'linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.97) 0%, #ffffff 100%)',
           },
         }}
       >

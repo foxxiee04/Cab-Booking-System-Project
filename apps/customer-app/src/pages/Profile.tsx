@@ -32,6 +32,8 @@ import { updateUser } from '../store/auth.slice';
 import { useTranslation } from 'react-i18next';
 import EditIcon from '@mui/icons-material/Edit';
 import CloseIcon from '@mui/icons-material/Close';
+import CheckCircleRounded from '@mui/icons-material/CheckCircleRounded';
+import RadioButtonUncheckedRounded from '@mui/icons-material/RadioButtonUncheckedRounded';
 
 const Profile: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -206,7 +208,7 @@ const Profile: React.FC = () => {
   <Box
     sx={{
       p: 2.5,
-      background: 'linear-gradient(135deg, #0f172a, #1d4ed8)',
+      background: (theme) => `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
       color: '#fff',
       position: 'relative'
     }}
@@ -498,14 +500,17 @@ const Profile: React.FC = () => {
                       </Grid>
 
                       <Box sx={{ mt: 2, p: 1.5, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-                          {t('profile.passwordChecklist', 'Kiểm tra nhanh')}
+                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 700 }}>
+                          {t('profile.passwordChecklist', 'Yêu cầu mật khẩu')}
                         </Typography>
-                        <Stack spacing={0.9} sx={{ mt: 1.1 }}>
+                        <Stack spacing={0.7} sx={{ mt: 1.1 }}>
                           {passwordChecks.map((rule) => (
-                            <Stack key={rule.label} direction="row" spacing={1} alignItems="center">
-                              <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: rule.met ? '#16a34a' : '#cbd5e1', flexShrink: 0 }} />
-                              <Typography variant="body2" color={rule.met ? 'success.main' : 'text.secondary'}>
+                            <Stack key={rule.label} direction="row" spacing={0.75} alignItems="center">
+                              {rule.met
+                                ? <CheckCircleRounded sx={{ fontSize: 16, color: 'success.main', flexShrink: 0 }} />
+                                : <RadioButtonUncheckedRounded sx={{ fontSize: 16, color: '#cbd5e1', flexShrink: 0 }} />
+                              }
+                              <Typography variant="body2" color={rule.met ? 'success.dark' : 'text.secondary'} sx={{ fontWeight: rule.met ? 600 : 400 }}>
                                 {rule.label}
                               </Typography>
                             </Stack>

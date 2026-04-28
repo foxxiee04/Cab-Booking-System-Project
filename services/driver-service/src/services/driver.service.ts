@@ -75,7 +75,7 @@ export class DriverService {
     const driver = await prisma.driver.create({
       data: {
         userId: input.userId,
-        status: DriverStatus.APPROVED,
+        status: DriverStatus.PENDING,
         availabilityStatus: AvailabilityStatus.OFFLINE,
         vehicleType: input.vehicle.type as VehicleType,
         vehicleBrand: input.vehicle.brand,
@@ -256,8 +256,14 @@ export class DriverService {
     }
 
     // Check if driver is approved
-    if (driver.status === DriverStatus.REJECTED || driver.status === DriverStatus.SUSPENDED) {
-      throw new Error(`Driver account is not allowed to go online. Current status: ${driver.status}`);
+    if (driver.status === DriverStatus.PENDING) {
+      throw new Error('Tài khoản tài xế đang chờ duyệt. Vui lòng chờ admin xét duyệt hồ sơ trước khi bật nhận cuốc.');
+    }
+    if (driver.status === DriverStatus.REJECTED) {
+      throw new Error('Hồ sơ tài xế đã bị từ chối. Vui lòng liên hệ hỗ trợ để biết thêm thông tin.');
+    }
+    if (driver.status === DriverStatus.SUSPENDED) {
+      throw new Error('Tài khoản tài xế đang bị tạm khóa. Vui lòng liên hệ hỗ trợ.');
     }
 
     // Check wallet status via wallet-service (keyed by userId, the authoritative wallet)

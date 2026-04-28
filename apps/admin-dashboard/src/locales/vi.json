@@ -146,7 +146,6 @@
     "heatmapTitle": "Bản đồ nhiệt tài xế thời gian thực",
     "heatmapBody": "Màu nhiệt và marker phản ánh phân bố tài xế online trong khu vực đang vận hành.",
     "region": "Khu vực",
-    "fallbackMap": "Đang dùng bản đồ OpenStreetMap dự phòng vì chưa có Google Maps key hoặc Google Maps tải lỗi. Heatmap và vị trí tài xế vẫn hoạt động bình thường.",
     "rideStatusTitle": "Trạng thái chuyến đi",
     "paymentPulseTitle": "Nhịp thanh toán",
     "hotspotsTitle": "Điểm nóng tài xế",

@@ -206,7 +206,7 @@ const ContactBox: React.FC<ContactBoxProps> = ({
         sx={{
           position: floatingPanel ? 'fixed' : 'relative',
           bottom: floatingPanel ? { xs: 144, sm: 96 } : 'auto',
-          right: floatingPanel ? { xs: 16, sm: 24 } : 'auto',
+          left: floatingPanel ? { xs: 16, sm: 24 } : 'auto',
           mt: floatingPanel ? 0 : 1.25,
           width: floatingPanel
             ? { xs: 'calc(100vw - 32px)', sm: 420 }
@@ -225,7 +225,7 @@ const ContactBox: React.FC<ContactBoxProps> = ({
       >
         <Box
           sx={{
-            background: 'linear-gradient(135deg, #1d4ed8, #2563eb)',
+            background: (theme: any) => `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
             color: '#fff',
             px: 2,
             py: 1.25,
@@ -394,12 +394,12 @@ const ContactBox: React.FC<ContactBoxProps> = ({
       sx={{
         position: !inlineTrigger && floatingPanel ? 'fixed' : 'relative',
         bottom: !inlineTrigger && floatingPanel ? { xs: 80, sm: 24 } : 'auto',
-        right: !inlineTrigger && floatingPanel ? { xs: 16, sm: 24 } : 'auto',
+        left: !inlineTrigger && floatingPanel ? { xs: 16, sm: 24 } : 'auto',
         zIndex: floatingPanel ? 1300 : 4,
         width: inlineTrigger && fullWidthTrigger ? '100%' : 'auto',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: inlineTrigger && fullWidthTrigger ? 'stretch' : 'flex-end',
+        alignItems: inlineTrigger && fullWidthTrigger ? 'stretch' : 'flex-start',
       }}
     >
       {floatingPanel && panelContent}
@@ -430,19 +430,39 @@ const ContactBox: React.FC<ContactBoxProps> = ({
           </Button>
         ) : (
           <Fab
-            color={open ? 'default' : 'primary'}
-            size="medium"
+            size="large"
             onClick={() => setOpen((prev) => !prev)}
             sx={{
-              boxShadow: '0 6px 20px rgba(29,78,216,0.3)',
-              transition: 'all 200ms ease',
-              ...(open && {
-                bgcolor: '#e2e8f0',
-                '&:hover': { bgcolor: '#cbd5e1' },
+              width: 60,
+              height: 60,
+              background: open
+                ? 'linear-gradient(135deg, #475569, #64748b)'
+                : 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 55%, #4f46e5 100%)',
+              color: '#fff',
+              boxShadow: open
+                ? '0 4px 12px rgba(0,0,0,0.2)'
+                : '0 6px 24px rgba(37,99,235,0.45)',
+              transition: 'all 220ms cubic-bezier(0.34,1.56,0.64,1)',
+              transform: open ? 'rotate(90deg) scale(0.95)' : 'scale(1)',
+              '&:hover': {
+                background: open
+                  ? 'linear-gradient(135deg, #334155, #475569)'
+                  : 'linear-gradient(135deg, #0284c7 0%, #1d4ed8 55%, #4338ca 100%)',
+                transform: open ? 'rotate(90deg) scale(0.95)' : 'scale(1.06)',
+              },
+              ...(unread > 0 && !open && {
+                animation: 'fabPulse 1.8s ease-in-out infinite',
+                '@keyframes fabPulse': {
+                  '0%,100%': { boxShadow: '0 6px 24px rgba(37,99,235,0.45)' },
+                  '50%':     { boxShadow: '0 6px 32px rgba(37,99,235,0.75), 0 0 0 8px rgba(37,99,235,0.12)' },
+                },
               }),
             }}
           >
-            {open ? <Close /> : <ChatBubbleRounded />}
+            {open
+              ? <Close sx={{ fontSize: 24 }} />
+              : <ChatBubbleRounded sx={{ fontSize: 26 }} />
+            }
           </Fab>
         )}
       </Badge>

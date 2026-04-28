@@ -72,7 +72,12 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
   const [mapKey, setMapKey] = useState(0);
   const timeoutHandledForRideRef = useRef<string | null>(null);
 
-  const driverShare = 0.8;
+  // Commission rates must match backend: MOTORBIKE/SCOOTER 20%, CAR_4 18%, CAR_7 15%
+  const commissionRateMap: Record<string, number> = {
+    MOTORBIKE: 0.20, SCOOTER: 0.20, CAR_4: 0.18, CAR_7: 0.15,
+  };
+  const commissionRate = commissionRateMap[ride?.vehicleType || ''] ?? 0.20;
+  const driverShare = 1 - commissionRate;
 
   useEffect(() => {
     if (open && ride) {
@@ -120,6 +125,18 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
   const finalDistanceMeters = distanceMeters || derivedDistanceMeters;
   const finalDurationSeconds = durationSeconds || (finalDistanceMeters ? Math.max(180, Math.round(((finalDistanceMeters / 1000) / 24) * 3600)) : undefined);
 
+  // ETA to pickup point (how long for driver to reach the customer)
+  const etaToPickupMinutes = ride.etaMinutes
+    ? Math.round(ride.etaMinutes)
+    : ride.durationFromDriverSeconds
+      ? Math.max(1, Math.round(ride.durationFromDriverSeconds / 60))
+      : ride.distanceFromDriverMeters
+        ? Math.max(1, Math.round((ride.distanceFromDriverMeters / 1000 / 25) * 60))
+        : null;
+  const distanceFromDriverKm = ride.distanceFromDriverMeters
+    ? (ride.distanceFromDriverMeters / 1000).toFixed(1)
+    : null;
+
   return (
     <Dialog
       open={open}
@@ -139,7 +156,7 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
         {/* Header gradient */}
         <Box
           sx={{
-            background: 'linear-gradient(135deg, #0f172a 0%, #0284c7 60%, #0f766e 100%)',
+            background: (theme: any) => `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 60%, ${theme.palette.secondary.dark} 100%)`,
             color: 'white',
             px: 3,
             pt: 2.5,
@@ -229,6 +246,20 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
             </Stack>
           </Box>
 
+          {/* ETA to pickup — most important for driver decision */}
+          {(etaToPickupMinutes || distanceFromDriverKm) && (
+            <Box sx={{ mb: 1.5, p: 1.25, borderRadius: 3, bgcolor: '#f0f9ff', border: '1px solid #bae6fd', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Timer sx={{ fontSize: 20, color: '#0284c7' }} />
+              <Box flex={1}>
+                <Typography variant="caption" color="text.secondary" display="block">Thời gian đến điểm đón</Typography>
+                <Typography variant="body2" fontWeight={800} color="#0369a1">
+                  {etaToPickupMinutes ? `~${etaToPickupMinutes} phút` : '—'}
+                  {distanceFromDriverKm ? ` · ${distanceFromDriverKm} km từ bạn` : ''}
+                </Typography>
+              </Box>
+            </Box>
+          )}
+
           {/* Trip stats row */}
           <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
             <Box sx={{ flex: 1, textAlign: 'center', bgcolor: '#f8fafc', borderRadius: 3, p: 1.5 }}>
@@ -240,14 +271,14 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
             </Box>
             <Box sx={{ flex: 1, textAlign: 'center', bgcolor: '#f8fafc', borderRadius: 3, p: 1.5 }}>
               <RouteIcon sx={{ fontSize: 20, color: '#7c3aed', mb: 0.5 }} />
-              <Typography variant="caption" color="text.secondary" display="block">Khoảng cách</Typography>
+              <Typography variant="caption" color="text.secondary" display="block">Quãng đường</Typography>
               <Typography variant="body2" fontWeight={700}>
                 {finalDistanceMeters ? formatDistance(finalDistanceMeters) : 'Đang cập nhật'}
               </Typography>
             </Box>
             <Box sx={{ flex: 1, textAlign: 'center', bgcolor: '#f8fafc', borderRadius: 3, p: 1.5 }}>
               <AccessTime sx={{ fontSize: 20, color: '#d97706', mb: 0.5 }} />
-              <Typography variant="caption" color="text.secondary" display="block">Thời gian</Typography>
+              <Typography variant="caption" color="text.secondary" display="block">Thời gian chuyến</Typography>
               <Typography variant="body2" fontWeight={700}>
                 {finalDurationSeconds ? formatDuration(finalDurationSeconds) : 'Đang cập nhật'}
               </Typography>
@@ -281,10 +312,10 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
                   <TrendingUp sx={{ color: '#0284c7', fontSize: 20 }} />
                   <Box>
                     <Typography variant="body2" fontWeight={700} color="#0284c7">
-                      Hoa hồng bạn nhận
+                      Bạn nhận được
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {Math.round(driverShare * 100)}% sau phí nền tảng
+                      {Math.round(driverShare * 100)}% cước · phí nền tảng {Math.round(commissionRate * 100)}%
                     </Typography>
                   </Box>
                 </Stack>

@@ -28,8 +28,11 @@ import type { SlideProps } from '@mui/material';
 import {
   AttachMoneyRounded,
   AccountBalanceWalletRounded,
+  BlockRounded,
+  CheckCircleOutlineRounded,
   DriveEtaRounded,
   HistoryRounded,
+  HourglassTopRounded,
   LogoutRounded,
   NotificationsRounded,
   PersonRounded,
@@ -101,19 +104,6 @@ const formatNotificationTimestamp = (createdAt: string) => {
   });
 };
 
-const getApprovalStatusTone = (status?: string) => {
-  switch (status) {
-    case 'APPROVED':
-      return { color: 'success' as const, labelKey: 'profile.approved', fallback: 'Da duoc duyet' };
-    case 'REJECTED':
-      return { color: 'error' as const, labelKey: 'profile.rejected', fallback: 'Bi tu choi' };
-    case 'SUSPENDED':
-      return { color: 'default' as const, labelKey: 'profile.suspended', fallback: 'Tam khoa' };
-    case 'PENDING':
-    default:
-      return { color: 'info' as const, labelKey: 'profile.pendingApproval', fallback: 'Ho so dang duoc theo doi' };
-  }
-};
 
 const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
   const navigate = useNavigate();
@@ -404,7 +394,6 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
   const walletBalance = walletState ? Number(walletState.balance ?? 0) : null;
   const walletOperationalBalance = walletState ? Number(walletState.operationalBalance ?? walletState.availableBalance ?? walletState.balance ?? 0) : null;
   const activationThreshold = walletState?.activationThreshold ?? 300_000;
-  const warningThreshold = walletState?.warningThreshold ?? -100_000;
   const debtLimit = walletState?.debtLimit ?? -200_000;
   const hasDriverBlockingStatus = ['REJECTED', 'SUSPENDED'].includes(profile?.status || '');
 
@@ -455,13 +444,25 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
     }));
   }, [debtLimit, dispatch, hasDriverBlockingStatus, user?.id, walletOperationalBalance, walletState?.canAcceptRide, walletState?.warningThresholdReached]);
 
+  useEffect(() => {
+    if (hasDriverBlockingStatus || !user?.id || !walletState?.hasOverdueDebt) return;
+    const warningKey = `wallet:overdue-debt:${user.id}`;
+    if (sessionStorage.getItem(warningKey)) return;
+    sessionStorage.setItem(warningKey, '1');
+    dispatch(showNotification({
+      type: 'error',
+      title: 'Công nợ quá hạn',
+      message: 'Bạn có khoản công nợ quá hạn. Vui lòng vào mục Ví tiền để xem chi tiết và thanh toán.',
+      persistMs: 10000,
+    }));
+  }, [dispatch, hasDriverBlockingStatus, user?.id, walletState?.hasOverdueDebt]);
+
   const notifStyle = notification ? NOTIFICATION_STYLES[notification.type] : null;
   const handleNotifClose = (_: React.SyntheticEvent | Event, reason?: string) => {
     if (reason !== 'clickaway') dispatch(hideNotification());
   };
 
   const effectiveOnline = isOnline || profile?.isOnline || false;
-  const approvalStatusTone = getApprovalStatusTone(profile?.status);
 
   const handleOpenNotifications = () => {
     setNotificationsOpen(true);
@@ -487,7 +488,7 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
         height: '100vh',
         display: 'flex',
         flexDirection: 'column',
-        background: 'linear-gradient(180deg, #f8fbff 0%, #eef6ff 42%, #ffffff 100%)',
+        background: 'linear-gradient(180deg, #f8fbff 0%, #f5f5f5 42%, #ffffff 100%)',
       }}
     >
       <AppBar
@@ -546,65 +547,94 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
           WebkitOverflowScrolling: 'touch',
         }}
       >
-        {profile?.status && hasDriverBlockingStatus && (
-          <Box
-            sx={{
-              width: shellMaxWidth,
-              mx: 'auto',
-              mb: 1.5,
-              px: 2,
-              py: 1,
-              borderRadius: 2,
-              bgcolor: approvalStatusTone.color === 'error' ? '#fef2f2' : approvalStatusTone.color === 'default' ? '#f8fafc' : '#f0f9ff',
-              border: `1px solid ${approvalStatusTone.color === 'error' ? '#fca5a5' : approvalStatusTone.color === 'default' ? '#cbd5e1' : '#93c5fd'}`,
-              textAlign: 'center',
-            }}
-          >
-            <Typography variant="body2" fontWeight={700} sx={{ color: approvalStatusTone.color === 'error' ? '#b91c1c' : approvalStatusTone.color === 'default' ? '#334155' : '#1e40af' }}>
-              {t(approvalStatusTone.labelKey, approvalStatusTone.fallback)}
-            </Typography>
+        {/* ── PENDING approval gate ─────────────────────────────────── */}
+        {profile?.status === 'PENDING' && (
+          <Box sx={{ width: shellMaxWidth, mx: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '70vh', px: 2, textAlign: 'center', gap: 3 }}>
+            <Box sx={{ width: 80, height: 80, borderRadius: '50%', bgcolor: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <HourglassTopRounded sx={{ fontSize: 44, color: 'primary.main', animation: 'pulse 2s infinite', '@keyframes pulse': { '0%,100%': { opacity: 1 }, '50%': { opacity: 0.5 } } }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight={800} gutterBottom>Hồ sơ đang chờ duyệt</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>
+                Hồ sơ tài xế của bạn đã được gửi và đang chờ admin xét duyệt. Quá trình thường mất 1–2 ngày làm việc.
+              </Typography>
+            </Box>
+            <Box sx={{ bgcolor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 3, p: 2, width: '100%', maxWidth: 320 }}>
+              <Stack spacing={1}>
+                {[
+                  { icon: <CheckCircleOutlineRounded sx={{ color: 'success.main', fontSize: 18 }} />, text: 'Hồ sơ đã nộp thành công' },
+                  { icon: <HourglassTopRounded sx={{ color: 'primary.main', fontSize: 18 }} />, text: 'Admin đang xét duyệt' },
+                  { icon: <AccountBalanceWalletRounded sx={{ color: 'text.disabled', fontSize: 18 }} />, text: 'Sau khi duyệt: nạp 300k ký quỹ' },
+                  { icon: <DriveEtaRounded sx={{ color: 'text.disabled', fontSize: 18 }} />, text: 'Sau nạp ký quỹ: bắt đầu nhận cuốc' },
+                ].map((step, i) => (
+                  <Stack key={i} direction="row" spacing={1} alignItems="center">
+                    {step.icon}
+                    <Typography variant="body2" color={i < 2 ? 'text.primary' : 'text.disabled'}>{step.text}</Typography>
+                  </Stack>
+                ))}
+              </Stack>
+            </Box>
+            <Typography variant="caption" color="text.disabled">Trang tự động cập nhật khi hồ sơ được duyệt</Typography>
+            <Button variant="outlined" size="small" onClick={handleLogout} startIcon={<LogoutRounded />} sx={{ borderRadius: 3 }}>
+              Đăng xuất
+            </Button>
           </Box>
         )}
-        {!hasDriverBlockingStatus && walletState?.activationRequired && walletBalance !== null && (
-          <Alert
-            severity="warning"
-            sx={{ width: shellMaxWidth, mx: 'auto', mb: 1.5, borderRadius: 3 }}
-            action={
-              <Button color="inherit" size="small" sx={{ fontWeight: 700 }} onClick={() => navigate('/wallet')}>
-                Nạp để kích hoạt tài khoản
+
+        {/* ── REJECTED gate ─────────────────────────────────────────── */}
+        {profile?.status === 'REJECTED' && (
+          <Box sx={{ width: shellMaxWidth, mx: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '70vh', px: 2, textAlign: 'center', gap: 3 }}>
+            <Box sx={{ width: 80, height: 80, borderRadius: '50%', bgcolor: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <BlockRounded sx={{ fontSize: 44, color: 'error.main' }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight={800} color="error.dark" gutterBottom>Hồ sơ bị từ chối</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>
+                Hồ sơ tài xế của bạn chưa được phê duyệt. Vui lòng kiểm tra lại thông tin và liên hệ bộ phận hỗ trợ để biết thêm chi tiết.
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={1.5}>
+              <Button variant="outlined" color="error" size="small" onClick={() => navigate('/profile')} sx={{ borderRadius: 3 }}>
+                Xem hồ sơ
               </Button>
-            }
-          >
-            Tài khoản tài xế chưa được kích hoạt. Số dư hiện tại là {formatCurrency(walletBalance)}. Bạn cần đạt tối thiểu {formatCurrency(activationThreshold)} để bật nhận cuốc.
-          </Alert>
-        )}
-        {!hasDriverBlockingStatus && !walletState?.activationRequired && walletState?.warningThresholdReached && walletState?.canAcceptRide !== false && walletOperationalBalance !== null && (
-          <Alert
-            severity="warning"
-            sx={{ width: shellMaxWidth, mx: 'auto', mb: 1.5, borderRadius: 3 }}
-            action={
-              <Button color="inherit" size="small" sx={{ fontWeight: 700 }} onClick={() => navigate('/wallet')}>
-                Nạp ví
+              <Button variant="outlined" size="small" onClick={handleLogout} startIcon={<LogoutRounded />} sx={{ borderRadius: 3 }}>
+                Đăng xuất
               </Button>
-            }
-          >
-            Số dư vận hành đã âm quá {formatCurrency(Math.abs(warningThreshold))}. Tài khoản vẫn hoạt động nhưng bạn nên nạp thêm trước khi chạm mốc khóa {formatCurrency(debtLimit)}.
-          </Alert>
+            </Stack>
+          </Box>
         )}
-        {!hasDriverBlockingStatus && !walletState?.activationRequired && walletState?.canAcceptRide === false && walletOperationalBalance !== null && (
-          <Alert
-            severity="error"
-            sx={{ width: shellMaxWidth, mx: 'auto', mb: 1.5, borderRadius: 3 }}
-            action={
-              <Button color="inherit" size="small" sx={{ fontWeight: 700 }} onClick={() => navigate('/wallet')}>
-                Nạp ví
-              </Button>
-            }
-          >
-            Ví đã chạm mốc khóa nhận cuốc {formatCurrency(debtLimit)}. Số dư vận hành hiện tại là {formatCurrency(walletOperationalBalance)}. Bạn cần nạp thêm để bật lại nhận chuyến.
-          </Alert>
+
+        {/* ── Normal content (APPROVED / SUSPENDED) ─────────────────── */}
+        {profile?.status !== 'PENDING' && profile?.status !== 'REJECTED' && (
+          <>
+            {profile?.status === 'SUSPENDED' && (
+              <Box sx={{ width: shellMaxWidth, mx: 'auto', mb: 1.5, px: 2, py: 1, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #cbd5e1', textAlign: 'center' }}>
+                <Typography variant="body2" fontWeight={700} color="text.secondary">
+                  Tài khoản đang bị tạm khóa. Vui lòng liên hệ hỗ trợ.
+                </Typography>
+              </Box>
+            )}
+            {walletState?.activationRequired && walletBalance !== null && (
+              <Alert severity="warning" sx={{ width: shellMaxWidth, mx: 'auto', mb: 1.5, borderRadius: 3 }}
+                action={<Button color="inherit" size="small" sx={{ fontWeight: 700 }} onClick={() => navigate('/wallet')}>Nạp để kích hoạt</Button>}>
+                Chưa kích hoạt ví. Nạp tối thiểu {formatCurrency(activationThreshold)} để bắt đầu nhận cuốc.
+              </Alert>
+            )}
+            {!walletState?.activationRequired && walletState?.warningThresholdReached && walletState?.canAcceptRide !== false && walletOperationalBalance !== null && (
+              <Alert severity="warning" sx={{ width: shellMaxWidth, mx: 'auto', mb: 1.5, borderRadius: 3 }}
+                action={<Button color="inherit" size="small" sx={{ fontWeight: 700 }} onClick={() => navigate('/wallet')}>Nạp ví</Button>}>
+                Số dư vận hành đang âm ({formatCurrency(walletOperationalBalance)}). Nạp thêm trước khi chạm ngưỡng khóa {formatCurrency(debtLimit)}.
+              </Alert>
+            )}
+            {!walletState?.activationRequired && walletState?.canAcceptRide === false && walletOperationalBalance !== null && (
+              <Alert severity="error" sx={{ width: shellMaxWidth, mx: 'auto', mb: 1.5, borderRadius: 3 }}
+                action={<Button color="inherit" size="small" sx={{ fontWeight: 700 }} onClick={() => navigate('/wallet')}>Nạp ví</Button>}>
+                Ví đã chạm ngưỡng khóa {formatCurrency(debtLimit)}. Nạp thêm để bật lại nhận cuốc.
+              </Alert>
+            )}
+            <Box sx={{ minHeight: '100%', width: shellMaxWidth, mx: 'auto' }}>{children}</Box>
+          </>
         )}
-        <Box sx={{ minHeight: '100%', width: shellMaxWidth, mx: 'auto' }}>{children}</Box>
       </Box>
 
       <Paper

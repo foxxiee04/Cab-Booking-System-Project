@@ -8,3 +8,8 @@ numpy==1.24.3
 pandas==2.1.3
 pytest==7.4.3
 httpx==0.25.2
+# RAG dependencies
+sentence-transformers==2.7.0
+faiss-cpu==1.8.0
+torch==2.2.2
+transformers==4.40.2

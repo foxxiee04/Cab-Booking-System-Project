@@ -1,0 +1,30 @@
+TIÊU ĐỀ: Trở thành tài xế - Yêu cầu và đăng ký
+DANH MỤC: tài xế, đăng ký tài xế, yêu cầu tài xế, driver
+
+Yêu cầu để trở thành tài xế CabBooking:
+- Tuổi từ 21 trở lên.
+- Có bằng lái xe phù hợp với loại phương tiện đăng ký (A2 cho xe máy, B2 cho ô tô 4 chỗ, D cho ô tô 7 chỗ).
+- Phương tiện không quá 8 năm tuổi (tính từ năm sản xuất).
+- Phương tiện đã được kiểm định đăng kiểm còn hiệu lực.
+- Có bảo hiểm xe hợp lệ.
+- Lý lịch tư pháp sạch (không có tiền án tiền sự nghiêm trọng).
+
+Quy trình đăng ký:
+1. Tải app và đăng ký tài khoản tài xế.
+2. Điền thông tin cá nhân và tải lên ảnh CCCD/CMND.
+3. Tải lên ảnh bằng lái xe hợp lệ.
+4. Tải lên ảnh phương tiện và giấy tờ xe (đăng ký xe, đăng kiểm).
+5. Đợi admin xem xét và phê duyệt (thường trong 1-3 ngày làm việc).
+6. Sau khi được duyệt, tài xế có thể bật "Trực tuyến" và nhận chuyến.
+
+Hoa hồng (Commission):
+- Xe máy/Scooter: Hoa hồng 20% trên mỗi chuyến.
+- Ô tô 4 chỗ: Hoa hồng 18% trên mỗi chuyến.
+- Ô tô 7 chỗ: Hoa hồng 15% trên mỗi chuyến.
+
+Thanh toán cho tài xế:
+- Chuyến tiền mặt: Khách trả tài xế trực tiếp. Tài xế nợ nền tảng phần hoa hồng (trừ vào ví).
+- Chuyến online: Tiền chuyển thẳng vào ví tài xế trừ hoa hồng.
+- Ví tài xế cần duy trì số dư tối thiểu để tiếp tục nhận chuyến.
+
+Tài xế có thể xem thu nhập, lịch sử chuyến và số dư ví trong ứng dụng tài xế.

@@ -9,6 +9,7 @@ from app.api import predict
 from app.services.prediction_service import prediction_service
 from app.services.accept_service import accept_service  # noqa: F401 — eager load at startup
 from app.services.wait_service import wait_service  # noqa: F401 — eager load at startup
+from app.services.rag_service import rag_service
 
 # Configure logging
 logging.basicConfig(
@@ -45,6 +46,9 @@ async def startup_event():
     """Run on application startup"""
     logger.info(f"{settings.APP_NAME} v{settings.APP_VERSION} starting...")
     logger.info(f"Model path: {settings.MODEL_PATH}")
+    # Pre-initialize RAG service in background to reduce cold start latency
+    import asyncio
+    asyncio.get_event_loop().run_in_executor(None, rag_service.initialize)
 
 
 @app.on_event("shutdown")

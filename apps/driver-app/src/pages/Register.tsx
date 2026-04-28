@@ -180,7 +180,7 @@ const Register: React.FC = () => {
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
-        background: 'linear-gradient(135deg, #4a6fa5 0%, #5a9f8a 100%)',
+        background: (theme: any) => `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
       }}
     >
       <Container maxWidth="sm">

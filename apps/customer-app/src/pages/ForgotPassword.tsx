@@ -127,7 +127,7 @@ const ForgotPassword: React.FC = () => {
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
-        background: 'linear-gradient(135deg, #2E7D32 0%, #1976D2 100%)',
+        background: (theme: any) => `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 100%)`,
         py: 4,
       }}
     >
@@ -188,9 +188,9 @@ const ForgotPassword: React.FC = () => {
                 <Box sx={{ textAlign: 'center' }}>
                   <Link
                     to="/login"
-                    style={{ color: '#2E7D32', textDecoration: 'none', fontSize: '0.875rem' }}
+                    style={{ textDecoration: 'none', fontSize: '0.875rem' }}
                   >
-                    ← Quay lại đăng nhập
+                    <Typography component="span" sx={{ color: 'primary.main', fontSize: '0.875rem' }}>← Quay lại đăng nhập</Typography>
                   </Link>
                 </Box>
               </form>

@@ -1,0 +1,29 @@
+TIÊU ĐỀ: Voucher và mã giảm giá
+DANH MỤC: voucher, mã giảm giá, khuyến mãi, discount, coupon
+
+Cách sử dụng voucher:
+1. Vào mục "Voucher" trong ứng dụng để xem danh sách mã giảm giá có sẵn.
+2. Nhấn "Thu thập" để lưu voucher vào ví của bạn.
+3. Khi đặt xe, chọn voucher muốn áp dụng trước khi xác nhận đặt chuyến.
+4. Giảm giá sẽ được tự động trừ khỏi tổng tiền.
+
+Các loại voucher:
+- Giảm theo số tiền cố định (ví dụ: giảm 20.000đ)
+- Giảm theo phần trăm (ví dụ: giảm 10%, tối đa 50.000đ)
+
+Điều kiện sử dụng voucher:
+- Mỗi voucher có thời hạn sử dụng cụ thể (xem ngày hết hạn trên voucher).
+- Một số voucher chỉ áp dụng cho loại xe nhất định hoặc phương thức thanh toán nhất định.
+- Mỗi tài khoản chỉ được dùng mỗi mã voucher một lần.
+- Voucher không thể kết hợp cùng nhau trong một chuyến.
+- Giảm giá không vượt quá tổng tiền chuyến (không hoàn lại tiền thừa).
+
+Thu thập voucher:
+- Voucher hiển thị trong tab "Có sẵn" khi chưa thu thập.
+- Sau khi thu thập, chuyển sang tab "Của tôi".
+- Voucher hết hạn sẽ tự động chuyển sang tab "Hết hạn".
+
+Nếu gặp lỗi khi sử dụng voucher, hãy kiểm tra:
+- Voucher có còn trong thời hạn không?
+- Đơn hàng có đủ điều kiện tối thiểu không?
+- Voucher đã được sử dụng chưa?

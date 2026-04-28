@@ -6,6 +6,7 @@ import { useAppDispatch, useAppSelector } from './store/hooks';
 import { socketService } from './socket/customer.socket';
 import { hideNotification } from './store/ui.slice';
 import MobileAppShell from './components/layout/MobileAppShell';
+import AIChatWidget from './components/common/AIChatWidget';
 
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -214,6 +215,9 @@ function App() {
 
         <Route path="*" element={<Navigate to={isAuthenticated ? '/home' : '/login'} replace />} />
       </Routes>
+
+      {/* AI customer support chatbot — visible only when logged in */}
+      {isAuthenticated && <AIChatWidget />}
     </Box>
   );
 }

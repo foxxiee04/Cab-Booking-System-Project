@@ -172,7 +172,7 @@ const Profile: React.FC = () => {
             sx={{
               borderRadius: 5,
               overflow: 'hidden',
-              background: 'linear-gradient(135deg, #1e40af 0%, #0ea5e9 60%, #38bdf8 100%)',
+              background: (theme: any) => `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 60%, ${theme.palette.primary.light} 100%)`,
               position: 'relative',
               mb: 2.5,
             }}
@@ -302,45 +302,24 @@ const Profile: React.FC = () => {
   </Grid>
 
   <Grid item xs={12} md={7}>
-    <Paper
-      variant="outlined"
-      sx={{
-        p: 1.5,
-        borderRadius: 3,
-        borderColor: 'rgba(148,163,184,0.22)',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-      }}
-    >
-      <Box
-        sx={{
-          width: '100%',
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-          gap: 2,
-        }}
-      >
-        {[
-          { label: 'Hãng xe', value: profile.vehicleMake },
-          { label: 'Dòng xe', value: profile.vehicleModel },
-          { label: 'Màu xe', value: profile.vehicleColor },
-          { label: 'Biển số', value: profile.licensePlate },
-          { label: 'Hạng GPLX', value: profile.licenseClass },
-          { label: 'Năm SX', value: profile.vehicleYear?.toString() },
-          { label: 'Số GPLX', value: profile.licenseNumber },
-        ].map(({ label, value }) => (
-          <Box key={label}>
-            <Typography variant="caption" color="text.secondary">
-              {label}
-            </Typography>
-            <Typography variant="body2" fontWeight={600}>
-              {value || '—'}
-            </Typography>
-          </Box>
-        ))}
-      </Box>
-    </Paper>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, height: '100%' }}>
+      {[
+        { label: 'Hãng xe', value: profile.vehicleMake, color: '#1d4ed8', bg: '#eff6ff' },
+        { label: 'Dòng xe', value: profile.vehicleModel, color: '#1d4ed8', bg: '#eff6ff' },
+        { label: 'Màu xe', value: profile.vehicleColor, color: '#0891b2', bg: '#ecfeff' },
+        { label: 'Biển số', value: profile.licensePlate, color: '#dc2626', bg: '#fef2f2' },
+        { label: 'Năm SX', value: profile.vehicleYear?.toString(), color: '#059669', bg: '#f0fdf4' },
+        { label: 'Hạng GPLX', value: profile.licenseClass, color: '#7c3aed', bg: '#faf5ff' },
+        { label: 'Số GPLX', value: profile.licenseNumber, color: '#7c3aed', bg: '#faf5ff' },
+      ].map(({ label, value, color, bg }) => (
+        <Box key={label} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.5, py: 0.9, borderRadius: 2, bgcolor: value ? bg : '#f8fafc', border: `1px solid ${value ? bg : '#e2e8f0'}` }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>{label}</Typography>
+          <Typography variant="body2" fontWeight={800} sx={{ color: value ? color : 'text.disabled' }}>
+            {value || '—'}
+          </Typography>
+        </Box>
+      ))}
+    </Box>
   </Grid>
 </Grid>
 

@@ -1,0 +1,30 @@
+TIÊU ĐỀ: An toàn và hỗ trợ khách hàng
+DANH MỤC: an toàn, hỗ trợ, liên hệ, báo cáo, khiếu nại, SOS
+
+Tính năng an toàn:
+- Theo dõi chuyến xe thời gian thực trên bản đồ.
+- Nút SOS khẩn cấp trong ứng dụng (gọi 113/114).
+- Tất cả tài xế đã được xác minh danh tính và bằng lái.
+- Mã hành trình chia sẻ với gia đình/bạn bè.
+- Chat trực tiếp với tài xế trong suốt chuyến đi.
+
+Đánh giá tài xế:
+- Sau mỗi chuyến, khách có thể đánh giá tài xế từ 1-5 sao.
+- Để lại nhận xét về chất lượng dịch vụ.
+- Tài xế không đạt yêu cầu sẽ bị hạn chế hoặc khóa tài khoản.
+
+Báo cáo sự cố:
+- Trong ứng dụng: Vào mục "Lịch sử chuyến" → chọn chuyến → "Báo cáo vấn đề".
+- Hỗ trợ 24/7 qua email: support@cabbooking.vn
+- Hotline hỗ trợ: 1900-XXXX (8h-22h các ngày trong tuần).
+
+Các vấn đề thường gặp và hướng giải quyết:
+- Tài xế không đến: Gọi điện cho tài xế qua số điện thoại ẩn trong app hoặc hủy và đặt lại.
+- Quên đồ trên xe: Liên hệ hỗ trợ cung cấp số chuyến, chúng tôi sẽ kết nối với tài xế.
+- Tài xế đi sai đường: Chat hoặc gọi cho tài xế để điều chỉnh lộ trình.
+- Thanh toán sai số tiền: Chụp ảnh hóa đơn và báo cáo qua app.
+
+Chính sách bảo vệ người dùng:
+- Thông tin cá nhân được bảo mật, không chia sẻ với bên thứ ba.
+- Số điện thoại được ẩn giữa tài xế và khách hàng.
+- Mọi cuộc gọi đi qua hệ thống của CabBooking.

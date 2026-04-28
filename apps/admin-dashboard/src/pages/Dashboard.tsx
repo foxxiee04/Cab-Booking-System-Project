@@ -444,7 +444,7 @@ const Dashboard: React.FC = () => {
                 </Stack>
               </Box>
 
-              <Box sx={{ height: 520, bgcolor: '#dbeafe' }}>
+              <Box sx={{ height: 520, bgcolor: 'primary.50' }}>
                 {hasGoogleMapsApiKey ? (
                   <GoogleDriverHeatmap googleMapsApiKey={googleMapsApiKey} mapCenter={mapCenter} drivers={filteredDrivers} fallback={leafletHeatmap} />
                 ) : leafletHeatmap}

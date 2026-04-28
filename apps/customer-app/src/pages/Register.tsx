@@ -180,7 +180,7 @@ const Register: React.FC = () => {
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: (theme: any) => `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 100%)`,
       }}
     >
       <Container maxWidth="sm">
@@ -230,8 +230,8 @@ const Register: React.FC = () => {
 
                     <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 2 }}>
                       Đã có tài khoản?{' '}
-                      <Link to="/login" style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 700 }}>
-                        Đăng nhập
+                      <Link to="/login" style={{ textDecoration: 'none' }}>
+                        <Typography component="span" sx={{ color: 'primary.main', fontWeight: 700 }}>Đăng nhập</Typography>
                       </Link>
                     </Typography>
                   </Stack>

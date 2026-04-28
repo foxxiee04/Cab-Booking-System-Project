@@ -1,12 +1,12 @@
 # Seed Account Reference
 
-Generated at: 14:15:41 24/4/2026
+Generated at: 00:30:56 28/4/2026
 
 ## Credentials
 
 - Admin: admin@cabbooking.com / 0900000001
 - Password chung: Password@1
-- Admin userId: 2efddbf0-d8cd-41d9-8c6e-c8108eaac91c
+- Admin userId: 9546a808-7763-40aa-9050-3f02c9719e21
 
 ## Tài khoản test trọng điểm
 

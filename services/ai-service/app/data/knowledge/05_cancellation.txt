@@ -1,0 +1,22 @@
+TIÊU ĐỀ: Hủy chuyến và chính sách hủy
+DANH MỤC: hủy chuyến, cancel, hoàn tiền, chính sách
+
+Cách hủy chuyến:
+1. Trong màn hình theo dõi chuyến, nhấn nút "Hủy chuyến".
+2. Chọn lý do hủy (tùy chọn).
+3. Xác nhận hủy.
+
+Chính sách hủy chuyến:
+- Hủy trước khi tài xế nhận chuyến: Miễn phí, không mất phí.
+- Hủy sau khi tài xế đã nhận chuyến nhưng chưa đến đón: Có thể mất phí hủy nhỏ.
+- Hủy nhiều lần trong ngày: Tài khoản có thể bị hạn chế đặt xe.
+
+Trường hợp tài xế hủy chuyến:
+- Hệ thống tự động tìm tài xế mới.
+- Không tính phí hủy với khách hàng.
+- Nếu không tìm được tài xế, chuyến bị hủy và hoàn tiền (với thanh toán online).
+
+Hoàn tiền khi hủy chuyến:
+- Thanh toán tiền mặt: Không phát sinh thanh toán, không cần hoàn tiền.
+- Thanh toán online (MoMo/VNPay): Hoàn tiền trong 3-5 ngày làm việc về phương thức thanh toán gốc.
+- Nếu đã hoàn thành thanh toán nhưng chuyến bị hủy do lỗi hệ thống: Liên hệ hỗ trợ để được hoàn tiền.

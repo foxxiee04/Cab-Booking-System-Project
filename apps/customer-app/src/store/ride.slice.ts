@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { Ride, Driver, Location } from '../types';
+import { logout } from './auth.slice';
 
 interface RideState {
   currentRide: Ride | null;
@@ -83,6 +84,10 @@ const rideSlice = createSlice({
       state.fareEstimate = null;
       state.error = null;
     },
+  },
+  extraReducers: (builder) => {
+    // Clear ALL ride/location state when user logs out — prevents account B seeing account A's ride
+    builder.addCase(logout, () => ({ ...initialState }));
   },
 });
 

@@ -947,12 +947,16 @@ export class RideService {
       }))
       .filter((ride) => ride.distanceKm <= radiusKm)
       .sort((a, b) => a.distanceKm - b.distanceKm)
-      .map(({ distanceKm, ...ride }) => ({
-        ...ride,
-        distanceFromDriver: parseFloat(distanceKm.toFixed(2)),
-        distanceFromDriverMeters: Math.round(distanceKm * 1000),
-        durationFromDriverSeconds: Math.max(180, Math.round((distanceKm / 24) * 3600)),
-      }));
+      .map(({ distanceKm, ...ride }) => {
+        const etaMinutes = parseFloat(Math.max(1, (distanceKm / 24) * 60).toFixed(1));
+        return {
+          ...ride,
+          distanceFromDriver: parseFloat(distanceKm.toFixed(2)),
+          distanceFromDriverMeters: Math.round(distanceKm * 1000),
+          durationFromDriverSeconds: Math.max(60, Math.round((distanceKm / 24) * 3600)),
+          etaMinutes,
+        };
+      });
 
     return this.enrichRideCustomers(availableRides as Ride[]);
   }
@@ -1354,9 +1358,11 @@ export class RideService {
       rideId: ride.id,
       customerId: ride.customerId,
       pickup: { lat: ride.pickupLat, lng: ride.pickupLng, address: ride.pickupAddress },
-     dropoff: { lat: ride.dropoffLat, lng: ride.dropoffLng, address: ride.dropoffAddress },
-     vehicleType: ride.vehicleType,
-     fare: ride.fare,
+      dropoff: { lat: ride.dropoffLat, lng: ride.dropoffLng, address: ride.dropoffAddress },
+      vehicleType: ride.vehicleType,
+      fare: ride.fare,
+      distance: ride.distance,
+      duration: ride.duration,
       searchRadiusKm: config.ride.searchRadiusKm,
       attempt: 1,
       maxAttempts: this.offerManager.getMaxReassignAttempts(),

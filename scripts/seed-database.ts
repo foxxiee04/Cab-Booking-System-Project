@@ -33,6 +33,36 @@ type SeededDriverLocation = {
 // Default password for all seed users: Password@1
 const SEED_PASSWORD_HASH = bcrypt.hashSync('Password@1', 10);
 
+// ─── Pricing formula (mirrors services/pricing-service/src/config/index.ts) ──
+// baseFare + vehicleServiceFee + distance×perKmRate + minutes×perMinuteRate + shortTripFee
+// shortTripFee applies when distance < 2.5 km (only for SCOOTER and CAR variants)
+const PRICING = {
+  MOTORBIKE: { base: 10_000, svc: 0,      perKm: 6_200,  perMin: 450,   stFee: 0 },
+  SCOOTER:   { base: 14_000, svc: 1_500,  perKm: 8_400,  perMin: 700,   stFee: 1_500 },
+  CAR_4:     { base: 24_000, svc: 6_000,  perKm: 15_000, perMin: 1_900, stFee: 6_000 },
+  CAR_7:     { base: 32_000, svc: 10_000, perKm: 18_500, perMin: 2_400, stFee: 9_000 },
+} as const;
+const SHORT_TRIP_THRESHOLD_KM = 2.5;
+const MINIMUM_FARE = 15_000;
+
+function calcFare(
+  vehicleType: keyof typeof PRICING,
+  distanceKm: number,
+  durationSeconds: number,
+  surgeMultiplier = 1.0,
+): number {
+  const cfg = PRICING[vehicleType];
+  const mins = durationSeconds / 60;
+  const isShort = distanceKm < SHORT_TRIP_THRESHOLD_KM;
+  const subtotal =
+    cfg.base + cfg.svc +
+    distanceKm * cfg.perKm +
+    mins * cfg.perMin +
+    (isShort ? cfg.stFee : 0);
+  // Round to nearest 1 000 VND, then apply minimum fare
+  return Math.max(Math.round((subtotal * surgeMultiplier) / 1_000) * 1_000, MINIMUM_FARE);
+}
+
 function pgUrl(db: string) {
   return `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${db}`;
 }
@@ -552,7 +582,8 @@ const BOOKINGS = [
     dropoffAddress: 'Saigon Centre, Le Loi, Q1, TP.HCM',
     dropoffLat: 10.7721, dropoffLng: 106.7002,
     vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    estimatedFare: 45000, estimatedDistance: 3.5, estimatedDuration: 900,
+    estimatedDistance: 3.5, estimatedDuration: 900,
+    estimatedFare: calcFare('CAR_4', 3.5, 900),           // ~111 000
   },
   {
     pickupAddress: 'Ben Thanh Market, Q1, TP.HCM',
@@ -560,7 +591,8 @@ const BOOKINGS = [
     dropoffAddress: 'Tan Son Nhat Airport, TP.HCM',
     dropoffLat: 10.8185, dropoffLng: 106.6588,
     vehicleType: 'CAR_4', paymentMethod: 'CARD',
-    estimatedFare: 120000, estimatedDistance: 8.2, estimatedDuration: 1800,
+    estimatedDistance: 8.2, estimatedDuration: 1800,
+    estimatedFare: calcFare('CAR_4', 8.2, 1800),          // ~210 000
   },
   {
     pickupAddress: 'Phu My Hung, Q7, TP.HCM',
@@ -568,7 +600,8 @@ const BOOKINGS = [
     dropoffAddress: 'Thu Thiem, TP.HCM',
     dropoffLat: 10.7875, dropoffLng: 106.7342,
     vehicleType: 'CAR_7', paymentMethod: 'WALLET',
-    estimatedFare: 85000, estimatedDistance: 12.5, estimatedDuration: 2400,
+    estimatedDistance: 12.5, estimatedDuration: 2400,
+    estimatedFare: calcFare('CAR_7', 12.5, 2400),         // ~369 000
   },
   {
     pickupAddress: 'Landmark 81, Binh Thanh, TP.HCM',
@@ -576,7 +609,8 @@ const BOOKINGS = [
     dropoffAddress: 'Crescent Mall, Q7, TP.HCM',
     dropoffLat: 10.7299, dropoffLng: 106.7212,
     vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    estimatedFare: 135000, estimatedDistance: 10.7, estimatedDuration: 2100,
+    estimatedDistance: 10.7, estimatedDuration: 2100,
+    estimatedFare: calcFare('CAR_4', 10.7, 2100),         // ~257 000
   },
   {
     pickupAddress: 'Vinhomes Grand Park, Thu Duc, TP.HCM',
@@ -584,7 +618,8 @@ const BOOKINGS = [
     dropoffAddress: 'Ben Xe Mien Dong Moi, Thu Duc, TP.HCM',
     dropoffLat: 10.8412, dropoffLng: 106.8098,
     vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    estimatedFare: 52000, estimatedDistance: 6.4, estimatedDuration: 960,
+    estimatedDistance: 6.4, estimatedDuration: 960,
+    estimatedFare: calcFare('CAR_4', 6.4, 960),           // ~156 000
   },
   {
     pickupAddress: 'Aeon Mall Tan Phu, TP.HCM',
@@ -592,7 +627,8 @@ const BOOKINGS = [
     dropoffAddress: 'University of Economics HCMC, Q10, TP.HCM',
     dropoffLat: 10.7623, dropoffLng: 106.6825,
     vehicleType: 'CAR_7', paymentMethod: 'WALLET',
-    estimatedFare: 148000, estimatedDistance: 14.2, estimatedDuration: 2280,
+    estimatedDistance: 14.2, estimatedDuration: 2280,
+    estimatedFare: calcFare('CAR_7', 14.2, 2280),         // ~396 000
   },
   {
     pickupAddress: 'Bệnh viện Chợ Rẫy, Q5, TP.HCM',
@@ -600,7 +636,8 @@ const BOOKINGS = [
     dropoffAddress: 'Bệnh viện Đại học Y Dược, Q5, TP.HCM',
     dropoffLat: 10.7614, dropoffLng: 106.6779,
     vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
-    estimatedFare: 22000, estimatedDistance: 1.8, estimatedDuration: 420,
+    estimatedDistance: 1.8, estimatedDuration: 420,
+    estimatedFare: calcFare('MOTORBIKE', 1.8, 420),       // ~24 000
   },
   {
     pickupAddress: 'Đại học Bách Khoa TPHCM, Q10',
@@ -608,7 +645,8 @@ const BOOKINGS = [
     dropoffAddress: 'Hồ Con Rùa, Q3, TP.HCM',
     dropoffLat: 10.7793, dropoffLng: 106.6957,
     vehicleType: 'SCOOTER', paymentMethod: 'CARD',
-    estimatedFare: 35000, estimatedDistance: 2.4, estimatedDuration: 600,
+    estimatedDistance: 2.4, estimatedDuration: 600,
+    estimatedFare: calcFare('SCOOTER', 2.4, 600),         // ~44 000 (short trip)
   },
   {
     pickupAddress: 'Sân vận động Thống Nhất, Q10',
@@ -616,7 +654,8 @@ const BOOKINGS = [
     dropoffAddress: 'Dinh Độc Lập, Q1, TP.HCM',
     dropoffLat: 10.7793, dropoffLng: 106.6957,
     vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    estimatedFare: 38000, estimatedDistance: 2.9, estimatedDuration: 720,
+    estimatedDistance: 2.9, estimatedDuration: 720,
+    estimatedFare: calcFare('CAR_4', 2.9, 720),           // ~96 000
   },
   {
     pickupAddress: 'Lotte Mart Gò Vấp, TP.HCM',
@@ -624,213 +663,294 @@ const BOOKINGS = [
     dropoffAddress: 'Công viên Hoàng Văn Thụ, Tân Bình',
     dropoffLat: 10.8013, dropoffLng: 106.6571,
     vehicleType: 'CAR_7', paymentMethod: 'WALLET',
-    estimatedFare: 72000, estimatedDistance: 5.8, estimatedDuration: 1200,
+    estimatedDistance: 5.8, estimatedDuration: 1200,
+    estimatedFare: calcFare('CAR_7', 5.8, 1200),          // ~197 000
   },
 ];
 
 const RIDE_SEEDS = [
-  // ---- COMPLETED rides (cash/momo/vnpay) ----
+  // ---- COMPLETED rides ----
+  // [AI coverage] off-peak short trip, cash, CAR_4
   {
     customerIndex: 0, driverIndex: 0, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
     pickupAddress: '227 Nguyen Van Cu, Q5, TP.HCM', pickupLat: 10.7628, pickupLng: 106.6825,
     dropoffAddress: 'Saigon Centre, Le Loi, Q1, TP.HCM', dropoffLat: 10.7721, dropoffLng: 106.7002,
-    distance: 3.5, duration: 900, fare: 45000, paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
+    distance: 3.5, duration: 900,
+    fare: calcFare('CAR_4', 3.5, 900),                    // 111 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
   },
+  // [AI coverage] rush-hour medium trip, MOMO, CAR_4
   {
     customerIndex: 1, driverIndex: 1, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'MOMO',
     pickupAddress: 'Ben Thanh Market, Q1, TP.HCM', pickupLat: 10.7726, pickupLng: 106.698,
     dropoffAddress: 'Tan Son Nhat Airport, TP.HCM', dropoffLat: 10.8185, dropoffLng: 106.6588,
-    distance: 8.2, duration: 1800, fare: 120000, paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
+    distance: 8.2, duration: 1800,
+    fare: calcFare('CAR_4', 8.2, 1800),                   // 210 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
   },
+  // [AI coverage] rush-hour long trip, VNPAY, CAR_7
   {
     customerIndex: 2, driverIndex: 2, status: 'COMPLETED', vehicleType: 'CAR_7', paymentMethod: 'VNPAY',
     pickupAddress: 'Phu My Hung, Q7, TP.HCM', pickupLat: 10.7294, pickupLng: 106.7187,
     dropoffAddress: 'Thu Thiem, TP.HCM', dropoffLat: 10.7875, dropoffLng: 106.7342,
-    distance: 12.5, duration: 2400, fare: 85000, paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
+    distance: 12.5, duration: 2400,
+    fare: calcFare('CAR_7', 12.5, 2400),                  // 369 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
   },
+  // [AI coverage] off-peak very short trip, cash, MOTORBIKE
   {
     customerIndex: 3, driverIndex: 3, status: 'COMPLETED', vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
     pickupAddress: 'Chợ Bến Thành, Q1, TP.HCM', pickupLat: 10.7726, pickupLng: 106.6981,
     dropoffAddress: 'Nhà thờ Đức Bà, Q1, TP.HCM', dropoffLat: 10.7798, dropoffLng: 106.699,
-    distance: 1.2, duration: 360, fare: 18000, paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
+    distance: 1.2, duration: 360,
+    fare: calcFare('MOTORBIKE', 1.2, 360),                // 20 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
   },
+  // [AI coverage] off-peak medium trip, MOMO, SCOOTER
   {
     customerIndex: 4, driverIndex: 4, status: 'COMPLETED', vehicleType: 'SCOOTER', paymentMethod: 'MOMO',
     pickupAddress: 'Đại học Bách Khoa TPHCM, Q10', pickupLat: 10.7721, pickupLng: 106.6589,
     dropoffAddress: 'Công viên 23/9, Q1, TP.HCM', dropoffLat: 10.7707, dropoffLng: 106.6972,
-    distance: 3.8, duration: 780, fare: 32000, paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
+    distance: 3.8, duration: 780,
+    fare: calcFare('SCOOTER', 3.8, 780),                  // 57 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
   },
+  // [AI coverage] rush-hour long trip, cash, CAR_4
   {
     customerIndex: 5, driverIndex: 5, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
     pickupAddress: 'Landmark 81, Binh Thanh, TP.HCM', pickupLat: 10.7949, pickupLng: 106.7219,
     dropoffAddress: 'Crescent Mall, Q7, TP.HCM', dropoffLat: 10.7299, dropoffLng: 106.7212,
-    distance: 10.7, duration: 2100, fare: 135000, paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
+    distance: 10.7, duration: 2100,
+    fare: calcFare('CAR_4', 10.7, 2100),                  // 257 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
   },
+  // [AI coverage] off-peak medium trip, VNPAY, CAR_4
   {
     customerIndex: 6, driverIndex: 6, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'VNPAY',
     pickupAddress: 'Lotte Mart Gò Vấp, TP.HCM', pickupLat: 10.8312, pickupLng: 106.6837,
-    dropoffAddress: 'Bệnh viện Gia Định, Bình Thạnh',
-    dropoffLat: 10.8156, dropoffLng: 106.7021,
-    distance: 5.8, duration: 1080, fare: 63000, paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
+    dropoffAddress: 'Bệnh viện Gia Định, Bình Thạnh', dropoffLat: 10.8156, dropoffLng: 106.7021,
+    distance: 5.8, duration: 1080,
+    fare: calcFare('CAR_4', 5.8, 1080),                   // 151 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
   },
+  // [AI coverage] off-peak very short trip, cash, MOTORBIKE
   {
     customerIndex: 7, driverIndex: 7, status: 'COMPLETED', vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
     pickupAddress: 'Ga Sài Gòn, Q3, TP.HCM', pickupLat: 10.7814, pickupLng: 106.6819,
     dropoffAddress: 'Hồ Con Rùa, Q3, TP.HCM', dropoffLat: 10.7793, dropoffLng: 106.6957,
-    distance: 1.5, duration: 480, fare: 20000, paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
+    distance: 1.5, duration: 480,
+    fare: calcFare('MOTORBIKE', 1.5, 480),                // 23 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
   },
+  // [AI coverage] off-peak medium trip, MOMO, CAR_7
   {
     customerIndex: 8, driverIndex: 8, status: 'COMPLETED', vehicleType: 'CAR_7', paymentMethod: 'MOMO',
     pickupAddress: 'Vinhomes Grand Park, Thu Duc, TP.HCM', pickupLat: 10.8434, pickupLng: 106.8287,
     dropoffAddress: 'Ben Xe Mien Dong Moi, Thu Duc', dropoffLat: 10.8412, dropoffLng: 106.8098,
-    distance: 6.4, duration: 960, fare: 52000, paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
+    distance: 6.4, duration: 960,
+    fare: calcFare('CAR_7', 6.4, 960),                    // 199 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
   },
+  // [AI coverage] rush-hour very long trip, cash, CAR_4
   {
     customerIndex: 9, driverIndex: 9, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
     pickupAddress: 'Aeon Mall Tan Phu, TP.HCM', pickupLat: 10.8018, pickupLng: 106.6187,
     dropoffAddress: 'Trường ĐH Kinh Tế TP.HCM, Q10', dropoffLat: 10.7623, dropoffLng: 106.6825,
-    distance: 14.2, duration: 2280, fare: 148000, paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
+    distance: 14.2, duration: 2280,
+    fare: calcFare('CAR_4', 14.2, 2280),                  // 315 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
   },
+  // [AI coverage] off-peak short trip (<2.5km), VNPAY, SCOOTER
   {
     customerIndex: 10, driverIndex: 0, status: 'COMPLETED', vehicleType: 'SCOOTER', paymentMethod: 'VNPAY',
     pickupAddress: 'RMIT Sài Gòn, Q7, TP.HCM', pickupLat: 10.7316, pickupLng: 106.7222,
     dropoffAddress: 'Phú Mỹ Hưng, Q7, TP.HCM', dropoffLat: 10.7294, dropoffLng: 106.7187,
-    distance: 2.1, duration: 540, fare: 27000, paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
+    distance: 2.1, duration: 540,
+    fare: calcFare('SCOOTER', 2.1, 540),                  // 41 000 (short trip)
+    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
   },
+  // [AI coverage] off-peak ultra-short trip (<2.5km), MOMO, CAR_4
   {
     customerIndex: 11, driverIndex: 1, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'MOMO',
     pickupAddress: 'Dinh Độc Lập, Q1, TP.HCM', pickupLat: 10.7793, pickupLng: 106.6957,
     dropoffAddress: 'Bảo tàng Chiến tranh, Q3, TP.HCM', dropoffLat: 10.7785, dropoffLng: 106.6896,
-    distance: 0.9, duration: 300, fare: 25000, paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
+    distance: 0.9, duration: 300,
+    fare: calcFare('CAR_4', 0.9, 300),                    // 59 000 (short trip)
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
   },
+  // [AI coverage] off-peak medium trip, cash, MOTORBIKE
   {
     customerIndex: 12, driverIndex: 2, status: 'COMPLETED', vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
     pickupAddress: 'Sân vận động Thống Nhất, Q10', pickupLat: 10.7817, pickupLng: 106.6834,
     dropoffAddress: 'Bệnh viện Chợ Rẫy, Q5, TP.HCM', dropoffLat: 10.7555, dropoffLng: 106.6721,
-    distance: 4.1, duration: 840, fare: 38000, paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
+    distance: 4.1, duration: 840,
+    fare: calcFare('MOTORBIKE', 4.1, 840),                // 42 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
   },
+  // [AI coverage] rush-hour medium trip, VNPAY, CAR_7
   {
     customerIndex: 13, driverIndex: 3, status: 'COMPLETED', vehicleType: 'CAR_7', paymentMethod: 'VNPAY',
     pickupAddress: 'Bến cảng Nhà Rồng, Q4, TP.HCM', pickupLat: 10.7647, pickupLng: 106.7046,
     dropoffAddress: 'Khu đô thị Sala, TP.Thủ Đức', dropoffLat: 10.7857, dropoffLng: 106.7466,
-    distance: 7.3, duration: 1380, fare: 78000, paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
+    distance: 7.3, duration: 1380,
+    fare: calcFare('CAR_7', 7.3, 1380),                   // 232 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
   },
+  // [AI coverage] off-peak short trip, cash, CAR_4
   {
     customerIndex: 14, driverIndex: 4, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
     pickupAddress: 'Chợ Tân Bình, TP.HCM', pickupLat: 10.7967, pickupLng: 106.6516,
     dropoffAddress: 'Sân bay Tân Sơn Nhất, TP.HCM', dropoffLat: 10.8185, dropoffLng: 106.6588,
-    distance: 3.2, duration: 720, fare: 55000, paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
+    distance: 3.2, duration: 720,
+    fare: calcFare('CAR_4', 3.2, 720),                    // 101 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
   },
   // ---- CANCELLED rides ----
   {
     customerIndex: 15, driverIndex: 5, status: 'CANCELLED', vehicleType: 'CAR_4', paymentMethod: 'MOMO',
     pickupAddress: 'Nhà hàng Phở Hòa, Q10, TP.HCM', pickupLat: 10.7762, pickupLng: 106.6751,
     dropoffAddress: 'Chợ Bình Thới, Q11, TP.HCM', dropoffLat: 10.7688, dropoffLng: 106.6573,
-    distance: 2.8, duration: 660, fare: 40000, paymentStatus: 'FAILED', paymentProvider: 'MOMO', paymentCompleted: false,
+    distance: 2.8, duration: 660,
+    fare: calcFare('CAR_4', 2.8, 660),                    // 93 000
+    paymentStatus: 'FAILED', paymentProvider: 'MOMO', paymentCompleted: false,
   },
   {
     customerIndex: 16, driverIndex: undefined, status: 'CANCELLED', vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
     pickupAddress: 'Trường THPT Lê Hồng Phong, Q5', pickupLat: 10.7519, pickupLng: 106.6742,
     dropoffAddress: 'Công viên Lê Văn Tám, Q1', dropoffLat: 10.7838, dropoffLng: 106.7013,
-    distance: 4.7, duration: 900, fare: 42000, paymentStatus: 'FAILED', paymentProvider: 'MOCK', paymentCompleted: false,
+    distance: 4.7, duration: 900,
+    fare: calcFare('MOTORBIKE', 4.7, 900),                // 46 000
+    paymentStatus: 'FAILED', paymentProvider: 'MOCK', paymentCompleted: false,
   },
   // ---- ASSIGNED (driver matched, not picked up yet) ----
   {
     customerIndex: 17, driverIndex: 6, status: 'ASSIGNED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
     pickupAddress: 'Vinhomes Central Park, Bình Thạnh', pickupLat: 10.7941, pickupLng: 106.7207,
     dropoffAddress: 'Bạch Đằng Wharf, Q1, TP.HCM', dropoffLat: 10.7768, dropoffLng: 106.7067,
-    distance: 5.1, duration: 840, fare: 56000, paymentStatus: 'PENDING', paymentProvider: 'MOCK', paymentCompleted: false,
+    distance: 5.1, duration: 840,
+    fare: calcFare('CAR_4', 5.1, 840),                    // 133 000
+    paymentStatus: 'PENDING', paymentProvider: 'MOCK', paymentCompleted: false,
   },
   // ---- PICKING_UP (driver on the way to customer) ----
   {
     customerIndex: 18, driverIndex: 7, status: 'PICKING_UP', vehicleType: 'CAR_7', paymentMethod: 'VNPAY',
     pickupAddress: 'BigC An Lạc, Bình Tân, TP.HCM', pickupLat: 10.7521, pickupLng: 106.6092,
     dropoffAddress: 'Đầm Sen, Q11, TP.HCM', dropoffLat: 10.7666, dropoffLng: 106.6382,
-    distance: 5.4, duration: 1020, fare: 60000, paymentStatus: 'PENDING', paymentProvider: 'VNPAY', paymentCompleted: false,
+    distance: 5.4, duration: 1020,
+    fare: calcFare('CAR_7', 5.4, 1020),                   // 183 000
+    paymentStatus: 'PENDING', paymentProvider: 'VNPAY', paymentCompleted: false,
   },
   // ---- IN_PROGRESS (ride currently happening) ----
   {
     customerIndex: 19, driverIndex: 8, status: 'IN_PROGRESS', vehicleType: 'CAR_4', paymentMethod: 'MOMO',
     pickupAddress: 'Landmark 81, Bình Thạnh, TP.HCM', pickupLat: 10.7949, pickupLng: 106.7219,
     dropoffAddress: 'Crescent Mall, Q7, TP.HCM', dropoffLat: 10.7299, dropoffLng: 106.7212,
-    distance: 10.7, duration: 2100, fare: 135000, paymentStatus: 'PROCESSING', paymentProvider: 'MOMO', paymentCompleted: false,
+    distance: 10.7, duration: 2100,
+    fare: calcFare('CAR_4', 10.7, 2100),                  // 257 000
+    paymentStatus: 'PROCESSING', paymentProvider: 'MOMO', paymentCompleted: false,
   },
-  // ---- FINDING_DRIVER ----
+  // ---- FINDING_DRIVER (surge 1.2 — rush-hour demand spike) ----
   {
     customerIndex: 0, driverIndex: undefined, status: 'FINDING_DRIVER', vehicleType: 'CAR_7', paymentMethod: 'MOMO',
     pickupAddress: 'Aeon Mall Tân Phú, TP.HCM', pickupLat: 10.8018, pickupLng: 106.6187,
     dropoffAddress: 'Trường ĐH Kinh Tế TP.HCM, Q10', dropoffLat: 10.7623, dropoffLng: 106.6825,
-    distance: 14.2, duration: 2280, fare: 148000, paymentStatus: 'REQUIRES_ACTION', paymentProvider: 'MOMO', paymentCompleted: false,
+    distance: 14.2, duration: 2280,
+    fare: calcFare('CAR_7', 14.2, 2280, 1.2),             // 475 000 (surge 1.2)
+    paymentStatus: 'REQUIRES_ACTION', paymentProvider: 'MOMO', paymentCompleted: false,
   },
-  // ---- More COMPLETED ----
+  // ---- More COMPLETED (varied distances, all vehicle types) ----
   {
     customerIndex: 1, driverIndex: 9, status: 'COMPLETED', vehicleType: 'SCOOTER', paymentMethod: 'CASH',
     pickupAddress: 'Trường ĐH Sư Phạm TPHCM, Q5', pickupLat: 10.7627, pickupLng: 106.6844,
     dropoffAddress: 'Siêu thị Co.opmart Đinh Tiên Hoàng, Bình Thạnh', dropoffLat: 10.8024, dropoffLng: 106.7113,
-    distance: 5.9, duration: 1140, fare: 48000, paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
+    distance: 5.9, duration: 1140,
+    fare: calcFare('SCOOTER', 5.9, 1140),                 // 78 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
   },
   {
     customerIndex: 2, driverIndex: 0, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'VNPAY',
     pickupAddress: 'Bệnh viện Đại học Y Dược, Q5, TP.HCM', pickupLat: 10.7614, pickupLng: 106.6779,
     dropoffAddress: 'Trung tâm thương mại Bitexco, Q1', dropoffLat: 10.7722, dropoffLng: 106.7047,
-    distance: 2.7, duration: 660, fare: 42000, paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
+    distance: 2.7, duration: 660,
+    fare: calcFare('CAR_4', 2.7, 660),                    // 91 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
   },
   {
     customerIndex: 3, driverIndex: 1, status: 'COMPLETED', vehicleType: 'MOTORBIKE', paymentMethod: 'MOMO',
     pickupAddress: 'Công viên Hoàng Văn Thụ, Tân Bình', pickupLat: 10.8013, pickupLng: 106.6571,
     dropoffAddress: 'Chợ Phạm Văn Hai, Tân Bình', dropoffLat: 10.7986, dropoffLng: 106.6493,
-    distance: 1.0, duration: 300, fare: 16000, paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
+    distance: 1.0, duration: 300,
+    fare: calcFare('MOTORBIKE', 1.0, 300),                // 18 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
   },
   {
     customerIndex: 4, driverIndex: 2, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
     pickupAddress: 'Đại học Quốc gia TP.HCM, Thu Duc', pickupLat: 10.8701, pickupLng: 106.8037,
     dropoffAddress: 'QTSC, Quận 12, TP.HCM', dropoffLat: 10.8642, dropoffLng: 106.7978,
-    distance: 2.3, duration: 480, fare: 30000, paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
+    distance: 2.3, duration: 480,
+    fare: calcFare('CAR_4', 2.3, 480),                    // 86 000 (short trip)
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
   },
   {
     customerIndex: 5, driverIndex: 3, status: 'COMPLETED', vehicleType: 'CAR_7', paymentMethod: 'VNPAY',
     pickupAddress: 'Khu đô thị Sala, TP.Thủ Đức', pickupLat: 10.7857, pickupLng: 106.7466,
     dropoffAddress: 'Bảo tàng TP.HCM, Q1', dropoffLat: 10.7773, dropoffLng: 106.7008,
-    distance: 8.6, duration: 1560, fare: 95000, paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
+    distance: 8.6, duration: 1560,
+    fare: calcFare('CAR_7', 8.6, 1560),                   // 264 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
   },
 ];
 
 const FOCUSED_COMPLETED_RIDE_SEEDS: typeof RIDE_SEEDS = [
+  // Bến Thành cluster — short trips for UI distance/rating test
   {
     customerIndex: 0, driverIndex: 0, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
     pickupAddress: 'Cửa Nam Chợ Bến Thành, Q1, TP.HCM', pickupLat: 10.77255, pickupLng: 106.69815,
     dropoffAddress: 'Dinh Độc Lập, Q1, TP.HCM', dropoffLat: 10.77930, dropoffLng: 106.69570,
-    distance: 1.1, duration: 360, fare: 26000, paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
+    distance: 1.1, duration: 360,
+    fare: calcFare('CAR_4', 1.1, 360),                    // 64 000 (short trip)
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
   },
   {
     customerIndex: 1, driverIndex: 1, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'MOMO',
     pickupAddress: 'Ga Metro Bến Thành, Q1, TP.HCM', pickupLat: 10.77305, pickupLng: 106.69775,
     dropoffAddress: 'Saigon Centre, Q1, TP.HCM', dropoffLat: 10.77210, dropoffLng: 106.70020,
-    distance: 1.4, duration: 420, fare: 30000, paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
+    distance: 1.4, duration: 420,
+    fare: calcFare('CAR_4', 1.4, 420),                    // 70 000 (short trip)
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
   },
   {
     customerIndex: 2, driverIndex: 7, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'VNPAY',
     pickupAddress: 'Công viên 23/9 - Bến Thành, Q1, TP.HCM', pickupLat: 10.77095, pickupLng: 106.69710,
     dropoffAddress: 'Hồ Con Rùa, Q3, TP.HCM', dropoffLat: 10.77930, dropoffLng: 106.69570,
-    distance: 2.0, duration: 540, fare: 38000, paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
+    distance: 2.0, duration: 540,
+    fare: calcFare('CAR_4', 2.0, 540),                    // 83 000 (short trip)
+    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
   },
+  // Tân Sơn Nhất cluster
   {
     customerIndex: 3, driverIndex: 10, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
     pickupAddress: 'Ga Quốc Nội - Sân bay Tân Sơn Nhất, TP.HCM', pickupLat: 10.81895, pickupLng: 106.65840,
     dropoffAddress: 'Công viên Hoàng Văn Thụ, Tân Bình, TP.HCM', dropoffLat: 10.80130, dropoffLng: 106.65710,
-    distance: 2.3, duration: 600, fare: 34000, paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
+    distance: 2.3, duration: 600,
+    fare: calcFare('CAR_4', 2.3, 600),                    // 90 000 (short trip)
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
   },
   {
     customerIndex: 4, driverIndex: 14, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'MOMO',
     pickupAddress: 'Ga Quốc Tế - Sân bay Tân Sơn Nhất, TP.HCM', pickupLat: 10.81785, pickupLng: 106.66455,
     dropoffAddress: 'Lăng Cha Cả, Tân Bình, TP.HCM', dropoffLat: 10.80455, dropoffLng: 106.65635,
-    distance: 2.8, duration: 720, fare: 38000, paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
+    distance: 2.8, duration: 720,
+    fare: calcFare('CAR_4', 2.8, 720),                    // 95 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
   },
   {
     customerIndex: 5, driverIndex: 18, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'VNPAY',
     pickupAddress: 'Đường Trường Sơn - cổng sân bay Tân Sơn Nhất, TP.HCM', pickupLat: 10.81265, pickupLng: 106.66410,
     dropoffAddress: 'E.Town Cộng Hòa, Tân Bình, TP.HCM', dropoffLat: 10.80120, dropoffLng: 106.65320,
-    distance: 3.1, duration: 780, fare: 42000, paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
+    distance: 3.1, duration: 780,
+    fare: calcFare('CAR_4', 3.1, 780),                    // 101 000
+    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
   },
 ];
 

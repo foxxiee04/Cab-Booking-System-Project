@@ -1,0 +1,27 @@
+TIÊU ĐỀ: Tài khoản và ví điện tử
+DANH MỤC: tài khoản, ví, nạp tiền, rút tiền, đăng ký, đăng nhập, mật khẩu
+
+Đăng ký tài khoản:
+- Mở ứng dụng và nhấn "Đăng ký".
+- Nhập số điện thoại và nhận mã OTP xác minh.
+- Điền họ tên, email và mật khẩu.
+- Mật khẩu phải có ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường và số.
+
+Đăng nhập:
+- Dùng số điện thoại + mật khẩu đã đăng ký.
+- Nếu quên mật khẩu: Nhấn "Quên mật khẩu" → nhập số điện thoại → nhận OTP → đặt mật khẩu mới.
+
+Ví CabBooking (dành cho tài xế):
+- Tài xế nhận thu nhập từ các chuyến online vào ví.
+- Có thể nạp tiền vào ví qua MoMo hoặc VNPay.
+- Rút tiền về tài khoản ngân hàng (xử lý trong 1-3 ngày làm việc).
+- Số dư ví tối thiểu phải duy trì: 50.000đ để tiếp tục nhận chuyến.
+
+Chỉnh sửa thông tin tài khoản:
+- Vào "Hồ sơ của tôi" để thay đổi ảnh đại diện, họ tên, email.
+- Số điện thoại không thể thay đổi sau khi đăng ký (là định danh chính).
+
+Bảo mật tài khoản:
+- Không chia sẻ mã OTP với bất kỳ ai.
+- Nhân viên CabBooking không bao giờ yêu cầu OTP.
+- Đăng xuất tài khoản trên thiết bị không sử dụng nữa.

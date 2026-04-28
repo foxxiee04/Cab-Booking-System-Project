@@ -10,6 +10,7 @@ import { commissionService, TripContext, DriverStats } from './commission.servic
 import { WalletService } from './wallet.service';
 import { IncentiveService } from './incentive.service';
 import { VoucherService } from './voucher.service';
+import { resolveDriverUserId } from '../utils/resolve-driver-id';
 
 interface RideCompletedPayload {
   rideId: string;
@@ -615,9 +616,14 @@ export class PaymentService {
       // Notify wallet-service of the settled earnings (idempotent via rideId key)
       if (driverId) {
         try {
+          // Resolve the auth userId for this driver profile so wallet-service can
+          // find the correct DriverWallet row (keyed by userId, not profileId).
+          const driverUserId = await resolveDriverUserId(driverId).catch(() => null);
+
           await this.eventPublisher.publish('driver.earning.settled', {
             rideId,
             driverId,
+            driverUserId: driverUserId ?? driverId,
             paymentMethod: mappedMethod,
             grossFare:     earnings.grossFare,
             commissionRate: earnings.commissionRate,

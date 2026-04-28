@@ -264,9 +264,14 @@ const History: React.FC = () => {
       )}
 
       {!loading && filteredRides.length === 0 && (
-        <Box sx={{ py: 6, textAlign: 'center' }}>
-          <DriveEtaRounded sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
-          <Typography variant="body2" color="text.secondary">{t('history.noRides')}</Typography>
+        <Box sx={{ py: 6, textAlign: 'center', bgcolor: '#f8fafc', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+          <Box sx={{ width: 64, height: 64, borderRadius: '50%', bgcolor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 2 }}>
+            <DriveEtaRounded sx={{ fontSize: 32, color: 'text.disabled' }} />
+          </Box>
+          <Typography variant="subtitle2" fontWeight={700} gutterBottom>{t('history.noRides', 'Chưa có chuyến nào')}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {searchQuery ? 'Không tìm thấy kết quả phù hợp' : 'Các chuyến đã hoàn thành sẽ xuất hiện ở đây.'}
+          </Typography>
         </Box>
       )}
 
@@ -281,8 +286,10 @@ const History: React.FC = () => {
               sx={{
                 cursor: 'pointer',
                 borderRadius: 3,
-                transition: 'box-shadow 0.15s',
-                '&:hover': { boxShadow: 4, borderColor: 'primary.main' },
+                transition: 'all 0.15s',
+                borderLeft: `3px solid`,
+                borderLeftColor: ride.status === 'COMPLETED' ? 'success.main' : ride.status === 'CANCELLED' ? 'error.main' : 'primary.main',
+                '&:hover': { boxShadow: 3, transform: 'translateX(2px)' },
               }}
             >
               <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>

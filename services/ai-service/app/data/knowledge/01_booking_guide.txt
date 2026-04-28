@@ -1,0 +1,18 @@
+TIÊU ĐỀ: Hướng dẫn đặt xe
+DANH MỤC: đặt xe, hướng dẫn, cách đặt
+
+Cách đặt xe trên ứng dụng CabBooking:
+1. Mở ứng dụng và đăng nhập vào tài khoản của bạn.
+2. Hệ thống sẽ tự động xác định vị trí hiện tại của bạn làm điểm đón.
+3. Nhập địa chỉ điểm đến vào ô tìm kiếm.
+4. Chọn loại xe phù hợp: Xe máy (MOTORBIKE), Xe ô tô 4 chỗ (CAR_4), hoặc Xe ô tô 7 chỗ (CAR_7).
+5. Xem giá ước tính được hiển thị trước khi xác nhận.
+6. Chọn phương thức thanh toán: Tiền mặt (CASH), Ví MoMo, hoặc VNPay.
+7. Nhấn "Đặt xe" để xác nhận.
+8. Hệ thống sẽ tìm tài xế gần nhất và thông báo khi có tài xế nhận chuyến.
+
+Thời gian tìm tài xế thường từ 1-5 phút. Nếu không tìm được tài xế sau 5 phút, chuyến sẽ tự động hủy.
+
+Bạn có thể theo dõi vị trí tài xế trên bản đồ sau khi tài xế đã nhận chuyến.
+
+Để hủy chuyến, nhấn vào nút "Hủy chuyến" trong màn hình theo dõi chuyến đi. Lưu ý: hủy nhiều lần có thể ảnh hưởng đến tài khoản.

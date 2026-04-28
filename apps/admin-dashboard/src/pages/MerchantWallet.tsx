@@ -403,20 +403,22 @@ const MerchantWallet: React.FC = () => {
     <>
     <Box>
       {/* ── Header ── */}
-      <Stack direction="row" alignItems="center" spacing={1} mb={3}>
-        <AccountBalance color="primary" sx={{ fontSize: 32 }} />
-        <Typography variant="h5" fontWeight={700}>
-          Ví nền tảng
-        </Typography>
-        <Box flex={1} />
-        <Tooltip title="Làm mới">
-          <IconButton
-            onClick={() => { fetchBalance(); fetchLedger(); fetchRecon(); fetchWallets(); fetchBankAccounts(); fetchBankTxns(); }}
-          >
-            <Refresh />
-          </IconButton>
-        </Tooltip>
-      </Stack>
+      <Box sx={{ background: (theme: any) => `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 100%)`, borderRadius: 3, p: 3, mb: 3, color: '#fff' }}>
+        <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5}>
+          <Box sx={{ p: 1.25, borderRadius: 2.5, bgcolor: 'rgba(255,255,255,0.1)' }}>
+            <AccountBalance sx={{ fontSize: 28, color: '#93c5fd' }} />
+          </Box>
+          <Box flex={1}>
+            <Typography variant="h5" fontWeight={800}>Ví nền tảng</Typography>
+            <Typography variant="body2" sx={{ opacity: 0.7 }}>Quản lý tài chính và đối soát sổ cái hệ thống</Typography>
+          </Box>
+          <Tooltip title="Làm mới tất cả">
+            <IconButton onClick={() => { fetchBalance(); fetchLedger(); fetchRecon(); fetchWallets(); fetchBankAccounts(); fetchBankTxns(); }} sx={{ color: '#93c5fd', bgcolor: 'rgba(255,255,255,0.08)', '&:hover': { bgcolor: 'rgba(255,255,255,0.15)' } }}>
+              <Refresh />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      </Box>
 
       {/* ── Section 1: Balance Snapshot ── */}
       <Card sx={{ mb: 3 }} elevation={2}>
@@ -525,12 +527,12 @@ const MerchantWallet: React.FC = () => {
               <Typography variant="subtitle2" fontWeight={600}>Phân tích danh mục</Typography>
               <TableContainer component={Paper} variant="outlined">
                 <Table size="small">
-                  <TableHead>
+                  <TableHead sx={{ '& .MuiTableCell-head': { bgcolor: '#f1f5f9', fontWeight: 700, fontSize: 12 } }}>
                     <TableRow>
-                      <TableCell><strong>Danh mục</strong></TableCell>
-                      <TableCell align="right"><strong>THU</strong></TableCell>
-                      <TableCell align="right"><strong>CHI</strong></TableCell>
-                      <TableCell align="right"><strong>Ròng</strong></TableCell>
+                      <TableCell>Danh mục</TableCell>
+                      <TableCell align="right">THU</TableCell>
+                      <TableCell align="right">CHI</TableCell>
+                      <TableCell align="right">Ròng</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -603,7 +605,7 @@ const MerchantWallet: React.FC = () => {
         <CardContent sx={{ p: 0 }}>
           <TableContainer>
             <Table size="small">
-              <TableHead>
+              <TableHead sx={{ '& .MuiTableCell-head': { bgcolor: '#f1f5f9', fontWeight: 700, fontSize: 12 } }}>
                 <TableRow>
                   <TableCell>Thời gian</TableCell>
                   <TableCell>Loại</TableCell>
@@ -652,7 +654,7 @@ const MerchantWallet: React.FC = () => {
                     >
                       {e.type === 'IN' ? '+' : '−'}{vnd(e.amount)}
                     </TableCell>
-                    <TableCell sx={{ fontSize: 11, fontFamily: 'monospace' }}>
+                    <TableCell sx={{ fontSize: 12, fontFamily: 'monospace' }}>
                       {e.referenceId ? (
                         <Stack direction="row" alignItems="center" spacing={0.5}>
                           <span>{e.referenceId.slice(0, 8)}…</span>
@@ -661,7 +663,7 @@ const MerchantWallet: React.FC = () => {
                               size="small"
                               onClick={() => copyToClipboard(e.referenceId!, () => setSnackMsg('Đã sao chép mã tham chiếu'))}
                             >
-                              <ContentCopy sx={{ fontSize: 12 }} />
+                              <ContentCopy sx={{ fontSize: 14 }} />
                             </IconButton>
                           </Tooltip>
                         </Stack>
@@ -711,7 +713,7 @@ const MerchantWallet: React.FC = () => {
         <CardContent sx={{ p: 0 }}>
           <TableContainer>
             <Table size="small">
-              <TableHead>
+              <TableHead sx={{ '& .MuiTableCell-head': { bgcolor: '#f1f5f9', fontWeight: 700, fontSize: 12 } }}>
                 <TableRow>
                   <TableCell>Mã tài xế</TableCell>
                   <TableCell align="right">Số dư</TableCell>
@@ -720,7 +722,8 @@ const MerchantWallet: React.FC = () => {
                   <TableCell>Trạng thái</TableCell>
                   <TableCell>Kích hoạt</TableCell>
                   <TableCell>Cập nhật</TableCell>
-                  <TableCell align="center">Thao tác</TableCell>                </TableRow>
+                  <TableCell align="center">Thao tác</TableCell>
+                </TableRow>
               </TableHead>
               <TableBody>
                 {wallets.length === 0 && !walletsLoading && (
@@ -737,7 +740,7 @@ const MerchantWallet: React.FC = () => {
                         <span title={w.driverId}>{w.driverId.slice(0, 12)}…</span>
                         <Tooltip title="Sao chép ID">
                           <IconButton size="small" onClick={() => copyToClipboard(w.driverId, () => setSnackMsg('Đã sao chép ID tài xế'))}>
-                            <ContentCopy sx={{ fontSize: 11 }} />
+                            <ContentCopy sx={{ fontSize: 14 }} />
                           </IconButton>
                         </Tooltip>
                       </Stack>
@@ -771,7 +774,7 @@ const MerchantWallet: React.FC = () => {
                         color={w.initialActivationCompleted ? 'success' : 'warning'}
                       />
                     </TableCell>
-                    <TableCell sx={{ fontSize: 11 }}>{dateStr(w.updatedAt)}</TableCell>
+                    <TableCell sx={{ fontSize: 12 }}>{dateStr(w.updatedAt)}</TableCell>
                     <TableCell align="center">
                       {w.status === 'ACTIVE' && (
                         <Tooltip title="Ngừng hoạt động tài xế này">
@@ -836,7 +839,7 @@ const MerchantWallet: React.FC = () => {
         <CardContent sx={{ p: 0 }}>
           <TableContainer>
             <Table size="small">
-              <TableHead>
+              <TableHead sx={{ '& .MuiTableCell-head': { bgcolor: '#f1f5f9', fontWeight: 700, fontSize: 12 } }}>
                 <TableRow>
                   <TableCell>ID</TableCell>
                   <TableCell>Ngân hàng</TableCell>
@@ -910,7 +913,7 @@ const MerchantWallet: React.FC = () => {
         <CardContent sx={{ p: 0 }}>
           <TableContainer>
             <Table size="small">
-              <TableHead>
+              <TableHead sx={{ '& .MuiTableCell-head': { bgcolor: '#f1f5f9', fontWeight: 700, fontSize: 12 } }}>
                 <TableRow>
                   <TableCell>Thời gian</TableCell>
                   <TableCell>Loại</TableCell>
@@ -940,8 +943,8 @@ const MerchantWallet: React.FC = () => {
                         color={BANK_TXN_TYPE_COLOR[t.type] ?? 'default'}
                       />
                     </TableCell>
-                    <TableCell sx={{ fontSize: 11 }}>{SYSTEM_ACCOUNT_LABEL[t.fromAccount] ?? t.fromAccount}</TableCell>
-                    <TableCell sx={{ fontSize: 11 }}>{SYSTEM_ACCOUNT_LABEL[t.toAccount] ?? t.toAccount}</TableCell>
+                    <TableCell sx={{ fontSize: 12 }}>{SYSTEM_ACCOUNT_LABEL[t.fromAccount] ?? t.fromAccount}</TableCell>
+                    <TableCell sx={{ fontSize: 12 }}>{SYSTEM_ACCOUNT_LABEL[t.toAccount] ?? t.toAccount}</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700 }}>{vnd(t.amount)}</TableCell>
                     <TableCell>
                       <Chip
@@ -951,13 +954,13 @@ const MerchantWallet: React.FC = () => {
                         variant="outlined"
                       />
                     </TableCell>
-                    <TableCell sx={{ fontSize: 11, fontFamily: 'monospace' }}>
+                    <TableCell sx={{ fontSize: 12, fontFamily: 'monospace' }}>
                       {t.referenceId ? (
                         <Stack direction="row" alignItems="center" spacing={0.5}>
                           <span>{t.referenceId.slice(0, 8)}…</span>
                           <Tooltip title="Sao chép">
                             <IconButton size="small" onClick={() => copyToClipboard(t.referenceId!, () => setSnackMsg('Đã sao chép mã tham chiếu'))}>
-                              <ContentCopy sx={{ fontSize: 11 }} />
+                              <ContentCopy sx={{ fontSize: 14 }} />
                             </IconButton>
                           </Tooltip>
                         </Stack>

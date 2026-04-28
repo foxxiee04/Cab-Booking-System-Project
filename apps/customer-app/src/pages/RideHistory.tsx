@@ -387,10 +387,13 @@ const RideHistory: React.FC = () => {
       )}
 
       {!loading && filteredRides.length === 0 && (
-        <Box sx={{ textAlign: 'center', py: 6 }}>
-          <ReceiptLongRounded sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+        <Box sx={{ textAlign: 'center', py: 7, px: 3, bgcolor: '#f8fafc', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+          <Box sx={{ width: 64, height: 64, borderRadius: '50%', bgcolor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 2 }}>
+            <ReceiptLongRounded sx={{ fontSize: 30, color: 'text.disabled' }} />
+          </Box>
+          <Typography variant="subtitle2" fontWeight={700} gutterBottom>{t('rideHistory.noRides', 'Chưa có chuyến nào')}</Typography>
           <Typography variant="body2" color="text.secondary">
-            {t('rideHistory.noRides')}
+            {t('rideHistory.noRidesDesc', 'Tất cả chuyến đi sẽ xuất hiện ở đây.')}
           </Typography>
         </Box>
       )}
@@ -404,7 +407,7 @@ const RideHistory: React.FC = () => {
             ONLINE_METHODS.has(ride.paymentMethod);
 
           return (
-            <Card key={ride.id} variant="outlined" sx={{ borderRadius: 4, cursor: 'pointer' }} onClick={() => void handleOpenRideDetails(ride)}>
+            <Card key={ride.id} variant="outlined" sx={{ borderRadius: 4, cursor: 'pointer', borderLeft: '3px solid', borderLeftColor: ride.status === 'COMPLETED' ? 'success.main' : ride.status === 'CANCELLED' ? 'error.main' : 'primary.main', transition: 'all 0.15s', '&:hover': { boxShadow: 3, transform: 'translateY(-1px)' } }} onClick={() => void handleOpenRideDetails(ride)}>
               <CardContent>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1 }}>
                   <Box>

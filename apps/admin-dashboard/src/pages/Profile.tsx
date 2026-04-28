@@ -91,7 +91,7 @@ const Profile: React.FC = () => {
 
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: '360px minmax(0, 1fr)' } }}>
         <Card elevation={0} sx={{ borderRadius: 5, overflow: 'hidden', border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.06)' }}>
-          <Box sx={{ p: 2.5, background: 'linear-gradient(135deg, #0f172a, #1d4ed8)', color: '#fff' }}>
+          <Box sx={{ p: 2.5, background: (theme: any) => `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`, color: '#fff' }}>
             <Stack spacing={2} alignItems="center">
               <Avatar src={avatar || undefined} sx={{ width: 92, height: 92, border: '3px solid rgba(255,255,255,0.25)' }}>
                 {displayName[0]}

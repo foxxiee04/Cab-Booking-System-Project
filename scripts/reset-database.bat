@@ -2,7 +2,8 @@
 setlocal EnableDelayedExpansion
 REM ============================================
 REM  Cab Booking System - Database Reset Script
-REM  Resets all PostgreSQL + MongoDB databases
+REM  Resets all PostgreSQL + MongoDB databases,
+REM  re-runs Prisma migrations, then seeds data.
 REM ============================================
 
 echo ============================================
@@ -23,7 +24,7 @@ if not defined MONGO_PASSWORD set MONGO_PASSWORD=mongo
 echo [1/4] Dropping and recreating PostgreSQL databases...
 echo.
 
-for %%d in (auth_db booking_db driver_db payment_db ride_db user_db) do (
+for %%d in (auth_db booking_db driver_db payment_db ride_db user_db wallet_db) do (
     echo   Dropping %%d...
     psql -h %POSTGRES_HOST% -p %POSTGRES_PORT% -U %POSTGRES_USER% -d postgres -c "DROP DATABASE IF EXISTS %%d WITH (FORCE);"
     if errorlevel 1 exit /b 1
@@ -37,7 +38,7 @@ echo [2/4] Dropping MongoDB databases...
 echo.
 
 mongosh --host %MONGO_HOST% --port %MONGO_PORT% -u %MONGO_USER% -p %MONGO_PASSWORD% --authenticationDatabase admin --eval "db.getSiblingDB('notification_db').dropDatabase(); db.getSiblingDB('review_db').dropDatabase(); print('MongoDB databases dropped');"
-if errorlevel 1 exit /b 1
+if errorlevel 1 echo   MongoDB drop skipped (not available or already clean)
 
 echo.
 echo [3/4] Running Prisma migrations...
@@ -45,20 +46,22 @@ echo.
 
 cd /d "%~dp0.."
 
-for %%s in (auth-service booking-service driver-service payment-service ride-service user-service) do (
+for %%s in (auth-service booking-service driver-service payment-service ride-service user-service wallet-service) do (
     echo   Migrating %%s...
     set DB_NAME=
-    if "%%s"=="auth-service" set DB_NAME=auth_db
+    if "%%s"=="auth-service"    set DB_NAME=auth_db
     if "%%s"=="booking-service" set DB_NAME=booking_db
-    if "%%s"=="driver-service" set DB_NAME=driver_db
+    if "%%s"=="driver-service"  set DB_NAME=driver_db
     if "%%s"=="payment-service" set DB_NAME=payment_db
-    if "%%s"=="ride-service" set DB_NAME=ride_db
-    if "%%s"=="user-service" set DB_NAME=user_db
+    if "%%s"=="ride-service"    set DB_NAME=ride_db
+    if "%%s"=="user-service"    set DB_NAME=user_db
+    if "%%s"=="wallet-service"  set DB_NAME=wallet_db
     cd services\%%s
     set "DATABASE_URL=postgresql://%POSTGRES_USER%:%POSTGRES_PASSWORD%@%POSTGRES_HOST%:%POSTGRES_PORT%/!DB_NAME!?schema=public"
     call npx prisma migrate deploy
-    call npx prisma db push --accept-data-loss
-    if errorlevel 1 exit /b 1
+    if errorlevel 1 (
+        call npx prisma db push --accept-data-loss
+    )
     call npx prisma generate
     if errorlevel 1 exit /b 1
     cd ..\..

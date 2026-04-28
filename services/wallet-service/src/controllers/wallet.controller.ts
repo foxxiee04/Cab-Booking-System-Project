@@ -154,4 +154,16 @@ export class WalletController {
       res.status(500).json({ success: false, message: 'Failed to fetch incentive rules' });
     }
   };
+
+  // GET /wallet/debt-records
+  getDebtRecords = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const driverId = req.user!.userId;
+      const records  = await this.walletService.getDebtRecords(driverId);
+      res.json({ success: true, data: records });
+    } catch (error) {
+      logger.error('getDebtRecords error:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch debt records' });
+    }
+  };
 }

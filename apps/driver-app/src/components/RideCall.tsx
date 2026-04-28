@@ -51,7 +51,7 @@ const RideCall: React.FC<RideCallProps> = ({
         Cuộc gọi chuyến đi
       </Typography>
 
-      <Avatar sx={{ width: 80, height: 80, bgcolor: '#1d4ed8', fontSize: 28 }}>
+      <Avatar sx={{ width: 80, height: 80, bgcolor: 'primary.main', fontSize: 28 }}>
         {avatarLabel}
       </Avatar>
 

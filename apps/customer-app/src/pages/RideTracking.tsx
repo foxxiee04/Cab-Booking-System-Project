@@ -933,19 +933,7 @@ const RideTracking: React.FC = () => {
                   </Box>
                   <Stack alignItems="flex-end" spacing={1.25}>
                     <Chip icon={<StarRate sx={{ color: '#f59e0b !important' }} />} label={((displayedDriver?.rating || 5)).toFixed(1)} variant="outlined" />
-                    {Boolean(currentRide?.driverId) && !isChatReadOnly && (
-                      <ContactBox
-                        token={accessToken}
-                        rideId={rideId}
-                        myUserId={user?.id}
-                        contactName={driverDisplayName}
-                        contactPhone={driverPhoneNumber || undefined}
-                        role="CUSTOMER"
-                        triggerMode="inline"
-                        panelMode="floating"
-                        triggerLabel="Liên hệ"
-                      />
-                    )}
+                    {/* floating FAB rendered below */}
                   </Stack>
                 </Stack>
                 {/* Live tracking info panel */}
@@ -1460,6 +1448,21 @@ const RideTracking: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* ── Messenger-style floating chat FAB ───────────────────── */}
+      {Boolean(currentRide?.driverId) && !isChatReadOnly && (
+        <ContactBox
+          token={accessToken}
+          rideId={rideId}
+          myUserId={user?.id}
+          contactName={driverDisplayName}
+          contactPhone={driverPhoneNumber || undefined}
+          role="CUSTOMER"
+          triggerMode="floating"
+          panelMode="floating"
+          triggerLabel="Chat"
+        />
+      )}
     </Box>
   );
 };

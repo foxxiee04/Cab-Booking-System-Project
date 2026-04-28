@@ -16,6 +16,12 @@ enum WalletStatus {
   BLOCKED
 }
 
+enum DebtStatus {
+  ACTIVE    // debt exists and within due date
+  OVERDUE   // past due date, not fully settled
+  SETTLED   // fully settled
+}
+
 enum TransactionType {
   EARN        // online ride net earnings credited to driver
   COMMISSION  // cash ride commission debited from driver
@@ -95,6 +101,7 @@ model DriverWallet {
   driverId                   String       @unique
   balance                    Float        @default(0)
   availableBalance           Float        @default(0)   // balance - pending withdrawals (excludes lockedBalance)
+  pendingBalance             Float        @default(0)   // online earnings held T+24h before becoming available
   lockedBalance              Float        @default(0)   // security deposit (ký quỹ), locked until driver deactivates
   debt                       Float        @default(0)   // absolute debt amount when balance < 0
   status                     WalletStatus @default(INACTIVE)
@@ -102,12 +109,52 @@ model DriverWallet {
   createdAt                  DateTime     @default(now())
   updatedAt                  DateTime     @updatedAt
 
-  transactions WalletTransaction[]
-  withdrawals  WithdrawalRequest[]
-  topUpOrders  WalletTopUpOrder[]
+  transactions    WalletTransaction[]
+  withdrawals     WithdrawalRequest[]
+  topUpOrders     WalletTopUpOrder[]
+  pendingEarnings PendingEarning[]
+  debtRecords     DebtRecord[]
 
   @@index([driverId])
   @@map("driver_wallets")
+}
+
+// ─── Pending Earnings (online ride earnings held T+24h) ─────────────────────
+
+model PendingEarning {
+  id         String    @id @default(uuid())
+  driverId   String
+  amount     Float
+  rideId     String
+  settleAt   DateTime  // createdAt + 24h — when eligible to move to available
+  settledAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  wallet DriverWallet @relation(fields: [driverId], references: [driverId])
+
+  @@index([driverId, settleAt])
+  @@index([driverId, settledAt])
+  @@map("pending_earnings")
+}
+
+// ─── Debt Records (per-cash-ride debt with due date) ────────────────────────
+
+model DebtRecord {
+  id         String     @id @default(uuid())
+  driverId   String
+  amount     Float      // original commission amount
+  remaining  Float      // unpaid portion
+  rideId     String?
+  status     DebtStatus @default(ACTIVE)
+  dueDate    DateTime   // createdAt + 2 days
+  settledAt  DateTime?
+  createdAt  DateTime   @default(now())
+
+  wallet DriverWallet @relation(fields: [driverId], references: [driverId])
+
+  @@index([driverId, status])
+  @@index([driverId, dueDate])
+  @@map("debt_records")
 }
 
 // ─── Wallet Transactions (immutable ledger) ─────────────────────────────────

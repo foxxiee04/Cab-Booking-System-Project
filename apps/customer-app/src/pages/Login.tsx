@@ -62,7 +62,7 @@ const Login: React.FC = () => {
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
-        background: 'linear-gradient(135deg, #2E7D32 0%, #1976D2 100%)',
+        background: (theme: any) => `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 100%)`,
       }}
     >
       <Container maxWidth="sm">
@@ -130,16 +130,16 @@ const Login: React.FC = () => {
               </Button>
 
               <Box sx={{ textAlign: 'right', mb: 1 }}>
-                <Link to="/forgot-password" style={{ color: '#2E7D32', textDecoration: 'none', fontSize: '0.875rem' }}>
-                  Quên mật khẩu?
+                <Link to="/forgot-password" style={{ textDecoration: 'none', fontSize: '0.875rem', color: 'inherit' }}>
+                  <Typography component="span" sx={{ color: 'primary.main', fontSize: '0.875rem' }}>Quên mật khẩu?</Typography>
                 </Link>
               </Box>
 
               <Box sx={{ textAlign: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
                   Chưa có tài khoản?{' '}
-                  <Link to="/register" style={{ color: '#2E7D32', textDecoration: 'none', fontWeight: 600 }}>
-                    Đăng ký ngay
+                  <Link to="/register" style={{ textDecoration: 'none' }}>
+                    <Typography component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>Đăng ký ngay</Typography>
                   </Link>
                 </Typography>
               </Box>

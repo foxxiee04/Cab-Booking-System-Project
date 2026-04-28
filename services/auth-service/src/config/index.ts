@@ -37,12 +37,20 @@ export const config = {
   },
 
   sms: {
+    // OTP_SMS_MODE: 'mock' | 'twilio' | 'speedsms' | 'sns'
     mode: (process.env.OTP_SMS_MODE || 'mock').toLowerCase(),
     twilio: {
       accountSid: process.env.TWILIO_ACCOUNT_SID || '',
-      authToken: process.env.TWILIO_AUTH_TOKEN || '',
-      fromPhone: process.env.TWILIO_FROM_PHONE || '',
+      authToken:  process.env.TWILIO_AUTH_TOKEN  || '',
+      fromPhone:  process.env.TWILIO_FROM_PHONE  || '',
     },
+    speedsms: {
+      // Lay API key tai: https://speedsms.vn — muc Account > API
+      apiKey:     process.env.SPEEDSMS_API_KEY   || '',
+      senderName: process.env.SPEEDSMS_SENDER    || '',  // ten hien thi (neu co)
+    },
+    // SNS mode tu dong dung IAM role khi chay tren EC2/ECS — khong can key
+    // Neu chay local: set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
   },
 
   rabbitmq: {

@@ -82,36 +82,45 @@ const Messages: React.FC = () => {
           </Alert>
         )}
 
-        <Card sx={{ borderRadius: 5 }}>
-          <CardContent>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+        <Card sx={{ borderRadius: 5, overflow: 'hidden' }}>
+          <Box sx={{ px: 2.5, py: 2, background: 'linear-gradient(135deg, #f0f9ff, #eff6ff)', borderBottom: '1px solid #e0f2fe' }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Box>
-                <Typography variant="h6" fontWeight={800}>
+                <Typography variant="subtitle1" fontWeight={800}>
                   {t('messages.inbox', 'Hộp thư dịch vụ')}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {t('messages.inboxBody', 'Giao diện đã được tổ chức theo kiểu super-app để sẵn sàng gắn chat realtime và thông báo điều hành.')}
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.78rem' }}>
+                  {t('messages.inboxBody', 'Chat & hỗ trợ')}
                 </Typography>
               </Box>
               <ChatBubbleOutlineRounded color="primary" />
             </Stack>
-
-            <List disablePadding>
-              {conversations.map((conversation) => (
-                <ListItem key={conversation.id} disableGutters sx={{ py: 1.25 }}>
-                  <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: '#dbeafe', color: '#1d4ed8' }}>{conversation.icon}</Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={conversation.title}
-                    secondary={conversation.subtitle}
-                    primaryTypographyProps={{ fontWeight: 700 }}
-                  />
-                  <Chip label={conversation.badge} size="small" color="primary" variant="outlined" />
-                </ListItem>
-              ))}
-            </List>
-          </CardContent>
+          </Box>
+          <List disablePadding>
+            {conversations.map((conversation, idx) => (
+              <ListItem
+                key={conversation.id}
+                disableGutters
+                sx={{
+                  px: 2, py: 1.25,
+                  borderBottom: idx < conversations.length - 1 ? '1px solid #f1f5f9' : 'none',
+                  '&:hover': { bgcolor: '#fafafa', cursor: 'pointer' },
+                  transition: 'background 0.1s',
+                }}
+              >
+                <ListItemAvatar>
+                  <Avatar sx={{ bgcolor: '#dbeafe', color: '#1d4ed8', width: 44, height: 44 }}>{conversation.icon}</Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                  primary={conversation.title}
+                  secondary={conversation.subtitle}
+                  primaryTypographyProps={{ fontWeight: 700, fontSize: '0.9rem' }}
+                  secondaryTypographyProps={{ fontSize: '0.76rem', noWrap: true }}
+                />
+                <Chip label={conversation.badge} size="small" color="primary" variant="filled" sx={{ fontWeight: 700, fontSize: '0.65rem' }} />
+              </ListItem>
+            ))}
+          </List>
         </Card>
 
         <Card sx={{ borderRadius: 5 }}>

@@ -1,0 +1,58 @@
+TIÊU ĐỀ: Bảng giá và cách tính cước
+DANH MỤC: giá cước, cách tính giá, cước phí, tiền, phí, bao nhiêu tiền, giá bao nhiêu
+
+Bảng giá theo loại xe:
+
+Xe máy số (MOTORBIKE):
+- Giá khởi điểm: 10.000đ
+- Phụ phí dịch vụ: 0đ
+- Cước theo km: 6.200đ/km
+- Cước theo thời gian: 450đ/phút
+- Phí chuyến ngắn (<2,5 km): 0đ (không áp dụng)
+
+Xe tay ga (SCOOTER):
+- Giá khởi điểm: 14.000đ
+- Phụ phí dịch vụ: 1.500đ
+- Cước theo km: 8.400đ/km
+- Cước theo thời gian: 700đ/phút
+- Phí chuyến ngắn (<2,5 km): +1.500đ
+
+Ô tô 4 chỗ (CAR_4):
+- Giá khởi điểm: 24.000đ
+- Phụ phí dịch vụ: 6.000đ
+- Cước theo km: 15.000đ/km
+- Cước theo thời gian: 1.900đ/phút
+- Phí chuyến ngắn (<2,5 km): +6.000đ
+
+Ô tô 7 chỗ (CAR_7):
+- Giá khởi điểm: 32.000đ
+- Phụ phí dịch vụ: 10.000đ
+- Cước theo km: 18.500đ/km
+- Cước theo thời gian: 2.400đ/phút
+- Phí chuyến ngắn (<2,5 km): +9.000đ
+
+Cách tính giá chuyến:
+Giá = (Giá khởi điểm + Phụ phí dịch vụ + Quãng đường × Cước/km + Thời gian × Cước/phút + Phí chuyến ngắn) × Hệ số surge
+
+Ví dụ giá tham khảo (surge = 1.0, không giờ cao điểm):
+- Xe máy 5 km, 15 phút: ≈ 48.000đ
+- Xe tay ga 5 km, 15 phút: ≈ 68.000đ
+- Ô tô 4 chỗ 5 km, 15 phút: ≈ 133.000đ
+- Ô tô 7 chỗ 5 km, 15 phút: ≈ 175.000đ
+
+Giá tối thiểu mỗi chuyến: 15.000đ
+
+Hệ số surge (giá tăng cường):
+Áp dụng khi nhu cầu cao, thường vào giờ cao điểm sáng (7–9h) và chiều (17–20h), ngày lễ tết.
+Hệ số dao động từ 1.0 (bình thường) đến 2.0 (cao nhất).
+Khi có surge, giá hiển thị trên app đã bao gồm hệ số, không có phụ thu ẩn.
+
+Phí chuyến ngắn:
+Áp dụng cho chuyến dưới 2,5 km với xe tay ga và ô tô để bù đắp chi phí đón khách.
+Xe máy số không áp dụng phí này.
+
+Lưu ý:
+- Giá hiển thị trên app là giá ước tính theo tuyến đường ngắn nhất.
+- Giá thực tế có thể chênh lệch nhỏ do tắc đường hoặc thay đổi lộ trình.
+- Giá cước đã bao gồm VAT. Không có phí đặt xe hay phí ẩn.
+- Nếu tài xế yêu cầu thanh toán nhiều hơn số tiền trên app, hãy liên hệ hỗ trợ.

@@ -233,16 +233,33 @@ export default function VouchersPage() {
     setTimeout(() => setCopiedCode(null), 1500);
   };
 
+  const resolveVoucherError = (err: any): string => {
+    const msg: string = err.response?.data?.error?.message || err.response?.data?.message || '';
+    if (msg.includes('already') || msg.includes('đã lưu') || msg.includes('đã thu thập')) {
+      return 'Bạn đã lưu voucher này rồi. Vào tab "Của tôi" để xem và sử dụng.';
+    }
+    if (msg.includes('expired') || msg.includes('hết hạn')) {
+      return 'Voucher đã hết hạn và không thể thu thập nữa.';
+    }
+    if (msg.includes('not found') || msg.includes('không tìm thấy') || msg.includes('invalid') || msg.includes('không hợp lệ')) {
+      return 'Mã voucher không tồn tại. Kiểm tra lại chính tả hoặc liên hệ hỗ trợ.';
+    }
+    if (msg.includes('limit') || msg.includes('hết lượt') || msg.includes('đã hết')) {
+      return 'Voucher đã hết lượt phát. Hãy chú ý các đợt ưu đãi tiếp theo!';
+    }
+    return msg || 'Không thể lưu voucher. Vui lòng thử lại sau.';
+  };
+
   const handleCollectCard = async (code: string, voucherId: string) => {
     setCollectingId(voucherId);
     setCollectError('');
     setCollectSuccess('');
     try {
       await voucherApi.collectVoucher(code);
-      setCollectSuccess(`Đã lưu voucher "${code}" thành công!`);
+      setCollectSuccess(`Đã lưu voucher "${code}"! Vào tab "Của tôi" để sử dụng khi đặt xe.`);
       await Promise.all([loadPublic(), loadMy()]);
     } catch (err: any) {
-      setCollectError(err.response?.data?.error?.message || 'Không thể lưu voucher.');
+      setCollectError(resolveVoucherError(err));
     } finally {
       setCollectingId(null);
     }
@@ -256,12 +273,12 @@ export default function VouchersPage() {
     setCollectLoading(true);
     try {
       await voucherApi.collectVoucher(code);
-      setCollectSuccess(`Đã lưu voucher "${code}" thành công!`);
+      setCollectSuccess(`Đã lưu voucher "${code}"! Vào tab "Của tôi" để sử dụng khi đặt xe.`);
       setCollectCode('');
       setCodeDialogOpen(false);
       await Promise.all([loadPublic(), loadMy()]);
     } catch (err: any) {
-      setCollectError(err.response?.data?.error?.message || 'Mã không hợp lệ hoặc đã được lưu.');
+      setCollectError(resolveVoucherError(err));
     } finally {
       setCollectLoading(false);
     }

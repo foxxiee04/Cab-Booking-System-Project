@@ -1,0 +1,30 @@
+TIÊU ĐỀ: Phương thức thanh toán
+DANH MỤC: thanh toán, MoMo, VNPay, tiền mặt, ví điện tử, payment
+
+Các phương thức thanh toán được hỗ trợ:
+
+1. Tiền mặt (CASH):
+   - Thanh toán trực tiếp cho tài xế sau khi kết thúc chuyến.
+   - Không cần kết nối internet khi thanh toán.
+   - Tài xế sẽ thối lại tiền thừa.
+
+2. Ví MoMo:
+   - Thanh toán nhanh qua ứng dụng MoMo.
+   - Cần có tài khoản MoMo đã liên kết số điện thoại.
+   - Quét QR code hoặc mở app MoMo để xác nhận thanh toán.
+   - Tiền sẽ bị trừ ngay khi xác nhận thanh toán.
+   - Nếu thanh toán thất bại, hệ thống sẽ hủy chuyến và hoàn tiền trong vòng 3-5 ngày làm việc.
+
+3. VNPay:
+   - Thanh toán qua ví VNPay hoặc ngân hàng liên kết VNPay.
+   - Hỗ trợ hầu hết các ngân hàng tại Việt Nam.
+   - Quét QR code hoặc chuyển khoản qua mã giao dịch.
+
+Lưu ý quan trọng về thanh toán online (MoMo/VNPay):
+- Chuyến xe chỉ được kích hoạt tìm tài xế SAU KHI thanh toán thành công.
+- Nếu không hoàn thành thanh toán trong 15 phút, chuyến sẽ bị hủy tự động.
+- Lịch sử giao dịch có thể xem tại mục "Ví của tôi" trong ứng dụng.
+
+Hoàn tiền:
+- Thanh toán online bị lỗi: hoàn tiền tự động trong 3-5 ngày làm việc.
+- Tài xế không đến: liên hệ hỗ trợ để được hoàn tiền thủ công.

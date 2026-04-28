@@ -63,7 +63,7 @@ const Login: React.FC = () => {
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
-        background: 'linear-gradient(135deg, #1976D2 0%, #2E7D32 100%)',
+        background: (theme: any) => `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 100%)`,
       }}
     >
       <Container maxWidth="sm">

@@ -34,6 +34,7 @@ import {
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { updateRideStatus, clearCurrentRide, setCurrentRide } from '../store/ride.slice';
 import { setCurrentLocation } from '../store/driver.slice';
+import { showNotification } from '../store/ui.slice';
 import { rideApi } from '../api/ride.api';
 import { driverApi } from '../api/driver.api';
 import { Ride } from '../types';
@@ -248,6 +249,33 @@ const ActiveRide: React.FC = () => {
       const storageKey = getOptimisticCompletedRidesKey(user?.id);
       const currentCompletedRides = Number(sessionStorage.getItem(storageKey) || '0');
       sessionStorage.setItem(storageKey, String(currentCompletedRides + 1));
+
+      // Dispatch earnings/debt notification so driver knows what to expect in wallet
+      const fare = currentRide.fare || 0;
+      const isCash = currentRide.paymentMethod === 'CASH';
+      const commissionRateMap: Record<string, number> = {
+        MOTORBIKE: 0.20, SCOOTER: 0.20, CAR_4: 0.18, CAR_7: 0.15,
+      };
+      const rate = commissionRateMap[currentRide.vehicleType || ''] ?? 0.20;
+      const commission = Math.round(fare * rate);
+      const netEarnings = fare - commission;
+
+      if (isCash) {
+        dispatch(showNotification({
+          type: 'warning',
+          title: 'Chuyến tiền mặt hoàn thành',
+          message: `Bạn giữ ${formatCurrency(fare)} tiền mặt. Phí nền tảng ${formatCurrency(commission)} (${Math.round(rate * 100)}%) đã ghi nợ vào ví. Xem chi tiết công nợ trong mục Ví tiền.`,
+          persistMs: 9000,
+        }));
+      } else {
+        dispatch(showNotification({
+          type: 'success',
+          title: 'Thu nhập đang xử lý',
+          message: `${formatCurrency(netEarnings)} sẽ vào ví trong vòng 24h (sau khi hệ thống xử lý). Xem trạng thái trong Ví tiền → Tiền chờ xử lý.`,
+          persistMs: 9000,
+        }));
+      }
+
       dispatch(clearCurrentRide());
       navigate('/dashboard');
     } catch (err: any) {
@@ -390,19 +418,7 @@ const ActiveRide: React.FC = () => {
                 </Box>
               )}
             </Box>
-            {['ASSIGNED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS'].includes(status) && (
-              <ContactBox
-                token={accessToken}
-                rideId={currentRide?.id}
-                myUserId={user?.id}
-                contactName={customerName}
-                contactPhone={customerPhoneNumber || undefined}
-                role="DRIVER"
-                triggerMode="inline"
-                panelMode="floating"
-                triggerLabel="Liên hệ"
-              />
-            )}
+            {/* Chat button rendered separately as floating FAB — see below */}
           </Box>
 
 
@@ -573,6 +589,21 @@ const ActiveRide: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* ── Messenger-style floating chat FAB ───────────────────── */}
+      {['ASSIGNED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS'].includes(status) && (
+        <ContactBox
+          token={accessToken}
+          rideId={currentRide?.id}
+          myUserId={user?.id}
+          contactName={customerName}
+          contactPhone={customerPhoneNumber || undefined}
+          role="DRIVER"
+          triggerMode="floating"
+          panelMode="floating"
+          triggerLabel="Chat"
+        />
+      )}
     </Box>
   );
 };

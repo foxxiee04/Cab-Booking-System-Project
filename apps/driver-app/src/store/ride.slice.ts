@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { Ride } from '../types';
+import { logout } from './auth.slice';
 
 interface RideState {
   pendingRide: Ride | null; // New ride request
@@ -58,6 +59,16 @@ const rideSlice = createSlice({
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
+  },
+  extraReducers: (builder) => {
+    // Clear ALL ride state when user logs out — prevents another account seeing this user's ride
+    builder.addCase(logout, () => ({
+      pendingRide: null,
+      currentRide: null,
+      timeoutSeconds: 20,
+      loading: false,
+      error: null,
+    }));
   },
 });
 

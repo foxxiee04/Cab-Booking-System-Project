@@ -8,13 +8,15 @@ export interface WalletBalance {
   balance: number;
   operationalBalance?: number;
   availableBalance: number;
+  pendingBalance: number;       // online earnings held T+24h before becoming withdrawable
   lockedBalance: number;        // security deposit (ký quỹ), cannot be withdrawn
-  withdrawableBalance: number;  // balance - lockedBalance, what driver can actually withdraw
+  withdrawableBalance: number;  // what driver can actually withdraw right now
   debt: number;
   status: 'INACTIVE' | 'ACTIVE' | 'BLOCKED';
   initialActivationCompleted?: boolean;
   activationRequired?: boolean;
   warningThresholdReached?: boolean;
+  hasOverdueDebt?: boolean;
   canAcceptRide?: boolean;
   activationThreshold?: number;
   warningThreshold?: number;
@@ -35,6 +37,17 @@ export interface WalletBalance {
       description?: string;
     } | null;
   };
+}
+
+export interface DebtRecord {
+  id: string;
+  amount: number;
+  remaining: number;
+  rideId: string | null;
+  status: 'ACTIVE' | 'OVERDUE' | 'SETTLED';
+  dueDate: string;
+  settledAt: string | null;
+  createdAt: string;
 }
 
 export interface WalletTransaction {
@@ -179,4 +192,7 @@ export const walletApi = {
 
   getIncentiveRules: () =>
     axiosInstance.get<{ success: boolean; data: IncentiveRule[] }>('/wallet/incentive-rules'),
+
+  getDebtRecords: () =>
+    axiosInstance.get<{ success: boolean; data: DebtRecord[] }>('/wallet/debt-records'),
 };

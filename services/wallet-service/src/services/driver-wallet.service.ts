@@ -61,6 +61,7 @@ interface ProcessRefundInput {
 interface WalletLedgerState {
   balance: number;
   availableBalance: number;
+  pendingBalance: number;
   lockedBalance: number;
   debt: number;
   initialActivationCompleted: boolean;
@@ -88,6 +89,7 @@ export class DriverWalletService {
     return {
       balance: Math.max(0, Number(wallet?.balance ?? 0)),
       availableBalance: Math.max(0, Number(wallet?.availableBalance ?? 0)),
+      pendingBalance: Math.max(0, Number(wallet?.pendingBalance ?? 0)),
       lockedBalance: Math.max(0, Number(wallet?.lockedBalance ?? 0)),
       debt: Math.max(0, Number(wallet?.debt ?? 0)),
       initialActivationCompleted: Boolean(wallet?.initialActivationCompleted),
@@ -103,7 +105,7 @@ export class DriverWalletService {
       return Math.max(0, inactiveBalanceOverride ?? state.balance);
     }
 
-    return state.lockedBalance + state.availableBalance - state.debt;
+    return state.lockedBalance + state.availableBalance + state.pendingBalance - state.debt;
   }
 
   private getWalletStatus(initialActivationCompleted: boolean, operationalBalance: number): WalletStatus {
@@ -118,6 +120,95 @@ export class DriverWalletService {
     const debtPaid = Math.min(state.debt, amount);
     state.debt -= debtPaid;
     state.availableBalance += amount - debtPaid;
+  }
+
+  /** Settle DebtRecord rows FIFO (oldest first) against a payment amount inside a transaction. */
+  private async settleDebtRecordsFifo(tx: PrismaAny, driverId: string, maxAmount: number): Promise<void> {
+    if (maxAmount <= 0) return;
+    const records = await tx.debtRecord.findMany({
+      where: { driverId, status: { not: 'SETTLED' } },
+      orderBy: { createdAt: 'asc' },
+    });
+    let remaining = maxAmount;
+    for (const rec of records) {
+      if (remaining <= 0) break;
+      const pay = Math.min(rec.remaining, remaining);
+      remaining -= pay;
+      const newRemaining = rec.remaining - pay;
+      await tx.debtRecord.update({
+        where: { id: rec.id },
+        data: {
+          remaining: newRemaining,
+          status:    newRemaining <= 0 ? 'SETTLED' : rec.status,
+          settledAt: newRemaining <= 0 ? new Date() : rec.settledAt,
+        },
+      });
+    }
+  }
+
+  // ─── Settle Pending Earnings (T+24h → available) ─────────────────────────
+
+  /**
+   * Move eligible pending earnings (> 24h old) into availableBalance.
+   * Auto-settles oldest DebtRecords first. Called lazily on getBalance()
+   * and also by the background job every hour.
+   */
+  async settlePendingEarnings(driverId: string): Promise<void> {
+    const wallet = await (this.prisma as any).driverWallet.findUnique({ where: { driverId } });
+    if (!wallet || Number(wallet.pendingBalance ?? 0) <= 0) return;
+
+    const now = new Date();
+    const eligible = await (this.prisma as any).pendingEarning.findMany({
+      where: { driverId, settleAt: { lte: now }, settledAt: null },
+      orderBy: { settleAt: 'asc' },
+    });
+    if (eligible.length === 0) return;
+
+    const totalToSettle = eligible.reduce((s: number, e: any) => s + Number(e.amount), 0);
+    if (totalToSettle <= 0) return;
+
+    await this.prisma.$transaction(async (tx: PrismaAny) => {
+      const fresh = await tx.driverWallet.findUnique({ where: { driverId } });
+      if (!fresh) return;
+
+      const state = this.toLedgerState(fresh);
+      const settleAmount = Math.min(state.pendingBalance, totalToSettle);
+      if (settleAmount <= 0) return;
+
+      // Move from pending to available, paying down debt first
+      this.applyDebtPaydown(state, settleAmount);
+      state.pendingBalance = Math.max(0, state.pendingBalance - settleAmount);
+
+      const operationalBalance = this.getOperationalBalance(state);
+      const newBalance = this.getSettlementBalance(state);
+      const newStatus = this.getWalletStatus(state.initialActivationCompleted, operationalBalance);
+
+      await tx.driverWallet.update({
+        where: { driverId },
+        data: {
+          balance:          newBalance,
+          availableBalance: state.availableBalance,
+          pendingBalance:   state.pendingBalance,
+          debt:             state.debt,
+          status:           newStatus,
+        },
+      });
+
+      // Settle debt records FIFO for the amount that paid down debt
+      const debtPaid = Math.min(fresh.debt, settleAmount);
+      if (debtPaid > 0) {
+        await this.settleDebtRecordsFifo(tx, driverId, debtPaid);
+      }
+
+      // Mark pending earnings as settled
+      const ids = eligible.map((e: any) => e.id);
+      await tx.pendingEarning.updateMany({
+        where: { id: { in: ids } },
+        data:  { settledAt: now },
+      });
+    });
+
+    logger.info(`Settled ${totalToSettle} VND pending earnings for driver ${driverId}`);
   }
 
   private applyOperationalDebit(state: WalletLedgerState, amount: number) {
@@ -195,6 +286,7 @@ export class DriverWalletService {
           driverId,
           balance:          0,
           availableBalance: 0,
+          pendingBalance:   0,
           lockedBalance:    0,
           debt:             0,
           status:           INACTIVE_WALLET_STATUS,
@@ -275,6 +367,7 @@ export class DriverWalletService {
         driverId,
         balance:          0,
         availableBalance: 0,
+        pendingBalance:   0,
         lockedBalance:    0,
         debt:             0,
         status:           INACTIVE_WALLET_STATUS,
@@ -303,7 +396,11 @@ export class DriverWalletService {
     } else if (direction === TransactionDirection.CREDIT) {
       if (type === TransactionType.REFUND) {
         state.availableBalance += amount;
+      } else if (type === TransactionType.EARN) {
+        // Online ride earnings go to pendingBalance (T+24h hold before available)
+        state.pendingBalance += amount;
       } else {
+        // TOP_UP, BONUS: pay down debt first, rest to available
         this.applyDebtPaydown(state, amount);
       }
     } else {
@@ -330,6 +427,7 @@ export class DriverWalletService {
       data: {
         balance:          newBalance,
         availableBalance: state.availableBalance,
+        pendingBalance:   state.pendingBalance,
         lockedBalance:    state.lockedBalance,
         debt:             state.debt,
         status:           newStatus,
@@ -398,6 +496,12 @@ export class DriverWalletService {
       });
 
       if (deltaResult.alreadyExisted) return deltaResult;
+
+      // Track individual pending earning for T+24h settlement
+      const settleAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await tx.pendingEarning.create({
+        data: { driverId, amount: netEarnings, rideId, settleAt },
+      });
 
       // Merchant IN: full gross fare from customer (before voucher)
       await tx.merchantLedger.create({
@@ -482,6 +586,12 @@ export class DriverWalletService {
 
       if (deltaResult.alreadyExisted) return deltaResult;
 
+      // Create a debt record with T+2 day due date
+      const dueDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+      await tx.debtRecord.create({
+        data: { driverId, amount: commission, remaining: commission, rideId, dueDate },
+      });
+
       // Merchant IN: platform earns commission from cash ride
       await tx.merchantLedger.create({
         data: {
@@ -550,6 +660,13 @@ export class DriverWalletService {
       activated = !(beforeWallet?.initialActivationCompleted ?? false) && Boolean(deltaResult.wallet.initialActivationCompleted);
       if (activated) {
         logger.info(`Driver ${driverId} wallet ACTIVATED — locked ${initialActivationBalance} VND as security deposit`);
+      }
+
+      // Settle debt records FIFO for however much the top-up paid toward debt
+      const prevDebt = Math.max(0, Number(beforeWallet?.debt ?? 0));
+      if (prevDebt > 0) {
+        const debtPaid = Math.min(prevDebt, amount);
+        await this.settleDebtRecordsFifo(tx, driverId, debtPaid);
       }
 
       // Merchant IN: top-up received from driver
@@ -861,11 +978,12 @@ export class DriverWalletService {
       await tx.driverWallet.update({
         where: { driverId },
         data: {
-          balance: 0,
+          balance:          0,
           availableBalance: 0,
-          lockedBalance: 0,
-          debt: 0,
-          status: INACTIVE_WALLET_STATUS,
+          pendingBalance:   0,
+          lockedBalance:    0,
+          debt:             0,
+          status:           INACTIVE_WALLET_STATUS,
           initialActivationCompleted: false,
         },
       });
@@ -893,6 +1011,15 @@ export class DriverWalletService {
   // ─── Query Methods ───────────────────────────────────────────────────────
 
   async getBalance(driverId: string) {
+    // Lazily settle any eligible pending earnings before reading balance
+    await this.settlePendingEarnings(driverId).catch(() => {});
+
+    // Mark overdue debt records
+    await (this.prisma as any).debtRecord.updateMany({
+      where: { driverId, status: 'ACTIVE', dueDate: { lt: new Date() } },
+      data:  { status: 'OVERDUE' },
+    }).catch(() => {});
+
     const [wallet, businessAccounts] = await Promise.all([
       this.getOrCreateWallet(driverId),
       this.getBusinessAccounts(),
@@ -905,6 +1032,9 @@ export class DriverWalletService {
     const warningThresholdReached = wallet.status === WalletStatus.ACTIVE && operationalBalance <= warningThreshold;
     const activationRequired = wallet.status === INACTIVE_WALLET_STATUS;
     const withdrawableBalance = Math.max(0, ledgerState.availableBalance);
+    const hasOverdueDebt = ledgerState.debt > 0 && wallet.status !== INACTIVE_WALLET_STATUS
+      ? await (this.prisma as any).debtRecord.count({ where: { driverId, status: 'OVERDUE' } }).then((c: number) => c > 0).catch(() => false)
+      : false;
 
     let reason: string | undefined;
     if (activationRequired) {
@@ -914,6 +1044,8 @@ export class DriverWalletService {
         : `Ví đang chờ ghi nhận ký quỹ kích hoạt ${initialActivationBalance.toLocaleString('vi-VN')} VND.`;
     } else if (!canAcceptRide) {
       reason = `Số dư vận hành hiện tại là ${operationalBalance.toLocaleString('vi-VN')} VND và đã chạm ngưỡng khóa ${debtLimit.toLocaleString('vi-VN')} VND.`;
+    } else if (hasOverdueDebt) {
+      reason = 'Bạn có khoản công nợ quá hạn. Vui lòng thanh toán để tránh bị hạn chế tài khoản.';
     }
 
     return {
@@ -921,6 +1053,7 @@ export class DriverWalletService {
       balance:                     wallet.balance,
       operationalBalance,
       availableBalance:            ledgerState.availableBalance,
+      pendingBalance:              ledgerState.pendingBalance,
       lockedBalance:               ledgerState.lockedBalance,
       withdrawableBalance,
       debt:                        ledgerState.debt,
@@ -928,6 +1061,7 @@ export class DriverWalletService {
       initialActivationCompleted:  wallet.initialActivationCompleted,
       activationRequired,
       warningThresholdReached,
+      hasOverdueDebt,
       canAcceptRide,
       activationThreshold:         initialActivationBalance,
       warningThreshold,
@@ -935,6 +1069,24 @@ export class DriverWalletService {
       reason,
       businessAccounts,
     };
+  }
+
+  async getDebtRecords(driverId: string) {
+    const records = await (this.prisma as any).debtRecord.findMany({
+      where:   { driverId },
+      orderBy: { createdAt: 'desc' },
+      take:    50,
+    });
+    return records.map((r: any) => ({
+      id:        r.id,
+      amount:    r.amount,
+      remaining: r.remaining,
+      rideId:    r.rideId,
+      status:    r.status,
+      dueDate:   r.dueDate,
+      settledAt: r.settledAt,
+      createdAt: r.createdAt,
+    }));
   }
 
   async getTransactions(

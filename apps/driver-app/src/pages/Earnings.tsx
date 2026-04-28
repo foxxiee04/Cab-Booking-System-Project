@@ -153,7 +153,7 @@ const Earnings: React.FC = () => {
       {renderPeriodSelector()}
 
       {/* Main earning card */}
-      <Card elevation={0} sx={{ background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)', color: '#fff', borderRadius: 4 }}>
+      <Card elevation={0} sx={{ background: (theme: any) => `linear-gradient(135deg, ${theme.palette.secondary.dark} 0%, ${theme.palette.secondary.main} 100%)`, color: '#fff', borderRadius: 4 }}>
         <CardContent sx={{ p: 2.5 }}>
           <Typography variant="caption" sx={{ opacity: 0.7, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', textAlign: 'center' }}>
             Thực nhận {period === 'today' ? 'hôm nay' : period === 'week' ? '7 ngày' : 'tháng này'}

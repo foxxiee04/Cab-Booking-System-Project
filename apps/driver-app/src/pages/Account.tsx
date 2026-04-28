@@ -267,11 +267,12 @@ const Account: React.FC = () => {
                 </Stack>
 
                 {editing && (
-                  <Card variant="outlined" sx={{ mt: 2.5, borderRadius: 4 }}>
+                  <Card variant="outlined" sx={{ mt: 2.5, borderRadius: 4, bgcolor: '#f8fafc', borderColor: '#e2e8f0' }}>
                     <CardContent>
-                      <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 2 }}>
-                        Thông tin tài khoản
-                      </Typography>
+                      <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                        <Box sx={{ width: 6, height: 24, borderRadius: 3, bgcolor: 'primary.main' }} />
+                        <Typography variant="subtitle1" fontWeight={800}>Thông tin tài khoản</Typography>
+                      </Stack>
                       <Grid container spacing={2}>
                         <Grid item xs={12} sm={6}>
                           <TextField fullWidth label="Họ" value={formData.firstName} onChange={handleChange('firstName')} />
@@ -426,7 +427,7 @@ secondary={profile?.licensePlate ? `Biển số ${profile.licensePlate}` : 'Bổ
             </Stack>
 
             {passwordEditing && (
-              <Card variant="outlined" sx={{ borderRadius: 4 }}>
+              <Card variant="outlined" sx={{ borderRadius: 4, bgcolor: '#f8fafc', borderColor: '#e2e8f0' }}>
                 <CardContent>
                   <Grid container spacing={2}>
                     <Grid item xs={12}>

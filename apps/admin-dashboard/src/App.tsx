@@ -80,27 +80,37 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const unsub = adminSocketService.subscribeToEvents((event) => {
       setUnreadCount((n) => n + 1);
       setRecentNotifs((prev) => [event, ...prev].slice(0, maxNotifHistory));
+      // If a new driver registered, bump the pending count immediately
+      if (event.title?.toLowerCase().includes('hồ sơ') || event.title?.toLowerCase().includes('driver') || event.title?.toLowerCase().includes('tài xế')) {
+        setPendingApprovalCount((n) => n + 1);
+      }
     });
     return unsub;
   }, [isAuthenticated]);
 
-  // Fetch pending driver approvals count
+  // Fetch pending driver approvals count — poll every 15s (also updated via socket above)
   useEffect(() => {
     if (!isAuthenticated) return;
     const fetchCount = async () => {
       try {
         const res = await adminApi.getDrivers({ status: 'PENDING', limit: 1, offset: 0 });
         const drivers = res.data?.drivers || [];
-        // API may return total count in meta; fall back to array length
-        const total = (res.data as any)?.total ?? (res.data as any)?.meta?.total ?? drivers.length;
+        const total = (res as any)?.meta?.total ?? (res.data as any)?.total ?? drivers.length;
         setPendingApprovalCount(total);
       } catch {
         // non-critical
       }
     };
     void fetchCount();
-    const id = window.setInterval(() => void fetchCount(), 30_000);
-    return () => window.clearInterval(id);
+    // Reduced to 15s for more responsive count; socket events reduce it further
+    const id = window.setInterval(() => void fetchCount(), 15_000);
+    // Listen for manual refresh trigger from DriverApprovals page after approve/reject
+    const onRefresh = () => void fetchCount();
+    window.addEventListener('driver-approval-changed', onRefresh);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('driver-approval-changed', onRefresh);
+    };
   }, [isAuthenticated]);
 
   const handleLogout = () => {

@@ -78,8 +78,12 @@ const shouldForwardOverHttp = (
   }
 
   return /^\/api\/drivers\/me$/.test(normalizedPath)
-    || /^\/api\/drivers\/me\/(online|offline|location|available-rides)$/.test(normalizedPath)
-    || /^\/api\/drivers\/me\/rides\/[^/]+\/accept$/.test(normalizedPath);
+    || /^\/api\/drivers\/me\/(online|offline|location|available-rides|assigned)$/.test(normalizedPath)
+    || /^\/api\/drivers\/me\/rides\/[^/]+\/accept$/.test(normalizedPath)
+    || /^\/api\/drivers\/register$/.test(normalizedPath)
+    || /^\/api\/drivers\/nearby/.test(normalizedPath)
+    || /^\/api\/drivers\/[^/]+\/profile$/.test(normalizedPath)
+    || /^\/api\/drivers\/user\//.test(normalizedPath);
 };
 
 async function forwardOverHttp(
@@ -174,5 +178,44 @@ router.use('/api/pricing', (req, res) => void forward('pricing', req, res));
 router.use('/api/users', (req, res) => void forward('user', req, res));
 router.use('/api/reviews', (req, res) => void forward('review', req, res));
 router.use('/api/notifications', (req, res) => void forward('notification', req, res));
+
+// AI service — direct HTTP forward (no gRPC).
+// Routes: POST /api/ai/chat, GET /api/ai/chat/status, GET /api/ai/stats
+router.use('/api/ai', async (req, res) => {
+  try {
+    const aiBase = config.services.ai;
+    // Map /api/ai/chat → /api/chat  (strip the /ai prefix)
+    const downstreamPath = req.path.replace(/^\//, ''); // e.g. "chat" or "chat/status"
+    const url = new URL(`/api/${downstreamPath}`, aiBase);
+
+    Object.entries(req.query).forEach(([key, val]) => {
+      if (val !== undefined && val !== null) {
+        url.searchParams.set(key, String(val));
+      }
+    });
+
+    const response = await fetch(url.toString(), {
+      method: req.method,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': String(req.headers['x-user-id'] || ''),
+        'x-user-role': String(req.headers['x-user-role'] || ''),
+      },
+      body: ['GET', 'HEAD'].includes(req.method.toUpperCase())
+        ? undefined
+        : JSON.stringify(req.body || {}),
+    });
+
+    const text = await response.text();
+    try {
+      res.status(response.status).json(text ? JSON.parse(text) : {});
+    } catch {
+      res.status(response.status).send(text);
+    }
+  } catch (err) {
+    logger.error('AI service proxy error:', err);
+    res.status(503).json({ success: false, message: 'AI service temporarily unavailable' });
+  }
+});
 
 export default router;
