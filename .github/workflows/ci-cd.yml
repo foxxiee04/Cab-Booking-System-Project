@@ -159,15 +159,16 @@ jobs:
           cache: npm
 
       - name: Start integration infrastructure
-        run: docker compose -f .github/docker/docker-compose.integration.yml up -d --build --wait
+        run: docker compose -f .github/docker/docker-compose.integration.yml up -d --wait
+        # --build removed: images already public; --wait ensures containers are healthy
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build backend artifacts in dependency order
-        run: npm run build
+      - name: Build shared helpers
+        run: npm run build:shared
 
-      - name: Start backend services and run integration tests
+      - name: Run integration health checks
         run: npx tsx scripts/run-integration-backend.ts
 
       - name: Print Node service logs on failure

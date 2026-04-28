@@ -12,7 +12,7 @@ import { requireInternalServiceAuth } from './middleware/internal-auth';
 
 interface AuthAppOptions {
   authService: AuthService;
-  otpService: OtpService;
+  otpService?: OtpService;
   getReadiness: () => Promise<Record<string, boolean>>;
 }
 
@@ -80,7 +80,7 @@ export function createApp({ authService, otpService, getReadiness }: AuthAppOpti
   // Only active when OTP_SMS_MODE=mock AND NODE_ENV !== production.
   // Usage: GET /internal/dev/otp?phone=0971234567&purpose=register
   //        Header: x-internal-token: <INTERNAL_SERVICE_TOKEN>
-  if (config.sms.mode === 'mock' && config.nodeEnv !== 'production') {
+  if (otpService && config.sms.mode === 'mock' && config.nodeEnv !== 'production') {
     app.get('/internal/dev/otp', async (req, res) => {
       const phone = req.query.phone as string | undefined;
       const purpose = (req.query.purpose as string | undefined) || 'register';
