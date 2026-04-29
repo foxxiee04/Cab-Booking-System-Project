@@ -1,18 +1,13 @@
-# Cab Booking System
+# Cab Booking System — Hệ thống đặt xe công nghệ
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20.x-green)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-18-blue)](https://react.dev/)
-[![Docker](https://img.shields.io/badge/Docker-Compose%20%7C%20Swarm-blue)](https://www.docker.com/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-AI_Service-teal)](https://fastapi.tiangolo.com/)
-[![gRPC](https://img.shields.io/badge/gRPC-Internal_RPC-orange)](https://grpc.io/)
-[![RabbitMQ](https://img.shields.io/badge/RabbitMQ-Event_Bus-FF6600)](https://www.rabbitmq.com/)
-[![Socket.IO](https://img.shields.io/badge/Socket.IO-Realtime-black)](https://socket.io/)
-[![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748)](https://www.prisma.io/)
+[![Docker](https://img.shields.io/badge/Docker-Swarm-blue)](https://www.docker.com/)
+[![AWS](https://img.shields.io/badge/AWS-EC2-orange)](https://aws.amazon.com/)
+[![Domain](https://img.shields.io/badge/Domain-foxgo.online-brightgreen)](https://foxgo.online)
 
-Hệ thống đặt xe công nghệ xây dựng theo kiến trúc microservices, phục vụ ba nhóm người dùng: khách hàng, tài xế và quản trị viên. Hệ thống gồm ba ứng dụng React SPA, mười một microservice Node.js/TypeScript, một AI service FastAPI/Python, hạ tầng dữ liệu đa mô hình (PostgreSQL, MongoDB, Redis, RabbitMQ) và pipeline CI/CD trên GitHub Actions.
-
-Tài liệu này mô tả toàn diện bài toán, mục tiêu thiết kế, kiến trúc hệ thống, các pattern kỹ thuật cốt lõi, luồng nghiệp vụ chi tiết, mô hình dữ liệu, cách triển khai và vận hành.
+Hệ thống đặt xe công nghệ xây dựng theo kiến trúc **microservices**, phục vụ ba nhóm người dùng: khách hàng, tài xế và quản trị viên. Hệ thống gồm ba ứng dụng React SPA, mười một microservice Node.js/TypeScript, một AI service FastAPI/Python, hạ tầng dữ liệu đa mô hình (PostgreSQL, MongoDB, Redis, RabbitMQ) và pipeline CI/CD trên GitHub Actions triển khai lên AWS EC2.
 
 ---
 
@@ -27,8 +22,9 @@ Tài liệu này mô tả toàn diện bài toán, mục tiêu thiết kế, ki�
 - [7. Cổng dịch vụ và môi trường chạy](#7-cổng-dịch-vụ-và-môi-trường-chạy)
 - [8. Hướng dẫn cài đặt và khởi động](#8-hướng-dẫn-cài-đặt-và-khởi-động)
 - [9. Kiểm thử và CI/CD](#9-kiểm-thử-và-cicd)
-- [10. Giám sát và vận hành](#10-giám-sát-và-vận-hành)
-- [11. Hướng phát triển tiếp theo](#11-hướng-phát-triển-tiếp-theo)
+- [10. Triển khai trên AWS](#10-triển-khai-trên-aws)
+- [11. Monitoring và Observability](#11-monitoring-và-observability)
+- [12. Hướng phát triển tiếp theo](#12-hướng-phát-triển-tiếp-theo)
 
 ---
 
@@ -36,75 +32,65 @@ Tài liệu này mô tả toàn diện bài toán, mục tiêu thiết kế, ki�
 
 ### 1.1 Mục tiêu thiết kế
 
-Hệ thống được xây dựng nhằm cung cấp một ứng dụng đặt xe trực tuyến hoàn chỉnh, tương tự mô hình hoạt động của Grab hoặc Gojek, với trọng tâm là kết nối khách hàng và tài xế theo thời gian thực. Việc lựa chọn kiến trúc microservices xuất phát từ các mục tiêu thiết kế sau:
+Hệ thống được xây dựng nhằm cung cấp một ứng dụng đặt xe trực tuyến hoàn chỉnh, tương tự mô hình hoạt động của Grab hoặc Gojek, với trọng tâm là kết nối khách hàng và tài xế theo thời gian thực.
 
 - **Kết nối nhanh** giữa khách hàng và tài xế gần nhất, sử dụng geospatial indexing và thuật toán scoring đa tiêu chí.
 - **Ước lượng chi phí chính xác** dựa trên khoảng cách thực tế (OSRM), thời gian di chuyển và hệ số surge động.
 - **Cập nhật trạng thái thời gian thực** qua Socket.IO cho cả khách hàng và tài xế trong suốt vòng đời chuyến đi.
 - **Thanh toán đáng tin cậy** tích hợp MoMo và VNPay với idempotency, xử lý IPN callback nhiều lần.
 - **Ví tài xế chuẩn fintech** với ký quỹ, giữ thu nhập T+24h, tất toán công nợ FIFO.
-- **Tách biệt miền nghiệp vụ** rõ ràng — mỗi service sở hữu database riêng, không phụ thuộc schema chéo.
-- **Khả năng mở rộng ngang** thông qua Docker Swarm, Redis Adapter cho Socket.IO cluster.
-- **AI tùy chọn** — mọi lời gọi AI đều có timeout 150ms và fallback hoàn chỉnh, hệ thống hoạt động bình thường khi AI không khả dụng.
-
-Nếu toàn bộ hệ thống được xây dựng theo kiến trúc nguyên khối, các vấn đề thường gặp là khó mở rộng, khó cô lập lỗi, khó tối ưu theo từng miền nghiệp vụ và khó triển khai độc lập từng thành phần. Vì vậy, dự án lựa chọn kiến trúc microservices kết hợp ba cơ chế giao tiếp: HTTP đồng bộ, gRPC độ trễ thấp và RabbitMQ bất đồng bộ.
+- **Tách biệt miền nghiệp vụ** rõ ràng — mỗi service sở hữu database riêng.
+- **AI tùy chọn** — mọi lời gọi AI có timeout 150ms với fallback hoàn chỉnh.
 
 ### 1.2 Yêu cầu kỹ thuật
 
 | Hạng mục | Lựa chọn | Lý do |
 |---------|---------|-------|
 | Frontend | React 18, Redux Toolkit | Quản lý state phức tạp (chuyến đi, ví, realtime) |
-| Backend services | Node.js 20, Express.js, TypeScript | Hiệu năng I/O cao, type safety |
-| AI service | Python 3.11, FastAPI | Ecosystem ML (scikit-learn, sentence-transformers) |
+| Backend | Node.js 20, Express.js, TypeScript | Hiệu năng I/O cao, type safety |
+| AI service | Python 3.11, FastAPI | Ecosystem ML (scikit-learn) |
 | Giao tiếp sync | gRPC (protocol buffers) | Độ trễ thấp cho Pricing ↔ Driver lookup |
 | Giao tiếp async | RabbitMQ topic exchange | Loose coupling cho ride lifecycle, payment |
 | Realtime | Socket.IO + Redis Adapter | Cluster-aware WebSocket broadcast |
-| CSDL quan hệ | PostgreSQL 15 (port 5433) | ACID cho tài chính, ride state machine |
+| CSDL quan hệ | PostgreSQL (port 5433) | ACID cho tài chính, ride state machine |
 | CSDL document | MongoDB | Notification, review — schema linh hoạt |
 | Cache & Geo | Redis | `GEOADD`/`GEORADIUS` O(log M) tìm tài xế |
 | ORM | Prisma | Migration, type-safe queries cho 7 PostgreSQL DB |
 | Xác thực | JWT (HS256) + Refresh Token | Stateless auth, revoke qua DB |
-| Triển khai | Docker Compose, Docker Swarm | Local dev → production scaling |
-| CI/CD | GitHub Actions | Quality gate: unit → contract → integration → build |
+| Triển khai | Docker Swarm | Production scaling trên AWS |
+| CI/CD | GitHub Actions | Quality gate → Docker Hub → SSH deploy |
 
 ### 1.3 Chức năng chính
 
 #### Khách hàng
-
-- Đăng ký, đăng nhập qua số điện thoại + OTP, đặt lại mật khẩu.
-- Xem giá ước tính (có surge, AI-assisted ETA) trước khi xác nhận đặt xe.
-- Theo dõi vị trí tài xế trên bản đồ real-time trong suốt chuyến đi.
-- Thanh toán tiền mặt, MoMo hoặc VNPay; nhận thông báo xác nhận.
-- Chat và gọi điện thoại trực tiếp với tài xế qua WebRTC trong chuyến.
-- Xem lịch sử chuyến đi, đánh giá tài xế sau mỗi chuyến.
-- Sử dụng voucher/mã giảm giá.
-- Trò chuyện với trợ lý AI chatbot hỗ trợ (RAG-based).
+- Đăng ký/đăng nhập qua số điện thoại + OTP
+- Xem giá ước tính (surge, AI-assisted ETA) trước khi đặt
+- Theo dõi tài xế trên bản đồ real-time trong suốt chuyến
+- Thanh toán tiền mặt, MoMo, VNPay
+- Chat và gọi điện WebRTC với tài xế trong chuyến
+- Đánh giá tài xế, dùng voucher/mã giảm giá
+- AI chatbot hỗ trợ (RAG-based)
 
 #### Tài xế
-
-- Đăng ký, upload hồ sơ phương tiện và bằng lái; chờ quản trị duyệt.
-- Bật/tắt trạng thái sẵn sàng nhận chuyến (ONLINE/OFFLINE).
-- Nhận offer chuyến đi, xem thông tin khách hàng và điểm đón trên bản đồ.
-- Cập nhật trạng thái lần lượt: đến đón → đã đón → hoàn thành.
-- Nạp tiền ký quỹ kích hoạt ví; xem số dư, thu nhập, lịch sử giao dịch.
-- Yêu cầu rút tiền về tài khoản ngân hàng.
-- Chat và gọi điện với khách hàng trong chuyến.
+- Đăng ký, upload hồ sơ xe + bằng lái; chờ admin duyệt
+- Bật/tắt nhận chuyến (ONLINE/OFFLINE)
+- Nhận offer, xem điểm đón/trả trên bản đồ
+- Cập nhật trạng thái: đến đón → đã đón → hoàn thành
+- Ví điện tử: nạp ký quỹ, xem thu nhập, rút tiền về ngân hàng
 
 #### Quản trị viên
-
-- Dashboard tổng quan: số chuyến, doanh thu, tài xế hoạt động, người dùng mới.
-- Duyệt/từ chối/tạm ngưng hồ sơ tài xế.
-- Quản lý ví thương nhân (merchant balance, ledger).
-- Duyệt yêu cầu rút tiền của tài xế.
-- Xem và ẩn đánh giá vi phạm chính sách.
+- Dashboard tổng quan: chuyến đi, doanh thu, tài xế hoạt động
+- Duyệt/từ chối hồ sơ tài xế
+- Quản lý ví thương nhân (merchant balance, ledger)
+- Duyệt yêu cầu rút tiền của tài xế
 
 ### 1.4 Phân rã microservices
 
 | Service | Bounded Context | Trách nhiệm |
 |---------|----------------|-------------|
 | API Gateway | Infrastructure | Entry point, JWT auth, proxy, Socket.IO hub, driver matching |
-| Auth Service | Identity | Đăng ký, đăng nhập, OTP, JWT, refresh token |
-| User Service | User Profile | Hồ sơ người dùng mở rộng (tên, avatar) |
+| Auth Service | Identity | Đăng ký, đăng nhập, OTP (SMS/SNS/Twilio), JWT |
+| User Service | User Profile | Hồ sơ người dùng mở rộng |
 | Driver Service | Driver Domain | Hồ sơ tài xế, trạng thái, vị trí địa lý |
 | Ride Service | Ride Domain | Vòng đời chuyến đi, state machine, chat |
 | Booking Service | Booking Domain | Tạo booking, xem giá, chuyển sang ride |
@@ -121,85 +107,74 @@ Nếu toàn bộ hệ thống được xây dựng theo kiến trúc nguyên kh�
 
 ### 2.1 Bounded Contexts và Context Map
 
-Mỗi microservice tương ứng với một **Bounded Context** độc lập — có ngôn ngữ riêng (Ubiquitous Language), model dữ liệu riêng và giao tiếp qua interface tường minh. Các context tương tác với nhau qua ba cơ chế: gRPC (synchronous), RabbitMQ events (asynchronous) và Shared Kernel (shared TypeScript types trong `@cab-booking/shared`).
-
 ```mermaid
 graph TB
-    subgraph IAC["Identity and Access Context\nauth-service"]
-        U["User (Aggregate Root)\nphone · email · role · status"]
-        RT["RefreshToken (Entity)"]
-        OTP_E["OTP (Value Object)\nhash · ttl · attempts"]
+    subgraph IAC["Identity and Access\nauth-service"]
+        U["User (AR)"]
+        RT["RefreshToken"]
+        OTP_E["OTP"]
         U --- RT
         U --- OTP_E
     end
 
-    subgraph UPC["User Profile Context\nuser-service"]
-        UP["UserProfile (Aggregate Root)"]
-        ADDR["Address (Value Object)"]
-        UP --- ADDR
+    subgraph UPC["User Profile\nuser-service"]
+        UP["UserProfile (AR)"]
     end
 
-    subgraph RIDC["Ride Management Context\nride-service"]
-        R["Ride (Aggregate Root)\nstatus · fare · locations"]
-        RL["RideLocation (Entity)"]
-        RE["RideStateTransition (Entity)"]
-        CHAT["RideChatMessage (Entity)"]
+    subgraph RIDC["Ride Management\nride-service"]
+        R["Ride (AR)\nstatus · fare · locations"]
+        RL["RideLocation"]
+        RE["RideStateTransition"]
         R --- RL
         R --- RE
-        R --- CHAT
     end
 
-    subgraph DRC["Driver Management Context\ndriver-service"]
-        DV["Driver (Aggregate Root)\nstatus · rating · geo"]
-        DL["DriverLocation (Value Object)"]
-        DLI["DriverLicense (Entity)"]
+    subgraph DRC["Driver Management\ndriver-service"]
+        DV["Driver (AR)\nstatus · rating · geo"]
+        DL["DriverLocation"]
+        DLI["DriverLicense"]
         DV --- DL
         DV --- DLI
     end
 
-    subgraph BC["Booking Context\nbooking-service"]
-        BK["Booking (Aggregate Root)\npickup · dropoff · fare"]
+    subgraph BC["Booking\nbooking-service"]
+        BK["Booking (AR)"]
     end
 
-    subgraph PRC["Pricing Context\npricing-service — stateless"]
-        PQ["PricingQuery (Value Object)"]
-        SR["SurgeRate (Value Object)"]
-        PQ --- SR
+    subgraph PRC["Pricing\npricing-service"]
+        PQ["PricingQuery (VO)"]
+        SR["SurgeRate (VO)"]
     end
 
-    subgraph PAC["Payment Context\npayment-service"]
-        P["Payment (Aggregate Root)"]
-        TX["Transaction (Entity)"]
-        IPK["IdempotencyKey (Value Object)"]
-        FARE["Fare (Entity)"]
-        OBX["OutboxEvent (Entity)"]
+    subgraph PAC["Payment\npayment-service"]
+        P["Payment (AR)"]
+        TX["Transaction"]
+        IPK["IdempotencyKey (VO)"]
+        OBX["OutboxEvent"]
         P --- TX
         P --- IPK
-        P --- FARE
         P --- OBX
     end
 
-    subgraph WC["Wallet Context\nwallet-service"]
-        W["DriverWallet (Aggregate Root)\nbalance · pendingBalance · lockedBalance"]
-        WT["WalletTransaction (Entity)"]
-        DR["DebtRecord (Entity)"]
-        PE["PendingEarning (Entity)"]
-        ML["MerchantLedger (Entity)"]
+    subgraph WC["Wallet\nwallet-service"]
+        W["DriverWallet (AR)"]
+        WT["WalletTransaction"]
+        DR["DebtRecord"]
+        PE["PendingEarning"]
         W --- WT
         W --- DR
         W --- PE
-        ML
     end
 
-    subgraph NC["Notification Context\nnotification-service"]
-        N["Notification (Aggregate Root)"]
-        PT["PushToken (Entity)"]
+    subgraph NC["Notification\nnotification-service"]
+        N["Notification (AR)"]
+        PT["PushToken"]
         N --- PT
     end
 
-    subgraph RVC["Review Context\nreview-service"]
-        RV["Review (Aggregate Root)"]
-        RAT["Rating (Value Object)\n1-5 stars · tags"]
+    subgraph RVC["Review\nreview-service"]
+        RV["Review (AR)"]
+        RAT["Rating (VO)"]
         RV --- RAT
     end
 
@@ -219,110 +194,45 @@ graph TB
 
 | Bounded Context | Aggregate Root | Entities | Value Objects | Domain Services |
 |---|---|---|---|---|
-| Identity & Access | User | RefreshToken, OtpRecord | OTP (hash+ttl), Phone | OtpService, JwtService |
+| Identity & Access | User | RefreshToken | OTP (hash+ttl), Phone | OtpService, JwtService |
 | User Profile | UserProfile | — | Address | — |
-| Ride Management | Ride | RideLocation, RideStateTransition, RideChatMessage | Coordinate, Fare | RideStateMachine |
+| Ride Management | Ride | RideLocation, RideStateTransition | Coordinate, Fare | RideStateMachine |
 | Driver Management | Driver | DriverLicense | DriverLocation | AvailabilityChecker |
-| Booking | Booking | — | BookingStatus, EstimatedFare | — |
-| Pricing | — | — | PricingResult, SurgeRate, SurgeWindow | PricingCalculator |
-| Payment | Payment | Transaction, Fare, OutboxEvent | IdempotencyKey, Money | PaymentSaga |
-| Wallet | DriverWallet | WalletTransaction, DebtRecord, PendingEarning | Money, MerchantLedger | CommissionCalculator, DebtSettler |
-| Notification | Notification | PushToken | — | SmsDispatcher, PushDispatcher |
-| Review | Review | — | Rating (1–5 + tags) | RatingAggregator |
+| Booking | Booking | — | EstimatedFare | — |
+| Pricing | — | — | PricingResult, SurgeRate | PricingCalculator |
+| Payment | Payment | Transaction, OutboxEvent | IdempotencyKey, Money | PaymentSaga |
+| Wallet | DriverWallet | WalletTransaction, DebtRecord, PendingEarning | Money | CommissionCalculator |
+| Notification | Notification | PushToken | — | SmsDispatcher |
+| Review | Review | — | Rating (1–5) | — |
 
 ### 2.3 Domain Events
 
-Toàn bộ events được publish qua RabbitMQ `domain-events` topic exchange. Type definitions được định nghĩa trong `shared/types/events.ts`.
-
-```mermaid
-graph LR
-    subgraph PUB["Publishers"]
-        RS["ride-service"]
-        BS["booking-service"]
-        PS["payment-service"]
-        WS_P["wallet-service"]
-        AS["auth-service"]
-        DS["driver-service"]
-        REVS["review-service"]
-    end
-
-    subgraph MQ["RabbitMQ domain-events"]
-        E1(["ride.created"])
-        E2(["ride.offered"])
-        E3(["ride.assigned"])
-        E4(["ride.completed"])
-        E5(["ride.cancelled"])
-        E6(["booking.confirmed"])
-        E7(["payment.completed"])
-        E8(["driver.earning.settled"])
-        E9(["refund.completed"])
-        E10(["wallet.topup.completed"])
-        E11(["user.registered"])
-        E12(["driver.approved"])
-        E13(["driver.rating_updated"])
-    end
-
-    subgraph SUB["Subscribers"]
-        GW_S["api-gateway\nSocket.IO emit"]
-        NS["notification-service\nPush / SMS"]
-        WS_S["wallet-service\nCredit / Debt"]
-        PS_S["payment-service\nTopup sync"]
-        US["user-service\nCreate profile"]
-        DS_S["driver-service\nUpdate rating"]
-        WS2["wallet-service\nCreate wallet"]
-    end
-
-    RS --> E1 & E2 & E3 & E4 & E5
-    BS --> E6
-    PS --> E7 & E8 & E9
-    WS_P --> E10
-    AS --> E11
-    DS --> E12
-    REVS --> E13
-
-    E1 --> GW_S
-    E2 --> GW_S
-    E3 --> GW_S & NS
-    E4 --> GW_S & NS & PS_S
-    E5 --> GW_S & NS & PS_S
-    E6 --> RS
-    E7 --> NS
-    E8 --> WS_S
-    E9 --> WS_S & NS
-    E10 --> PS_S & NS
-    E11 --> US
-    E12 --> WS2 & NS
-    E13 --> DS_S
-```
-
 | Event | Publisher | Subscribers | Mô tả |
 |---|---|---|---|
-| `ride.created` | ride-service | api-gateway | Chuyến mới tạo, kích hoạt matching |
-| `ride.offered` | ride-service | api-gateway | Gateway emit Socket.IO → driver app |
-| `ride.assigned` | ride-service | api-gateway, notification | Tài xế chấp nhận |
-| `ride.completed` | ride-service | payment, api-gateway, notification | Kích hoạt luồng thanh toán |
+| `ride.created` | ride-service | api-gateway | Kích hoạt matching engine |
+| `ride.accepted` | ride-service | api-gateway, notification | Tài xế chấp nhận |
+| `ride.completed` | ride-service | payment, api-gateway, notification | Kích hoạt thanh toán |
 | `ride.cancelled` | ride-service | payment, api-gateway, notification | Hoàn tiền nếu có |
 | `booking.confirmed` | booking-service | ride-service | Tạo Ride từ Booking |
-| `payment.completed` | payment-service | notification | Xác nhận thanh toán → khách hàng |
 | `driver.earning.settled` | payment-service | wallet-service | Credit ví tài xế |
 | `refund.completed` | payment-service | wallet, notification | Hoàn tiền |
 | `wallet.topup.completed` | wallet-service | payment, notification | Nạp tiền thành công |
 | `user.registered` | auth-service | user-service | Tạo UserProfile |
-| `driver.approved` | driver-service | wallet, notification | Tạo ví + thông báo duyệt |
-| `driver.rating_updated` | review-service | driver-service | Cập nhật rating tài xế |
+| `driver.approved` | driver-service | wallet, notification | Tạo ví + thông báo |
+| `driver.rating_updated` | review-service | driver-service | Cập nhật rating |
 
 ### 2.4 Invariants và Business Rules
 
-| Context | Invariant / Business Rule |
+| Context | Invariant |
 |---|---|
-| Ride | Chỉ các transition trong `VALID_TRANSITIONS` được phép; không update `status` trực tiếp |
-| Payment | Mỗi `Payment` có `idempotencyKey` unique; IPN callback phải idempotent |
-| Wallet | Trước khi ONLINE, tài xế phải có `balance > DEBT_LIMIT` (-500,000đ) |
-| Wallet | Cash ride: tài xế nhận toàn bộ tiền mặt nhưng nợ `platformFee` (debited từ ví) |
-| Wallet | Thu nhập giữ `T+24h` trong `PendingEarning` trước khi release |
-| Wallet | Tất toán nợ FIFO: trả nợ cũ nhất trước khi credit `availableBalance` |
-| Wallet | Ký quỹ 300,000đ bắt buộc để kích hoạt ví |
-| AI | Mọi call tới AI Service có timeout 150ms với fallback hoàn chỉnh |
+| Ride | Chỉ transition hợp lệ trong `VALID_TRANSITIONS` — không update `status` trực tiếp |
+| Payment | `idempotencyKey` unique — IPN callback phải idempotent |
+| Wallet | Trước khi ONLINE: `balance > DEBT_LIMIT` (-500,000đ) |
+| Wallet | Cash ride: tài xế nhận tiền mặt, nợ `platformFee` vào wallet |
+| Wallet | Thu nhập giữ T+24h trong `PendingEarning` trước khi release |
+| Wallet | FIFO debt settlement: trả nợ cũ nhất trước |
+| Wallet | Ký quỹ bắt buộc 300,000đ để kích hoạt ví |
+| AI | Mọi call có timeout 150ms với fallback |
 
 ---
 
@@ -330,17 +240,21 @@ graph LR
 
 ### 3.1 Lớp kiến trúc
 
-Hệ thống được tổ chức thành bốn lớp rõ ràng:
-
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        PRESENTATION LAYER                            │
 │    Customer App (:4000)   Driver App (:4001)   Admin (:4002)        │
 │              React 18 + Redux Toolkit + Socket.IO client            │
 └────────────────────────────────┬────────────────────────────────────┘
-                                 │ HTTP + WebSocket
+                                 │ HTTPS + WebSocket
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────┐
+│                    Nginx (host) + Let's Encrypt SSL                  │
+│   api.foxgo.online → :3000 (proxy)                                  │
+│   foxgo.online     → /home/ubuntu/customer-build  (static)          │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+┌────────────────────────────────▼────────────────────────────────────┐
 │                          GATEWAY LAYER                               │
 │                    API Gateway (:3000)                               │
 │   JWT Verify  │  HTTP Proxy  │  Rate Limit  │  Address Normalize    │
@@ -355,11 +269,11 @@ Hệ thống được tổ chức thành bốn lớp rõ ràng:
 │  gRPC    │  │ gRPC:    │  │  Wallet  User  Notification  Review  │
 │  :50051  │  │ :50057   │  │  (mỗi service: HTTP + DB riêng)     │
 └──────────┘  └─────┬────┘  └─────────────────────────────────────┘
-                    │ HTTP (timeout 150ms)
+                    │ HTTP (timeout 150ms, fallback)
                     ▼
              ┌──────────┐
              │    AI    │
-             │  :8000   │ FastAPI/Python
+             │  :8000   │ FastAPI/Python — ETA, Surge, RAG
              └──────────┘
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        DATA & INFRA LAYER                            │
@@ -367,14 +281,14 @@ Hệ thống được tổ chức thành bốn lớp rõ ràng:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 Sơ đồ kiến trúc hệ thống (Block Diagram)
+### 3.2 Sơ đồ kiến trúc hệ thống
 
 ```mermaid
 graph TB
     subgraph Frontend ["Frontend (React SPAs)"]
-        Customer["Customer App\n:4000"]
-        Driver["Driver App\n:4001"]
-        Admin["Admin Dashboard\n:4002"]
+        Customer["Customer\n:4000"]
+        Driver["Driver\n:4001"]
+        Admin["Admin\n:4002"]
     end
 
     subgraph Gateway ["Gateway Layer"]
@@ -406,128 +320,38 @@ graph TB
     end
 
     Customer & Driver & Admin --> APIGW
-
     APIGW -- "HTTP proxy" --> Auth & User & Ride & DriverSvc
     APIGW -- "HTTP proxy" --> Booking & Payment & Wallet & Notification & Review
     APIGW -- "gRPC bridge" --> Pricing
     APIGW -- "gRPC" --> DriverSvc
-
-    Pricing -- "HTTP 150ms\nfallback" --> AI
+    Pricing -- "HTTP 150ms fallback" --> AI
 
     Auth & User & Ride & DriverSvc --> PG
     Booking & Payment & Wallet --> PG
     Notification --> Mongo
     Review --> Mongo
     DriverSvc & Pricing --> Redis
-    APIGW -- "Socket.IO\nRedis Adapter" --> Redis
-
+    APIGW -- "Socket.IO Redis Adapter" --> Redis
     Ride & Booking -- "publish" --> Rabbit
-    Payment & Wallet -- "publish\n(Outbox)" --> Rabbit
+    Payment & Wallet -- "publish (Outbox)" --> Rabbit
     Rabbit -- "consume" --> APIGW & Notification & Wallet & Review
 ```
 
-### 3.3 Cơ chế giao tiếp giữa các service
-
-Hệ thống dùng ba cơ chế giao tiếp khác nhau tùy theo yêu cầu về độ trễ và coupling:
-
-#### HTTP Proxy (qua API Gateway)
-
-Tất cả request từ client đi qua API Gateway → proxy đến service tương ứng. Gateway inject ba header xác thực sau khi verify JWT:
-```
-x-user-id:    <uuid>     # Auth User.id
-x-user-role:  CUSTOMER|DRIVER|ADMIN
-x-user-email: <email>
-```
-Downstream services **tin tưởng** các header này mà không re-verify JWT.
-
-#### gRPC (Internal Low-Latency)
-
-Dùng cho các lời gọi đồng bộ yêu cầu độ trễ thấp giữa các service nội bộ:
-
-| Client | gRPC Server | RPC Method | Mục đích |
-|--------|-----------|-----------|---------|
-| API Gateway | Driver Service :50055 | `GetDriverById` | Lấy thông tin tài xế để hiển thị |
-| API Gateway | Pricing Service :50057 | `EstimateFare` | Tính giá (tránh JSON overhead) |
-| Booking Service | Pricing Service :50057 | `EstimateFare` | Giá ước tính khi tạo booking |
-| Ride Service | Pricing Service :50057 | `EstimateFare` | Giá cuối khi hoàn thành chuyến |
-| * | Auth Service :50051 | `ValidateUser` | Xác minh userId nội bộ |
-
-#### RabbitMQ Topic Exchange (`domain-events`)
-
-Dùng cho các luồng bất đồng bộ, loose coupling — xem bảng đầy đủ ở [Mục 2.3](#23-domain-events).
-
-#### Socket.IO Realtime
-
-API Gateway là **Socket.IO hub duy nhất** trong hệ thống. Redis Adapter đảm bảo events được phân phối đúng khi scale ngang:
-
-```
-Tài xế / Khách hàng kết nối → authenticate(token) → join room: userId, rideId
-Gateway phát events:
-  ride:status_update     → cả driver lẫn customer trong rideId room
-  ride:driver_location   → customer theo dõi vị trí tài xế
-  ride:offer             → driver nhận offer chuyến mới
-  call:incoming          → WebRTC incoming call signal
-  call:offer/answer/ice  → WebRTC relay P2P negotiation
-  ride:chat_message      → tin nhắn chat hai chiều
-```
-
-### 3.4 Các pattern kỹ thuật cốt lõi
+### 3.3 Các pattern kỹ thuật cốt lõi
 
 | Pattern | Service áp dụng | Vấn đề giải quyết |
 |---------|----------------|------------------|
-| **State Machine** | Ride Service | Kiểm soát chuyển trạng thái hợp lệ cho chuyến đi |
-| **Outbox Pattern** | Payment, Wallet | Đảm bảo at-least-once delivery cho events dù RabbitMQ tạm ngắt |
-| **Idempotency Key** | Payment | IPN callback gọi nhiều lần → không xử lý trùng |
-| **Geospatial Index** | Driver + Gateway | Redis `GEOADD`/`GEORADIUS` — tìm tài xế O(log M) |
-| **T+24h Pending Hold** | Wallet Service | Giữ thu nhập trước khi rút, phòng tranh chấp |
-| **FIFO Debt Settlement** | Wallet Service | Ưu tiên trả nợ cũ nhất trước khi credit số dư |
-| **Security Deposit** | Wallet Service | Ký quỹ 300.000đ bắt buộc để kích hoạt ví |
-| **WebRTC P2P** | Gateway + Client | Cuộc gọi thoại trực tiếp tài xế↔khách qua ICE relay |
+| **State Machine** | Ride Service | Kiểm soát chuyển trạng thái hợp lệ |
+| **Outbox Pattern** | Payment, Wallet | at-least-once delivery dù RabbitMQ tạm ngắt |
+| **Idempotency Key** | Payment | IPN callback nhiều lần không xử lý trùng |
+| **Geospatial Index** | Driver + Gateway | Redis `GEOADD`/`GEORADIUS` O(log M) |
+| **T+24h Pending Hold** | Wallet | Giữ thu nhập trước khi rút |
+| **FIFO Debt Settlement** | Wallet | Ưu tiên trả nợ cũ nhất |
+| **Security Deposit** | Wallet | Ký quỹ 300,000đ để kích hoạt ví |
+| **WebRTC P2P** | Gateway + Client | Call thoại tài xế ↔ khách qua ICE relay |
 | **gRPC Bridge** | API Gateway | HTTP→gRPC cho Pricing và Driver lookup |
-| **AI Fallback** | Pricing Service | Timeout 150ms → fallback về rule-based surge |
-| **Database-per-Service** | Tất cả | Không chia sẻ schema — mỗi service sở hữu database riêng |
-
-### 3.5 Sơ đồ triển khai và vận hành
-
-```mermaid
-flowchart LR
-    Dev[Developer\npush/PR] --> Git[GitHub Repository]
-    Git --> CI[GitHub Actions]
-
-    subgraph QualityGate ["Quality Gate (parallel jobs)"]
-        Unit[test-unit\nPostgres + Redis + Mongo + Rabbit]
-        Contract[test-contract\nDriver ↔ Ride boundary]
-        Integration[test-integration\nDocker-backed full stack]
-        AITest[test-ai\npytest FastAPI]
-    end
-
-    CI --> QualityGate
-    QualityGate --> Build[Build Docker Images\n& Push to Registry]
-    Build --> Runtime["Docker Compose (dev)\nDocker Swarm (prod)"]
-    Runtime --> Users[Customer · Driver · Admin]
-```
-
-### 3.6 Bảng tóm tắt thành phần
-
-| Thành phần | Vai trò chính | Công nghệ |
-|-----------|-------------|----------|
-| Customer / Driver / Admin App | Giao diện SPA, realtime updates | React 18, Redux Toolkit, Socket.IO |
-| API Gateway | Entry point, matching engine, realtime hub | Node.js, Express, Socket.IO, ioredis |
-| Auth Service | Đăng ký, đăng nhập, JWT, OTP | Node.js, Prisma, bcryptjs |
-| User Service | Hồ sơ người dùng mở rộng | Node.js, Prisma |
-| Driver Service | Tài xế, vị trí địa lý, trạng thái | Node.js, Prisma, Redis |
-| Ride Service | Vòng đời chuyến đi, state machine, chat | Node.js, Prisma, RabbitMQ |
-| Booking Service | Tạo booking, xem giá trước đặt | Node.js, Prisma |
-| Payment Service | Thanh toán MoMo/VNPay, IPN, hoa hồng | Node.js, Prisma, Outbox Pattern |
-| Wallet Service | Ví tài xế fintech (T+24h, FIFO debt) | Node.js, Prisma |
-| Pricing Service | Tính giá, surge, tích hợp AI | Node.js, Redis, gRPC |
-| Notification Service | Email, SMS, push — event-driven | Node.js, MongoDB |
-| Review Service | Đánh giá hai chiều, rating | Node.js, MongoDB |
-| AI Service | ETA/surge ML, accept prob, wait time, RAG chatbot | Python, FastAPI, scikit-learn, FAISS |
-| PostgreSQL | CSDL quan hệ — 7 database độc lập | PostgreSQL 15 |
-| MongoDB | CSDL document — notification, review | MongoDB 7 |
-| Redis | Cache, geospatial, Socket.IO adapter | Redis 7 |
-| RabbitMQ | Event bus bất đồng bộ | RabbitMQ 3.13 |
+| **AI Fallback** | Pricing | Timeout 150ms → fallback rule-based surge |
+| **Database-per-Service** | Tất cả | Không chia sẻ schema |
 
 ---
 
@@ -535,433 +359,89 @@ flowchart LR
 
 ### 4.1 Luồng đặt xe và ghép tài xế
 
-Đây là luồng phức tạp nhất, phối hợp sáu service và ba cơ chế giao tiếp khác nhau.
-
 ```mermaid
 sequenceDiagram
     participant C as Customer App
     participant G as API Gateway
     participant B as Booking Service
     participant P as Pricing Service
-    participant AI as AI Service
-    participant MQ as RabbitMQ
     participant R as Ride Service
     participant D as Driver Service
-    participant Redis as Redis Geo Index
+    participant Redis as Redis Geo
     participant DA as Driver App
 
-    C->>G: POST /api/bookings\n{pickup, dropoff, vehicleType}
-    G->>B: Forward request
-    B->>P: gRPC EstimateFare\n{pickupLat/Lng, dropoffLat/Lng, type}
-    P->>AI: POST /api/predict\n{distance_km, time_of_day, day_type}\n[timeout 150ms]
-    alt AI available
-        AI-->>P: {eta_minutes, price_multiplier, insights}
-    else AI timeout / error
-        P-->>P: Dùng surge từ Redis hoặc 1.0
-    end
+    C->>G: POST /api/bookings {pickup, dropoff, vehicleType}
+    G->>B: Forward
+    B->>P: gRPC EstimateFare
     P-->>B: {fare, distance, duration, surge}
-    B-->>G: {bookingId, estimatedFare}
-    G-->>C: Hiển thị giá ước tính + ETA
+    B-->>C: Hiển thị giá + ETA
 
     C->>G: POST /api/bookings/:id/confirm
-    G->>B: Confirm booking
-    B->>MQ: Publish booking.confirmed
-    MQ->>R: [Consumer] Tạo Ride mới (status=CREATED)
-    R->>MQ: Publish ride.created
-    MQ->>G: [Consumer] Kích hoạt matching engine
+    B->>RabbitMQ: booking.confirmed
+    RabbitMQ->>R: Tạo Ride PENDING
+    R->>RabbitMQ: ride.created
+    RabbitMQ->>G: Kích hoạt matching
 
-    loop Vòng matching (tối đa 3 vòng)
-        G->>Redis: GEORADIUS drivers:geo:online\nround1: 2km / round2: 3km / round3: 5km
-        Redis-->>G: Danh sách driverId gần nhất
+    loop 3 vòng: 2km×1, 3km×3, 5km×5
+        G->>Redis: GEORADIUS (radius, online drivers)
         G->>D: gRPC GetDriverById (batch)
-        D-->>G: {rating, acceptRate, cancelRate, idleTime}
-        Note over G: Score = 0.40×distance + 0.25×rating\n+ 0.15×idleTime + 0.15×acceptRate - 0.05×cancelRate
-        G->>R: Cập nhật offeredDriverIds
-        R->>MQ: Publish ride.offered
-        MQ->>G: [Consumer] Socket.IO → DA
-        G-->>DA: Emit ride:offer {rideId, fare, pickup, dropoff}
-
+        Note over G: Score = 0.40×dist + 0.25×rating + 0.15×idle + 0.15×accept − 0.05×cancel
+        G-->>DA: Socket.IO emit ride:offer
         alt Tài xế chấp nhận trong 30s
             DA->>G: POST /api/rides/:id/accept
-            G->>R: Driver accept
-            R->>MQ: Publish ride.assigned
-            MQ->>G: Socket.IO → C
-            G-->>C: Emit ride:status_update (ASSIGNED)\n+ thông tin tài xế
-        else Timeout / từ chối
-            Note over G: reassignAttempts++\ndriverId → rejectedDriverIds\nChuyển vòng tiếp theo
+            G->>R: PENDING → ACCEPTED
+            G-->>C: Socket.IO ride:status_update
         end
     end
 ```
 
-**Giải thích:**
-- API Gateway giữ vai trò **Matching Engine** — không phải Ride Service hay Driver Service.
-- Geospatial index trong Redis cho phép tìm tài xế gần nhất với độ phức tạp O(log M) thay vì full table scan.
-- Ba vòng bán kính mở rộng (2→3→5 km) đảm bảo tìm được tài xế kể cả khi mật độ thấp.
-- AI Service cung cấp `price_multiplier` và `recommended_driver_radius_km` để tinh chỉnh cả giá lẫn chiến lược tìm kiếm.
-
-### 4.2 Thuật toán điều phối tài xế (Driver Matching)
-
-```mermaid
-flowchart TD
-    Start([ride.created event]) --> R1
-    
-    subgraph Round1 ["Vòng 1: radius=2km, max=1 tài xế"]
-        R1[GEORADIUS 2km\nLấy tài xế online] --> Score1[Tính điểm scoring\nFilter APPROVED + ONLINE]
-        Score1 --> Offer1[Gửi offer cho tài xế điểm cao nhất]
-        Offer1 --> Wait1{Chờ 30s}
-        Wait1 -->|Accept| Assigned([ASSIGNED ✅])
-        Wait1 -->|Reject / Timeout| R2
-    end
-    
-    subgraph Round2 ["Vòng 2: radius=3km, max=3 tài xế"]
-        R2[GEORADIUS 3km\nLoại rejected IDs] --> Score2[Tính điểm, chọn top 3]
-        Score2 --> Offer2[Gửi offer đồng thời 3 tài xế]
-        Offer2 --> Wait2{Chờ 30s\nFirst-accept-wins}
-        Wait2 -->|Accept| Assigned
-        Wait2 -->|All reject / Timeout| R3
-    end
-    
-    subgraph Round3 ["Vòng 3: radius=5km, max=5 tài xế"]
-        R3[GEORADIUS 5km\nLoại rejected IDs] --> Score3[Tính điểm, chọn top 5]
-        Score3 --> Offer3[Broadcast 5 tài xế]
-        Offer3 --> Wait3{Chờ 30s}
-        Wait3 -->|Accept| Assigned
-        Wait3 -->|All fail| NoDriver([ride.no_driver_found\nThông báo khách hàng ❌])
-    end
-```
-
-**Công thức tính điểm:**
-
-```
-score = 0.40 × (1 − normalizedDistance)  # Khoảng cách: càng gần càng tốt
-      + 0.25 × normalizedRating           # Rating trung bình (0–5 sao)
-      + 0.15 × normalizedIdleTime         # Thời gian chờ (ưu tiên chờ lâu)
-      + 0.15 × acceptanceRate             # Tỷ lệ chấp nhận lịch sử
-      − 0.05 × cancelRate                 # Trừ điểm tỷ lệ hủy
-```
-
-Nếu `MATCHING_AI_ADJUSTMENT_ENABLED=true`, xác suất chấp nhận từ AI Service điều chỉnh score (timeout 150ms, fallback về score gốc).
-
-### 4.3 Luồng thực hiện chuyến đi (State Machine)
-
-Ride Service enforce toàn bộ chuyển trạng thái qua state machine. Mọi cập nhật status đều phải qua hàm `transition()` — không update trực tiếp field `status`.
+### 4.2 State Machine — Vòng đời chuyến đi
 
 ```mermaid
 stateDiagram-v2
-    [*] --> CREATED: customer tạo ride
-    CREATED --> FINDING_DRIVER: booking.confirmed
-    FINDING_DRIVER --> OFFERED: matching chọn tài xế
-    OFFERED --> ASSIGNED: driver accept
-    OFFERED --> FINDING_DRIVER: timeout / reject
-    ASSIGNED --> ACCEPTED: driver xác nhận
-    ACCEPTED --> PICKING_UP: driver báo đang đến
-    PICKING_UP --> IN_PROGRESS: driver đón được khách
-    IN_PROGRESS --> COMPLETED: driver hoàn thành
-    CREATED --> CANCELLED: khách hủy sớm
-    FINDING_DRIVER --> CANCELLED: không tìm được tài xế
-    OFFERED --> CANCELLED: khách hủy
-    ASSIGNED --> CANCELLED: khách / tài xế hủy
-    ACCEPTED --> CANCELLED
-    PICKING_UP --> CANCELLED
+    [*] --> PENDING : Khách đặt xe
+    PENDING --> ACCEPTED : Tài xế chấp nhận
+    PENDING --> CANCELLED : Timeout / Không có tài xế
+
+    ACCEPTED --> IN_PROGRESS : Tài xế bắt đầu chuyến
+    ACCEPTED --> CANCELLED : Tài xế/khách huỷ
+
+    IN_PROGRESS --> COMPLETED : Tài xế kết thúc
+    IN_PROGRESS --> CANCELLED : Admin huỷ khẩn cấp
+
     COMPLETED --> [*]
     CANCELLED --> [*]
 ```
 
-```mermaid
-sequenceDiagram
-    participant DA as Driver App
-    participant G as API Gateway
-    participant R as Ride Service
-    participant MQ as RabbitMQ
-    participant CA as Customer App
-
-    DA->>G: POST /api/rides/:id/arrived\n(tài xế đến điểm đón)
-    G->>R: Transition → PICKING_UP
-    R->>MQ: Publish ride.picking_up
-    MQ->>G: Socket.IO event
-    G-->>CA: Emit ride:status_update (PICKING_UP)
-
-    DA->>G: POST /api/rides/:id/start\n(đã đón được khách)
-    G->>R: Transition → IN_PROGRESS
-    R->>MQ: Publish ride.started
-    G-->>CA: Emit ride:status_update (IN_PROGRESS)
-
-    loop Mỗi ~5 giây (khi IN_PROGRESS)
-        DA->>G: PUT /api/driver/me/location {lat, lng}
-        G->>Redis: GEOADD drivers:geo:online
-        G-->>CA: Emit ride:driver_location {lat, lng}
-    end
-
-    DA->>G: POST /api/rides/:id/complete
-    G->>R: Transition → COMPLETED
-    R->>MQ: Publish ride.completed
-    MQ->>G: Socket.IO event
-    MQ->>PaymentService: Trigger thanh toán
-    G-->>CA: Emit ride:status_update (COMPLETED)
-```
-
-### 4.4 Luồng thanh toán — MoMo/VNPay và Idempotency
-
-Đây là luồng fintech phức tạp nhất, đảm bảo thanh toán đúng kể cả khi IPN callback gọi nhiều lần.
+### 4.3 Luồng thanh toán (Outbox Pattern + Idempotency)
 
 ```mermaid
 sequenceDiagram
     participant R as Ride Service
     participant MQ as RabbitMQ
     participant Pay as Payment Service
-    participant DB as payment_db
-    participant MoMo as MoMo/VNPay Gateway
-    participant Wallet as Wallet Service
-    participant N as Notification Service
-
-    R->>MQ: Publish ride.completed {rideId, fare, method}
-    MQ->>Pay: [Consumer] Xử lý thanh toán
-
-    Pay->>DB: INSERT Fare {baseFare, distanceFare, timeFare, surge, total}
-    
-    alt Thanh toán CASH
-        Pay->>DB: INSERT Payment {status=COMPLETED, method=CASH, idempotencyKey}
-        Pay->>DB: INSERT DriverEarnings {driverCollected=true, cashDebt=platformFee}
-        Pay->>DB: INSERT OutboxEvent {type="driver.earnings.settled"}
-    else Thanh toán MOMO / VNPAY
-        Pay->>DB: INSERT Payment {status=PENDING, idempotencyKey}
-        Pay->>MoMo: POST /create-payment-link {orderId, amount, redirectUrl}
-        MoMo-->>Pay: {payUrl, orderId}
-        Pay-->>Customer: Redirect đến trang thanh toán MoMo/VNPay
-        
-        MoMo->>Pay: POST /api/payment/momo/ipn\n{orderId, resultCode, amount}\n[Có thể gọi nhiều lần]
-        
-        alt idempotencyKey chưa xử lý
-            Pay->>DB: UPDATE Payment {status=COMPLETED}
-            Pay->>DB: INSERT DriverEarnings {driverCollected=false}
-            Pay->>DB: INSERT OutboxEvent {type="payment.completed"}
-        else idempotencyKey đã tồn tại
-            Pay-->>MoMo: 200 OK (bỏ qua, tránh xử lý trùng)
-        end
-    end
-
-    Note over Pay,DB: Outbox Worker (polling 1s)
-    DB->>MQ: Publish payment.completed / driver.earnings.settled
-    MQ->>Wallet: Credit ví tài xế (PendingEarning T+24h)
-    MQ->>N: Gửi thông báo xác nhận thanh toán
-    N-->>Customer: Email + Push notification
-```
-
-**Outbox Pattern đảm bảo:** Kể cả khi RabbitMQ tạm thời ngắt kết nối, event không bao giờ mất — OutboxEvent được commit cùng DB transaction, Outbox Worker liên tục retry.
-
-**Hoa hồng nền tảng:**
-| Loại xe | Tỷ lệ | Công thức |
-|---------|-------|----------|
-| CAR_7 | 15% | platformFee = grossFare × 0.15 |
-| CAR_4, SCOOTER | 18% | platformFee = grossFare × 0.18 |
-| MOTORBIKE | 20% | platformFee = grossFare × 0.20 |
-
-### 4.5 Luồng ví tài xế — Nạp tiền, Thu nhập, Rút tiền
-
-```mermaid
-sequenceDiagram
-    participant DA as Driver App
-    participant G as API Gateway
-    participant Pay as Payment Service
-    participant MoMo as MoMo Gateway
-    participant MQ as RabbitMQ
+    participant DB as payment_db (Outbox)
     participant Wallet as Wallet Service
 
-    Note over DA,Wallet: 1. KÝ QUỸ KÍCH HOẠT VÍ (bắt buộc 1 lần)
-    DA->>G: POST /api/wallet/top-up/momo {amount: 300000}
-    G->>Pay: Tạo top-up order (MoMo)
-    Pay->>MoMo: Tạo link thanh toán
-    MoMo-->>DA: Redirect trang MoMo
-    DA->>MoMo: Thanh toán thành công
-    MoMo->>Pay: IPN callback
-    Pay->>MQ: Publish wallet.topup.completed
-    MQ->>Wallet: CREDIT 300.000đ\nlockedBalance=300.000đ\nstatus=ACTIVE\ninitialActivationCompleted=true
+    R->>MQ: ride.completed {rideId, fare, method}
+    MQ->>Pay: Consume
 
-    Note over DA,Wallet: 2. THU NHẬP SAU CHUYẾN ĐI (T+24h hold)
-    MQ->>Wallet: driver.earnings.settled {netEarnings, rideId}
-    Wallet->>Wallet: INSERT PendingEarning\n{amount, settleAt = now()+24h}
-    Wallet->>Wallet: Nếu CASH ride:\nINSERT DebtRecord {platformFee, dueDate=now()+2d}
-
-    Note over Wallet: 24h sau — Settlement Cron Job
-    Wallet->>Wallet: Query PendingEarning WHERE settleAt <= now()
-    
-    alt Còn debt chưa trả
-        Wallet->>Wallet: FIFO: Trả debt cũ nhất trước\nremaining debt -= amount
-        Wallet->>Wallet: CREDIT phần còn lại vào availableBalance
-    else Không có debt
-        Wallet->>Wallet: CREDIT toàn bộ vào availableBalance
-    end
-
-    Note over DA,Wallet: 3. RÚT TIỀN VỀ NGÂN HÀNG
-    DA->>G: POST /api/wallet/withdraw\n{amount, bankName, accountNumber}
-    G->>Wallet: Kiểm tra availableBalance >= amount
-    Wallet->>Wallet: INSERT WithdrawalRequest (PENDING)
-    Wallet->>Wallet: DEBIT availableBalance
-
-    Note over Wallet: Admin duyệt rút tiền
-    Wallet->>Wallet: UPDATE WithdrawalRequest → COMPLETED
-    Wallet->>MQ: Publish wallet.withdrawal.completed
+    Pay->>DB: INSERT Payment + OutboxEvent (atomic)
+    Note over Pay,DB: Outbox Worker polling 1s
+    DB->>MQ: driver.earning.settled
+    MQ->>Wallet: pendingBalance += netEarnings (T+24h)
+    Wallet->>Wallet: MerchantLedger double-entry
 ```
 
-**Công thức số dư:**
+### 4.4 Luồng ví tài xế
+
 ```
-availableBalance = balance - lockedBalance - pendingBalance - debt
+availableBalance = balance - lockedBalance(300k) - pendingBalance(T+24h) - debt
 
-Ví dụ:
-  balance         = 550.000đ
-  lockedBalance   = 300.000đ  (ký quỹ cố định)
-  pendingBalance  = 100.000đ  (chuyến hôm nay, chờ 24h)
-  debt            =  18.000đ  (nợ phí hoa hồng chuyến CASH)
-  ──────────────────────────
-  availableBalance = 132.000đ (có thể rút)
-```
-
-### 4.6 Luồng đăng ký và duyệt tài xế
-
-```mermaid
-sequenceDiagram
-    participant DA as Driver App
-    participant G as API Gateway
-    participant Auth as Auth Service
-    participant DriverSvc as Driver Service
-    participant MQ as RabbitMQ
-    participant Wallet as Wallet Service
-    participant Admin as Admin Dashboard
-
-    DA->>G: POST /api/auth/register {phone, password, role: DRIVER}
-    G->>Auth: Tạo User (role=DRIVER, status=ACTIVE)
-    Auth->>MQ: Publish user.registered
-    MQ->>UserService: Tạo UserProfile
-
-    DA->>G: POST /api/driver/profile\n{vehicleType, plate, licenseClass,...}
-    G->>DriverSvc: INSERT Driver {userId, status=PENDING, vehicleInfo, licenseInfo}
-
-    Note over Admin: Admin xem danh sách PENDING
-    Admin->>G: PATCH /api/admin/drivers/:id/approve
-    G->>DriverSvc: UPDATE Driver {status=APPROVED, licenseVerified=true}
-    DriverSvc->>MQ: Publish driver.approved {driverId, userId}
-    MQ->>Wallet: INSERT DriverWallet {driverId, status=INACTIVE}
-    MQ->>Notification: Gửi email/SMS chúc mừng tài xế
-
-    Note over DA: Tài xế nạp ký quỹ 300.000đ → ví ACTIVE
-    DA->>G: POST /api/driver/me/go-online
-    G->>DriverSvc: Kiểm tra canAcceptRide (HTTP internal → Payment Service)
-    DriverSvc->>G: OK — UPDATE status=ONLINE
-    G->>Redis: GEOADD drivers:geo:online lng lat driverId
-```
-
-### 4.7 Chat và gọi điện WebRTC trong chuyến
-
-Khi ride ở trạng thái ASSIGNED→COMPLETED, khách hàng và tài xế có thể chat và gọi điện P2P.
-
-```mermaid
-sequenceDiagram
-    participant CA as Customer App
-    participant G as API Gateway\n(Socket.IO Hub)
-    participant DA as Driver App
-    participant R as Ride Service
-
-    Note over CA,DA: Chat
-
-    CA->>G: Socket emit: ride:chat_send {rideId, message}
-    G->>R: POST /api/rides/:id/chat {message, senderRole=CUSTOMER}
-    R->>R: INSERT RideChatMessage
-    R-->>G: Saved message
-    G-->>DA: Emit ride:chat_message {senderId, message, timestamp}
-
-    Note over CA,DA: Gọi điện WebRTC (P2P qua TURN/ICE)
-
-    CA->>G: Socket emit: call:start {rideId, targetUserId}
-    G-->>DA: Emit call:incoming {callerId, rideId}
-    DA->>G: Socket emit: call:accept {rideId}
-    G-->>CA: Emit call:accepted
-
-    CA->>G: Socket emit: call:offer {rideId, sdp}
-    G-->>DA: Relay call:offer {sdp}
-    DA->>G: Socket emit: call:answer {rideId, sdp}
-    G-->>CA: Relay call:answer {sdp}
-
-    loop ICE Candidate exchange (P2P negotiation)
-        CA->>G: call:ice-candidate {candidate}
-        G-->>DA: Relay call:ice-candidate
-        DA->>G: call:ice-candidate {candidate}
-        G-->>CA: Relay call:ice-candidate
-    end
-
-    Note over CA,DA: Kết nối P2P thiết lập — Audio truyền trực tiếp\nkhông qua server
-
-    CA->>G: Socket emit: call:end {rideId}
-    G-->>DA: Emit call:ended
-```
-
-**Đặc điểm WebRTC:** Audio sau khi negotiate sẽ truyền **trực tiếp P2P** giữa hai thiết bị, API Gateway chỉ làm signaling relay. Điều này giảm tải băng thông server đáng kể.
-
-### 4.8 AI tích hợp vào hệ thống
-
-AI Service cung cấp ba model ML và một RAG chatbot, tất cả đều **optional** — có fallback hoàn chỉnh.
-
-```mermaid
-sequenceDiagram
-    participant C as Customer App
-    participant G as API Gateway
-    participant P as Pricing Service
-    participant AI as AI Service
-
-    Note over P,AI: Model 1: ETA + Price Multiplier
-    P->>AI: POST /api/predict\n{distance_km, time_of_day, day_type}\n[timeout: 150ms]
-    AI-->>P: {eta_minutes: 24, price_multiplier: 1.12,\ndemand_level: MEDIUM, recommended_radius: 3km}
-    
-    Note over P: Fallback nếu AI timeout:
-    Note over P: Dùng surge từ Redis hoặc 1.0
-
-    Note over G,AI: Model 2: Accept Probability (trong Matching Engine)
-    G->>AI: POST /api/predict/accept/batch\n{context: {fare, surge, zone, demand},\ndrivers: [{eta, acceptRate, cancelRate},...]}
-    AI-->>G: {results: [{p_accept: 0.82}, {p_accept: 0.61},...]}
-    
-    Note over G: Điều chỉnh điểm matching:\nscore × p_accept_clamped
-
-    Note over P,AI: Model 3: Wait Time Prediction
-    P->>AI: POST /api/predict/wait-time\n{demand_level, avail_drivers, hour, surge}
-    AI-->>P: {wait_time_minutes: 4.2, confidence: 0.86}
-
-    Note over C,AI: RAG Chatbot (AI Customer Support)
-    C->>G: POST /api/ai/chat\n{"Giá xe 4 chỗ bao nhiêu?"}
-    G->>AI: Forward to /api/chat
-    AI->>AI: Encode query → FAISS search\n→ Retrieve top-k chunks từ knowledge base\n→ [optional] Generate via LLM (Groq/OpenAI)
-    AI-->>G: {answer: "Xe 4 chỗ: 24.000đ + 15.000đ/km...", sources: [...]}
-    G-->>C: Response chatbot
-```
-
-**Ba model AI:**
-
-| Model | Algorithm | Input | Output |
-|-------|----------|-------|--------|
-| ETA & Surge | Random Forest (multi-output) | distance, time, day | eta_minutes, price_multiplier |
-| Accept Probability | Gradient Boosting Classifier | 15 features: eta, fare, zone, demand, driver stats | P(accept) per driver |
-| Wait Time | Gradient Boosting Regressor (Huber) | 12 features: demand, supply, hour, accept_rate | wait_time_minutes [1–15] |
-| RAG Chatbot | Sentence-Transformer + FAISS | User question (Vietnamese/English) | Contextual answer từ knowledge base |
-
-### 4.9 Luồng đánh giá sau chuyến
-
-```mermaid
-sequenceDiagram
-    participant CA as Customer App
-    participant G as API Gateway
-    participant Rev as Review Service
-    participant MQ as RabbitMQ
-    participant DriverSvc as Driver Service
-
-    Note over CA,Rev: Cửa sổ đánh giá: 24h sau khi ride.completed
-
-    CA->>G: POST /api/reviews\n{rideId, type: CUSTOMER_TO_DRIVER,\nrating: 5, comment, tags}
-    G->>Rev: Kiểm tra: rideId hợp lệ, chưa review, trong cửa sổ 24h
-    Rev->>Rev: INSERT review document
-    Rev->>MQ: Publish driver.rating_updated {driverId, newAvg}
-    MQ->>DriverSvc: UPDATE ratingAverage, ratingCount
-
-    Note over DA,Rev: Tài xế đánh giá khách hàng (tùy chọn)
-    DA->>G: POST /api/reviews\n{rideId, type: DRIVER_TO_CUSTOMER, rating: 4}
-    G->>Rev: INSERT review
+CASH ride flow:
+  1. Tài xế nhận toàn bộ tiền mặt từ khách
+  2. DebtRecord: nợ platformFee (20% MOTORBIKE / 18% CAR_4 / 15% CAR_7)
+  3. Mỗi ngày: Outbox Worker trừ nợ FIFO từ thu nhập mới
 ```
 
 ---
@@ -970,23 +450,21 @@ sequenceDiagram
 
 ### 5.1 Phân tách database
 
-Nguyên tắc **Database-per-Service** được áp dụng toàn bộ: không service nào ghi trực tiếp vào schema của service khác. Tích hợp chỉ xảy ra qua REST API, gRPC hoặc RabbitMQ events.
-
 | DBMS | Database | Service | Schema cốt lõi |
 |------|---------|---------|---------------|
-| PostgreSQL | `auth_db` | Auth Service | User, RefreshToken, OtpRecord, AuditLog |
-| PostgreSQL | `user_db` | User Service | UserProfile |
-| PostgreSQL | `driver_db` | Driver Service | Driver (với vehicle, license, location) |
-| PostgreSQL | `ride_db` | Ride Service | Ride, RideStateTransition, RideChatMessage |
-| PostgreSQL | `booking_db` | Booking Service | Booking |
-| PostgreSQL | `payment_db` | Payment Service | Fare, Payment, DriverEarnings, Voucher, OutboxEvent |
-| PostgreSQL | `wallet_db` | Wallet Service | DriverWallet, PendingEarning, DebtRecord, WalletTransaction, MerchantLedger, MerchantBalance |
-| MongoDB | `notification_db` | Notification Service | notifications, notification_templates |
-| MongoDB | `review_db` | Review Service | reviews |
+| PostgreSQL | `auth_db` | Auth | User, RefreshToken, AuditLog |
+| PostgreSQL | `user_db` | User | UserProfile |
+| PostgreSQL | `driver_db` | Driver | Driver, DriverLicense, DriverLocation |
+| PostgreSQL | `ride_db` | Ride | Ride, RideStateTransition, RideChatMessage |
+| PostgreSQL | `booking_db` | Booking | Booking |
+| PostgreSQL | `payment_db` | Payment | Fare, Payment, DriverEarnings, OutboxEvent |
+| PostgreSQL | `wallet_db` | Wallet | DriverWallet, PendingEarning, DebtRecord, MerchantLedger |
+| MongoDB | `notification_db` | Notification | notifications, push_tokens |
+| MongoDB | `review_db` | Review | reviews |
 
-> PostgreSQL dùng port **5433** (không phải 5432 mặc định) để tránh xung đột khi cài local. Tất cả 7 PostgreSQL database chạy trong cùng một container.
+> 7 PostgreSQL database chia sẻ 1 instance (port **5433**). Mỗi service có Prisma client riêng.
 
-### 5.2 Sơ đồ quan hệ dữ liệu (ERD — các aggregate chính)
+### 5.2 ERD (các aggregate chính)
 
 ```mermaid
 erDiagram
@@ -996,48 +474,32 @@ erDiagram
         string email
         string role "CUSTOMER|DRIVER|ADMIN"
         string status "ACTIVE|INACTIVE|SUSPENDED"
-        string passwordHash
-        datetime createdAt
     }
-
     RIDE {
         uuid id PK
         uuid customerId FK
         uuid driverId FK
-        string status "CREATED|FINDING_DRIVER|OFFERED|ASSIGNED|ACCEPTED|PICKING_UP|IN_PROGRESS|COMPLETED|CANCELLED"
-        string vehicleType "MOTORBIKE|SCOOTER|CAR_4|CAR_7"
-        json pickupLocation
-        json dropoffLocation
+        string status
+        string vehicleType
         decimal estimatedFare
         decimal actualFare
-        string paymentMethod "CASH|WALLET|ONLINE"
-        datetime createdAt
+        string paymentMethod
     }
-
     DRIVER {
         uuid id PK
         uuid userId FK
-        string status "OFFLINE|ONLINE|BUSY|PENDING|APPROVED|SUSPENDED"
-        string vehicleType
+        string status "OFFLINE|ONLINE|BUSY"
         float rating
         decimal acceptanceRate
-        decimal cancellationRate
-        json currentLocation
     }
-
     PAYMENT {
         uuid id PK
         uuid rideId FK
-        uuid customerId FK
-        uuid driverId FK
         decimal amount
         decimal platformFee
-        decimal netEarnings
         string idempotencyKey UK
-        string status "PENDING|COMPLETED|REFUNDED|FAILED"
-        string method "CASH|WALLET|MOMO|VNPAY|STRIPE"
+        string status
     }
-
     DRIVER_WALLET {
         uuid id PK
         uuid driverId UK
@@ -1045,73 +507,12 @@ erDiagram
         decimal pendingBalance
         decimal lockedBalance
         string status "INACTIVE|ACTIVE|FROZEN"
-        datetime updatedAt
     }
-
-    WALLET_TRANSACTION {
-        uuid id PK
-        uuid walletId FK
-        string type "CREDIT|DEBIT|WITHDRAWAL|REFUND|TOPUP"
-        decimal amount
-        string referenceId
-        datetime createdAt
-    }
-
-    PENDING_EARNING {
-        uuid id PK
-        uuid walletId FK
-        decimal amount
-        datetime settleAt
-        string rideId
-    }
-
-    DEBT_RECORD {
-        uuid id PK
-        uuid walletId FK
-        decimal amount
-        datetime dueDate
-        string status "PENDING|SETTLED"
-    }
-
-    REVIEW {
-        uuid id PK
-        uuid rideId FK
-        uuid reviewerId FK
-        uuid revieweeId FK
-        string type "CUSTOMER_TO_DRIVER|DRIVER_TO_CUSTOMER"
-        int rating
-        string comment
-        datetime createdAt
-    }
-
     USER ||--o{ RIDE : dat
     DRIVER ||--o{ RIDE : thuc_hien
     RIDE ||--o| PAYMENT : co
     DRIVER ||--|| DRIVER_WALLET : so_huu
-    DRIVER_WALLET ||--o{ WALLET_TRANSACTION : ghi_nhan
-    DRIVER_WALLET ||--o{ PENDING_EARNING : cho_settle
-    DRIVER_WALLET ||--o{ DEBT_RECORD : no_phi
-    RIDE ||--o{ REVIEW : duoc_danh_gia
 ```
-
-### 5.3 Các thành phần frontend
-
-| Ứng dụng | Vai trò | Port |
-|---------|---------|------|
-| Customer App | Đặt xe, theo dõi chuyến, thanh toán, đánh giá, AI chatbot | 4000 |
-| Driver App | Nhận chuyến, cập nhật trạng thái, quản lý ví | 4001 |
-| Admin Dashboard | Quản lý tài xế, vận hành, ví thương nhân | 4002 |
-
-### 5.4 Các kiểu tích hợp giữa service
-
-| Cơ chế | Khi nào dùng | Ví dụ |
-|--------|-------------|-------|
-| **HTTP proxy** (qua Gateway) | Request/response từ client | Mọi API call từ app |
-| **gRPC** (internal) | Sync, low-latency, structured data | Pricing ↔ Gateway, Driver lookup |
-| **RabbitMQ** (async) | Loose coupling, at-least-once | Ride lifecycle events, payment events |
-| **Redis pub/sub** | Socket.IO cluster sync | Broadcast realtime event qua nhiều Gateway instance |
-| **HTTP internal** (x-internal-token) | Service-to-service check | Driver canAcceptRide → Payment |
-| **WebSocket** (Socket.IO) | Realtime push đến client | Vị trí tài xế, trạng thái chuyến, chat |
 
 ---
 
@@ -1120,263 +521,141 @@ erDiagram
 ```text
 Cab-Booking-System-Project/
 ├── apps/
-│   ├── customer-app/          # React SPA — khách hàng (port 4000)
-│   ├── driver-app/            # React SPA — tài xế (port 4001)
-│   └── admin-dashboard/       # React SPA — quản trị (port 4002)
+│   ├── customer-app/          # React SPA — khách hàng
+│   ├── driver-app/            # React SPA — tài xế
+│   └── admin-dashboard/       # React SPA — quản trị
 │
 ├── services/
 │   ├── api-gateway/           # HTTP 3000 — entry point, matching, Socket.IO
-│   ├── auth-service/          # HTTP 3001, gRPC 50051 — JWT, OTP
-│   ├── user-service/          # HTTP 3007, gRPC 50052 — hồ sơ user
-│   ├── booking-service/       # HTTP 3008, gRPC 50053 — booking
+│   ├── auth-service/          # HTTP 3001, gRPC 50051 — OTP, JWT
+│   ├── user-service/          # HTTP 3007, gRPC 50052
+│   ├── booking-service/       # HTTP 3008, gRPC 50053
 │   ├── ride-service/          # HTTP 3002, gRPC 50054 — state machine
-│   ├── driver-service/        # HTTP 3003, gRPC 50055 — tài xế + geo
+│   ├── driver-service/        # HTTP 3003, gRPC 50055 — geo, location
 │   ├── payment-service/       # HTTP 3004, gRPC 50056 — MoMo/VNPay
-│   ├── pricing-service/       # HTTP 3009, gRPC 50057 — tính giá
-│   ├── wallet-service/        # HTTP 3006 — ví tài xế fintech
-│   ├── notification-service/  # HTTP 3005 — email/SMS/push
-│   ├── review-service/        # HTTP 3010 — đánh giá
+│   ├── pricing-service/       # HTTP 3009, gRPC 50057
+│   ├── wallet-service/        # HTTP 3006 — fintech
+│   ├── notification-service/  # HTTP 3005
+│   ├── review-service/        # HTTP 3010
 │   └── ai-service/            # HTTP 8000 — FastAPI, ML, RAG
-│       ├── app/
-│       │   ├── api/           # FastAPI routes
-│       │   ├── models/        # *.joblib trained models
-│       │   ├── services/      # prediction_service, rag_service
-│       │   └── data/knowledge/# Knowledge base files cho RAG
-│       └── training/          # Scripts train model
 │
-├── shared/                    # Package dùng chung (@cab/shared)
-│   ├── types/                 # TypeScript interfaces, enums
+├── shared/                    # @cab-booking/shared
+│   ├── types/                 # TypeScript interfaces, events
 │   ├── grpc/                  # Protobuf definitions
-│   └── utils/                 # Internal auth, request-context
+│   └── utils/                 # Internal auth, geo, validation
 │
-├── docs/
-│   ├── services/              # Tài liệu chi tiết từng service (12 files)
-│   ├── bao-cao-kltn.md        # Báo cáo luận văn
-│   └── luongthanhtoan.md      # Mô tả luồng thanh toán
+├── monitoring/
+│   ├── README.md              # Docs chi tiết từng component
+│   ├── prometheus/prometheus.yml
+│   ├── loki/loki-config.yml
+│   ├── promtail/promtail-config.yml
+│   └── grafana/
+│       ├── provisioning/      # Auto-config datasource + dashboard
+│       └── dashboards/        # 4 JSON dashboards
+│
+├── deploy/
+│   ├── DEPLOY.md              # Hướng dẫn deploy AWS đầy đủ
+│   ├── CLUSTER-AWS.md         # Kiến trúc multi-node (tham khảo)
+│   └── nginx/nginx-apps.conf  # Nginx config tham khảo
 │
 ├── scripts/
-│   ├── reset-database.sh      # Reset toàn bộ DB + migrate + seed (Linux/Mac)
-│   ├── reset-database.bat     # Reset toàn bộ DB + migrate + seed (Windows)
-│   ├── seed-database.ts       # Seed dữ liệu mẫu cho toàn hệ thống
-│   └── test-ai.mjs            # Test suite cho AI service
+│   ├── reset-database.sh/.bat # Reset + migrate + seed
+│   ├── seed-database.ts        # Seed dữ liệu mẫu
+│   └── run-integration-backend.ts  # CI integration health check
 │
-├── monitoring/                # Prometheus, Loki, Grafana configs
-│   ├── prometheus.yml
-│   └── loki-config.yml
-│
-├── .github/
-│   ├── workflows/ci-cd.yml    # Pipeline CI/CD chính
-│   └── docker/docker-compose.integration.yml
-│
-├── docker-compose.yml         # Local dev stack
-├── docker-compose.prod.yml    # Production-oriented
-├── docker-stack.yml           # Docker Swarm deployment
-└── package.json               # Workspace root (npm workspaces)
+├── .github/workflows/ci-cd.yml  # Pipeline CI/CD
+├── docker-compose.yml           # Local dev stack
+├── docker-stack.thesis.yml      # AWS Docker Swarm stack
+└── package.json                 # Workspace root
 ```
-
-**Ý nghĩa các thư mục:**
-- `apps/` — Ba ứng dụng React độc lập, build riêng lẻ.
-- `services/` — Mười một microservice Node.js và một AI service Python. Mỗi service là npm workspace riêng với `package.json`, `Dockerfile`, Prisma schema và migrations riêng.
-- `shared/` — Package TypeScript dùng chung: types, gRPC proto files, internal auth helpers. Build trước khi build các service khác.
-- `scripts/` — Automation: reset database, seed data, integration test runner.
-- `monitoring/` — Stack giám sát (Prometheus, Grafana, Loki, Promtail, cAdvisor, Node Exporter).
-- `.github/workflows/` — Pipeline CI/CD: test → build → push Docker image.
 
 ---
 
 ## 7. Cổng dịch vụ và môi trường chạy
 
-### 7.1 Backend services
-
-| Service | HTTP Port | gRPC Port | Database |
-|---------|-----------|-----------|----------|
+| Service | HTTP | gRPC | Database |
+|---------|------|------|----------|
 | API Gateway | **3000** | — | Redis |
-| Auth Service | 3001 | **50051** | `auth_db` |
-| Ride Service | 3002 | **50054** | `ride_db` |
-| Driver Service | 3003 | **50055** | `driver_db` + Redis |
-| Payment Service | 3004 | **50056** | `payment_db` |
-| Notification Service | 3005 | — | `notification_db` |
-| Wallet Service | 3006 | — | `wallet_db` |
-| User Service | 3007 | **50052** | `user_db` |
-| Booking Service | 3008 | **50053** | `booking_db` |
-| Pricing Service | 3009 | **50057** | Redis (stateless) |
-| Review Service | 3010 | — | `review_db` |
-| AI Service | **8000** | — | File models |
-
-### 7.2 Hạ tầng
-
-| Thành phần | Port | Ghi chú |
-|-----------|------|---------|
-| PostgreSQL | **5433** | Container port 5432; tất cả 7 DB cùng instance |
-| MongoDB | 27017 | Auth source: `admin` |
-| Redis | 6379 | Geospatial, cache, Socket.IO adapter |
-| RabbitMQ AMQP | 5672 | `domain-events` topic exchange |
-| RabbitMQ Management UI | 15672 | `http://localhost:15672` |
-| RabbitMQ Prometheus | 15692 | Metrics scrape |
-
-### 7.3 Frontend apps (dev)
-
-| App | Port |
-|-----|------|
-| Customer App | 4000 |
-| Driver App | 4001 |
-| Admin Dashboard | 4002 |
-
-### 7.4 Monitoring (profile tùy chọn)
-
-| Thành phần | Port |
-|-----------|------|
-| Prometheus | 9090 |
-| Grafana | 3006 |
-| Loki | 3100 |
-| cAdvisor | 8081 |
-| Node Exporter | 9100 |
-
-### 7.5 Các file Docker Compose
-
-| File | Mục đích |
-|------|---------|
-| `docker-compose.yml` | Chạy local/dev — build từ source code |
-| `docker-compose.prod.yml` | Production — dùng image đã push lên registry |
-| `.github/docker/docker-compose.integration.yml` | Hạ tầng cho integration tests trong CI |
-| `docker-stack.yml` | Triển khai Docker Swarm (multi-node) |
+| Auth | 3001 | **50051** | auth_db |
+| Ride | 3002 | **50054** | ride_db |
+| Driver | 3003 | **50055** | driver_db + Redis |
+| Payment | 3004 | **50056** | payment_db |
+| Notification | 3005 | — | notification_db (Mongo) |
+| Wallet | 3006 | — | wallet_db |
+| User | 3007 | **50052** | user_db |
+| Booking | 3008 | **50053** | booking_db |
+| Pricing | 3009 | **50057** | Redis (stateless) |
+| Review | 3010 | — | review_db (Mongo) |
+| AI | **8000** | — | File models |
+| PostgreSQL | **5433** | — | 7 databases |
+| MongoDB | 27017 | — | 2 databases |
+| Redis | 6379 | — | |
+| RabbitMQ | 5672 | — | |
+| RabbitMQ UI | 15672 | — | |
 
 ---
 
 ## 8. Hướng dẫn cài đặt và khởi động
 
-### 8.1 Yêu cầu môi trường
+### 8.1 Yêu cầu
 
-| Công cụ | Phiên bản | Ghi chú |
-|---------|----------|---------|
-| Docker | 24+ | Bắt buộc |
-| Docker Compose | v2+ | Bắt buộc |
-| Node.js | 20.x | Chỉ cần khi chạy service ngoài Docker |
-| Python | 3.11 | Chỉ cần khi chạy AI service ngoài Docker |
-| Git | — | |
+- Node.js >= 20, npm >= 10
+- Docker Desktop (Docker Compose v2)
 
-### 8.2 Khởi động toàn bộ hệ thống bằng Docker
+### 8.2 Chạy local với Docker
 
 ```bash
 git clone <repository-url>
 cd Cab-Booking-System-Project
+cp .env.example .env    # chỉnh sửa theo môi trường
 
-# Cấu hình biến môi trường (copy từ mẫu)
-cp .env.example .env
-# Chỉnh sửa .env theo môi trường thực tế
-
-# Build và khởi động
-docker compose build
 docker compose up -d
-
-# Xem trạng thái
-docker compose ps
-
-# Kiểm tra health
-curl http://localhost:3000/health
-curl http://localhost:3000/ready
 ```
 
-### 8.3 Khởi động từng service riêng (development hot-reload)
+| URL | Mục đích |
+|-----|---------|
+| http://localhost:4000 | Customer App |
+| http://localhost:4001 | Driver App |
+| http://localhost:4002 | Admin Dashboard |
+| http://localhost:3000 | API Gateway |
+| http://localhost:15672 | RabbitMQ (guest/guest) |
+
+### 8.3 Chế độ dev (hot-reload)
 
 ```bash
-# Build shared package trước (bắt buộc)
-npm run build:shared
-
-# Khởi động từng service
-npm run dev:gateway       # API Gateway :3000
-npm run dev:auth          # Auth Service :3001
-npm run dev:ride          # Ride Service :3002
-npm run dev:driver        # Driver Service :3003
-npm run dev:payment       # Payment Service :3004
-npm run dev:notification  # Notification Service :3005
-npm run dev:wallet        # Wallet Service :3006
-npm run dev:user          # User Service :3007
-npm run dev:booking       # Booking Service :3008
-npm run dev:pricing       # Pricing Service :3009
-npm run dev:review        # Review Service :3010
-
-# Frontend apps
-npm run dev:customer      # Customer App :4000
-npm run dev:driver-app    # Driver App :4001
-npm run dev:admin         # Admin Dashboard :4002
-npm run dev:frontends     # Tất cả frontend cùng lúc
+npm run build:shared     # bắt buộc chạy trước
+npm run dev:gateway      # API Gateway
+npm run dev:auth         # Auth Service
+# ... xem package.json để đầy đủ danh sách
 ```
 
-### 8.4 Reset và seed dữ liệu
+### 8.4 Seed dữ liệu
 
 ```bash
-# Windows (PowerShell hoặc CMD)
-scripts\reset-database.bat
-
-# Linux / macOS / WSL
-bash scripts/reset-database.sh
-
-# Chỉ seed dữ liệu (sau khi DB đã tồn tại)
 npm run db:seed
+# 1 admin, 20 khách hàng, 40 tài xế, 28 chuyến, vouchers
 ```
 
-Script reset thực hiện theo thứ tự:
-1. Drop và recreate toàn bộ PostgreSQL databases (7 databases bao gồm `wallet_db`)
-2. Drop MongoDB databases (`notification_db`, `review_db`)
-3. Chạy Prisma migration cho tất cả 7 service (bao gồm `wallet-service`)
-4. Seed dữ liệu mẫu: 1 admin, 20 khách hàng, 40 tài xế, 10 bookings, 28 chuyến đi, vouchers
+### 8.5 Lấy OTP trong môi trường dev
 
-### 8.5 Xem OTP trong development
-
-**Cách 1 — Docker logs (môi trường local)**
+**Local:**
 ```bash
-# OTP được print ra stdout (không gửi SMS thật)
 docker logs cab-auth-service 2>&1 | grep OTP
 ```
 
-**Cách 2 — API endpoint** (khi đã deploy trên AWS với `OTP_SMS_MODE=mock`)
-
-Khi chạy trên server không có terminal, lấy OTP qua endpoint nội bộ (chỉ hoạt động khi `OTP_SMS_MODE=mock` và `NODE_ENV != production`):
-
+**Trên AWS (mock mode):**
 ```bash
-curl -H "x-internal-token: <INTERNAL_SERVICE_TOKEN>" \
-  "http://<AUTH_HOST>:3001/internal/dev/otp?phone=0971234567&purpose=register"
-# Response: {"success":true,"otp":"123456","purpose":"register","note":"mock mode only"}
+curl -H "x-internal-token: <TOKEN>" \
+  "https://api.foxgo.online/internal/dev/otp?phone=0971234567"
+# Chỉ hoạt động khi OTP_SMS_MODE=mock và NODE_ENV!=production
 ```
 
-**Cách 3 — SMS thật (production/staging)**
-
-Cấu hình một trong các provider sau trong `.env`:
+**Production:**
 ```env
-# AWS SNS — tự động dùng IAM role khi chạy trên EC2, không cần access key
-OTP_SMS_MODE=sns
-AWS_REGION=ap-southeast-1
-
-# SpeedSMS — nhà mạng VN (speedsms.vn)
-OTP_SMS_MODE=speedsms
-SPEEDSMS_API_KEY=<key>
-
-# Twilio
-OTP_SMS_MODE=twilio
-TWILIO_ACCOUNT_SID=<sid>
-TWILIO_AUTH_TOKEN=<token>
-TWILIO_FROM_PHONE=+1xxxxxxxxxx
+OTP_SMS_MODE=sns        # AWS SNS (IAM role, không cần key)
+OTP_SMS_MODE=speedsms   # SpeedSMS — nhà mạng VN
+OTP_SMS_MODE=twilio     # Twilio
 ```
-
-### 8.6 Kết nối database trực tiếp
-
-```
-PostgreSQL:  postgresql://postgres:postgres@localhost:5433/<db_name>
-MongoDB:     mongodb://mongo:mongo@localhost:27017/?authSource=admin
-Redis:       redis://localhost:6379
-RabbitMQ UI: http://localhost:15672  (guest/guest)
-```
-
-### 8.7 Prisma — Tạo migration mới cho một service
-
-```bash
-cd services/<service-name>
-npx prisma migrate dev --name <tên_migration>
-npx prisma generate        # Tái tạo Prisma Client
-```
-
-> **Lưu ý build context**: Các service `api-gateway`, `auth-service`, `driver-service`, `ride-service`, `pricing-service` cần build từ **root directory** (vì phụ thuộc `shared/`). Các service còn lại build từ thư mục service.
 
 ---
 
@@ -1384,178 +663,159 @@ npx prisma generate        # Tái tạo Prisma Client
 
 ### 9.1 Các mức kiểm thử
 
-| Nhóm | Lệnh | Mô tả |
-|------|------|-------|
-| Unit tests | `npm run test:unit` | Kiểm thử logic từng service (có mock DB) |
-| Contract tests | `npm run test:contract` | Kiểm tra tương thích API boundary giữa Driver ↔ Ride |
-| Integration tests | `npm run test:integration` | Full stack với PostgreSQL/MongoDB/Redis/RabbitMQ thật |
-| Coverage | `npm run test:coverage` | Báo cáo coverage toàn bộ workspace |
-| AI tests | `cd services/ai-service && pytest -q` | Test FastAPI endpoints và ML inference |
-| AI test script | `node scripts/test-ai.mjs` | Test toàn bộ AI API: 33 test cases |
-| Smoke tests | `npm run smoke:gateway` | Kiểm tra nhanh API Gateway khi stack đang chạy |
+```bash
+npm run test:unit        # unit tests (mock DB)
+npm run test:contract    # driver ↔ ride service boundary
+npm run test:integration # full stack với Docker infra
+npm run test:coverage    # coverage report
+cd services/ai-service && pytest -q  # AI service tests
+```
 
-### 9.2 Pipeline CI/CD (GitHub Actions)
+### 9.2 CI/CD Pipeline
 
 ```mermaid
-flowchart TD
-    Push[Push / Pull Request] --> Install[Install Dependencies\nnpm ci + pip install]
-    Install --> Shared[Build Shared Package\n@cab/shared]
+flowchart LR
+    Push["git push\nmain"] --> S1
 
-    Shared --> Unit[Job: test-unit\nServices: Postgres + Mongo + Redis + Rabbit]
-    Shared --> Contract[Job: test-contract\nDriver ↔ Ride Service boundary]
-    Shared --> Integration[Job: test-integration\nDocker Compose full stack]
-    Shared --> AI[Job: test-ai\npytest -q services/ai-service]
+    subgraph S1["Stage 1 — Tests parallel"]
+        T1["test-unit"]
+        T2["test-contract"]
+        T3["test-integration"]
+        T4["test-ai"]
+    end
 
-    Unit & Contract & Integration & AI --> Gate{Quality Gate\n4 jobs}
+    S1 --> S2
 
-    Gate -->|PR| Stop[No deploy on PR]
-    Gate -->|non-PR branch| Build[Build Docker Images\ndocker buildx — 12 services parallel]
-    Build --> Push2[Push to Docker Hub\n<registry>/cab-<service>:<sha>]
-    Push2 --> DeployB[Deploy Backend\ndocker stack deploy via SSH]
-    Push2 --> DeployF[Deploy Frontend x3\nnpm build → rsync → nginx reload]
+    subgraph S2["Stage 2 — Docker Build matrix"]
+        D["Build + Push 12 images\nfoxxiee04/cab-service:latest"]
+    end
+
+    S2 --> S3a
+    S2 --> S3b
+
+    subgraph S3a["Deploy Backend"]
+        B["SCP stack + monitoring\nSSH: docker stack deploy"]
+    end
+
+    subgraph S3b["Deploy Frontend x3"]
+        F["npm build → rsync\n→ nginx reload"]
+    end
 ```
 
-**Chi tiết các job:**
+---
 
-- **test-unit**: Chạy với GitHub Actions Services (PostgreSQL, MongoDB, Redis, RabbitMQ). Build shared package trước, sau đó `npm run test:unit --runInBand`.
-- **test-contract**: Kiểm tra tính tương thích API giữa các service có boundary quan trọng (Driver ↔ Ride).
-- **test-integration**: Khởi động hạ tầng tích hợp qua file compose riêng trong `.github/docker/`, build backend artifacts, chạy integration test suite.
-- **test-ai**: Cài Python dependencies, chạy `pytest -q` trong `services/ai-service`.
-- **docker-build-and-push**: Chỉ chạy trên nhánh không phải PR. Build 12 service song song bằng matrix strategy, cache qua GitHub Actions cache.
+## 10. Triển khai trên AWS
 
-**GitHub Secrets cần thiết:**
+### 10.1 Kiến trúc hiện tại
 
-| Secret | Mô tả |
-|---|---|
-| `DOCKERHUB_USERNAME` | Docker Hub username |
+```
+Internet
+    ├── https://foxgo.online         → Customer App
+    ├── https://driver.foxgo.online  → Driver App
+    ├── https://admin.foxgo.online   → Admin Dashboard
+    └── https://api.foxgo.online     → API Gateway
+              │
+    ┌─────────┴──────────────────────────────────────┐
+    │  EC2 t3.large — 18.136.250.236                  │
+    │  Ubuntu 22.04 · ap-southeast-1 (Singapore)      │
+    │  Elastic IP · Let's Encrypt SSL                 │
+    │                                                  │
+    │  ┌─────── Nginx (host) ──────────────────────┐  │
+    │  │  :80/:443 → React builds (static files)   │  │
+    │  │  api.foxgo.online → proxy :3000            │  │
+    │  └───────────────────────────────────────────┘  │
+    │                                                  │
+    │  ┌─────── Docker Swarm (single-node) ─────────┐  │
+    │  │  Infrastructure: PG, Mongo, Redis, RabbitMQ │  │
+    │  │  Services: 11 Node.js + 1 Python AI         │  │
+    │  │  Monitoring: Prometheus + Grafana + Loki    │  │
+    │  └─────────────────────────────────────────────┘  │
+    └────────────────────────────────────────────────────┘
+```
+
+### 10.2 GitHub Secrets
+
+| Secret | Giá trị |
+|--------|---------|
+| `DOCKERHUB_USERNAME` | `foxxiee04` |
 | `DOCKERHUB_TOKEN` | Docker Hub access token |
-| `DEPLOY_HOST` | IP/hostname EC2 Manager |
-| `DEPLOY_USER` | SSH user (ubuntu) |
-| `DEPLOY_SSH_KEY` | Nội dung private key PEM |
-| `DEPLOY_PORT` | SSH port (tuỳ chọn, mặc định 22) |
-| `REACT_APP_API_URL` | URL API công khai |
-| `REACT_APP_SOCKET_URL` | URL WebSocket công khai |
-| `REACT_APP_GOOGLE_MAPS_API_KEY` | Google Maps key (tuỳ chọn) |
+| `DEPLOY_HOST` | `18.136.250.236` |
+| `DEPLOY_USER` | `ubuntu` |
+| `DEPLOY_SSH_KEY` | Nội dung `cab-key.pem` |
+| `REACT_APP_API_URL` | `https://api.foxgo.online` |
+| `REACT_APP_SOCKET_URL` | `https://api.foxgo.online` |
 
-### 9.3 Chạy integration test tại local
+### 10.3 Deploy thủ công (không cần thay đổi code)
 
 ```bash
-# Khởi động hạ tầng tích hợp
-docker compose -f .github/docker/docker-compose.integration.yml up -d
-
-# Chạy integration tests
-npm run test:integration
-
-# Dọn dẹp
-docker compose -f .github/docker/docker-compose.integration.yml down
+git commit --allow-empty -m "ci: manual redeploy"
+git push origin main
 ```
+
+### 10.4 Hướng dẫn đầy đủ
+
+Xem [`deploy/DEPLOY.md`](deploy/DEPLOY.md) cho toàn bộ quy trình từ đầu.
 
 ---
 
-## 10. Giám sát và vận hành
+## 11. Monitoring và Observability
 
-### 10.1 Stack monitoring
+### 11.1 Stack
 
-| Công cụ | Vai trò | Port |
-|---------|---------|------|
-| Prometheus | Thu thập metrics từ các service và infra | 9090 |
-| Grafana | Dashboard quan sát metrics và logs | 3006 |
-| Loki | Tập trung logs từ toàn bộ containers | 3100 |
-| Promtail | Forward logs từ Docker containers → Loki | — |
-| cAdvisor | Metrics tài nguyên CPU/Memory theo container | 8081 |
-| Node Exporter | Metrics tài nguyên host (disk, network, CPU) | 9100 |
+| Component | Tác dụng | URL |
+|-----------|---------|-----|
+| **Prometheus** | Thu thập metrics mỗi 15s | http://18.136.250.236:9090 |
+| **Grafana** | Dashboard visualization | http://18.136.250.236:3030 |
+| **Loki** | Log aggregation | (qua Grafana) |
+| **Promtail** | Log collector từ Docker | — |
+| **cAdvisor** | Container metrics | http://18.136.250.236:8081 |
+| **Node Exporter** | Host metrics | — |
 
-API Gateway expose `/metrics` endpoint (Prometheus format) gồm: request count, response time histogram, active WebSocket connections, matching queue length.
+### 11.2 Dashboards tự động load
 
-### 10.2 Bật monitoring
+| Dashboard | Nội dung |
+|-----------|---------|
+| System Overview | CPU, Memory, Disk, Network, Load Average của EC2 |
+| Container Resources | CPU/Memory từng service Docker |
+| Application Metrics | RabbitMQ queues, API Gateway AI matching |
+| Service Logs | Log explorer theo service, filter error |
 
-```bash
-# Khởi động với monitoring profile
-docker compose --profile monitoring up -d \
-  prometheus grafana loki promtail cadvisor node-exporter
+### 11.3 Metrics thu thập
 
-# Truy cập
-open http://localhost:9090   # Prometheus
-open http://localhost:3006   # Grafana (admin/admin)
-open http://localhost:3100   # Loki
-```
+- **Host**: CPU usage, memory, disk, network throughput, load average
+- **Containers**: CPU/memory/network per service
+- **RabbitMQ**: Queue depth, consumers, message rates
+- **API Gateway**: HTTP requests, WebSocket connections, AI matching decisions
+- **Logs**: Tất cả stdout/stderr từ 12 services qua Docker
 
-### 10.3 Health checks và readiness
-
-```bash
-# Tổng quan health của API Gateway
-GET http://localhost:3000/health
-# → {"status":"healthy","service":"api-gateway","timestamp":"..."}
-
-# Kiểm tra tất cả downstream services
-GET http://localhost:3000/ready
-# → {"ready": true, "checks": {"auth": "ok", "ride": "ok", ...}}
-
-# Health từng service
-GET http://localhost:300{1-9}/health
-
-# AI service health + model status
-GET http://localhost:8000/health
-GET http://localhost:8000/api/stats
-# → {"model_loaded": true, "rag_ready": true, "accept_model_loaded": true}
-```
-
-### 10.4 Xem logs
-
-```bash
-# Logs real-time của tất cả service
-docker compose logs -f
-
-# Logs service cụ thể
-docker compose logs -f api-gateway
-docker compose logs -f ride-service
-
-# Xem OTP (chỉ dev)
-docker logs cab-auth-service 2>&1 | grep OTP
-
-# Xem RabbitMQ queue
-open http://localhost:15672  # Management UI
-```
+Xem chi tiết: [`monitoring/README.md`](monitoring/README.md)
 
 ---
 
-## 11. Hướng phát triển tiếp theo
+## 12. Hướng phát triển tiếp theo
 
 ### Kỹ thuật
-
-- **Distributed Tracing**: Tích hợp OpenTelemetry để trace request xuyên suốt qua các service (hiện chỉ có correlation ID cơ bản).
-- **Circuit Breaker**: Thêm Resilience4j/opossum để tránh cascade failure khi một service chậm.
-- **Event Sourcing**: Ride Service hiện có `RideStateTransition` — có thể nâng lên event sourcing hoàn chỉnh cho audit và time-travel debug.
-- **gRPC Streaming**: Cập nhật vị trí tài xế hiện qua WebSocket; gRPC bidirectional streaming có thể giảm overhead.
-- **AI Retraining Pipeline**: Hiện dùng synthetic data; tích hợp MLflow để train lại định kỳ từ dữ liệu thực.
+- **Distributed Tracing**: Tích hợp OpenTelemetry để trace xuyên suốt qua các service
+- **Circuit Breaker**: Thêm opossum để tránh cascade failure
+- **Kubernetes**: Chuyển từ Docker Swarm sang K8s cho production-grade orchestration
+- **AI Retraining**: MLflow để train lại model định kỳ từ dữ liệu thực
+- **gRPC Streaming**: Giảm overhead cập nhật vị trí tài xế
 
 ### Nghiệp vụ
-
-- **Đặt xe trước (Scheduled Ride)**: Booking Service đã có `expiresAt` — có thể mở rộng cho đặt xe theo giờ hẹn.
-- **Đa tài xế (Pooling)**: Chia sẻ chuyến đi nhiều khách cùng lộ trình.
-- **Payment Provider thực**: Hiện đã tích hợp MoMo và VNPay qua IPN; cần cấu hình merchant account thật.
-- **Chương trình thưởng**: IncentiveRule đã có schema — cần thêm UI admin và cron tính thưởng.
-- **Rating nâng cao**: Phân tích sentiment từ comment; gắn cờ review vi phạm tự động.
+- **Đặt xe trước**: Mở rộng Booking Service cho scheduled ride
+- **Ride Pooling**: Chia sẻ chuyến đi nhiều khách cùng lộ trình
+- **Payment Production**: Cấu hình merchant account MoMo/VNPay thật
+- **Rating nâng cao**: Sentiment analysis từ comment
 
 ### Vận hành
-
-- **Kubernetes**: Chuyển từ Docker Swarm sang K8s cho production-grade orchestration.
-- **Secret Management**: Tích hợp HashiCorp Vault hoặc AWS Secrets Manager thay vì `.env` files.
-- **Multi-Region**: Redis Cluster, PostgreSQL replication, RabbitMQ Federation.
-- **TLS Termination**: Nginx/Traefik reverse proxy với Let's Encrypt trước API Gateway.
+- **Secret Management**: HashiCorp Vault hoặc AWS Secrets Manager
+- **Multi-Region**: Redis Cluster, PostgreSQL replication
+- **Alerting**: Grafana alerts qua Email/Slack/Telegram
+- **Cost Optimization**: Reserved Instances nếu dùng dài hạn
 
 ---
 
-## Kết luận
-
-Cab Booking System giải quyết đồng thời ba lớp bài toán kỹ thuật điển hình trong hệ thống giao thông số quy mô lớn:
-
-**Lớp real-time** — Socket.IO hub với Redis Adapter xử lý broadcast trạng thái chuyến đi, vị trí tài xế và WebRTC signaling với độ trễ thấp; gRPC đảm bảo lookup tài xế và tính giá sub-10ms.
-
-**Lớp orchestration** — State machine enforce 9 trạng thái hợp lệ cho vòng đời chuyến đi; thuật toán matching 3 vòng bán kính với scoring đa tiêu chí và điều chỉnh AI tùy chọn; RabbitMQ Outbox Pattern đảm bảo không mất event kể cả khi broker tạm ngắt.
-
-**Lớp fintech** — Ví tài xế với ký quỹ bắt buộc, giữ thu nhập T+24h, tất toán công nợ FIFO, sổ cái thương nhân song song; idempotency key chống xử lý trùng IPN callback từ MoMo và VNPay.
-
-Mười hai service được phân rã theo Bounded Context của Domain-Driven Design — mỗi service sở hữu database riêng, giao tiếp qua hợp đồng rõ ràng, triển khai và scale độc lập. AI Service là optional hoàn toàn; hệ thống hoạt động bình thường khi không có AI nhờ fallback ở mọi điểm tích hợp.
-
-Tài liệu chi tiết từng service: [`docs/services/`](docs/services/README.md)
+**Tài liệu chi tiết:**
+- Deploy: [`deploy/DEPLOY.md`](deploy/DEPLOY.md)
+- Monitoring: [`monitoring/README.md`](monitoring/README.md)
+- Service docs: [`docs/services/`](docs/services/)
