@@ -1,0 +1,83 @@
+{
+  "title": "Service Logs",
+  "uid": "service-logs",
+  "tags": ["logs", "loki"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Error Logs — All Services",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 },
+      "targets": [{
+        "datasource": "Loki",
+        "expr": "{job=\"docker-containers\"} |= \"error\" | json | line_format \"[{{.service}}] {{.log}}\"",
+        "legendFormat": ""
+      }],
+      "options": { "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true }
+    },
+    {
+      "id": 2,
+      "title": "API Gateway Logs",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [{
+        "datasource": "Loki",
+        "expr": "{service=\"cab-api-gateway\"}",
+        "legendFormat": ""
+      }],
+      "options": { "showTime": true, "sortOrder": "Descending" }
+    },
+    {
+      "id": 3,
+      "title": "Auth Service Logs",
+      "type": "logs",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [{
+        "datasource": "Loki",
+        "expr": "{service=\"cab-auth-service\"}",
+        "legendFormat": ""
+      }],
+      "options": { "showTime": true, "sortOrder": "Descending" }
+    },
+    {
+      "id": 4,
+      "title": "Ride Service Logs",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [{
+        "datasource": "Loki",
+        "expr": "{service=\"cab-ride-service\"}",
+        "legendFormat": ""
+      }],
+      "options": { "showTime": true, "sortOrder": "Descending" }
+    },
+    {
+      "id": 5,
+      "title": "Payment Service Logs",
+      "type": "logs",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [{
+        "datasource": "Loki",
+        "expr": "{service=\"cab-payment-service\"}",
+        "legendFormat": ""
+      }],
+      "options": { "showTime": true, "sortOrder": "Descending" }
+    },
+    {
+      "id": 6,
+      "title": "Log Rate by Service",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 7 },
+      "targets": [{
+        "datasource": "Loki",
+        "expr": "sum by (service) (rate({job=\"docker-containers\"}[5m]))",
+        "legendFormat": "{{service}}"
+      }],
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    }
+  ],
+  "schemaVersion": 38
+}

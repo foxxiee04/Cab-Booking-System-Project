@@ -1,0 +1,96 @@
+{
+  "title": "Application Metrics",
+  "uid": "application",
+  "tags": ["app", "api-gateway", "rabbitmq"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "RabbitMQ — Messages Ready",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 7 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "rabbitmq_queue_messages_ready",
+        "legendFormat": "{{queue}}"
+      }]
+    },
+    {
+      "id": 2,
+      "title": "RabbitMQ — Messages Published/s",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 7 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(rabbitmq_channel_messages_published_total[5m])",
+          "legendFormat": "Published/s"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(rabbitmq_channel_messages_delivered_total[5m])",
+          "legendFormat": "Delivered/s"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "RabbitMQ — Connections & Channels",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 7, "w": 6, "h": 4 },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "rabbitmq_connections", "legendFormat": "Connections" },
+        { "datasource": "Prometheus", "expr": "rabbitmq_channels", "legendFormat": "Channels" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "RabbitMQ — Consumers",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 7, "w": 6, "h": 4 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "sum(rabbitmq_queue_consumers)",
+        "legendFormat": "Consumers"
+      }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": 0 }] } } }
+    },
+    {
+      "id": 5,
+      "title": "API Gateway — AI Matching Decisions",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 7, "w": 12, "h": 7 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "rate(cab_matching_ai_decisions_total[5m])",
+        "legendFormat": "{{source}} / {{outcome}}"
+      }]
+    },
+    {
+      "id": 6,
+      "title": "API Gateway — AI Adjustment Score",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 7 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "histogram_quantile(0.95, rate(cab_matching_ai_adjustment_bucket[5m]))",
+        "legendFormat": "p95 AI adjustment"
+      }]
+    },
+    {
+      "id": 7,
+      "title": "API Gateway — AI Latency (ms)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 7 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "histogram_quantile(0.95, rate(cab_matching_ai_latency_ms_bucket[5m]))",
+        "legendFormat": "p95 latency"
+      }],
+      "fieldConfig": { "defaults": { "unit": "ms" } }
+    }
+  ],
+  "schemaVersion": 38
+}

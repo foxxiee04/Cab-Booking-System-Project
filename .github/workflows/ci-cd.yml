@@ -361,14 +361,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Copy stack file to server
+      - name: Copy stack and monitoring files to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
-          source: "docker-stack.thesis.yml"
+          source: "docker-stack.thesis.yml,monitoring"
           target: "~/cab-booking/"
           strip_components: 0
 
