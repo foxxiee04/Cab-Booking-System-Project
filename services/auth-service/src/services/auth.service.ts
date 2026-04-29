@@ -301,7 +301,7 @@ export class AuthService {
     await this.otpService.storeOtp(input.phone, otp, purpose);
     await this.smsService.sendOtp(input.phone, otp, purpose);
     // In mock mode store plaintext so the /internal/dev/otp endpoint can return it
-    if (config.sms.mode === 'mock') {
+    if (config.sms?.mode === 'mock') {
       await this.otpService.storePlainOtp(input.phone, otp, purpose);
     }
 
@@ -320,7 +320,7 @@ export class AuthService {
       maskedPhone: this.maskPhone(input.phone),
       expiresInSeconds: config.otp.ttlSeconds,
       maxAttempts: config.otp.maxAttempts,
-      deliveryMethod: config.sms.mode === 'mock' ? 'SERVER_LOG' : 'SMS',
+      deliveryMethod: config.sms?.mode === 'mock' ? 'SERVER_LOG' : 'SMS',
     };
   }
 
@@ -466,7 +466,7 @@ export class AuthService {
         maskedPhone: this.maskPhone(phone),
         expiresInSeconds: config.otp.ttlSeconds,
         maxAttempts: config.otp.maxAttempts,
-        deliveryMethod: config.sms.mode === 'mock' ? 'SERVER_LOG' : 'SMS',
+        deliveryMethod: config.sms?.mode === 'mock' ? 'SERVER_LOG' : 'SMS',
       };
     }
     if (user.status === UserStatus.SUSPENDED) {

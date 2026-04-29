@@ -109,7 +109,7 @@ describe('map routes', () => {
       success: true,
       data: {
         results: [
-          { lat: 10.8501, lng: 106.7601, address: '366 Võ Văn Ngân, Phường Bình Thọ, Thành phố Thủ Đức, TP. HCM' },
+          { lat: 10.8501, lng: 106.7601, address: '366 Võ Văn Ngân, Phường Bình Thọ, TP. HCM' },
           { lat: 10.8305, lng: 106.6842, address: '366 Võ Văn Ngân, Phường Hạnh Thông, TP. HCM' },
         ],
       },

@@ -72,7 +72,8 @@ describe('NotificationController', () => {
       const req = mockReq({
         headers: { 'x-user-id': 'user-1' },
         query: { limit: '10' },
-      });
+      } as any);
+      (req as any).user = { userId: 'user-1' };
       const res = mockRes();
 
       await notificationController.getUserNotifications(req, res);
@@ -91,7 +92,8 @@ describe('NotificationController', () => {
       const req = mockReq({
         headers: { 'x-user-id': 'user-1' },
         query: {},
-      });
+      } as any);
+      (req as any).user = { userId: 'user-1' };
       const res = mockRes();
 
       await notificationController.getUserNotifications(req, res);

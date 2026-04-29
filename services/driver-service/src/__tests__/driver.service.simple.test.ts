@@ -1,3 +1,9 @@
+// Mock axios before imports
+jest.mock('axios', () => ({
+  get: jest.fn().mockResolvedValue({ data: { data: { canAcceptRide: true } } }),
+  post: jest.fn().mockResolvedValue({ data: {} }),
+}));
+
 // Mock Prisma before imports
 const mockPrisma: any = {
   driver: {
@@ -24,9 +30,10 @@ jest.mock('../generated/prisma-client', () => ({
     BUSY: 'BUSY',
   },
   VehicleType: {
-    CAR: 'CAR',
-    MOTORCYCLE: 'MOTORCYCLE',
-    SUV: 'SUV',
+    MOTORBIKE: 'MOTORBIKE',
+    SCOOTER: 'SCOOTER',
+    CAR_4: 'CAR_4',
+    CAR_7: 'CAR_7',
   },
 }));
 
@@ -76,7 +83,7 @@ describe('DriverService - Simple Test Suite', () => {
       const input = {
         userId: 'user-123',
         vehicle: {
-          type: 'CAR' as const,
+          type: 'CAR_4' as const,
           brand: 'Toyota',
           model: 'Camry',
           plate: '29A-12345',
@@ -85,6 +92,7 @@ describe('DriverService - Simple Test Suite', () => {
         },
         license: {
           number: 'DL-123456',
+          class: 'B' as const,
           expiryDate: new Date('2025-12-31'),
         },
       };
@@ -114,7 +122,7 @@ describe('DriverService - Simple Test Suite', () => {
       const input = {
         userId: 'user-123',
         vehicle: {
-          type: 'CAR' as const,
+          type: 'CAR_4' as const,
           brand: 'Toyota',
           model: 'Camry',
           plate: '29A-12345',
@@ -123,6 +131,7 @@ describe('DriverService - Simple Test Suite', () => {
         },
         license: {
           number: 'DL-123456',
+          class: 'B' as const,
           expiryDate: new Date('2025-12-31'),
         },
       };
@@ -150,7 +159,7 @@ describe('DriverService - Simple Test Suite', () => {
       });
 
       await expect(driverService.goOnline('user-123')).rejects.toThrow(
-        'Driver must be approved before going online. Current status: PENDING'
+        'Tài khoản tài xế đang chờ duyệt'
       );
     });
 

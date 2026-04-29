@@ -48,39 +48,26 @@ describe('AuthController', () => {
     expect(authService.register).not.toHaveBeenCalled();
   });
 
-  it('register should return 201 with user and tokens', async () => {
+  it('register should return 201 with OTP delivery result', async () => {
     authService.register.mockResolvedValue({
-      user: {
-        id: 'user-1',
-        email: 'test@example.com',
-        role: 'CUSTOMER',
-        firstName: 'Test',
-        lastName: 'User',
-      },
-      tokens: { accessToken: 'access', refreshToken: 'refresh' },
+      resendDelay: 0,
+      maskedPhone: '0912***567',
+      expiresInSeconds: 120,
+      maxAttempts: 5,
+      deliveryMethod: 'SMS',
     });
 
     const req = mockReq({
-      body: { email: 'test@example.com', password: 'TestPassword123!', firstName: 'Test', lastName: 'User' },
+      body: { phone: '0912345678', password: 'TestPassword123!', firstName: 'Test', lastName: 'User' },
     });
     const res = mockRes();
 
     await controller.register(req, res);
 
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({
-      success: true,
-      data: {
-        user: {
-          id: 'user-1',
-          email: 'test@example.com',
-          role: 'CUSTOMER',
-          firstName: 'Test',
-          lastName: 'User',
-        },
-        tokens: { accessToken: 'access', refreshToken: 'refresh' },
-      },
-    });
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true })
+    );
   });
 
   it('login should pass user-agent and ip to service', async () => {

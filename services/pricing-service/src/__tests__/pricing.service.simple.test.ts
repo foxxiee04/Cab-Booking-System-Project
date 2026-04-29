@@ -39,6 +39,17 @@ jest.mock('../config', () => ({
         COMFORT: 750,
         PREMIUM: 1200,
       },
+      vehicleServiceFee: {
+        ECONOMY: 3000,
+        COMFORT: 4000,
+        PREMIUM: 5000,
+      },
+      shortTripFee: {
+        ECONOMY: 5000,
+        COMFORT: 7000,
+        PREMIUM: 10000,
+      },
+      shortTripThresholdKm: 2,
       minimumFare: 20000,
       surgeThresholds: {
         medium: 1.3,

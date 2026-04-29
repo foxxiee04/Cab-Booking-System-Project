@@ -103,3 +103,15 @@ export interface AuthResponseDto {
   user: UserResponseDto;
   tokens: TokensDto;
 }
+
+// Login DTO
+export const loginSchema = Joi.object({
+  email: Joi.string().required().messages({ 'any.required': 'Email is required' }),
+  password: Joi.string().required().messages({ 'any.required': 'Password is required' }),
+});
+
+// Change Password DTO
+export const changePasswordSchema = Joi.object({
+  currentPassword: Joi.string().required(),
+  newPassword: Joi.string().min(8).required(),
+});

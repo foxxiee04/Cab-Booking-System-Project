@@ -61,7 +61,7 @@ describe('BookingService - Complete Test Suite', () => {
       dropoffAddress: '456 Oak St',
       dropoffLat: 10.782622,
       dropoffLng: 106.680172,
-      vehicleType: 'ECONOMY' as const,
+      vehicleType: 'MOTORBIKE' as const,
       paymentMethod: 'CASH' as const,
     };
 
@@ -124,7 +124,7 @@ describe('BookingService - Complete Test Suite', () => {
         dropoffAddress: '456 Oak St',
         dropoffLat: 10.782622,
         dropoffLng: 106.680172,
-        vehicleType: 'ECONOMY',
+        vehicleType: 'MOTORBIKE',
         paymentMethod: 'CASH',
         estimatedFare: 50000,
         surgeMultiplier: 1.0,
@@ -222,7 +222,7 @@ describe('BookingService - Complete Test Suite', () => {
         dropoffAddress: '456 Oak St',
         dropoffLat: 10.782622,
         dropoffLng: 106.680172,
-        vehicleType: 'ECONOMY' as const,
+        vehicleType: 'MOTORBIKE' as const,
         paymentMethod: 'CASH' as const,
       };
       

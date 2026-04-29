@@ -12,7 +12,7 @@ function buildOtpMessage(otp: string, purpose: 'register' | 'reset', ttlSeconds:
 // ─── SMS Service ─────────────────────────────────────────────────────────────
 
 export class SmsService {
-  private readonly mode = config.sms.mode;
+  private readonly mode = config.sms?.mode ?? 'mock';
 
   async sendOtp(phone: string, otp: string, purpose: 'register' | 'reset'): Promise<void> {
     switch (this.mode) {

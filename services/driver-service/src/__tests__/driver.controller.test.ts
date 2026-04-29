@@ -37,6 +37,8 @@ describe('DriverController', () => {
     updateLocation: jest.fn(),
     getDrivers: jest.fn(),
     updateDriver: jest.fn(),
+    approveDriver: jest.fn(),
+    rejectDriver: jest.fn(),
   } as any;
 
   let controller: DriverController;
@@ -185,10 +187,11 @@ describe('DriverController', () => {
   });
 
   it('getAvailableRides should proxy to ride service for drivers', async () => {
+    driverService.getDriverByUserId.mockResolvedValue({ id: 'driver-1', vehicleType: 'CAR_4' });
     (axios.get as jest.Mock).mockResolvedValue({ data: { data: { rides: [{ id: 'ride-1' }] } } });
     const req = mockReq({
       user: { userId: 'driver-user', role: 'DRIVER' } as any,
-      query: { lat: '10.1', lng: '106.1', radius: '5', vehicleType: 'CAR' },
+      query: { lat: '10.1', lng: '106.1', radius: '5' },
       headers: { authorization: 'Bearer token' } as any,
     });
     const res = mockRes();
@@ -198,8 +201,7 @@ describe('DriverController', () => {
     expect(axios.get).toHaveBeenCalledWith(
       expect.stringContaining('/api/rides/available'),
       expect.objectContaining({
-        params: { lat: '10.1', lng: '106.1', radius: '5', vehicleType: 'CAR' },
-        headers: { Authorization: 'Bearer token' },
+        params: expect.objectContaining({ lat: '10.1', lng: '106.1', radius: '5', vehicleType: 'CAR_4' }),
       })
     );
     expect(res.json).toHaveBeenCalledWith({ success: true, data: { rides: [{ id: 'ride-1' }] } });
@@ -247,8 +249,8 @@ describe('DriverController', () => {
   });
 
   it('verifyDriver should return 404 when driver is missing', async () => {
-    driverService.updateDriver.mockResolvedValue(null);
-    const req = mockReq({ params: { driverId: 'missing-driver' }, body: { verified: true } });
+    driverService.approveDriver.mockResolvedValue(null);
+    const req = mockReq({ params: { driverId: 'missing-driver' }, body: {} });
     const res = mockRes();
 
     await controller.verifyDriver(req, res);

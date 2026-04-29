@@ -1,5 +1,10 @@
 import { ReviewType } from '../models/review.model';
 
+jest.mock('axios', () => ({
+  get: jest.fn().mockResolvedValue({ data: {} }),
+  post: jest.fn().mockResolvedValue({ data: {} }),
+}));
+
 // Mock ReviewModel
 const mockCreate = jest.fn();
 const mockFindOne = jest.fn();
