@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Card, CardContent, Chip, InputAdornment, MenuItem, TextField, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, InputAdornment, MenuItem, TextField, Tooltip, Typography } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { SearchRounded } from '@mui/icons-material';
 import { adminApi } from '../api/admin.api';
@@ -75,7 +75,11 @@ const Rides: React.FC = () => {
   }), [filteredRows]);
 
   const columns: GridColDef<Ride>[] = [
-    { field: 'id', headerName: t('columns.rideId'), flex: 1, minWidth: 220 },
+    { field: 'id', headerName: t('columns.rideId'), width: 120, renderCell: (params) => (
+      <Tooltip title={params.value} arrow placement="top">
+        <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12 }}>{String(params.value).slice(0, 8).toUpperCase()}</span>
+      </Tooltip>
+    ) },
     {
       field: 'status',
       headerName: t('columns.status'),

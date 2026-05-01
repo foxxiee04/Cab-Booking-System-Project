@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Card, CardContent, Chip, InputAdornment, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, InputAdornment, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { SearchRounded } from '@mui/icons-material';
 import { adminApi } from '../api/admin.api';
@@ -76,7 +76,11 @@ const Customers: React.FC = () => {
   }), [filteredRows]);
 
   const columns: GridColDef<Customer>[] = [
-    { field: 'id', headerName: t('columns.customerId'), flex: 1, minWidth: 200 },
+    { field: 'id', headerName: t('columns.customerId'), width: 120, renderCell: (params) => (
+      <Tooltip title={params.value} arrow placement="top">
+        <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12 }}>{String(params.value).slice(0, 8).toUpperCase()}</span>
+      </Tooltip>
+    ) },
     {
       field: 'name',
       headerName: t('columns.name'),

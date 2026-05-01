@@ -75,19 +75,19 @@ interface VehicleOption {
 }
 
 const FALLBACK_PRICING: Record<VehicleOption['type'], { baseFare: number; perKmRate: number; perMinuteRate: number; vehicleServiceFee: number; shortTripFee: number }> = {
-  MOTORBIKE: { baseFare: 10000, perKmRate: 6200, perMinuteRate: 450, vehicleServiceFee: 0, shortTripFee: 0 },
-  SCOOTER: { baseFare: 14000, perKmRate: 8400, perMinuteRate: 700, vehicleServiceFee: 1500, shortTripFee: 1500 },
-  CAR_4: { baseFare: 24000, perKmRate: 15000, perMinuteRate: 1900, vehicleServiceFee: 6000, shortTripFee: 6000 },
-  CAR_7: { baseFare: 32000, perKmRate: 18500, perMinuteRate: 2400, vehicleServiceFee: 10000, shortTripFee: 9000 },
+  MOTORBIKE: { baseFare: 10000, perKmRate: 6200,  perMinuteRate: 450,  vehicleServiceFee: 0,     shortTripFee: 0     },
+  SCOOTER:   { baseFare: 16000, perKmRate: 9500,   perMinuteRate: 800,  vehicleServiceFee: 2000,  shortTripFee: 2000  },
+  CAR_4:     { baseFare: 28000, perKmRate: 18000,  perMinuteRate: 2200, vehicleServiceFee: 8000,  shortTripFee: 8000  },
+  CAR_7:     { baseFare: 40000, perKmRate: 24000,  perMinuteRate: 3000, vehicleServiceFee: 12000, shortTripFee: 12000 },
 };
 
 const MINIMUM_FARE = 15000;
 const SHORT_TRIP_THRESHOLD_KM = 2.5;
 
 const MIN_PRICE_GAP: Record<'SCOOTER' | 'CAR_4' | 'CAR_7', number> = {
-  SCOOTER: 3000,
-  CAR_4: 15000,
-  CAR_7: 10000,
+  SCOOTER: 8000,
+  CAR_4:   30000,
+  CAR_7:   25000,
 };
 
 const vehicleOptions: VehicleOption[] = [

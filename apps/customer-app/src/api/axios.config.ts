@@ -18,7 +18,7 @@ let refreshPromise: Promise<AuthTokens> | null = null;
 
 export const refreshAuthSession = async (): Promise<AuthTokens> => {
   if (!refreshPromise) {
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshToken = store.getState().auth.refreshToken;
     if (!refreshToken) {
       throw new Error('No refresh token available');
     }
@@ -45,7 +45,8 @@ export const refreshAuthSession = async (): Promise<AuthTokens> => {
 // Request interceptor - Add auth token
 axiosInstance.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('accessToken');
+    // Read from Redux store (in-memory per tab), not localStorage (shared across tabs in same incognito window)
+    const token = store.getState().auth.accessToken;
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }

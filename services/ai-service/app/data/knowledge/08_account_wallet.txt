@@ -1,27 +1,42 @@
-TIÊU ĐỀ: Tài khoản và ví điện tử
-DANH MỤC: tài khoản, ví, nạp tiền, rút tiền, đăng ký, đăng nhập, mật khẩu
+TIÊU ĐỀ: Tài khoản và ví điện tử FoxGo
+DANH MỤC: tài khoản, ví, nạp tiền, rút tiền, đăng ký, đăng nhập, mật khẩu, OTP, quên mật khẩu, hồ sơ
 
-Đăng ký tài khoản:
-- Mở ứng dụng và nhấn "Đăng ký".
-- Nhập số điện thoại và nhận mã OTP xác minh.
-- Điền họ tên, email và mật khẩu.
-- Mật khẩu phải có ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường và số.
+Đăng ký tài khoản FoxGo:
+1. Mở ứng dụng và nhấn "Đăng ký".
+2. Nhập số điện thoại → nhận mã OTP xác minh (gửi qua SMS).
+3. Điền họ tên, email và tạo mật khẩu.
+4. Mật khẩu phải có ít nhất 8 ký tự, gồm chữ hoa, chữ thường và số.
 
 Đăng nhập:
-- Dùng số điện thoại + mật khẩu đã đăng ký.
-- Nếu quên mật khẩu: Nhấn "Quên mật khẩu" → nhập số điện thoại → nhận OTP → đặt mật khẩu mới.
+• Dùng số điện thoại + mật khẩu đã đăng ký.
+• Nếu quên mật khẩu: nhấn "Quên mật khẩu" → nhập số điện thoại → nhận OTP → đặt mật khẩu mới.
 
-Ví CabBooking (dành cho tài xế):
-- Tài xế nhận thu nhập từ các chuyến online vào ví.
-- Có thể nạp tiền vào ví qua MoMo hoặc VNPay.
-- Rút tiền về tài khoản ngân hàng (xử lý trong 1-3 ngày làm việc).
-- Số dư ví tối thiểu phải duy trì: 50.000đ để tiếp tục nhận chuyến.
+Ví FoxGo (dành cho tài xế):
+• Tài xế nhận thu nhập từ chuyến online vào ví FoxGo.
+• Nạp tiền vào ví qua MoMo hoặc VNPay để đảm bảo số dư tối thiểu.
+• Số dư tối thiểu cần duy trì: 50.000đ để tiếp tục nhận chuyến.
+• Rút tiền về tài khoản ngân hàng: xử lý trong 1–3 ngày làm việc.
 
 Chỉnh sửa thông tin tài khoản:
-- Vào "Hồ sơ của tôi" để thay đổi ảnh đại diện, họ tên, email.
-- Số điện thoại không thể thay đổi sau khi đăng ký (là định danh chính).
+• Vào "Hồ sơ của tôi" để thay đổi ảnh đại diện, họ tên, email.
+• Số điện thoại KHÔNG thể thay đổi — là định danh chính và không thể sửa sau đăng ký.
 
 Bảo mật tài khoản:
-- Không chia sẻ mã OTP với bất kỳ ai.
-- Nhân viên CabBooking không bao giờ yêu cầu OTP.
-- Đăng xuất tài khoản trên thiết bị không sử dụng nữa.
+• KHÔNG bao giờ chia sẻ mã OTP với bất kỳ ai, kể cả nhân viên tự xưng là FoxGo.
+• Nhân viên FoxGo KHÔNG BAO GIỜ yêu cầu OTP qua điện thoại hay tin nhắn.
+• Đăng xuất trên thiết bị không dùng nữa (Cài đặt → Đăng xuất).
+
+Hỏi: Tôi không nhận được OTP thì sao?
+Đáp: Kiểm tra: (1) Số điện thoại nhập có đúng không. (2) Điện thoại có bị chặn SMS lạ không — tắt chặn spam nếu có. (3) Đợi 60 giây và nhấn "Gửi lại OTP". (4) Kiểm tra kết nối mạng. Nếu vẫn không nhận được, liên hệ support@foxgo.vn kèm số điện thoại.
+
+Hỏi: Tôi quên mật khẩu phải làm sao?
+Đáp: Nhấn "Quên mật khẩu" ở màn hình đăng nhập → nhập số điện thoại → nhận OTP → xác nhận OTP → đặt mật khẩu mới. Mật khẩu mới phải có ít nhất 8 ký tự gồm chữ hoa, thường và số.
+
+Hỏi: Tài khoản bị khóa phải làm sao?
+Đáp: Tài khoản có thể bị khóa do vi phạm chính sách (hủy nhiều lần, báo cáo từ tài xế...). Liên hệ support@foxgo.vn với số điện thoại và họ tên để được xem xét mở khóa.
+
+Hỏi: Đổi email hay họ tên được không?
+Đáp: Được. Vào "Hồ sơ của tôi" trong ứng dụng → chọn thông tin muốn sửa → lưu. Riêng số điện thoại là định danh cố định, không thể thay đổi.
+
+Hỏi: Tôi bị mất điện thoại, tài khoản có bị lộ không?
+Đáp: Đăng nhập trên thiết bị mới sẽ yêu cầu OTP xác minh gửi đến SIM của bạn. Ngay khi có điện thoại mới/SIM mới, đăng nhập lại và đổi mật khẩu ngay. Để an toàn hơn, liên hệ support@foxgo.vn để tạm khóa tài khoản.

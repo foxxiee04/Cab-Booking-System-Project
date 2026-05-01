@@ -1,0 +1,107 @@
+classDiagram
+    class DriverWallet {
+        <<Aggregate Root>>
+        +WalletId id
+        +DriverId driverId
+        +Money balance
+        +Money availableBalance
+        +Money pendingBalance
+        +Money lockedBalance
+        +Money debt
+        +WalletStatus status
+        +Boolean initialActivationCompleted
+        +activate(topUpAmount)
+        +creditEarning(netEarnings, rideId)
+        +debitCommission(commission, rideId)
+        +creditTopUp(amount)
+        +initiateWithdrawal(amount, bankInfo)
+        +settlePendingEarnings()
+        +canAcceptRide() Boolean
+    }
+
+    class WalletStatus {
+        <<Value Object>>
+        INACTIVE
+        ACTIVE
+        BLOCKED
+    }
+
+    class PendingEarning {
+        <<Entity>>
+        +EarningId id
+        +DriverId driverId
+        +Money amount
+        +RideId rideId
+        +DateTime settleAt
+        +DateTime settledAt
+        +isEligible() Boolean
+    }
+
+    class DebtRecord {
+        <<Entity>>
+        +DebtId id
+        +DriverId driverId
+        +Money amount
+        +Money remaining
+        +RideId rideId
+        +DebtStatus status
+        +DateTime dueDate
+        +DateTime settledAt
+        +isOverdue() Boolean
+        +pay(amount) Money
+    }
+
+    class DebtStatus {
+        <<Value Object>>
+        ACTIVE
+        OVERDUE
+        SETTLED
+    }
+
+    class WalletTransaction {
+        <<Entity - Immutable>>
+        +TxId id
+        +DriverId driverId
+        +TransactionType type
+        +TransactionDirection direction
+        +Money amount
+        +Money balanceAfter
+        +String idempotencyKey
+        +DateTime createdAt
+    }
+
+    class MerchantBalance {
+        <<Aggregate Root - Singleton>>
+        +Int id
+        +Money balance
+        +Money totalIn
+        +Money totalOut
+        +applyIn(amount)
+        +applyOut(amount)
+    }
+
+    class MerchantLedger {
+        <<Entity - Append Only>>
+        +LedgerId id
+        +LedgerType type
+        +LedgerCategory category
+        +Money amount
+        +String referenceId
+        +String idempotencyKey
+    }
+
+    class DebtSettlementService {
+        <<Domain Service>>
+        +settleFifo(driverId, paymentAmount)
+        +calculateTotalDebt(driverId) Money
+        +markOverdue(driverId)
+    }
+
+    DriverWallet "1" *-- "1" WalletStatus
+    DriverWallet "1" o-- "0..*" PendingEarning
+    DriverWallet "1" o-- "0..*" DebtRecord
+    DriverWallet "1" o-- "0..*" WalletTransaction
+    DebtRecord "1" *-- "1" DebtStatus
+    MerchantBalance "1" o-- "0..*" MerchantLedger
+    DebtSettlementService ..> DriverWallet
+    DebtSettlementService ..> DebtRecord

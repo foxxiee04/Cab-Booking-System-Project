@@ -1,0 +1,13 @@
+stateDiagram-v2
+    [*] --> PENDING : Khách đặt xe
+    PENDING --> ACCEPTED : Tài xế chấp nhận
+    PENDING --> CANCELLED : Timeout / Không có tài xế
+
+    ACCEPTED --> IN_PROGRESS : Tài xế bắt đầu chuyến
+    ACCEPTED --> CANCELLED : Tài xế/khách huỷ
+
+    IN_PROGRESS --> COMPLETED : Tài xế kết thúc
+    IN_PROGRESS --> CANCELLED : Admin huỷ khẩn cấp
+
+    COMPLETED --> [*]
+    CANCELLED --> [*]

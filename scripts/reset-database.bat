@@ -2,8 +2,9 @@
 setlocal EnableDelayedExpansion
 REM ============================================
 REM  Cab Booking System - Database Reset Script
-REM  Resets all PostgreSQL + MongoDB databases,
-REM  re-runs Prisma migrations, then seeds data.
+REM  Xoa va tao lai PostgreSQL + MongoDB DBs
+REM  Chay prisma db push cho tat ca service
+REM  (Khong seed du lieu - chay npm run db:seed sau)
 REM ============================================
 
 echo ============================================
@@ -21,7 +22,7 @@ if not defined MONGO_PORT set MONGO_PORT=27017
 if not defined MONGO_USER set MONGO_USER=mongo
 if not defined MONGO_PASSWORD set MONGO_PASSWORD=mongo
 
-echo [1/4] Dropping and recreating PostgreSQL databases...
+echo [1/3] Dropping and recreating PostgreSQL databases...
 echo.
 
 for %%d in (auth_db booking_db driver_db payment_db ride_db user_db wallet_db) do (
@@ -34,20 +35,20 @@ for %%d in (auth_db booking_db driver_db payment_db ride_db user_db wallet_db) d
 )
 
 echo.
-echo [2/4] Dropping MongoDB databases...
+echo [2/3] Dropping MongoDB databases...
 echo.
 
 mongosh --host %MONGO_HOST% --port %MONGO_PORT% -u %MONGO_USER% -p %MONGO_PASSWORD% --authenticationDatabase admin --eval "db.getSiblingDB('notification_db').dropDatabase(); db.getSiblingDB('review_db').dropDatabase(); print('MongoDB databases dropped');"
 if errorlevel 1 echo   MongoDB drop skipped (not available or already clean)
 
 echo.
-echo [3/4] Running Prisma migrations...
+echo [3/3] Running prisma db push for all services...
 echo.
 
 cd /d "%~dp0.."
 
 for %%s in (auth-service booking-service driver-service payment-service ride-service user-service wallet-service) do (
-    echo   Migrating %%s...
+    echo   Push schema %%s...
     set DB_NAME=
     if "%%s"=="auth-service"    set DB_NAME=auth_db
     if "%%s"=="booking-service" set DB_NAME=booking_db
@@ -58,23 +59,13 @@ for %%s in (auth-service booking-service driver-service payment-service ride-ser
     if "%%s"=="wallet-service"  set DB_NAME=wallet_db
     cd services\%%s
     set "DATABASE_URL=postgresql://%POSTGRES_USER%:%POSTGRES_PASSWORD%@%POSTGRES_HOST%:%POSTGRES_PORT%/!DB_NAME!?schema=public"
-    call npx prisma migrate deploy
-    if errorlevel 1 (
-        call npx prisma db push --accept-data-loss
-    )
+    call npx prisma db push --accept-data-loss
     call npx prisma generate
     if errorlevel 1 exit /b 1
     cd ..\..
 )
 
 echo.
-echo [4/4] Seeding database...
-echo.
-
-call npx tsx scripts\seed-database.ts
-if errorlevel 1 exit /b 1
-
-echo.
 echo ============================================
-echo  Database reset complete!
+echo  Schema reset complete!
 echo ============================================

@@ -1,30 +1,44 @@
-TIÊU ĐỀ: Trở thành tài xế - Yêu cầu và đăng ký
-DANH MỤC: tài xế, đăng ký tài xế, yêu cầu tài xế, driver
+TIÊU ĐỀ: Đăng ký tài xế FoxGo
+DANH MỤC: tài xế, đăng ký tài xế, yêu cầu tài xế, driver, hoa hồng, thu nhập tài xế, lái xe
 
-Yêu cầu để trở thành tài xế CabBooking:
-- Tuổi từ 21 trở lên.
-- Có bằng lái xe phù hợp với loại phương tiện đăng ký (A2 cho xe máy, B2 cho ô tô 4 chỗ, D cho ô tô 7 chỗ).
-- Phương tiện không quá 8 năm tuổi (tính từ năm sản xuất).
-- Phương tiện đã được kiểm định đăng kiểm còn hiệu lực.
-- Có bảo hiểm xe hợp lệ.
-- Lý lịch tư pháp sạch (không có tiền án tiền sự nghiêm trọng).
+Yêu cầu để trở thành tài xế FoxGo:
+• Tuổi từ 21 trở lên.
+• Bằng lái phù hợp: A2 cho xe máy/scooter, B2 cho ô tô 4 chỗ, D cho ô tô 7 chỗ.
+• Phương tiện không quá 8 năm tuổi (tính từ năm sản xuất).
+• Phương tiện đã đăng kiểm còn hiệu lực.
+• Có bảo hiểm xe hợp lệ.
+• Lý lịch tư pháp sạch (không có án hình sự nghiêm trọng).
 
-Quy trình đăng ký:
-1. Tải app và đăng ký tài khoản tài xế.
-2. Điền thông tin cá nhân và tải lên ảnh CCCD/CMND.
-3. Tải lên ảnh bằng lái xe hợp lệ.
-4. Tải lên ảnh phương tiện và giấy tờ xe (đăng ký xe, đăng kiểm).
-5. Đợi admin xem xét và phê duyệt (thường trong 1-3 ngày làm việc).
-6. Sau khi được duyệt, tài xế có thể bật "Trực tuyến" và nhận chuyến.
+Quy trình đăng ký (khoảng 1–3 ngày làm việc):
+1. Tải app FoxGo Driver và đăng ký tài khoản tài xế.
+2. Điền thông tin cá nhân (họ tên, ngày sinh, địa chỉ).
+3. Tải ảnh CCCD/CMND (mặt trước và mặt sau).
+4. Tải ảnh bằng lái xe hợp lệ.
+5. Tải ảnh phương tiện (ảnh xe, biển số) và giấy tờ xe (đăng ký, đăng kiểm, bảo hiểm).
+6. Chờ đội ngũ admin xem xét và phê duyệt.
+7. Sau khi được duyệt, bật "Trực tuyến" để bắt đầu nhận chuyến.
 
-Hoa hồng (Commission):
-- Xe máy/Scooter: Hoa hồng 20% trên mỗi chuyến.
-- Ô tô 4 chỗ: Hoa hồng 18% trên mỗi chuyến.
-- Ô tô 7 chỗ: Hoa hồng 15% trên mỗi chuyến.
+Hoa hồng (phí dịch vụ nền tảng):
+• Xe máy / Xe tay ga (MOTORBIKE/SCOOTER): 20% mỗi chuyến.
+• Ô tô 4 chỗ (CAR_4): 18% mỗi chuyến.
+• Ô tô 7 chỗ (CAR_7): 15% mỗi chuyến.
 
-Thanh toán cho tài xế:
-- Chuyến tiền mặt: Khách trả tài xế trực tiếp. Tài xế nợ nền tảng phần hoa hồng (trừ vào ví).
-- Chuyến online: Tiền chuyển thẳng vào ví tài xế trừ hoa hồng.
-- Ví tài xế cần duy trì số dư tối thiểu để tiếp tục nhận chuyến.
+Cơ chế thanh toán cho tài xế:
+• Chuyến tiền mặt: Khách trả tài xế trực tiếp. Phần hoa hồng được trừ vào số dư ví tài xế.
+• Chuyến online (MoMo/VNPay): Tiền chuyển thẳng vào ví tài xế sau khi trừ hoa hồng.
+• Tài xế cần duy trì số dư ví tối thiểu 50.000đ để tiếp tục nhận chuyến.
 
-Tài xế có thể xem thu nhập, lịch sử chuyến và số dư ví trong ứng dụng tài xế.
+Hỏi: Tôi muốn đăng ký tài xế, cần chuẩn bị gì?
+Đáp: Cần có: CCCD/CMND còn hạn, bằng lái phù hợp (A2/B2/D), đăng ký xe, giấy đăng kiểm, bảo hiểm xe còn hiệu lực, và ảnh chụp xe rõ ràng. Tải app FoxGo Driver và làm theo hướng dẫn trên app.
+
+Hỏi: Đăng ký tài xế mất bao lâu để được duyệt?
+Đáp: Thường từ 1–3 ngày làm việc sau khi nộp đầy đủ hồ sơ. Nếu hồ sơ thiếu hoặc không rõ, bạn sẽ nhận thông báo để bổ sung.
+
+Hỏi: Tài xế có thể rút tiền từ ví không?
+Đáp: Có. Tài xế có thể rút tiền về tài khoản ngân hàng từ mục "Ví" trong app FoxGo Driver. Thời gian xử lý 1–3 ngày làm việc.
+
+Hỏi: Tại sao tài xế không nhận được chuyến dù đã bật trực tuyến?
+Đáp: Kiểm tra: (1) Số dư ví có đủ 50.000đ không? Nếu thấp hơn mức tối thiểu, hệ thống tạm ngừng nhận chuyến. (2) Vị trí GPS có chính xác không? (3) Kết nối mạng có ổn định không? Nếu vẫn không nhận được chuyến sau 30 phút, liên hệ support@foxgo.vn.
+
+Hỏi: Tôi đăng ký 2 xe được không?
+Đáp: Mỗi tài khoản tài xế chỉ đăng ký được 1 phương tiện. Nếu muốn đổi xe, liên hệ hỗ trợ để cập nhật thông tin phương tiện.

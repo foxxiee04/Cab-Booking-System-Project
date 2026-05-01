@@ -1,0 +1,33 @@
+sequenceDiagram
+    participant C as Customer App
+    participant G as API Gateway
+    participant B as Booking Service
+    participant P as Pricing Service
+    participant R as Ride Service
+    participant D as Driver Service
+    participant Redis as Redis Geo
+    participant DA as Driver App
+
+    C->>G: POST /api/bookings {pickup, dropoff, vehicleType}
+    G->>B: Forward
+    B->>P: gRPC EstimateFare
+    P-->>B: {fare, distance, duration, surge}
+    B-->>C: Hiển thị giá + ETA
+
+    C->>G: POST /api/bookings/:id/confirm
+    B->>RabbitMQ: booking.confirmed
+    RabbitMQ->>R: Tạo Ride PENDING
+    R->>RabbitMQ: ride.created
+    RabbitMQ->>G: Kích hoạt matching
+
+    loop 3 vòng: 2km×1, 3km×3, 5km×5
+        G->>Redis: GEORADIUS (radius, online drivers)
+        G->>D: gRPC GetDriverById (batch)
+        Note over G: Score = 0.40×dist + 0.25×rating + 0.15×idle + 0.15×accept − 0.05×cancel
+        G-->>DA: Socket.IO emit ride:offer
+        alt Tài xế chấp nhận trong 30s
+            DA->>G: POST /api/rides/:id/accept
+            G->>R: PENDING → ACCEPTED
+            G-->>C: Socket.IO ride:status_update
+        end
+    end

@@ -72,9 +72,10 @@ class MoMoGateway {
 
     try {
       const requestId = `${Date.now()}-${params.orderId}`;
-      const requestType = params.requestType || config.momo.requestType || 'captureWallet';
+      const requestType = params.requestType || config.momo.requestType || 'payWithMethod';
       const autoCapture = typeof params.autoCapture === 'boolean' ? params.autoCapture : config.momo.autoCapture;
-      const paymentCode = params.paymentCode || config.momo.paymentCode || '';
+      const paymentCode = params.paymentCode
+        || (requestType === 'payWithMethod' ? '' : (config.momo.paymentCode || ''));
 
       const rawData = {
         accessKey: this.accessKey,

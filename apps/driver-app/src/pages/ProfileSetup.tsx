@@ -219,6 +219,17 @@ const ProfileSetup: React.FC = () => {
       nextErrors.licensePlate = t('errors.licensePlateInvalid');
     }
 
+    const cleanedLicenseNumber = formData.licenseNumber.replace(/\s+/g, '');
+    const normalizedPlate = normalizeLicensePlate(formData.licensePlate).replace(/[-.\s]/g, '').toUpperCase();
+    if (
+      normalizedPlate.length > 0 &&
+      cleanedLicenseNumber.length > 0 &&
+      normalizedPlate === cleanedLicenseNumber.toUpperCase()
+    ) {
+      nextErrors.licensePlate = 'Biển số xe không được trùng với số GPLX.';
+      nextErrors.licenseNumber = 'Số GPLX không được trùng với biển số xe.';
+    }
+
     if (!formData.vehicleImageUrl || formData.vehicleImageUrl.length < 16) {
       nextErrors.vehicleImageUrl = 'Vui lòng tải ảnh xe rõ biển số';
     }
@@ -392,8 +403,8 @@ const ProfileSetup: React.FC = () => {
               </Box>
               <CardContent sx={{ p: 2.5 }}>
                 <TextField fullWidth label={t('profileSetup.licensePlate', 'Biển số xe')} value={formData.licensePlate} onChange={handleChange('licensePlate')} required
-                  error={Boolean(fieldErrors.licensePlate)} helperText={fieldErrors.licensePlate || 'Định dạng: 29A-12345 hoặc 51H1-678.90'}
-                  placeholder="VD: 29A-12345" inputProps={{ maxLength: 12 }}
+                  error={Boolean(fieldErrors.licensePlate)} helperText={fieldErrors.licensePlate || 'Ô tô: 50A-123.45 · Xe máy/ga: 50AC-123.45'}
+                  placeholder="VD: 50A-123.45" inputProps={{ maxLength: 11 }}
                   InputProps={{ startAdornment: <InputAdornment position="start"><LocalOffer /></InputAdornment> }}
                   sx={{ mb: 2 }} />
 

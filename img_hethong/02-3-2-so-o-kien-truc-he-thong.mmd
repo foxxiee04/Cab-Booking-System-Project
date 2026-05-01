@@ -1,0 +1,51 @@
+graph TB
+    subgraph Frontend ["Frontend (React SPAs)"]
+        Customer["Customer\n:4000"]
+        Driver["Driver\n:4001"]
+        Admin["Admin\n:4002"]
+    end
+
+    subgraph Gateway ["Gateway Layer"]
+        APIGW["API Gateway :3000\nAuth · Proxy · Socket.IO\nMatching Engine"]
+    end
+
+    subgraph BusinessServices ["Business Services"]
+        Auth["Auth :3001\ngRPC :50051"]
+        User["User :3007\ngRPC :50052"]
+        Booking["Booking :3008\ngRPC :50053"]
+        Ride["Ride :3002\ngRPC :50054"]
+        DriverSvc["Driver :3003\ngRPC :50055"]
+        Payment["Payment :3004\ngRPC :50056"]
+        Pricing["Pricing :3009\ngRPC :50057"]
+        Wallet["Wallet :3006"]
+        Notification["Notification :3005"]
+        Review["Review :3010"]
+    end
+
+    subgraph AILayer ["AI Layer"]
+        AI["AI Service :8000\nFastAPI · scikit-learn\nRAG Chatbot"]
+    end
+
+    subgraph DataLayer ["Data & Infra"]
+        PG[("PostgreSQL :5433\n7 databases")]
+        Mongo[("MongoDB :27017\n2 databases")]
+        Redis[("Redis :6379\nGeo · Cache · Pub/Sub")]
+        Rabbit["RabbitMQ :5672\ndomain-events exchange"]
+    end
+
+    Customer & Driver & Admin --> APIGW
+    APIGW -- "HTTP proxy" --> Auth & User & Ride & DriverSvc
+    APIGW -- "HTTP proxy" --> Booking & Payment & Wallet & Notification & Review
+    APIGW -- "gRPC bridge" --> Pricing
+    APIGW -- "gRPC" --> DriverSvc
+    Pricing -- "HTTP 150ms fallback" --> AI
+
+    Auth & User & Ride & DriverSvc --> PG
+    Booking & Payment & Wallet --> PG
+    Notification --> Mongo
+    Review --> Mongo
+    DriverSvc & Pricing --> Redis
+    APIGW -- "Socket.IO Redis Adapter" --> Redis
+    Ride & Booking -- "publish" --> Rabbit
+    Payment & Wallet -- "publish (Outbox)" --> Rabbit
+    Rabbit -- "consume" --> APIGW & Notification & Wallet & Review

@@ -204,7 +204,7 @@ export class DriverController {
       res.json({ success: true, data: response.data.data });
     } catch (err: any) {
       logger.error('Driver accept ride error (proxy):', err.response?.data || err.message);
-      const message = err.response?.data?.error?.message || 'Failed to accept ride';
+      const message = err.response?.data?.error?.message || 'Không thể nhận chuyến đi. Vui lòng thử lại.';
       res.status(err.response?.status || 500).json({
         success: false,
         error: { code: 'ACCEPT_RIDE_FAILED', message },

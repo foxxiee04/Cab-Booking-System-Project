@@ -1,18 +1,38 @@
-TIÊU ĐỀ: Hướng dẫn đặt xe
-DANH MỤC: đặt xe, hướng dẫn, cách đặt
+TIÊU ĐỀ: Hướng dẫn đặt xe FoxGo
+DANH MỤC: đặt xe, hướng dẫn, cách đặt, book xe, gọi xe, đặt chuyến
 
-Cách đặt xe trên ứng dụng CabBooking:
-1. Mở ứng dụng và đăng nhập vào tài khoản của bạn.
-2. Hệ thống sẽ tự động xác định vị trí hiện tại của bạn làm điểm đón.
-3. Nhập địa chỉ điểm đến vào ô tìm kiếm.
-4. Chọn loại xe phù hợp: Xe máy (MOTORBIKE), Xe ô tô 4 chỗ (CAR_4), hoặc Xe ô tô 7 chỗ (CAR_7).
-5. Xem giá ước tính được hiển thị trước khi xác nhận.
+Cách đặt xe trên ứng dụng FoxGo:
+1. Mở ứng dụng FoxGo và đăng nhập vào tài khoản.
+2. Hệ thống tự động xác định vị trí hiện tại làm điểm đón. Bạn có thể kéo ghim bản đồ để điều chỉnh chính xác hơn.
+3. Nhập địa chỉ điểm đến vào ô tìm kiếm ở trên.
+4. Chọn loại xe phù hợp:
+   • Xe máy số (MOTORBIKE): nhanh, tiết kiệm, di chuyển đường nhỏ dễ dàng.
+   • Xe tay ga (SCOOTER): thoải mái hơn, phù hợp quãng đường trung bình.
+   • Ô tô 4 chỗ (CAR_4): tiện nghi, phù hợp gia đình nhỏ hoặc đi nhóm.
+   • Ô tô 7 chỗ (CAR_7): rộng rãi, phù hợp nhóm đông hoặc nhiều hành lý.
+5. Xem giá ước tính hiển thị trước khi xác nhận.
 6. Chọn phương thức thanh toán: Tiền mặt (CASH), Ví MoMo, hoặc VNPay.
-7. Nhấn "Đặt xe" để xác nhận.
-8. Hệ thống sẽ tìm tài xế gần nhất và thông báo khi có tài xế nhận chuyến.
+7. Áp dụng voucher nếu có (tùy chọn).
+8. Nhấn "Đặt xe" để xác nhận.
+9. Hệ thống tìm tài xế gần nhất và thông báo khi có tài xế nhận chuyến.
 
-Thời gian tìm tài xế thường từ 1-5 phút. Nếu không tìm được tài xế sau 5 phút, chuyến sẽ tự động hủy.
+Hỏi: Tìm tài xế mất bao lâu?
+Đáp: Thường từ 1–5 phút. Nếu không tìm được tài xế sau 5 phút, chuyến tự động hủy và hoàn tiền (nếu đã thanh toán online).
 
-Bạn có thể theo dõi vị trí tài xế trên bản đồ sau khi tài xế đã nhận chuyến.
+Hỏi: Làm sao theo dõi tài xế?
+Đáp: Sau khi tài xế nhận chuyến, bạn có thể theo dõi vị trí tài xế trên bản đồ thời gian thực trong màn hình "Theo dõi chuyến".
 
-Để hủy chuyến, nhấn vào nút "Hủy chuyến" trong màn hình theo dõi chuyến đi. Lưu ý: hủy nhiều lần có thể ảnh hưởng đến tài khoản.
+Hỏi: Tôi có thể thêm điểm dừng giữa chừng không?
+Đáp: Hiện tại FoxGo chưa hỗ trợ thêm điểm dừng trực tiếp trên app. Bạn có thể nhắn tin cho tài xế qua chat để thỏa thuận, hoặc đặt chuyến mới sau khi đến điểm dừng đầu tiên.
+
+Hỏi: Tôi nhập địa chỉ sai thì sao?
+Đáp: Bạn có thể hủy chuyến (miễn phí nếu tài xế chưa nhận) và đặt lại với địa chỉ đúng. Hoặc liên hệ tài xế qua chat để điều chỉnh.
+
+Hỏi: Ứng dụng không xác định được vị trí của tôi?
+Đáp: Kiểm tra xem bạn đã cấp quyền vị trí cho ứng dụng FoxGo chưa (Cài đặt → Ứng dụng → FoxGo → Quyền → Vị trí → Cho phép). Nếu vẫn lỗi, hãy bật GPS và thử lại.
+
+Hỏi: Khi nào ứng dụng hiển thị giá cao hơn bình thường?
+Đáp: Khi nhu cầu đặt xe cao (giờ cao điểm sáng 7–9h, chiều 17–20h, ngày lễ, trời mưa), hệ thống áp dụng hệ số surge tăng giá từ 1.0 đến 2.0. Giá hiển thị trên app đã bao gồm hệ số này.
+
+Hỏi: Tôi có thể lên lịch đặt xe trước không?
+Đáp: Hiện tại FoxGo chỉ hỗ trợ đặt xe tức thì (ngay lập tức), chưa có tính năng đặt lịch trước.

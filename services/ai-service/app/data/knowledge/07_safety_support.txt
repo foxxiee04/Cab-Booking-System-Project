@@ -1,30 +1,41 @@
-TIÊU ĐỀ: An toàn và hỗ trợ khách hàng
-DANH MỤC: an toàn, hỗ trợ, liên hệ, báo cáo, khiếu nại, SOS
+TIÊU ĐỀ: An toàn và hỗ trợ khách hàng FoxGo
+DANH MỤC: an toàn, hỗ trợ, liên hệ, báo cáo, khiếu nại, SOS, tai nạn, quên đồ, tài xế xấu, hotline
 
-Tính năng an toàn:
-- Theo dõi chuyến xe thời gian thực trên bản đồ.
-- Nút SOS khẩn cấp trong ứng dụng (gọi 113/114).
-- Tất cả tài xế đã được xác minh danh tính và bằng lái.
-- Mã hành trình chia sẻ với gia đình/bạn bè.
-- Chat trực tiếp với tài xế trong suốt chuyến đi.
+Tính năng an toàn trên FoxGo:
+• Theo dõi chuyến xe thời gian thực trên bản đồ.
+• Nút SOS khẩn cấp — gọi ngay 113/114 từ trong ứng dụng.
+• Chia sẻ hành trình với gia đình/bạn bè qua link theo dõi.
+• Tất cả tài xế đã được xác minh danh tính, bằng lái và lý lịch.
+• Số điện thoại ẩn — tài xế và khách hàng gọi qua hệ thống FoxGo, không lộ số thật.
+• Chat trực tiếp với tài xế trong suốt chuyến đi.
 
 Đánh giá tài xế:
-- Sau mỗi chuyến, khách có thể đánh giá tài xế từ 1-5 sao.
-- Để lại nhận xét về chất lượng dịch vụ.
-- Tài xế không đạt yêu cầu sẽ bị hạn chế hoặc khóa tài khoản.
+• Sau mỗi chuyến, bạn có thể đánh giá từ 1–5 sao và để lại nhận xét.
+• Phản hồi của bạn giúp cải thiện chất lượng dịch vụ.
+• Tài xế dưới điểm chuẩn sẽ bị hạn chế hoặc khóa tài khoản.
 
 Báo cáo sự cố:
-- Trong ứng dụng: Vào mục "Lịch sử chuyến" → chọn chuyến → "Báo cáo vấn đề".
-- Hỗ trợ 24/7 qua email: support@cabbooking.vn
-- Hotline hỗ trợ: 1900-XXXX (8h-22h các ngày trong tuần).
+• Trong app: Vào "Lịch sử chuyến" → chọn chuyến → "Báo cáo vấn đề".
+• Email: support@foxgo.vn (hỗ trợ 24/7, phản hồi trong 24 giờ).
+• Hotline: 1900-1234 (8h–22h các ngày trong tuần).
 
-Các vấn đề thường gặp và hướng giải quyết:
-- Tài xế không đến: Gọi điện cho tài xế qua số điện thoại ẩn trong app hoặc hủy và đặt lại.
-- Quên đồ trên xe: Liên hệ hỗ trợ cung cấp số chuyến, chúng tôi sẽ kết nối với tài xế.
-- Tài xế đi sai đường: Chat hoặc gọi cho tài xế để điều chỉnh lộ trình.
-- Thanh toán sai số tiền: Chụp ảnh hóa đơn và báo cáo qua app.
+Hỏi: Tôi quên đồ trên xe phải làm sao?
+Đáp: Vào "Lịch sử chuyến" → chọn chuyến vừa đi → "Báo cáo vấn đề" → chọn "Quên đồ trên xe". Cung cấp mô tả đồ vật và thời gian. Đội hỗ trợ sẽ liên hệ với tài xế và phản hồi trong vòng 2 giờ. Bạn cũng có thể gọi trực tiếp cho tài xế qua số ẩn trong app (trong vòng 30 phút sau chuyến).
 
-Chính sách bảo vệ người dùng:
-- Thông tin cá nhân được bảo mật, không chia sẻ với bên thứ ba.
-- Số điện thoại được ẩn giữa tài xế và khách hàng.
-- Mọi cuộc gọi đi qua hệ thống của CabBooking.
+Hỏi: Tài xế có thái độ xấu/lái nguy hiểm phải làm gì?
+Đáp: Trong chuyến: nhấn nút SOS nếu khẩn cấp, hoặc nhắn gia đình theo dõi link hành trình. Sau chuyến: báo cáo ngay qua "Lịch sử chuyến" → "Báo cáo vấn đề" và đánh giá 1 sao với mô tả chi tiết. FoxGo sẽ điều tra và xử lý nghiêm.
+
+Hỏi: Làm sao liên hệ với FoxGo?
+Đáp: Bạn có thể liên hệ qua:
+• Email: support@foxgo.vn — hỗ trợ 24/7, phản hồi trong 24 giờ.
+• Hotline: 1900-1234 — từ 8h đến 22h các ngày thường.
+• Trong app: mục "Hỗ trợ" hoặc báo cáo trực tiếp từ lịch sử chuyến.
+
+Hỏi: Tài xế đi sai đường/đường vòng thì sao?
+Đáp: Gọi hoặc chat cho tài xế trong app để điều chỉnh lộ trình. Nếu tài xế cố tình đi đường vòng để tăng tiền, báo cáo ngay — FoxGo sẽ điều chỉnh giá và xử lý tài xế.
+
+Hỏi: Xảy ra tai nạn trong chuyến FoxGo thì sao?
+Đáp: Đảm bảo an toàn trước — gọi 113 hoặc 114 nếu cần. Nhấn nút SOS trong app. Sau đó liên hệ support@foxgo.vn với thông tin chuyến và mô tả sự cố. FoxGo hỗ trợ giải quyết bồi thường theo chính sách bảo hiểm.
+
+Hỏi: Thông tin cá nhân của tôi có bị lộ không?
+Đáp: Không. FoxGo bảo vệ thông tin cá nhân theo chính sách bảo mật nghiêm ngặt, không chia sẻ với bên thứ ba. Số điện thoại được ẩn hoàn toàn, mọi cuộc gọi đi qua hệ thống của FoxGo.

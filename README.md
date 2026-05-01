@@ -25,6 +25,7 @@ Hệ thống đặt xe công nghệ xây dựng theo kiến trúc **microservice
 - [10. Triển khai trên AWS](#10-triển-khai-trên-aws)
 - [11. Monitoring và Observability](#11-monitoring-và-observability)
 - [12. Hướng phát triển tiếp theo](#12-hướng-phát-triển-tiếp-theo)
+- [13. Bộ sơ đồ hệ thống xuất sẵn](#13-bộ-sơ-đồ-hệ-thống-xuất-sẵn)
 
 ---
 
@@ -812,6 +813,25 @@ Xem chi tiết: [`monitoring/README.md`](monitoring/README.md)
 - **Multi-Region**: Redis Cluster, PostgreSQL replication
 - **Alerting**: Grafana alerts qua Email/Slack/Telegram
 - **Cost Optimization**: Reserved Instances nếu dùng dài hạn
+
+---
+
+## 13. Bộ sơ đồ hệ thống xuất sẵn
+
+- Toàn bộ sơ đồ Mermaid trong `README.md` và `docs/**/*.md` đã được xuất vào thư mục `img_hethong/`.
+- Mỗi sơ đồ có 2 định dạng:
+  - File nguồn Mermaid: `*.mmd`
+  - Ảnh vector: `*.svg`
+- Danh sách ánh xạ source ↔ sơ đồ nằm trong:
+  - `img_hethong/README.md`
+  - `img_hethong/manifest.json`
+
+Lệnh xuất lại khi tài liệu thay đổi:
+
+```bash
+node scripts/export-system-diagrams.cjs
+npx -y @mermaid-js/mermaid-cli -i img_hethong/<file>.mmd -o img_hethong/<file>.svg -b transparent
+```
 
 ---
 

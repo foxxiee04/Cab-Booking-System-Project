@@ -1,0 +1,26 @@
+stateDiagram-v2
+    [*] --> PENDING : Khách đặt xe\nRideRequested
+
+    PENDING --> ASSIGNED : Hệ thống tìm được tài xế\nDriverAssigned
+
+    ASSIGNED --> ACCEPTED : Tài xế nhấn Nhận cuốc\n[trong 30 giây]
+
+    ACCEPTED --> PICKING_UP : Tài xế xác nhận đã đến điểm đón
+
+    PICKING_UP --> IN_PROGRESS : Tài xế xác nhận đã đón khách
+
+    IN_PROGRESS --> COMPLETED : Tài xế hoàn thành chuyến\nRideCompleted → triggers Payment
+
+    PENDING --> CANCELLED : Không tìm được tài xế\nhoặc khách hủy
+    ASSIGNED --> CANCELLED : Tài xế không phản hồi 30s\nhoặc khách hủy
+    ACCEPTED --> CANCELLED : Tài xế hủy / khách hủy
+    PICKING_UP --> CANCELLED : Tài xế hủy
+
+    COMPLETED --> [*]
+    CANCELLED --> [*]
+
+    note right of IN_PROGRESS
+        Sau COMPLETED:
+        payment-service xử lý
+        wallet-service cập nhật
+    end note

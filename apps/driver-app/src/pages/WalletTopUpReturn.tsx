@@ -3,8 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
   CircularProgress,
   Divider,
@@ -280,14 +278,14 @@ export default function WalletTopUpReturn() {
       }}
     >
       <Fade in timeout={500}>
-        <Card
-          elevation={0}
+        <Box
           sx={{
             width: '100%',
             maxWidth: 420,
+            bgcolor: 'background.paper',
             borderRadius: 5,
-            overflow: 'hidden',
             boxShadow: '0 8px 40px rgba(0,0,0,0.12)',
+            overflow: 'hidden',
           }}
         >
           <Box
@@ -302,8 +300,7 @@ export default function WalletTopUpReturn() {
             }}
           />
 
-          <CardContent sx={{ p: 4 }}>
-            <Stack spacing={3} alignItems="center" textAlign="center">
+          <Stack spacing={3} alignItems="center" textAlign="center" sx={{ p: 4 }}>
               <Box
                 sx={{
                   width: 88,
@@ -324,6 +321,13 @@ export default function WalletTopUpReturn() {
                       : state === 'failed'
                       ? '0 4px 20px rgba(229,57,53,0.25)'
                       : `0 4px 20px ${processingColor}33`,
+                  ...(state === 'processing' && {
+                    animation: 'topup-pulse 1.8s ease-in-out infinite',
+                    '@keyframes topup-pulse': {
+                      '0%, 100%': { boxShadow: `0 4px 20px ${processingColor}33` },
+                      '50%': { boxShadow: `0 4px 32px ${processingColor}55` },
+                    },
+                  }),
                 }}
               >
                 {state === 'processing' && (
@@ -361,56 +365,44 @@ export default function WalletTopUpReturn() {
               {(topUpId || amount !== null) && (
                 <>
                   <Divider sx={{ width: '100%' }} />
-                  <Card variant="outlined" sx={{ width: '100%', borderRadius: 3 }}>
-                    <CardContent sx={{ p: 2.25 }}>
-                      <Stack spacing={1.25}>
-                        {amount !== null && (
-                          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <AccountBalanceWalletRounded color="primary" fontSize="small" />
-                              <Typography variant="body2" color="text.secondary">
-                                Số tiền nạp
-                              </Typography>
-                            </Stack>
-                            <Typography variant="body1" fontWeight={800} color="success.main">
-                              {formatCurrency(amount)}
-                            </Typography>
+                  <Box sx={{ width: '100%', bgcolor: 'grey.50', borderRadius: 2, p: 1.75 }}>
+                    <Stack spacing={1.25}>
+                      {amount !== null && (
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <AccountBalanceWalletRounded color="primary" fontSize="small" />
+                            <Typography variant="body2" color="text.secondary">Số tiền nạp</Typography>
                           </Stack>
-                        )}
-                        {newBalance !== null && state === 'success' && (
-                          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
-                            <Typography variant="body2" color="text.secondary">
-                              Số dư mới
-                            </Typography>
-                            <Typography variant="body1" fontWeight={800} color="primary.main">
-                              {formatCurrency(newBalance)}
-                            </Typography>
-                          </Stack>
-                        )}
-                        {activated && state === 'success' && (
-                          <Chip
-                            color="success"
-                            label="Tài khoản tài xế đã được kích hoạt"
-                            sx={{ fontWeight: 700, alignSelf: 'flex-start' }}
-                          />
-                        )}
-                        {topUpId && (
-                          <Box>
-                            <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                              Mã giao dịch nạp ví
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              fontWeight={700}
-                              sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
-                            >
-                              {topUpId}
-                            </Typography>
-                          </Box>
-                        )}
-                      </Stack>
-                    </CardContent>
-                  </Card>
+                          <Typography variant="body1" fontWeight={800} color="success.main">
+                            {formatCurrency(amount)}
+                          </Typography>
+                        </Stack>
+                      )}
+                      {newBalance !== null && state === 'success' && (
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+                          <Typography variant="body2" color="text.secondary">Số dư mới</Typography>
+                          <Typography variant="body1" fontWeight={800} color="primary.main">
+                            {formatCurrency(newBalance)}
+                          </Typography>
+                        </Stack>
+                      )}
+                      {activated && state === 'success' && (
+                        <Chip color="success" label="Tài khoản tài xế đã được kích hoạt"
+                          sx={{ fontWeight: 700, alignSelf: 'flex-start' }} />
+                      )}
+                      {topUpId && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                            Mã giao dịch nạp ví
+                          </Typography>
+                          <Typography variant="body2" fontWeight={700}
+                            sx={{ fontFamily: 'monospace', wordBreak: 'break-all', fontSize: '0.8rem' }}>
+                            {topUpId}
+                          </Typography>
+                        </Box>
+                      )}
+                    </Stack>
+                  </Box>
                 </>
               )}
 
@@ -464,9 +456,8 @@ export default function WalletTopUpReturn() {
                   Về dashboard
                 </Button>
               </Stack>
-            </Stack>
-          </CardContent>
-        </Card>
+          </Stack>
+        </Box>
       </Fade>
     </Box>
   );

@@ -457,16 +457,11 @@ export class RideService {
     async driverAcceptRide(rideId: string, driverId: string): Promise<Ride> {
       // Pre-flight eligibility check (non-atomic read for fast rejection)
       const candidateRide = await this.prisma.ride.findUnique({ where: { id: rideId } });
-      if (!candidateRide) throw new Error('Ride not found');
+      if (!candidateRide) throw new Error('Chuyến đi không tồn tại hoặc đã bị xóa.');
 
       if (candidateRide.status !== RideStatus.FINDING_DRIVER) {
-        throw new Error(`Ride is not available for acceptance. Current status: ${candidateRide.status}`);
-      }
-
-      if (candidateRide.suggestedDriverIds && candidateRide.suggestedDriverIds.length > 0) {
-        if (!candidateRide.suggestedDriverIds.includes(driverId)) {
-          throw new Error('Driver is not eligible for this ride');
-        }
+        // Ride was already claimed by another driver
+        throw new Error('Chuyến đi đã có tài xế.');
       }
 
       await this.ensureDriverVehicleCompatibility(driverId, candidateRide.vehicleType);
@@ -487,10 +482,7 @@ export class RideService {
 
       if (claimed.count === 0) {
         // Lost the race — another driver was faster
-        const current = await this.prisma.ride.findUnique({ where: { id: rideId } });
-        throw new Error(
-          `Ride is no longer available. Current status: ${current?.status ?? 'UNKNOWN'}`
-        );
+        throw new Error('Chuyến đi đã có tài xế.');
       }
 
       // Record the state-transition audit log (safe after atomic claim)
@@ -711,6 +703,57 @@ export class RideService {
       throw new Error('Driver can only cancel assigned ride');
     }
 
+    // When driver cancels before the trip has started (not IN_PROGRESS), re-dispatch to find another driver
+    const driverCancelsBeforeTrip =
+      userType === 'DRIVER' &&
+      (ride.status === RideStatus.ASSIGNED || ride.status === RideStatus.ACCEPTED || ride.status === RideStatus.PICKING_UP);
+
+    if (driverCancelsBeforeTrip) {
+      const updatedRide = await this.prisma.ride.update({
+        where: { id: rideId },
+        data: {
+          status: RideStatus.FINDING_DRIVER,
+          driverId: null,
+          assignedAt: null,
+          transitions: {
+            create: {
+              fromStatus: ride.status,
+              toStatus: RideStatus.FINDING_DRIVER,
+              actorId: userId,
+              actorType: userType,
+              reason: reason || 'Driver cancelled — finding new driver',
+            },
+          },
+        },
+      });
+
+      // Notify customer the driver cancelled but we're finding a new one
+      await this.eventPublisher.publish('ride.driver_cancelled_redispatch', {
+        rideId,
+        customerId: ride.customerId,
+        driverId: ride.driverId,
+        reason,
+      }, rideId);
+
+      // Re-dispatch excluding the driver who just cancelled
+      const excludeDriverIds = ride.driverId ? [ride.driverId] : [];
+      await this.eventPublisher.publish('ride.reassignment_requested', {
+        rideId,
+        customerId: ride.customerId,
+        pickup: { lat: ride.pickupLat, lng: ride.pickupLng, address: ride.pickupAddress },
+        dropoff: { lat: ride.dropoffLat, lng: ride.dropoffLng, address: ride.dropoffAddress },
+        vehicleType: ride.vehicleType,
+        fare: ride.fare,
+        excludeDriverIds,
+        attempt: (ride.reassignAttempts ?? 0) + 1,
+        matchingStartedAt: new Date().toISOString(),
+      }, rideId);
+
+      logger.info(`Driver ${userId} cancelled ride ${rideId} (status=${ride.status}). Re-dispatching, excluding driver.`);
+      return updatedRide;
+    }
+
+    // Normal cancellation (customer cancel, or driver cancels IN_PROGRESS)
     const updatedRide = await this.prisma.ride.update({
       where: { id: rideId },
       data: {

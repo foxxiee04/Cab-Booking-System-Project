@@ -475,12 +475,13 @@ const HomeMap: React.FC = () => {
 
         {!bookingFlowOpen ? (
           <>
-            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
-              <Chip icon={<MyLocationRounded />} label={pickupLocation?.address || t('home.pickupHint', 'Chọn điểm đón')} size="small" color="success" variant="outlined" />
-              {routeMeta.map((item) => (
-                <Chip key={item.label} icon={item.icon} label={item.label} size="small" variant="outlined" />
-              ))}
-            </Stack>
+            {routeMeta.length > 0 && (
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
+                {routeMeta.map((item) => (
+                  <Chip key={item.label} icon={item.icon} label={item.label} size="small" variant="outlined" />
+                ))}
+              </Stack>
+            )}
 
             <Button
               fullWidth

@@ -93,6 +93,7 @@ interface UIState {
   notification: Notification | null;
   notificationHistory: Notification[];
   sidebarOpen: boolean;
+  messengerOpenTo: 'ai' | 'driver' | null;
 }
 
 const initialState: UIState = {
@@ -100,6 +101,7 @@ const initialState: UIState = {
   notification: null,
   notificationHistory: loadNotificationHistory(),
   sidebarOpen: false,
+  messengerOpenTo: null,
 };
 
 const uiSlice = createSlice({
@@ -135,6 +137,12 @@ const uiSlice = createSlice({
     toggleSidebar: (state) => {
       state.sidebarOpen = !state.sidebarOpen;
     },
+    openMessenger: (state, action: PayloadAction<'ai' | 'driver'>) => {
+      state.messengerOpenTo = action.payload;
+    },
+    closeMessenger: (state) => {
+      state.messengerOpenTo = null;
+    },
     setSidebarOpen: (state, action: PayloadAction<boolean>) => {
       state.sidebarOpen = action.payload;
     },
@@ -168,6 +176,8 @@ export const {
   clearNotificationHistory,
   toggleSidebar,
   setSidebarOpen,
+  openMessenger,
+  closeMessenger,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;

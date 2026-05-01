@@ -17,7 +17,7 @@ let refreshPromise: Promise<AuthTokens> | null = null;
 
 export const refreshAuthSession = async (): Promise<AuthTokens> => {
   if (!refreshPromise) {
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshToken = sessionStorage.getItem('refreshToken');
     if (!refreshToken) {
       throw new Error('No refresh token available');
     }
@@ -44,7 +44,7 @@ export const refreshAuthSession = async (): Promise<AuthTokens> => {
 // Request interceptor
 axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('accessToken');
+    const token = sessionStorage.getItem('accessToken');
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }

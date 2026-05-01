@@ -1,14 +1,15 @@
 """
-RAG (Retrieval-Augmented Generation) Service for CabBooking Customer Support.
+RAG (Retrieval-Augmented Generation) Service for FoxGo Customer Support.
 
 Pipeline:
   1. Knowledge base documents are chunked and embedded at startup.
   2. Embeddings are stored in a FAISS in-memory index.
   3. On each chat request:
-     a. Embed the user query.
-     b. Retrieve top-k similar chunks from FAISS.
-     c. Build a prompt with the retrieved context.
-     d. Generate answer via LLM (if configured) or return formatted context.
+     a. Enrich the query with recent conversation history.
+     b. Embed the enriched query.
+     c. Retrieve top-k similar chunks from FAISS.
+     d. Build a prompt with context + full history.
+     e. Generate answer via LLM (if configured) or return formatted context.
 """
 
 import logging
@@ -56,10 +57,10 @@ EMBEDDING_MODEL_NAME = os.getenv(
     "paraphrase-multilingual-MiniLM-L12-v2",  # 117 MB, supports Vietnamese
 )
 KNOWLEDGE_DIR = Path(__file__).resolve().parents[1] / "data" / "knowledge"
-CHUNK_SIZE = 400          # characters per chunk
-CHUNK_OVERLAP = 80        # overlap between consecutive chunks
-TOP_K = 4                 # number of chunks to retrieve
-MIN_SCORE = 0.25          # cosine similarity threshold (0-1)
+CHUNK_SIZE = 600          # characters per chunk (larger = more context per chunk)
+CHUNK_OVERLAP = 100       # overlap between consecutive chunks
+TOP_K = 5                 # number of chunks to retrieve
+MIN_SCORE = 0.30          # cosine similarity threshold (raised for better precision)
 
 # Optional LLM integration ───────────────────────────────────────────────────
 LLM_PROVIDER = os.getenv("RAG_LLM_PROVIDER", "none")      # "openai" | "groq" | "none"
@@ -67,7 +68,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 LLM_MODEL = os.getenv("RAG_LLM_MODEL", "llama3-8b-8192")  # Groq default
 LLM_TIMEOUT_S = float(os.getenv("RAG_LLM_TIMEOUT_S", "8"))
-MAX_CONTEXT_CHARS = 2000
+MAX_CONTEXT_CHARS = 2500
+MAX_HISTORY_TURNS = 6     # number of recent history messages sent to LLM
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -99,7 +101,6 @@ def _load_documents(knowledge_dir: Path) -> List[Tuple[str, str, str]]:
     for txt_file in sorted(knowledge_dir.glob("*.txt")):
         try:
             content = txt_file.read_text(encoding="utf-8")
-            # Extract TIÊU ĐỀ from first line if present
             lines = content.split("\n")
             title = txt_file.stem
             for line in lines[:3]:
@@ -115,11 +116,7 @@ def _load_documents(knowledge_dir: Path) -> List[Tuple[str, str, str]]:
 
 
 def _chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> List[str]:
-    """
-    Split text into overlapping character-level chunks.
-    Tries to break at sentence/paragraph boundaries.
-    """
-    # Normalise whitespace
+    """Split text into overlapping character-level chunks at natural boundaries."""
     text = re.sub(r"\n{3,}", "\n\n", text.strip())
 
     chunks = []
@@ -127,7 +124,6 @@ def _chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OV
     while start < len(text):
         end = min(start + chunk_size, len(text))
 
-        # Try to break at a paragraph or sentence boundary within the window
         if end < len(text):
             for delim in ("\n\n", "\n", ".", "?", "!"):
                 pos = text.rfind(delim, start, end)
@@ -165,7 +161,6 @@ class VectorIndex:
         self.chunks = chunks
         np = _np
 
-        # L2-normalise so inner product == cosine similarity
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
         norms = np.where(norms == 0, 1.0, norms)
         self.embeddings = (embeddings / norms).astype("float32")
@@ -197,7 +192,6 @@ class VectorIndex:
                 if idx >= 0 and float(score) >= MIN_SCORE:
                     results.append((float(score), self.chunks[idx]))
         else:
-            # NumPy fallback
             sims = (self.embeddings @ q.T).flatten()
             top_indices = np.argsort(sims)[::-1][:top_k]
             results = [
@@ -210,45 +204,82 @@ class VectorIndex:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Query enrichment using history
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _enrich_query(query: str, history: Optional[List[dict]]) -> str:
+    """
+    For short or ambiguous queries (e.g., "còn cái nào khác?"), prepend the
+    last user message so embedding captures the right topic.
+    Only enriches when query is short (≤ 6 words) and history exists.
+    """
+    if not history or len(query.split()) > 6:
+        return query
+    recent_user = [h["content"] for h in history[-6:] if h.get("role") == "user"]
+    if len(recent_user) >= 2:
+        # Prepend the previous user turn as context
+        return f"{recent_user[-2]} {query}"
+    return query
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # LLM answer generation
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _format_context(retrieved: List[Tuple[float, Chunk]]) -> str:
     parts = []
     for _, chunk in retrieved:
-        parts.append(f"--- {chunk.title} ---\n{chunk.text}")
+        parts.append(f"[{chunk.title}]\n{chunk.text}")
     return "\n\n".join(parts)
+
+
+def _format_history(history: List[dict]) -> str:
+    """Format recent conversation turns for the LLM prompt."""
+    lines = []
+    for msg in history[-MAX_HISTORY_TURNS:]:
+        role = "Khách hàng" if msg.get("role") == "user" else "Trợ lý"
+        lines.append(f"{role}: {msg['content']}")
+    return "\n".join(lines)
 
 
 def _template_answer(query: str, retrieved: List[Tuple[float, Chunk]]) -> str:
     """
-    Build a structured answer from retrieved chunks when no LLM is configured.
-    Surfaces the most relevant chunk text plus source titles.
+    Build a clean, formatted answer from retrieved chunks when no LLM is configured.
+    Applies light markdown formatting for readability.
     """
     if not retrieved:
         return (
-            "Xin lỗi, tôi chưa tìm thấy thông tin phù hợp với câu hỏi của bạn. "
-            "Vui lòng liên hệ hỗ trợ qua email support@cabbooking.vn hoặc hotline 1900-XXXX."
+            "Xin lỗi, mình chưa tìm thấy thông tin phù hợp với câu hỏi của bạn 😔\n\n"
+            "Bạn có thể thử hỏi theo cách khác, hoặc liên hệ hỗ trợ trực tiếp:\n"
+            "• Email: support@foxgo.vn\n"
+            "• Hotline: 1900-1234 (8h–22h)"
         )
 
-    # Best chunk text as the main answer
     best_score, best_chunk = retrieved[0]
-    answer_parts = [best_chunk.text.strip()]
 
-    # Append additional relevant info from other chunks (avoid duplicates)
+    # Clean up the raw chunk text: remove metadata lines (TIÊU ĐỀ, DANH MỤC)
+    def clean_chunk(text: str) -> str:
+        lines = text.split("\n")
+        cleaned = [l for l in lines if not l.startswith(("TIÊU ĐỀ:", "DANH MỤC:"))]
+        return "\n".join(cleaned).strip()
+
+    main_text = clean_chunk(best_chunk.text)
+
+    # If there are additional relevant chunks from different topics, append briefly
+    answer_parts = [main_text]
     seen_sources = {best_chunk.source}
     for _, chunk in retrieved[1:]:
-        if chunk.source not in seen_sources and chunk.title != best_chunk.title:
-            answer_parts.append(f"\n📌 {chunk.title}:\n{chunk.text.strip()}")
+        if chunk.source not in seen_sources:
+            extra = clean_chunk(chunk.text)
+            if extra and len("\n\n".join(answer_parts)) + len(extra) < 1400:
+                answer_parts.append(extra)
             seen_sources.add(chunk.source)
-            if len("\n\n".join(answer_parts)) > 1200:
-                break
 
     return "\n\n".join(answer_parts)
 
 
-async def _call_llm_groq(system_prompt: str, user_message: str) -> Optional[str]:
-    """Call Groq API (free tier, very fast)."""
+async def _call_llm_groq(system_prompt: str, messages: List[dict]) -> Optional[str]:
+    """Call Groq API with full message history."""
     if not GROQ_API_KEY:
         return None
     try:
@@ -261,11 +292,8 @@ async def _call_llm_groq(system_prompt: str, user_message: str) -> Optional[str]
                 },
                 json={
                     "model": LLM_MODEL,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_message},
-                    ],
-                    "max_tokens": 512,
+                    "messages": [{"role": "system", "content": system_prompt}] + messages,
+                    "max_tokens": 600,
                     "temperature": 0.3,
                 },
             )
@@ -277,8 +305,8 @@ async def _call_llm_groq(system_prompt: str, user_message: str) -> Optional[str]
         return None
 
 
-async def _call_llm_openai(system_prompt: str, user_message: str) -> Optional[str]:
-    """Call OpenAI API."""
+async def _call_llm_openai(system_prompt: str, messages: List[dict]) -> Optional[str]:
+    """Call OpenAI API with full message history."""
     if not OPENAI_API_KEY:
         return None
     try:
@@ -291,11 +319,8 @@ async def _call_llm_openai(system_prompt: str, user_message: str) -> Optional[st
                 },
                 json={
                     "model": os.getenv("RAG_LLM_MODEL", "gpt-3.5-turbo"),
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_message},
-                    ],
-                    "max_tokens": 512,
+                    "messages": [{"role": "system", "content": system_prompt}] + messages,
+                    "max_tokens": 600,
                     "temperature": 0.3,
                 },
             )
@@ -307,10 +332,14 @@ async def _call_llm_openai(system_prompt: str, user_message: str) -> Optional[st
         return None
 
 
-async def _generate_answer(query: str, retrieved: List[Tuple[float, Chunk]]) -> Tuple[str, str]:
+async def _generate_answer(
+    query: str,
+    retrieved: List[Tuple[float, Chunk]],
+    history: Optional[List[dict]] = None,
+) -> Tuple[str, str]:
     """
-    Generate the final answer. Returns (answer_text, mode).
-    mode is one of: 'llm_groq' | 'llm_openai' | 'retrieval'
+    Generate the final answer using LLM (if configured) or template fallback.
+    Returns (answer_text, mode).
     """
     if not retrieved:
         return _template_answer(query, []), "retrieval"
@@ -318,24 +347,37 @@ async def _generate_answer(query: str, retrieved: List[Tuple[float, Chunk]]) -> 
     context = _format_context(retrieved)[:MAX_CONTEXT_CHARS]
 
     system_prompt = (
-        "Bạn là trợ lý hỗ trợ khách hàng của dịch vụ đặt xe CabBooking. "
-        "Hãy trả lời câu hỏi của khách hàng dựa trên thông tin trong ngữ cảnh được cung cấp. "
-        "Trả lời bằng tiếng Việt, ngắn gọn, thân thiện và chính xác. "
-        "Nếu thông tin không có trong ngữ cảnh, hãy nói rõ và hướng dẫn liên hệ hỗ trợ.\n\n"
+        "Bạn là Trợ lý FoxGo — AI hỗ trợ khách hàng của ứng dụng gọi xe FoxGo tại Việt Nam.\n"
+        "Nhiệm vụ: Trả lời câu hỏi của khách hàng dựa trên THÔNG TIN bên dưới.\n\n"
+        "Quy tắc bắt buộc:\n"
+        "1. Chỉ dùng thông tin trong phần NGỮ CẢNH — KHÔNG bịa đặt số liệu hay chính sách.\n"
+        "2. Trả lời bằng tiếng Việt, thân thiện, ngắn gọn (tối đa 150 từ).\n"
+        "3. Dùng gạch đầu dòng (•) khi liệt kê nhiều mục.\n"
+        "4. Nếu câu hỏi không có trong ngữ cảnh, nói rõ và hướng dẫn: "
+        "email support@foxgo.vn hoặc hotline 1900-1234.\n"
+        "5. Không lặp lại câu hỏi của khách hàng.\n\n"
         f"NGỮ CẢNH:\n{context}"
     )
 
+    # Build message list: history + current query
+    llm_messages: List[dict] = []
+    if history:
+        for msg in history[-MAX_HISTORY_TURNS:]:
+            role = msg.get("role", "user")
+            if role in ("user", "assistant"):
+                llm_messages.append({"role": role, "content": msg["content"]})
+    llm_messages.append({"role": "user", "content": query})
+
     if LLM_PROVIDER == "groq" or (LLM_PROVIDER == "auto" and GROQ_API_KEY):
-        answer = await _call_llm_groq(system_prompt, query)
+        answer = await _call_llm_groq(system_prompt, llm_messages)
         if answer:
             return answer, "llm_groq"
 
     if LLM_PROVIDER == "openai" or (LLM_PROVIDER == "auto" and OPENAI_API_KEY):
-        answer = await _call_llm_openai(system_prompt, query)
+        answer = await _call_llm_openai(system_prompt, llm_messages)
         if answer:
             return answer, "llm_openai"
 
-    # Fallback: template-based retrieval answer
     return _template_answer(query, retrieved), "retrieval"
 
 
@@ -344,10 +386,7 @@ async def _generate_answer(query: str, retrieved: List[Tuple[float, Chunk]]) -> 
 # ─────────────────────────────────────────────────────────────────────────────
 
 class RagService:
-    """
-    Singleton RAG service.
-    Initialised lazily on first request to avoid blocking startup.
-    """
+    """Singleton RAG service. Initialised lazily on first request."""
 
     def __init__(self):
         self._ready = False
@@ -405,8 +444,8 @@ class RagService:
         Main RAG chat method.
 
         Args:
-            message: User's question (Vietnamese or English).
-            history: Optional conversation history [{"role": "user"|"assistant", "content": "..."}].
+            message: User's question (Vietnamese).
+            history: Conversation history [{"role": "user"|"assistant", "content": "..."}].
             top_k: Number of chunks to retrieve.
 
         Returns:
@@ -420,7 +459,7 @@ class RagService:
                 return {
                     "answer": (
                         "Hệ thống hỗ trợ AI đang khởi động. Vui lòng thử lại sau ít phút "
-                        "hoặc liên hệ support@cabbooking.vn."
+                        "hoặc liên hệ support@foxgo.vn."
                     ),
                     "sources": [],
                     "retrieval_count": 0,
@@ -432,10 +471,12 @@ class RagService:
 
         retrieved: List[Tuple[float, Chunk]] = []
         if self._index is not None and message.strip():
-            query_emb = self._model.encode([message.strip()], normalize_embeddings=True)
+            # Enrich short/ambiguous queries with context from history
+            search_query = _enrich_query(message.strip(), history)
+            query_emb = self._model.encode([search_query], normalize_embeddings=True)
             retrieved = self._index.search(query_emb[0], top_k=top_k)
 
-        answer, mode = await _generate_answer(message, retrieved)
+        answer, mode = await _generate_answer(message, retrieved, history=history)
 
         sources = list({chunk.title for _, chunk in retrieved})
         score_max = max((s for s, _ in retrieved), default=0.0)

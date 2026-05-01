@@ -72,6 +72,21 @@ export class DriverService {
       throw new Error('Hạng GPLX không phù hợp với loại xe đăng ký');
     }
 
+    // Unique checks: license plate and license number must not already be registered
+    const existingPlate = await prisma.driver.findFirst({
+      where: { vehiclePlate: { equals: input.vehicle.plate, mode: 'insensitive' } },
+    });
+    if (existingPlate) {
+      throw new Error(`Biển số xe ${input.vehicle.plate} đã được đăng ký bởi tài xế khác.`);
+    }
+
+    const existingLicense = await prisma.driver.findFirst({
+      where: { licenseNumber: input.license.number },
+    });
+    if (existingLicense) {
+      throw new Error(`Số GPLX ${input.license.number} đã được đăng ký bởi tài xế khác.`);
+    }
+
     const driver = await prisma.driver.create({
       data: {
         userId: input.userId,
@@ -476,6 +491,15 @@ export class DriverService {
       shouldResetAvailability = true;
     }
     if (data.licensePlate !== undefined) {
+      const existingPlate = await prisma.driver.findFirst({
+        where: {
+          vehiclePlate: { equals: data.licensePlate, mode: 'insensitive' },
+          NOT: { id: driverId },
+        },
+      });
+      if (existingPlate) {
+        throw new Error(`Biển số xe ${data.licensePlate} đã được đăng ký bởi tài xế khác.`);
+      }
       updateData.vehiclePlate = data.licensePlate;
       shouldResetAvailability = true;
     }
@@ -492,6 +516,12 @@ export class DriverService {
       shouldResetAvailability = true;
     }
     if (data.licenseNumber !== undefined) {
+      const existingLicense = await prisma.driver.findFirst({
+        where: { licenseNumber: data.licenseNumber, NOT: { id: driverId } },
+      });
+      if (existingLicense) {
+        throw new Error(`Số GPLX ${data.licenseNumber} đã được đăng ký bởi tài xế khác.`);
+      }
       updateData.licenseNumber = data.licenseNumber;
       shouldResetAvailability = true;
     }

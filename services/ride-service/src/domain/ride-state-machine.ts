@@ -7,7 +7,7 @@ const VALID_TRANSITIONS: Record<RideStatus, RideStatus[]> = {
   OFFERED: [RideStatus.ASSIGNED, RideStatus.FINDING_DRIVER, RideStatus.CANCELLED],
   ASSIGNED: [RideStatus.ACCEPTED, RideStatus.PICKING_UP, RideStatus.FINDING_DRIVER, RideStatus.CANCELLED],
   ACCEPTED: [RideStatus.PICKING_UP, RideStatus.FINDING_DRIVER, RideStatus.CANCELLED],
-  PICKING_UP: [RideStatus.IN_PROGRESS, RideStatus.CANCELLED],
+  PICKING_UP: [RideStatus.IN_PROGRESS, RideStatus.FINDING_DRIVER, RideStatus.CANCELLED],
   IN_PROGRESS: [RideStatus.COMPLETED, RideStatus.CANCELLED],
   COMPLETED: [],
   CANCELLED: [],

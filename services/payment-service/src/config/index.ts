@@ -80,7 +80,7 @@ export const config = {
     accessKey: process.env.MOMO_ACCESS_KEY || '',
     secretKey: process.env.MOMO_SECRET_KEY || '',
     endpoint: process.env.MOMO_ENDPOINT || 'https://test-payment.momo.vn',
-    requestType: process.env.MOMO_REQUEST_TYPE || 'captureWallet',
+    requestType: process.env.MOMO_REQUEST_TYPE || 'payWithMethod',
     partnerName: process.env.MOMO_PARTNER_NAME || 'CabBooking',
     storeId: process.env.MOMO_STORE_ID || 'CabBookingStore',
     autoCapture: process.env.MOMO_AUTO_CAPTURE !== 'false',

@@ -49,6 +49,7 @@ import {
 } from '../../store/ui.slice';
 import { driverApi } from '../../api/driver.api';
 import { rideApi } from '../../api/ride.api';
+
 import { walletApi } from '../../api/wallet.api';
 import { setProfile } from '../../store/driver.slice';
 import { clearPendingRide, setCurrentRide } from '../../store/ride.slice';
@@ -123,6 +124,9 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
   const [notificationsOpen, setNotificationsOpen] = React.useState(false);
   const [walletState, setWalletState] = React.useState<WalletBalance | null>(null);
 
+  // effectiveOnline: true when either Redux online flag or profile.isOnline is set
+  const effectiveOnline = isOnline || Boolean(profile?.isOnline);
+
   // ── Global ride request popup ──────────────────────────────────────────
   const [newRidePopup, setNewRidePopup] = useState<Ride | null>(null);
   const [rideLoading, setRideLoading] = useState(false);
@@ -144,7 +148,7 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
 
   // Show popup when a new pending ride arrives (regardless of current tab)
   useEffect(() => {
-    if (newRidePopup || !isOnline || currentRide) {
+    if (newRidePopup || !effectiveOnline || currentRide) {
       return;
     }
 
@@ -167,7 +171,7 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
         window.setTimeout(() => notification.close(), 7000);
       }
     }
-  }, [currentRide, dispatch, isOnline, newRidePopup, pendingRide]);
+  }, [currentRide, dispatch, effectiveOnline, newRidePopup, pendingRide]);
 
   useEffect(() => {
     if (!pendingRide || !newRidePopup || pendingRide.id !== newRidePopup.id) {
@@ -228,6 +232,8 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
 
   const handleRejectPopupRide = () => {
     if (newRidePopup) {
+      // Notify server immediately so re-dispatch skips this driver without waiting 30s timeout
+      rideApi.declineOffer(newRidePopup.id).catch(() => {});
       dispatch(clearPendingRide());
     }
     setNewRidePopup(null);
@@ -461,8 +467,6 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
   const handleNotifClose = (_: React.SyntheticEvent | Event, reason?: string) => {
     if (reason !== 'clickaway') dispatch(hideNotification());
   };
-
-  const effectiveOnline = isOnline || profile?.isOnline || false;
 
   const handleOpenNotifications = () => {
     setNotificationsOpen(true);

@@ -22,7 +22,8 @@ const isFutureDate = (value: string) => {
   return parsed > today;
 };
 
-const isValidVehiclePlate = (value: string) => /^\d{2}[A-Z]{1,2}[-.\s]?\d{5}(\.[0-9]{2})?$/i.test(value.trim());
+// Vietnamese plate: 50A-123.45 (car/1 letter) or 50AC-123.45 (moto/2 letters) or legacy 50A-12345
+const isValidVehiclePlate = (value: string) => /^\d{2}[A-Z]{1,2}-(\d{3}\.\d{2}|\d{5})$/i.test(value.trim());
 // Vietnamese GPLX is exactly 12 digits
 const isValidLicenseNumber = (value: string) => /^\d{12}$/.test(value.trim());
 const isValidVehicleImageUrl = (value: string) => {

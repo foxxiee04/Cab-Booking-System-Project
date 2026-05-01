@@ -789,7 +789,7 @@ const MerchantWallet: React.FC = () => {
                               );
                               if (!confirmed) return;
                               try {
-                                const token = localStorage.getItem('adminToken') ?? '';
+                                const token = sessionStorage.getItem('accessToken') ?? '';
                                 const data = await apiPost<{ success: boolean; message: string }>(
                                   `/wallet/admin/drivers/${w.driverId}/deactivate`,
                                   { Authorization: `Bearer ${token}` }
@@ -830,54 +830,60 @@ const MerchantWallet: React.FC = () => {
           title={
             <Stack direction="row" spacing={1} alignItems="center">
               <AccountBalanceWallet color="primary" />
-              <span>Tài khoản ngân hàng hệ thống (Mock)</span>
+              <span>Tài khoản ngân hàng liên kết</span>
             </Stack>
           }
           subheader="Tài khoản đại diện mô phỏng dòng tiền — không kết nối ngân hàng thật"
           action={bankAccountsLoading ? <CircularProgress size={20} sx={{ mt: 1, mr: 1 }} /> : null}
         />
-        <CardContent sx={{ p: 0 }}>
-          <TableContainer>
-            <Table size="small">
-              <TableHead sx={{ '& .MuiTableCell-head': { bgcolor: '#f1f5f9', fontWeight: 700, fontSize: 12 } }}>
-                <TableRow>
-                  <TableCell>ID</TableCell>
-                  <TableCell>Ngân hàng</TableCell>
-                  <TableCell>Số tài khoản</TableCell>
-                  <TableCell>Chủ tài khoản</TableCell>
-                  <TableCell>Loại</TableCell>
-                  <TableCell>Mô tả</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {bankAccounts.length === 0 && !bankAccountsLoading && (
-                  <TableRow>
-                    <TableCell colSpan={6} align="center">
-                      <Typography variant="body2" color="text.secondary" py={2}>Chưa có dữ liệu</Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {bankAccounts.map((a) => (
-                  <TableRow key={a.id} hover>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700 }}>{a.id}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={600}>{a.bankName}</Typography>
-                    </TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace' }}>{a.accountNumber}</TableCell>
-                    <TableCell sx={{ fontSize: 12 }}>{a.accountHolder}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={BANK_ACCOUNT_TYPE_LABEL[a.type] ?? a.type}
-                        size="small"
-                        color={a.type === 'SETTLEMENT_ACCOUNT' ? 'success' : 'info'}
-                      />
-                    </TableCell>
-                    <TableCell sx={{ fontSize: 12, color: 'text.secondary' }}>{a.description ?? '—'}</TableCell>
-                  </TableRow>
+        <CardContent>
+          {bankAccountsLoading && (
+            <Box sx={{ textAlign: 'center', py: 2 }}><CircularProgress size={24} /></Box>
+          )}
+          {!bankAccountsLoading && bankAccounts.length === 0 && (
+            <Typography variant="body2" color="text.secondary" align="center" py={2}>Chưa có dữ liệu</Typography>
+          )}
+          {!bankAccountsLoading && bankAccounts.length > 0 && (() => {
+            // Deduplicate by accountNumber — show one card per unique account
+            const seen = new Set<string>();
+            const unique = bankAccounts.filter((a) => {
+              if (seen.has(a.accountNumber)) return false;
+              seen.add(a.accountNumber);
+              return true;
+            });
+            return (
+              <Stack spacing={2}>
+                {unique.map((a) => (
+                  <Box
+                    key={a.accountNumber}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 3,
+                      border: '1.5px solid',
+                      borderColor: 'primary.light',
+                      bgcolor: '#f0f7ff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 2,
+                    }}
+                  >
+                    <AccountBalanceWallet sx={{ fontSize: 40, color: 'primary.main', flexShrink: 0 }} />
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight={800} color="primary.dark">
+                        {a.bankName}
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '1rem', letterSpacing: 1.5 }}>
+                        {a.accountNumber}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {a.accountHolder}
+                      </Typography>
+                    </Box>
+                  </Box>
                 ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+              </Stack>
+            );
+          })()}
         </CardContent>
       </Card>
 

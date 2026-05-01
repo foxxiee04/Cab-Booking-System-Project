@@ -1,0 +1,24 @@
+graph TD
+    HTTP[Express HTTP :3006]
+    GRPC_NOT[Không có gRPC\nwallet chỉ HTTP]
+
+    HTTP --> ROUTES[wallet.routes.ts\nadmin.routes.ts]
+    ROUTES --> CTRL[WalletController\nBonusController]
+    CTRL --> SVC[DriverWalletService]
+
+    SVC --> PRISMA[Prisma Client\nwallet_db]
+    SVC --> EVENTS[EventPublisher\nRabbitMQ]
+    SVC --> MERCHANT[MerchantLedgerService]
+    SVC --> BANKSIM[BankSimulationService]
+
+    CONSUMER[EventConsumer\nRabbitMQ listener] --> SVC
+
+    INTERNAL[Internal Routes\n/internal/topup-completed\n/internal/driver/:id/can-accept] --> SVC
+
+    subgraph Domain Services
+        SETTLE[settlePendingEarnings]
+        DEBTFIFO[settleDebtRecordsFifo]
+        BONUS[BonusService]
+    end
+
+    SVC --> SETTLE & DEBTFIFO & BONUS

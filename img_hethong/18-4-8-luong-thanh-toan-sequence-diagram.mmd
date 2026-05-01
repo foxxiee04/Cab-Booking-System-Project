@@ -1,0 +1,38 @@
+sequenceDiagram
+    participant KH as Khách hàng
+    participant GW as API Gateway
+    participant RIDE as ride-service
+    participant PAY as payment-service
+    participant MoMo as MoMo Gateway
+    participant MQ as RabbitMQ
+    participant WALLET as wallet-service
+
+    KH->>GW: POST /api/rides/:id/complete
+    GW->>RIDE: gRPC CompleteRide(rideId)
+    RIDE->>RIDE: Transition → COMPLETED
+    RIDE->>MQ: publish ride.completed {rideId, paymentMethod=MOMO}
+    RIDE-->>GW: 200 OK
+    GW-->>KH: Chuyến đã hoàn thành
+
+    MQ->>PAY: consume ride.completed
+    PAY->>PAY: Tính fare, commission, netEarnings
+    PAY->>MoMo: POST /v2/gateway/api/create
+    MoMo-->>PAY: {payUrl, orderId}
+    PAY-->>KH: Redirect sang MoMo
+
+    KH->>MoMo: Thực hiện thanh toán
+    MoMo->>PAY: POST /api/payment/momo/ipn {orderId, resultCode=0}
+    PAY->>PAY: verifySignature()
+    PAY->>PAY: checkIdempotencyKey() → not exists
+    PAY->>PAY: status = COMPLETED
+    MQ->>WALLET: publish driver.earning.settled
+    PAY-->>MoMo: 200 {message: "success"}
+
+    MQ->>WALLET: consume driver.earning.settled
+    WALLET->>WALLET: creditEarning() → pendingBalance += 131k
+    WALLET->>WALLET: create PendingEarning {settleAt = T+24h}
+    WALLET->>WALLET: create WalletTransaction {type=EARN}
+
+    Note over WALLET: Sau 24h
+    WALLET->>WALLET: settlePendingEarnings()
+    WALLET->>WALLET: availableBalance += 131k\npendingBalance -= 131k

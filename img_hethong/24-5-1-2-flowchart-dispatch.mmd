@@ -1,0 +1,41 @@
+flowchart TD
+    START([Khách đặt xe]) --> CREATE[Tạo Ride PENDING]
+    CREATE --> ROUND1{Vòng 1\nRadius=2km}
+
+    ROUND1 --> GEO1[Redis GEORADIUS 2km]
+    GEO1 --> FILTER1[Lọc: ONLINE + loại xe + canAcceptRide]
+    FILTER1 --> EMPTY1{Có candidates?}
+
+    EMPTY1 -->|Không| ROUND2{Vòng 2\nRadius=3km}
+    EMPTY1 -->|Có| SCORE1[Tính điểm + optional AI]
+
+    SCORE1 --> PICK1[Chọn driver điểm cao nhất]
+    PICK1 --> NOTIFY1[Socket: NEW_RIDE_AVAILABLE]
+    NOTIFY1 --> WAIT1{Tài xế phản hồi\ntrong 30s?}
+
+    WAIT1 -->|Có - Chấp nhận| ASSIGN[Ride → ASSIGNED\nThông báo khách]
+    WAIT1 -->|Không / Từ chối| NEXTDRV{Còn driver\nkhác trong round?}
+
+    NEXTDRV -->|Có| PICK1
+    NEXTDRV -->|Không| ROUND2
+
+    ROUND2 --> GEO2[Redis GEORADIUS 3km]
+    GEO2 --> FILTER2[...]
+    FILTER2 --> EMPTY2{Có candidates?}
+    EMPTY2 -->|Không| ROUND3{Vòng 3\nRadius=5km}
+    EMPTY2 -->|Có| SCORE2[...]
+    SCORE2 --> PICK2[...]
+    PICK2 --> NOTIFY2[...]
+    NOTIFY2 --> WAIT2{30s × 3?}
+    WAIT2 -->|Chấp nhận| ASSIGN
+    WAIT2 -->|Thất bại| ROUND3
+
+    ROUND3 --> GEO3[...]
+    GEO3 --> EMPTY3{Tìm thấy?}
+    EMPTY3 -->|Có| WAIT3[...]
+    WAIT3 -->|Chấp nhận| ASSIGN
+    WAIT3 -->|Thất bại| FAIL
+
+    EMPTY3 -->|Không| FAIL([Không tìm được tài xế\nRide → CANCELLED])
+
+    ASSIGN --> END([Dispatch hoàn tất])

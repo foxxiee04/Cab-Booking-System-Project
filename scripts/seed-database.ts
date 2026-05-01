@@ -155,6 +155,8 @@ const CUSTOMERS = [
   { email: 'customer20@example.com', phone: '0901234580', firstName: 'Huynh',  lastName: 'Thi T' },
 ];
 
+// Biển số format: ô tô (1 chữ cái) XX A-NNN.NN, xe máy/ga (2 chữ cái) XX AB-NNN.NN
+// Số GPLX: đúng 12 chữ số
 const DRIVERS = [
   {
     email: 'driver1@example.com',
@@ -165,13 +167,13 @@ const DRIVERS = [
       type: 'CAR_4',
       brand: 'Toyota',
       model: 'Vios',
-      plate: '51A-12345',
+      plate: '51A-123.45',
       color: 'White',
       year: 2022,
     },
     license: {
       class: 'B',
-      number: 'GP-123456',
+      number: '100000000001',
       expiryDate: new Date('2027-12-31'),
     },
   },
@@ -184,13 +186,13 @@ const DRIVERS = [
       type: 'CAR_4',
       brand: 'Honda',
       model: 'City',
-      plate: '51A-67890',
+      plate: '51A-678.90',
       color: 'Black',
       year: 2023,
     },
     license: {
       class: 'B',
-      number: 'GP-654321',
+      number: '100000000002',
       expiryDate: new Date('2028-06-30'),
     },
   },
@@ -203,13 +205,13 @@ const DRIVERS = [
       type: 'CAR_7',
       brand: 'Ford',
       model: 'Everest',
-      plate: '51A-11111',
+      plate: '51A-111.11',
       color: 'Silver',
       year: 2023,
     },
     license: {
       class: 'D2',
-      number: 'GP-111111',
+      number: '100000000003',
       expiryDate: new Date('2028-12-31'),
     },
   },
@@ -222,13 +224,13 @@ const DRIVERS = [
       type: 'SCOOTER',
       brand: 'Honda',
       model: 'Vision',
-      plate: '59X3-24680',
+      plate: '59XA-246.80',   // SCOOTER: 2-letter prefix
       color: 'Red',
       year: 2024,
     },
     license: {
       class: 'A1',
-      number: 'GP-246810',
+      number: '100000000004',
       expiryDate: new Date('2029-03-31'),
     },
   },
@@ -241,13 +243,13 @@ const DRIVERS = [
       type: 'CAR_7',
       brand: 'Toyota',
       model: 'Innova',
-      plate: '51B-11111',
+      plate: '51B-111.11',
       color: 'Gray',
       year: 2022,
     },
     license: {
       class: 'D2',
-      number: 'GP-555555',
+      number: '100000000005',
       expiryDate: new Date('2028-09-30'),
     },
   },
@@ -260,13 +262,13 @@ const DRIVERS = [
       type: 'CAR_7',
       brand: 'Mitsubishi',
       model: 'Xpander',
-      plate: '51B-22222',
+      plate: '51B-222.22',
       color: 'Blue',
       year: 2023,
     },
     license: {
       class: 'D2',
-      number: 'GP-666666',
+      number: '100000000006',
       expiryDate: new Date('2027-06-30'),
     },
   },
@@ -279,13 +281,13 @@ const DRIVERS = [
       type: 'MOTORBIKE',
       brand: 'Honda',
       model: 'Wave Alpha',
-      plate: '59B1-33333',
+      plate: '59BA-333.33',   // MOTORBIKE: 2-letter prefix
       color: 'Blue',
       year: 2023,
     },
     license: {
       class: 'A1',
-      number: 'GP-777777',
+      number: '100000000007',
       expiryDate: new Date('2029-12-31'),
     },
   },
@@ -298,13 +300,13 @@ const DRIVERS = [
       type: 'CAR_4',
       brand: 'Hyundai',
       model: 'Accent',
-      plate: '51B-44444',
+      plate: '51B-444.44',
       color: 'White',
       year: 2024,
     },
     license: {
       class: 'B',
-      number: 'GP-888888',
+      number: '100000000008',
       expiryDate: new Date('2029-06-30'),
     },
   },
@@ -317,13 +319,13 @@ const DRIVERS = [
       type: 'CAR_7',
       brand: 'Kia',
       model: 'Sorento',
-      plate: '51B-55555',
+      plate: '51B-555.55',
       color: 'Black',
       year: 2023,
     },
     license: {
       class: 'D2',
-      number: 'GP-999999',
+      number: '100000000009',
       expiryDate: new Date('2028-03-31'),
     },
   },
@@ -336,13 +338,13 @@ const DRIVERS = [
       type: 'CAR_7',
       brand: 'Toyota',
       model: 'Fortuner',
-      plate: '51B-66666',
+      plate: '51B-666.66',
       color: 'Silver',
       year: 2022,
     },
     license: {
       class: 'D2',
-      number: 'GP-000000',
+      number: '100000000010',
       expiryDate: new Date('2027-09-30'),
     },
   },
@@ -450,6 +452,16 @@ for (let i = 0; i < EXTRA_DRIVER_COUNT; i += 1) {
   const vehicleOptions = EXTRA_VEHICLES_BY_TYPE[vehicleType];
   const selectedVehicle = vehicleOptions[i % vehicleOptions.length];
 
+  // Biển số: ô tô/7 chỗ dùng 1 chữ cái (59Z-NNN.NN), xe máy/ga dùng 2 chữ cái (59ZA-NNN.NN)
+  const isTwoWheeler = vehicleType === 'MOTORBIKE' || vehicleType === 'SCOOTER';
+  const platePrefix = isTwoWheeler ? '59ZA' : '59Z';
+  const serialDigits = String(10000 + serial).slice(-5); // 5 digits: 10011..10040
+  const plateNumber = `${serialDigits.slice(0, 3)}.${serialDigits.slice(3)}`; // NNN.NN
+  const plate = `${platePrefix}-${plateNumber}`;
+
+  // Số GPLX: 12 chữ số, bắt đầu từ 200000000011
+  const licenseNumber = String(200000000000 + serial);
+
   DRIVERS.push({
     email,
     phone,
@@ -459,13 +471,13 @@ for (let i = 0; i < EXTRA_DRIVER_COUNT; i += 1) {
       type: vehicleType,
       brand: selectedVehicle.brand,
       model: selectedVehicle.model,
-      plate: `59Z-${String(10000 + serial).slice(-5)}`,
+      plate,
       color: EXTRA_VEHICLE_COLORS[i % EXTRA_VEHICLE_COLORS.length],
       year: 2021 + (i % 4),
     },
     license: {
       class: getLicenseClassByVehicleType(vehicleType),
-      number: `GP-EXTRA-${String(serial).padStart(4, '0')}`,
+      number: licenseNumber,
       expiryDate: new Date('2029-12-31'),
     },
   });

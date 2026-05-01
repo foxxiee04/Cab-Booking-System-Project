@@ -206,7 +206,7 @@ const ContactBox: React.FC<ContactBoxProps> = ({
         sx={{
           position: floatingPanel ? 'fixed' : 'relative',
           bottom: floatingPanel ? { xs: 144, sm: 96 } : 'auto',
-          left: floatingPanel ? { xs: 16, sm: 24 } : 'auto',
+          right: floatingPanel ? { xs: 16, sm: 24 } : 'auto',
           mt: floatingPanel ? 0 : 1.25,
           width: floatingPanel
             ? { xs: 'calc(100vw - 32px)', sm: 420 }
@@ -394,7 +394,7 @@ const ContactBox: React.FC<ContactBoxProps> = ({
       sx={{
         position: !inlineTrigger && floatingPanel ? 'fixed' : 'relative',
         bottom: !inlineTrigger && floatingPanel ? { xs: 80, sm: 24 } : 'auto',
-        left: !inlineTrigger && floatingPanel ? { xs: 16, sm: 24 } : 'auto',
+        right: !inlineTrigger && floatingPanel ? { xs: 16, sm: 24 } : 'auto',
         zIndex: floatingPanel ? 1300 : 4,
         width: inlineTrigger && fullWidthTrigger ? '100%' : 'auto',
         display: 'flex',

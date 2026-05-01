@@ -1,0 +1,91 @@
+erDiagram
+    driver_wallets {
+        UUID id PK
+        VARCHAR driverId UK
+        FLOAT balance
+        FLOAT availableBalance
+        FLOAT pendingBalance
+        FLOAT lockedBalance
+        FLOAT debt
+        ENUM status "INACTIVE|ACTIVE|BLOCKED"
+        BOOL initialActivationCompleted
+        TIMESTAMPTZ createdAt
+        TIMESTAMPTZ updatedAt
+    }
+
+    wallet_transactions {
+        UUID id PK
+        VARCHAR driverId FK
+        ENUM type "EARN|COMMISSION|BONUS|WITHDRAW|REFUND|TOP_UP"
+        ENUM direction "CREDIT|DEBIT"
+        FLOAT amount
+        FLOAT balanceAfter
+        VARCHAR description "nullable"
+        VARCHAR referenceId "nullable"
+        VARCHAR idempotencyKey UK "nullable"
+        JSON metadata "nullable"
+        TIMESTAMPTZ createdAt
+    }
+
+    pending_earnings {
+        UUID id PK
+        VARCHAR driverId FK
+        FLOAT amount
+        VARCHAR rideId
+        TIMESTAMPTZ settleAt
+        TIMESTAMPTZ settledAt "nullable"
+        TIMESTAMPTZ createdAt
+    }
+
+    debt_records {
+        UUID id PK
+        VARCHAR driverId FK
+        FLOAT amount
+        FLOAT remaining
+        VARCHAR rideId "nullable"
+        ENUM status "ACTIVE|OVERDUE|SETTLED"
+        TIMESTAMPTZ dueDate
+        TIMESTAMPTZ settledAt "nullable"
+        TIMESTAMPTZ createdAt
+    }
+
+    withdrawal_requests {
+        UUID id PK
+        VARCHAR driverId FK
+        FLOAT amount
+        ENUM status "PENDING|PROCESSING|COMPLETED|FAILED|CANCELLED"
+        VARCHAR bankName "nullable"
+        VARCHAR accountNumber "nullable"
+        VARCHAR accountHolder "nullable"
+        VARCHAR idempotencyKey UK "nullable"
+        TIMESTAMPTZ processedAt "nullable"
+        VARCHAR failureReason "nullable"
+        TIMESTAMPTZ createdAt
+        TIMESTAMPTZ updatedAt
+    }
+
+    merchant_ledger {
+        UUID id PK
+        ENUM type "IN|OUT"
+        ENUM category "PAYMENT|PAYOUT|COMMISSION|WITHDRAW|BONUS|VOUCHER|REFUND|TOP_UP"
+        FLOAT amount
+        VARCHAR referenceId "nullable"
+        VARCHAR description "nullable"
+        VARCHAR idempotencyKey UK "nullable"
+        JSON metadata "nullable"
+        TIMESTAMPTZ createdAt
+    }
+
+    merchant_balance {
+        INT id PK "= 1 singleton"
+        FLOAT balance
+        FLOAT totalIn
+        FLOAT totalOut
+        TIMESTAMPTZ updatedAt
+    }
+
+    driver_wallets ||--o{ wallet_transactions : "driverId"
+    driver_wallets ||--o{ pending_earnings : "driverId"
+    driver_wallets ||--o{ debt_records : "driverId"
+    driver_wallets ||--o{ withdrawal_requests : "driverId"
+    merchant_ledger }o--|| merchant_balance : "aggregated in"

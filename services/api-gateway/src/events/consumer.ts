@@ -378,6 +378,7 @@ export class EventConsumer {
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.started');
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.completed');
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.cancelled');
+      await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.driver_cancelled_redispatch');
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'ride.no_driver_found');
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'driver.approved');
       await this.channel!.bindQueue(QUEUE_NAME, EXCHANGE_NAME, 'driver.rejected');
@@ -434,6 +435,9 @@ export class EventConsumer {
           break;
         case 'ride.cancelled':
           await this.handleRideCancelled(content.payload);
+          break;
+        case 'ride.driver_cancelled_redispatch':
+          await this.handleDriverCancelledRedispatch(content.payload);
           break;
         case 'ride.no_driver_found':
           await this.handleRideNoDriverFound(content.payload);
@@ -1253,6 +1257,31 @@ export class EventConsumer {
 
     // Track driver-side cancellation (penalises cancel rate in future scoring)
     if (payload.driverId && payload.cancelledBy === 'DRIVER') {
+      this.redis.hincrby(driverStatsKey(payload.driverId), 'totalCancelled', 1).catch(() => {});
+    }
+  }
+
+  private async handleDriverCancelledRedispatch(payload: RideEventPayload): Promise<void> {
+    logger.info(`Processing ride.driver_cancelled_redispatch for ride ${payload.rideId}`);
+
+    // Notify customer that driver cancelled but system is finding a new driver
+    this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', {
+      rideId: payload.rideId,
+      status: 'FINDING_DRIVER',
+      message: 'Tài xế đã hủy chuyến. Hệ thống đang tìm tài xế mới cho bạn...',
+      cancelledBy: 'DRIVER',
+    });
+
+    // Notify the driver their cancellation was recorded
+    const driverUserId = await this.resolveDriverUserId(payload.driverId);
+    if (driverUserId) {
+      this.socketServer.emitToDriver(driverUserId, 'ride:status', {
+        rideId: payload.rideId,
+        status: 'FINDING_DRIVER',
+      });
+    }
+
+    if (payload.driverId) {
       this.redis.hincrby(driverStatsKey(payload.driverId), 'totalCancelled', 1).catch(() => {});
     }
   }

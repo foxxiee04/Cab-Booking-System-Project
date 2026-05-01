@@ -10,11 +10,13 @@ interface AuthState {
   error: string | null;
 }
 
+// Use sessionStorage (per-tab) instead of localStorage (shared across tabs in same incognito window).
+// This prevents multiple driver accounts in different incognito tabs from overwriting each other's tokens.
 const initialState: AuthState = {
-  user: JSON.parse(localStorage.getItem('user') || 'null'),
-  accessToken: localStorage.getItem('accessToken'),
-  refreshToken: localStorage.getItem('refreshToken'),
-  isAuthenticated: !!localStorage.getItem('accessToken'),
+  user: JSON.parse(sessionStorage.getItem('user') || 'null'),
+  accessToken: sessionStorage.getItem('accessToken'),
+  refreshToken: sessionStorage.getItem('refreshToken'),
+  isAuthenticated: !!sessionStorage.getItem('accessToken'),
   loading: false,
   error: null,
 };
@@ -33,10 +35,10 @@ const authSlice = createSlice({
       state.isAuthenticated = true;
       state.error = null;
 
-      // Persist to localStorage
-      localStorage.setItem('user', JSON.stringify(action.payload.user));
-      localStorage.setItem('accessToken', action.payload.tokens.accessToken);
-      localStorage.setItem('refreshToken', action.payload.tokens.refreshToken);
+      // Persist to sessionStorage (per-tab — prevents cross-tab token leaks in incognito)
+      sessionStorage.setItem('user', JSON.stringify(action.payload.user));
+      sessionStorage.setItem('accessToken', action.payload.tokens.accessToken);
+      sessionStorage.setItem('refreshToken', action.payload.tokens.refreshToken);
     },
 
     updateTokens: (state, action: PayloadAction<AuthTokens>) => {
@@ -44,8 +46,8 @@ const authSlice = createSlice({
       state.refreshToken = action.payload.refreshToken;
       state.isAuthenticated = true;
 
-      localStorage.setItem('accessToken', action.payload.accessToken);
-      localStorage.setItem('refreshToken', action.payload.refreshToken);
+      sessionStorage.setItem('accessToken', action.payload.accessToken);
+      sessionStorage.setItem('refreshToken', action.payload.refreshToken);
     },
 
     logout: (state) => {
@@ -55,16 +57,16 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.error = null;
 
-      // Clear localStorage
-      localStorage.removeItem('user');
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      // Clear sessionStorage
+      sessionStorage.removeItem('user');
+      sessionStorage.removeItem('accessToken');
+      sessionStorage.removeItem('refreshToken');
     },
 
     updateUser: (state, action: PayloadAction<Partial<User>>) => {
       if (state.user) {
         state.user = { ...state.user, ...action.payload };
-        localStorage.setItem('user', JSON.stringify(state.user));
+        sessionStorage.setItem('user', JSON.stringify(state.user));
       }
     },
 

@@ -1,0 +1,40 @@
+graph TB
+    subgraph Client Layer
+        CA[Customer App\n:4000 React SPA]
+        DA[Driver App\n:4001 React SPA]
+        ADM[Admin Dashboard\n:4002 React SPA]
+    end
+
+    subgraph Gateway Layer
+        GW[API Gateway :3000\nJWT Auth · HTTP Proxy\ngRPC Bridge · Socket.IO\nDispatch Engine\nRedis Adapter]
+    end
+
+    subgraph Service Layer
+        AUTH[auth-service\n:3001/:50051\nauth_db PG]
+        RIDE[ride-service\n:3002/:50054\nride_db PG]
+        DRV[driver-service\n:3003/:50055\ndriver_db PG]
+        PAY[payment-service\n:3004/:50056\npayment_db PG]
+        NOTIF[notification-service\n:3005\nnotif_db Mongo]
+        WALLET[wallet-service\n:3006\nwallet_db PG]
+        USER[user-service\n:3007/:50052\nuser_db PG]
+        BOOK[booking-service\n:3008/:50053\nbooking_db PG]
+        PRICE[pricing-service\n:3009/:50057\nstateless]
+        REV[review-service\n:3010\nreview_db Mongo]
+        AI[ai-service\n:8000 Python\nstateless]
+    end
+
+    subgraph Infrastructure Layer
+        PG[(PostgreSQL :5433\n7 databases)]
+        MONGO[(MongoDB :27017)]
+        REDIS[(Redis :6379\nGEO · OTP · Socket)]
+        MQ[(RabbitMQ :5672\ndomain-events exchange)]
+    end
+
+    CA & DA & ADM <-->|HTTPS / WSS| GW
+    GW <-->|HTTP/gRPC| AUTH & RIDE & DRV & PAY & WALLET & USER & BOOK & PRICE & REV
+    GW -.->|HTTP 150ms| AI
+    GW <--> REDIS
+    SERVICE_LAYER <--> MQ
+    AUTH & RIDE & DRV & PAY & WALLET & USER & BOOK --> PG
+    NOTIF & REV --> MONGO
+    GW & DRV --> REDIS

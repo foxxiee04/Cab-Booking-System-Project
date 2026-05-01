@@ -44,7 +44,7 @@ class DriverSocketService {
     this.authFailureHandled = true;
     this.disconnect();
 
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshToken = store.getState().auth.refreshToken;
     if (!refreshToken) {
       store.dispatch(logout());
       store.dispatch(

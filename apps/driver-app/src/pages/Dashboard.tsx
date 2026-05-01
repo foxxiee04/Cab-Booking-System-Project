@@ -111,15 +111,15 @@ const getRideMetrics = (ride: Ride) => {
     ? ride.durationFromDriverSeconds
     : undefined;
 
-  if (distanceFromDriverMeters || durationFromDriverSeconds) {
-    return {
-      distanceMeters: distanceFromDriverMeters,
-      durationSeconds: durationFromDriverSeconds,
-    };
-  }
-
+  // Trip metrics (distance/duration of the ride itself, not driver→pickup ETA)
   const distanceMeters = normalizeDistanceMeters(ride.distance);
   const durationSeconds = normalizeDurationSeconds(ride.duration, ride.estimatedDuration);
+
+  if (distanceFromDriverMeters || durationFromDriverSeconds) {
+    // Return trip metrics so the duration chip shows trip time, not driver ETA time.
+    // The ETA chip below uses distanceFromDriver / durationFromDriverSeconds directly.
+    return { distanceMeters, durationSeconds };
+  }
 
   if (distanceMeters && durationSeconds) {
     return { distanceMeters, durationSeconds };
@@ -158,6 +158,7 @@ const Dashboard: React.FC = () => {
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [acceptingRideId, setAcceptingRideId] = useState<string | null>(null);
   const [watchId, setWatchId] = useState<number | null>(null);
   const [completedRidesCount, setCompletedRidesCount] = useState(0);
   const [availableRides, setAvailableRides] = useState<Ride[]>([]);
@@ -186,6 +187,8 @@ const Dashboard: React.FC = () => {
     const holdUntil = Date.now() + 30_000;
     ignoredRideIdsRef.current.set(rideId, holdUntil);
     dispatch(clearPendingRide());
+    // Notify server so re-dispatch skips this driver immediately
+    rideApi.declineOffer(rideId).catch(() => {});
   };
 
   const browsingLocation = currentLocation || profile?.currentLocation || null;
@@ -418,6 +421,7 @@ const Dashboard: React.FC = () => {
 
   const handleAcceptSpecificRide = async (rideId: string) => {
     setLoading(true);
+    setAcceptingRideId(rideId);
     ignoredRideIdsRef.current.delete(rideId);
     try {
       const response = await rideApi.acceptRide(rideId);
@@ -446,6 +450,7 @@ const Dashboard: React.FC = () => {
       }
     } finally {
       setLoading(false);
+      setAcceptingRideId(null);
     }
   };
 
@@ -732,7 +737,7 @@ const Dashboard: React.FC = () => {
                           <Button
                             variant="outlined" size="small" color="inherit"
                             onClick={() => dismissPendingRide(ride.id)}
-                            disabled={loading}
+                            disabled={acceptingRideId === ride.id}
                             sx={{ borderRadius: 99, flex: 1, fontWeight: 700, fontSize: '0.8rem' }}
                           >
                             Bỏ qua
@@ -740,12 +745,12 @@ const Dashboard: React.FC = () => {
                           <Button
                             variant="contained" size="small"
                             onClick={() => handleAcceptSpecificRide(ride.id)}
-                            disabled={loading}
+                            disabled={acceptingRideId !== null}
                             data-testid="accept-ride-button"
                             color={isFreshOffer ? 'success' : 'primary'}
                             sx={{ borderRadius: 99, flex: 2, fontWeight: 800, fontSize: '0.88rem' }}
                           >
-                            {isFreshOffer ? '✓ Nhận ngay' : 'Nhận cuốc'}
+                            {acceptingRideId === ride.id ? 'Đang xử lý...' : isFreshOffer ? '✓ Nhận ngay' : 'Nhận cuốc'}
                           </Button>
                         </Stack>
                       </Stack>

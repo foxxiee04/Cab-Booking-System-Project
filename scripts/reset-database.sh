@@ -57,9 +57,8 @@ for service in auth-service booking-service driver-service payment-service ride-
     DB_NAME="${service//-service/_db}"
     DB_NAME="${DB_NAME/driver_db/driver_db}"
     export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${DB_NAME}?schema=public"
-    npx prisma migrate deploy 2>/dev/null \
-        || npx prisma db push --accept-data-loss 2>/dev/null \
-        || echo "  Warning: $service migration skipped"
+    npx prisma db push --accept-data-loss 2>/dev/null \
+        || echo "  Warning: $service db push skipped"
     npx prisma generate 2>/dev/null || true
 done
 

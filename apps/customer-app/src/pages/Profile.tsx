@@ -131,19 +131,14 @@ const Profile: React.FC = () => {
     setError('');
     setSuccess('');
 
-    if (!formData.firstName.trim() || !formData.lastName.trim()) {
-      setError(t('profile.nameRequired', 'Vui lòng nhập đầy đủ họ và tên.'));
+    if (!formData.email.trim()) {
+      setError('Vui lòng nhập địa chỉ email.');
       return;
     }
 
     setSaving(true);
     try {
       const response = await authApi.updateMe({
-        profile: {
-          firstName: formData.firstName.trim(),
-          lastName: formData.lastName.trim(),
-          avatar: formData.avatar.trim() || undefined,
-        },
         email: formData.email.trim() || undefined,
       });
 
@@ -306,7 +301,8 @@ const Profile: React.FC = () => {
                     fullWidth
                     label={t('register.firstName')}
                     value={formData.firstName}
-                    onChange={handleChange('firstName')}
+                    disabled
+                    helperText="Không thể thay đổi họ tên."
                   />
                 </Grid>
 
@@ -315,7 +311,8 @@ const Profile: React.FC = () => {
                     fullWidth
                     label={t('register.lastName')}
                     value={formData.lastName}
-                    onChange={handleChange('lastName')}
+                    disabled
+                    helperText="Không thể thay đổi họ tên."
                   />
                 </Grid>
 
@@ -326,6 +323,7 @@ const Profile: React.FC = () => {
                     value={formData.email}
                     onChange={handleChange('email')}
                     placeholder="name@example.com"
+                    helperText="Bạn có thể thêm hoặc cập nhật email."
                   />
                 </Grid>
 

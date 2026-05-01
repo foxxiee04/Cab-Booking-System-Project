@@ -95,8 +95,17 @@ const toVietnameseMessage = (message: string | undefined, fallback: string): str
   return raw;
 };
 
-const getRideStatusNotification = (status: string, message?: string) => {
+const getRideStatusNotification = (status: string, message?: string, cancelledBy?: string) => {
   switch (status) {
+    case 'FINDING_DRIVER':
+      if (cancelledBy === 'DRIVER') {
+        return {
+          type: 'warning' as const,
+          title: 'Tài xế đã hủy chuyến',
+          message: 'Hệ thống đang tìm tài xế mới cho bạn, vui lòng chờ trong giây lát...',
+        };
+      }
+      return null;
     case 'ASSIGNED':
       return {
         type: 'success' as const,
@@ -164,7 +173,7 @@ class SocketService {
     this.authFailureHandled = true;
     this.disconnect();
 
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshToken = store.getState().auth.refreshToken;
     if (!refreshToken) {
       store.dispatch(logout());
       store.dispatch(
@@ -254,7 +263,7 @@ class SocketService {
     });
 
     // Ride events - matching backend event names
-    this.socket.on('RIDE_STATUS_UPDATE', (data: { rideId: string; status: string; message?: string; driverId?: string; driver?: any }) => {
+    this.socket.on('RIDE_STATUS_UPDATE', (data: { rideId: string; status: string; message?: string; driverId?: string; driver?: any; cancelledBy?: string }) => {
       store.dispatch(updateRideStatus({ rideId: data.rideId, status: data.status }));
 
       // When driver is assigned/accepted, fetch driver profile if not already in store
@@ -271,7 +280,7 @@ class SocketService {
         }
       }
 
-      const notification = getRideStatusNotification(data.status, data.message);
+      const notification = getRideStatusNotification(data.status, data.message, data.cancelledBy);
       if (notification) {
         store.dispatch(
           showNotification({

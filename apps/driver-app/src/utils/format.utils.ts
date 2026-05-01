@@ -27,11 +27,15 @@ export const formatPhoneNumber = (phone: string): string => {
   return phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3');
 };
 
-const LICENSE_PLATE_REGEX = /^\d{2}[A-Z]{1,2}[-.\s]?\d{5}(\.[0-9]{2})?$/;
+// Vietnamese license plate formats:
+//   Car  (1 letter): 50A-123.45  (2 digits + 1 letter + dash + 3 digits + dot + 2 digits)
+//   Moto (2 letters): 50AC-123.45 (2 digits + 2 letters + dash + 3 digits + dot + 2 digits)
+//   Legacy (no dot): 50A-12345 / 50AC-12345
+const LICENSE_PLATE_REGEX = /^\d{2}[A-Z]{1,2}-(\d{3}\.\d{2}|\d{5})$/;
 
 export const sanitizeLicensePlateInput = (licensePlate: string): string => {
   const normalized = licensePlate.toUpperCase().replace(/\s+/g, '');
-  return normalized.replace(/[^0-9A-Z.-]/g, '').slice(0, 12);
+  return normalized.replace(/[^0-9A-Z.-]/g, '').slice(0, 11);
 };
 
 export const isValidLicensePlate = (licensePlate: string): boolean => {
@@ -40,12 +44,19 @@ export const isValidLicensePlate = (licensePlate: string): boolean => {
 
 export const normalizeLicensePlate = (licensePlate: string): string => {
   const raw = sanitizeLicensePlateInput(licensePlate).trim();
-  const match = raw.match(/^(\d{2}[A-Z]{1,2})[-.\s]?(\d{5})(\.[0-9]{2})?$/);
-  if (!match) {
-    return raw.replace(/\s+/g, '');
+  // Match: PREFIX-NNN.NN (already normalized with dot)
+  const matchDot = raw.match(/^(\d{2}[A-Z]{1,2})-?(\d{3})\.?(\d{2})$/);
+  if (matchDot) {
+    const [, prefix, first3, last2] = matchDot;
+    return `${prefix}-${first3}.${last2}`;
   }
-  const [, prefix, digits, suffix] = match;
-  return `${prefix}-${digits}${suffix ?? ''}`;
+  // Match: PREFIX-NNNNN or PREFIX+NNNNN (5 digits no dot) → auto-format with dot
+  const matchNoDot = raw.match(/^(\d{2}[A-Z]{1,2})-?(\d{5})$/);
+  if (matchNoDot) {
+    const [, prefix, digits] = matchNoDot;
+    return `${prefix}-${digits.slice(0, 3)}.${digits.slice(3)}`;
+  }
+  return raw;
 };
 
 // Get vehicle type label

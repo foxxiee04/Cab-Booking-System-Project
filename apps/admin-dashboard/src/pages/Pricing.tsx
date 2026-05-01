@@ -128,7 +128,7 @@ const Pricing: React.FC = () => {
   const [ruleError, setRuleError] = useState('');
   const [ruleSaving, setRuleSaving] = useState(false);
 
-  const token = localStorage.getItem('adminToken') || '';
+  const token = sessionStorage.getItem('accessToken') || '';
   const headers = { Authorization: `Bearer ${token}` };
 
   const loadRules = useCallback(async () => {

@@ -1,0 +1,43 @@
+sequenceDiagram
+    participant KH as Khách hàng
+    participant GW as API Gateway
+    participant REDIS as Redis GEO
+    participant AI as AI Service
+    participant WALLET as wallet-service
+    participant TX as Tài xế Socket
+
+    KH->>GW: POST /api/rides {pickup, dropoff, vehicleType}
+    GW->>GW: Tạo Ride (PENDING)
+
+    loop Vòng 1: radius=2km, timeout=20s
+        GW->>REDIS: GEORADIUS drivers:geo:online 20 members ASC
+        REDIS-->>GW: [driver1, driver2, driver3]
+
+        par Với mỗi driver
+            GW->>WALLET: GET /internal/driver/{id}/can-accept
+            WALLET-->>GW: {canAcceptRide: true/false}
+        end
+
+        opt AI enabled
+            GW->>AI: POST /predict/acceptance {driverId, pickup, hour}
+            AI-->>GW: {probability: 0.85}
+        end
+
+        GW->>GW: score = 0.4×dist + 0.25×rating + 0.15×idle\n       + 0.15×acceptance - 0.05×cancel + ai_adj
+        GW->>GW: Sắp xếp, chọn driver điểm cao nhất
+
+        GW->>TX: socket emit NEW_RIDE_AVAILABLE
+        TX->>GW: socket emit driver:accept-ride [trong 30s]
+
+        alt Tài xế chấp nhận
+            GW->>GW: Ride → ASSIGNED
+            GW-->>KH: Tìm được tài xế!
+        else Hết 30s không phản hồi
+            GW->>GW: Thử driver tiếp theo trong vòng 1
+        end
+    end
+
+    opt Không tìm được trong vòng 1
+        Note over GW: Vòng 2: radius=3km, timeout=60s
+        Note over GW: Vòng 3: radius=5km, timeout=100s
+    end

@@ -3,6 +3,7 @@ import { config } from './config';
 import { createApp } from './app';
 import { EventPublisher } from './events/publisher';
 import { EventConsumer } from './events/consumer';
+import { DriverWalletService } from './services/driver-wallet.service';
 import { logger } from './utils/logger';
 
 // ─── Seed representative system bank accounts (mock) ─────────────────────────
@@ -87,9 +88,45 @@ async function main() {
     logger.info(`Wallet Service listening on port ${config.port}`);
   });
 
+  // ─── Pending earnings cron (every 30 min) ─────────────────────────────────
+  // Lazily settle T+24h earnings so drivers don't need to open the app for
+  // the balance to update automatically.
+  const walletService = new DriverWalletService(prisma, eventPublisher);
+  let pendingSettlementRunning = false;
+
+  const settlePendingEarningsCron = async () => {
+    if (pendingSettlementRunning) return;
+    pendingSettlementRunning = true;
+    try {
+      const due = await (prisma as any).pendingEarning.findMany({
+        where: { settledAt: null, settleAt: { lte: new Date() } },
+        select: { driverId: true },
+        distinct: ['driverId'],
+      });
+      if (due.length > 0) {
+        logger.info(`Pending earnings cron: settling for ${due.length} driver(s)`);
+        for (const { driverId } of due) {
+          try {
+            await walletService.settlePendingEarnings(driverId);
+          } catch (err) {
+            logger.warn(`Failed to settle pending earnings for driver ${driverId}:`, err);
+          }
+        }
+      }
+    } catch (err) {
+      logger.error('Pending earnings cron error:', err);
+    } finally {
+      pendingSettlementRunning = false;
+    }
+  };
+
+  const cronInterval = setInterval(() => { void settlePendingEarningsCron(); }, 30 * 60 * 1000);
+  void settlePendingEarningsCron(); // run once on startup to catch any missed settlements
+
   // ─── Graceful shutdown ────────────────────────────────────────────────────
   const shutdown = async (signal: string) => {
     logger.info(`Received ${signal}. Shutting down gracefully...`);
+    clearInterval(cronInterval);
     server.close(async () => {
       await eventConsumer.close();
       await eventPublisher.close();

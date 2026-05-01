@@ -1,0 +1,80 @@
+graph TB
+    subgraph IAC["Identity and Access\nauth-service"]
+        U["User (AR)"]
+        RT["RefreshToken"]
+        OTP_E["OTP"]
+        U --- RT
+        U --- OTP_E
+    end
+
+    subgraph UPC["User Profile\nuser-service"]
+        UP["UserProfile (AR)"]
+    end
+
+    subgraph RIDC["Ride Management\nride-service"]
+        R["Ride (AR)\nstatus · fare · locations"]
+        RL["RideLocation"]
+        RE["RideStateTransition"]
+        R --- RL
+        R --- RE
+    end
+
+    subgraph DRC["Driver Management\ndriver-service"]
+        DV["Driver (AR)\nstatus · rating · geo"]
+        DL["DriverLocation"]
+        DLI["DriverLicense"]
+        DV --- DL
+        DV --- DLI
+    end
+
+    subgraph BC["Booking\nbooking-service"]
+        BK["Booking (AR)"]
+    end
+
+    subgraph PRC["Pricing\npricing-service"]
+        PQ["PricingQuery (VO)"]
+        SR["SurgeRate (VO)"]
+    end
+
+    subgraph PAC["Payment\npayment-service"]
+        P["Payment (AR)"]
+        TX["Transaction"]
+        IPK["IdempotencyKey (VO)"]
+        OBX["OutboxEvent"]
+        P --- TX
+        P --- IPK
+        P --- OBX
+    end
+
+    subgraph WC["Wallet\nwallet-service"]
+        W["DriverWallet (AR)"]
+        WT["WalletTransaction"]
+        DR["DebtRecord"]
+        PE["PendingEarning"]
+        W --- WT
+        W --- DR
+        W --- PE
+    end
+
+    subgraph NC["Notification\nnotification-service"]
+        N["Notification (AR)"]
+        PT["PushToken"]
+        N --- PT
+    end
+
+    subgraph RVC["Review\nreview-service"]
+        RV["Review (AR)"]
+        RAT["Rating (VO)"]
+        RV --- RAT
+    end
+
+    RIDC -->|"ride.completed [MQ]"| PAC
+    RIDC -->|"ride.* [MQ]"| NC
+    PAC -->|"driver.earning.settled [MQ]"| WC
+    PAC -->|"refund.completed [MQ]"| WC
+    WC -->|"wallet.topup.completed [MQ]"| PAC
+    IAC -->|"user.registered [MQ]"| UPC
+    DRC -->|"driver.approved [MQ]"| WC
+    DRC -->|"driver.approved [MQ]"| NC
+    RVC -->|"driver.rating_updated [MQ]"| DRC
+    BC -->|"booking.confirmed [MQ]"| RIDC

@@ -25,7 +25,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { ArrowBack, AutorenewRounded, Cancel, CheckCircleRounded, HourglassTopRounded, PaymentRounded, StarRate, AccessTime, Route, Speed, FiberManualRecord } from '@mui/icons-material';
+import { ArrowBack, AutorenewRounded, Cancel, ChatBubbleRounded, CheckCircleRounded, HourglassTopRounded, PaymentRounded, StarRate, AccessTime, Route, Speed, FiberManualRecord } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { BookingMap, useSocket } from '../features/booking';
 import ContactBox from '../components/ContactBox';
@@ -35,6 +35,7 @@ import { rideApi } from '../api/ride.api';
 import { driverApi } from '../api/driver.api';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { clearRide, setCurrentRide, setDriver, updateRideStatus } from '../store/ride.slice';
+import { openMessenger } from '../store/ui.slice';
 import { Payment } from '../types';
 import { formatCurrency, formatDate, getPaymentMethodLabel, getVehicleTypeLabel } from '../utils/format.utils';
 import { calculateDistance, formatDistance as formatMapDistance, formatDuration as formatMapDuration } from '../utils/map.utils';
@@ -936,42 +937,53 @@ const RideTracking: React.FC = () => {
                     {/* floating FAB rendered below */}
                   </Stack>
                 </Stack>
-                {/* Live tracking info panel */}
-                {!isChatReadOnly && (
+                {/* Live tracking info panel — only show when real data is available */}
+                {!isChatReadOnly && (estimatedPickupEtaMinutes != null || pickupDistanceKmToDriver != null || trackingSpeedText || status === 'PICKING_UP') && (
                   <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#f0f9ff', borderRadius: 3, border: '1px solid #bae6fd' }}>
-                  <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1.25 }}>
-                    <FiberManualRecord sx={{ fontSize: 10, color: effectiveDriverLocation ? '#16a34a' : '#f59e0b' }} />
-                  </Stack>
-                  <Stack direction="row" spacing={1}>
-                    <Box sx={{ flex: 1, textAlign: 'center', py: 0.5 }}>
-                      <AccessTime sx={{ fontSize: 22, color: '#0284c7', mb: 0.25 }} />
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.2, mb: 0.25 }}>ETA đón</Typography>
-                      <Typography variant="body2" fontWeight={800} color="#0284c7">
-                        {trackingEtaText.replace('ETA đón: ', '') || '—'}
+                    <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 1 }}>
+                      <FiberManualRecord sx={{ fontSize: 10, color: effectiveDriverLocation ? '#16a34a' : '#f59e0b' }} />
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                        {effectiveDriverLocation ? 'Đang theo dõi vị trí tài xế' : 'Đang xác định vị trí...'}
                       </Typography>
-                    </Box>
-                    <Divider orientation="vertical" flexItem />
-                    <Box sx={{ flex: 1, textAlign: 'center', py: 0.5 }}>
-                      <Route sx={{ fontSize: 22, color: '#0284c7', mb: 0.25 }} />
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.2, mb: 0.25 }}>Khoảng cách</Typography>
-                      <Typography variant="body2" fontWeight={800} color="#0284c7">
-                        {trackingDistanceText.replace('Khoảng cách tới bạn: ', '') || '—'}
-                      </Typography>
-                    </Box>
-                    {trackingSpeedText ? (<>
-                      <Divider orientation="vertical" flexItem />
-                      <Box sx={{ flex: 1, textAlign: 'center', py: 0.5 }}>
-                        <Speed sx={{ fontSize: 22, color: '#0284c7', mb: 0.25 }} />
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.2, mb: 0.25 }}>Vận tốc</Typography>
-                        <Typography variant="body2" fontWeight={800} color="#0284c7">{trackingSpeedText}</Typography>
-                      </Box>
-                    </>) : null}
-                  </Stack>
+                    </Stack>
+                    <Stack direction="row" spacing={1} justifyContent="center">
+                      {(estimatedPickupEtaMinutes != null || status === 'PICKING_UP') && (
+                        <Box sx={{ flex: 1, textAlign: 'center', py: 0.5 }}>
+                          <AccessTime sx={{ fontSize: 22, color: '#0284c7', mb: 0.25 }} />
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.2, mb: 0.25 }}>ETA đón</Typography>
+                          <Typography variant="body2" fontWeight={800} color="#0284c7">
+                            {trackingEtaText.replace('ETA đón: ', '') || '—'}
+                          </Typography>
+                        </Box>
+                      )}
+                      {estimatedPickupEtaMinutes != null && pickupDistanceKmToDriver != null && (
+                        <Divider orientation="vertical" flexItem />
+                      )}
+                      {pickupDistanceKmToDriver != null && (
+                        <Box sx={{ flex: 1, textAlign: 'center', py: 0.5 }}>
+                          <Route sx={{ fontSize: 22, color: '#0284c7', mb: 0.25 }} />
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.2, mb: 0.25 }}>Khoảng cách</Typography>
+                          <Typography variant="body2" fontWeight={800} color="#0284c7">
+                            {trackingDistanceText.replace('Khoảng cách tới bạn: ', '') || '—'}
+                          </Typography>
+                        </Box>
+                      )}
+                      {trackingSpeedText ? (<>
+                        <Divider orientation="vertical" flexItem />
+                        <Box sx={{ flex: 1, textAlign: 'center', py: 0.5 }}>
+                          <Speed sx={{ fontSize: 22, color: '#0284c7', mb: 0.25 }} />
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.2, mb: 0.25 }}>Vận tốc</Typography>
+                          <Typography variant="body2" fontWeight={800} color="#0284c7">{trackingSpeedText}</Typography>
+                        </Box>
+                      </>) : null}
+                    </Stack>
                   </Box>
                 )}
               </CardContent>
             </Card>
           )}
+
+          {/* Chat button removed — floating icon in app header handles this */}
 
           {Boolean(currentRide?.driverId) && isChatReadOnly && ['COMPLETED', 'CANCELLED'].includes(status) && (
             <ContactBox
@@ -982,9 +994,9 @@ const RideTracking: React.FC = () => {
               contactPhone={driverPhoneNumber || undefined}
               role="CUSTOMER"
               triggerMode="inline"
-              triggerLabel={isChatReadOnly ? 'Xem lại cuộc trò chuyện' : 'Liên hệ tài xế'}
+              triggerLabel="Xem lại cuộc trò chuyện"
               fullWidthTrigger
-              readOnly={isChatReadOnly}
+              readOnly
             />
           )}
 
@@ -1449,20 +1461,7 @@ const RideTracking: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* ── Messenger-style floating chat FAB ───────────────────── */}
-      {Boolean(currentRide?.driverId) && !isChatReadOnly && (
-        <ContactBox
-          token={accessToken}
-          rideId={rideId}
-          myUserId={user?.id}
-          contactName={driverDisplayName}
-          contactPhone={driverPhoneNumber || undefined}
-          role="CUSTOMER"
-          triggerMode="floating"
-          panelMode="floating"
-          triggerLabel="Chat"
-        />
-      )}
+      {/* Floating chat is handled by the unified MessengerWidget in App.tsx */}
     </Box>
   );
 };

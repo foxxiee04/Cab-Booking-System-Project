@@ -1,0 +1,26 @@
+flowchart LR
+    Push["git push\nmain"] --> S1
+
+    subgraph S1["Stage 1 — Tests parallel"]
+        T1["test-unit"]
+        T2["test-contract"]
+        T3["test-integration"]
+        T4["test-ai"]
+    end
+
+    S1 --> S2
+
+    subgraph S2["Stage 2 — Docker Build matrix"]
+        D["Build + Push 12 images\nfoxxiee04/cab-service:latest"]
+    end
+
+    S2 --> S3a
+    S2 --> S3b
+
+    subgraph S3a["Deploy Backend"]
+        B["SCP stack + monitoring\nSSH: docker stack deploy"]
+    end
+
+    subgraph S3b["Deploy Frontend x3"]
+        F["npm build → rsync\n→ nginx reload"]
+    end

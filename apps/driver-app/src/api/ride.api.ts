@@ -75,9 +75,15 @@ export const rideApi = {
     };
   },
 
-  // Reject ride
+  // Reject ride (already assigned)
   rejectRide: async (rideId: string): Promise<ApiResponse> => {
     const response = await axiosInstance.post(`/rides/${rideId}/reject`, {});
+    return response.data;
+  },
+
+  // Decline an offered ride (dismissing popup — triggers immediate re-dispatch)
+  declineOffer: async (rideId: string): Promise<ApiResponse> => {
+    const response = await axiosInstance.post(`/rides/${rideId}/reject-offer`, { reason: 'Driver dismissed' });
     return response.data;
   },
 

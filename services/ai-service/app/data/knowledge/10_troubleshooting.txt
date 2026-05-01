@@ -1,0 +1,29 @@
+TIÊU ĐỀ: Xử lý sự cố ứng dụng FoxGo
+DANH MỤC: lỗi app, sự cố, không mở được, crash, bản đồ lỗi, không đặt được xe, lỗi thanh toán, ứng dụng bị lỗi
+
+Hỏi: App FoxGo bị đơ/crash khi mở thì sao?
+Đáp: Thử theo thứ tự: (1) Tắt và mở lại app. (2) Khởi động lại điện thoại. (3) Kiểm tra có bản cập nhật mới không (App Store / Google Play). (4) Xóa cache app (Cài đặt → Ứng dụng → FoxGo → Xóa cache). (5) Nếu vẫn lỗi, gỡ cài đặt và cài lại app. Dữ liệu tài khoản không bị mất khi cài lại vì được lưu trên server.
+
+Hỏi: Bản đồ không hiển thị hoặc bị trắng?
+Đáp: Bản đồ cần kết nối internet tốt. Kiểm tra: (1) WiFi hoặc 4G có hoạt động không. (2) Thử tắt VPN nếu đang bật. (3) Xóa cache ứng dụng. (4) Thử chuyển sang 4G nếu đang dùng WiFi yếu. Nếu vẫn lỗi, liên hệ support@foxgo.vn.
+
+Hỏi: Không xác định được vị trí, GPS không hoạt động?
+Đáp: Thực hiện: (1) Bật GPS điện thoại (kéo thanh thông báo xuống → bật Vị trí). (2) Vào Cài đặt → Ứng dụng → FoxGo → Quyền → Vị trí → chọn "Luôn cho phép" hoặc "Khi dùng app". (3) Đứng ở nơi thoáng, tránh trong nhà hay tầng hầm. (4) Khởi động lại app sau khi bật GPS.
+
+Hỏi: Nút "Đặt xe" bị mờ/không nhấn được?
+Đáp: Kiểm tra: (1) Đã nhập đầy đủ điểm đón và điểm đến chưa. (2) Điểm đến có nằm trong vùng phục vụ không. (3) Tài khoản có đang bị hạn chế không. (4) Với thanh toán online: ví có đủ số dư không. Thử đổi phương thức thanh toán sang tiền mặt để kiểm tra.
+
+Hỏi: Thanh toán MoMo/VNPay thành công nhưng không tạo được chuyến?
+Đáp: Tiền đã bị trừ nhưng không có chuyến — đây là lỗi hiếm gặp. Chờ 10 phút xem có cập nhật không. Nếu không, liên hệ ngay support@foxgo.vn với: số điện thoại, mã giao dịch MoMo/VNPay, thời gian giao dịch. Tiền sẽ được hoàn trong 3–5 ngày làm việc.
+
+Hỏi: Tôi thấy tài xế đang đến nhưng đột nhiên biến mất khỏi bản đồ?
+Đáp: Có thể do tài xế bị mất kết nối tạm thời hoặc tài xế đã hủy chuyến. Kiểm tra thông báo trong app — nếu tài xế hủy, hệ thống tự tìm tài xế mới. Nếu app không phản hồi, thoát và mở lại để làm mới trạng thái.
+
+Hỏi: Sau chuyến, app không cho tôi đánh giá tài xế?
+Đáp: Màn hình đánh giá xuất hiện ngay sau khi chuyến kết thúc. Nếu bỏ qua, bạn vẫn có thể đánh giá trong vòng 24 giờ qua "Lịch sử chuyến" → chọn chuyến → "Đánh giá tài xế".
+
+Hỏi: App yêu cầu cập nhật bắt buộc?
+Đáp: Một số phiên bản cũ không còn được hỗ trợ vì lý do bảo mật. Cập nhật là bắt buộc để tiếp tục sử dụng. Vào App Store hoặc Google Play, tìm "FoxGo" và nhấn "Cập nhật".
+
+Hỏi: Tôi đăng nhập được nhưng bị thoát ra liên tục?
+Đáp: Có thể do phiên đăng nhập hết hạn hoặc tài khoản bị đăng nhập ở thiết bị khác. Thử: (1) Đăng xuất hoàn toàn rồi đăng nhập lại. (2) Đổi mật khẩu nếu nghi ngờ bị đăng nhập trái phép. (3) Xóa cache app. Nếu vẫn lỗi, liên hệ support@foxgo.vn.
