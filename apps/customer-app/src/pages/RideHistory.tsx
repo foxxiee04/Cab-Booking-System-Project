@@ -20,6 +20,7 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  IconButton,
 } from '@mui/material';
 import {
   ExpandMoreRounded,
@@ -34,9 +35,14 @@ import {
   AccessTimeRounded,
   DirectionsCarRounded,
   EventRounded,
+  StarRounded,
+  StarBorderRounded,
+  RateReviewRounded,
+  CheckCircleRounded,
 } from '@mui/icons-material';
 import { rideApi } from '../api/ride.api';
 import { paymentApi } from '../api/payment.api';
+import { reviewApi } from '../api/review.api';
 import { Payment, Ride } from '../types';
 import {
   formatCurrency,
@@ -52,6 +58,200 @@ import { useAppSelector } from '../store/hooks';
 const PAGE_SIZE = 10;
 
 const ONLINE_METHODS = new Set(['MOMO', 'VNPAY', 'CARD', 'WALLET']);
+
+// Quick-select tags grouped by star rating
+const QUICK_TAGS: Record<number, { label: string; value: string }[]> = {
+  5: [
+    { label: 'Tuyệt vời!', value: 'excellent' },
+    { label: 'Lái xe an toàn', value: 'safe_driving' },
+    { label: 'Rất thân thiện', value: 'friendly' },
+    { label: 'Đúng giờ', value: 'on_time' },
+    { label: 'Xe sạch sẽ', value: 'clean_car' },
+  ],
+  4: [
+    { label: 'Dịch vụ tốt', value: 'good_service' },
+    { label: 'Lái cẩn thận', value: 'careful_driving' },
+    { label: 'Thái độ tốt', value: 'good_attitude' },
+    { label: 'Đúng tuyến đường', value: 'correct_route' },
+  ],
+  3: [
+    { label: 'Bình thường', value: 'average' },
+    { label: 'Cần cải thiện', value: 'needs_improvement' },
+    { label: 'Hơi trễ', value: 'slightly_late' },
+  ],
+  2: [
+    { label: 'Lái chưa cẩn thận', value: 'careless_driving' },
+    { label: 'Thái độ chưa tốt', value: 'poor_attitude' },
+    { label: 'Xe chưa sạch', value: 'unclean_car' },
+    { label: 'Đến muộn', value: 'late' },
+  ],
+  1: [
+    { label: 'Lái không an toàn', value: 'unsafe_driving' },
+    { label: 'Thái độ không tốt', value: 'bad_attitude' },
+    { label: 'Xe không sạch', value: 'dirty_car' },
+    { label: 'Đến rất muộn', value: 'very_late' },
+    { label: 'Sai tuyến đường', value: 'wrong_route' },
+  ],
+};
+
+// ─── ReviewModal ────────────────────────────────────────────────────────────
+interface ReviewModalProps {
+  open: boolean;
+  ride: Ride;
+  onClose: () => void;
+  onSubmitted: () => void;
+}
+
+const ReviewModal: React.FC<ReviewModalProps> = ({ open, ride, onClose, onSubmitted }) => {
+  const [rating, setRating] = useState(5);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const driverName = `${ride.driver?.firstName || ''} ${ride.driver?.lastName || ''}`.trim() || 'Tài xế';
+
+  const handleStarClick = (star: number) => {
+    setRating(star);
+    setSelectedTags([]);
+  };
+
+  const toggleTag = (value: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(value) ? prev.filter((t) => t !== value) : [...prev, value]
+    );
+  };
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setError('');
+    try {
+      await reviewApi.createRideReview({
+        rideId: ride.id,
+        bookingId: ride.bookingId,
+        revieweeId: ride.driverId!,
+        revieweeName: driverName,
+        rating,
+        comment: comment.trim() || undefined,
+        tags: selectedTags.length > 0 ? selectedTags : undefined,
+      });
+      onSubmitted();
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message || 'Không thể gửi đánh giá');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const displayRating = hoverRating || rating;
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
+      <DialogTitle sx={{ pb: 0.5 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Stack direction="row" spacing={1} alignItems="center">
+            <RateReviewRounded sx={{ color: '#2563eb' }} />
+            <Typography fontWeight={800}>Đánh giá chuyến đi</Typography>
+          </Stack>
+          <IconButton size="small" onClick={onClose}><CloseRounded fontSize="small" /></IconButton>
+        </Stack>
+      </DialogTitle>
+
+      <DialogContent>
+        <Stack spacing={2.5} sx={{ pt: 1 }}>
+          {/* Driver info */}
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ bgcolor: '#eff6ff', borderRadius: 3, p: 1.5 }}>
+            <Avatar src={ride.driver?.avatar} sx={{ bgcolor: '#1d4ed8', width: 44, height: 44 }}>
+              {ride.driver?.firstName?.[0] || 'T'}
+            </Avatar>
+            <Box>
+              <Typography variant="subtitle2" fontWeight={800}>{driverName}</Typography>
+              <Typography variant="caption" color="text.secondary">{ride.driver?.licensePlate || 'Biển số đang cập nhật'}</Typography>
+            </Box>
+          </Stack>
+
+          {/* Star selector */}
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+              {displayRating === 5 ? 'Tuyệt vời' : displayRating === 4 ? 'Tốt' : displayRating === 3 ? 'Bình thường' : displayRating === 2 ? 'Tệ' : 'Rất tệ'}
+            </Typography>
+            <Stack direction="row" justifyContent="center" spacing={0.5}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <IconButton
+                  key={star}
+                  size="small"
+                  onClick={() => handleStarClick(star)}
+                  onMouseEnter={() => setHoverRating(star)}
+                  onMouseLeave={() => setHoverRating(0)}
+                  sx={{ p: 0.25 }}
+                >
+                  {star <= displayRating
+                    ? <StarRounded sx={{ fontSize: 36, color: '#f59e0b' }} />
+                    : <StarBorderRounded sx={{ fontSize: 36, color: '#d1d5db' }} />
+                  }
+                </IconButton>
+              ))}
+            </Stack>
+          </Box>
+
+          {/* Quick-select tags */}
+          <Box>
+            <Typography variant="caption" color="text.secondary" fontWeight={700} display="block" sx={{ mb: 1 }}>
+              Chọn nhanh (không bắt buộc)
+            </Typography>
+            <Stack direction="row" flexWrap="wrap" gap={0.75}>
+              {(QUICK_TAGS[rating] || []).map((tag) => (
+                <Chip
+                  key={tag.value}
+                  label={tag.label}
+                  size="small"
+                  onClick={() => toggleTag(tag.value)}
+                  variant={selectedTags.includes(tag.value) ? 'filled' : 'outlined'}
+                  sx={{
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    bgcolor: selectedTags.includes(tag.value) ? '#2563eb' : undefined,
+                    color: selectedTags.includes(tag.value) ? '#fff' : undefined,
+                    borderColor: '#2563eb',
+                  }}
+                />
+              ))}
+            </Stack>
+          </Box>
+
+          {/* Comment */}
+          <TextField
+            multiline
+            minRows={2}
+            maxRows={4}
+            placeholder="Thêm nhận xét (không bắt buộc)..."
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            inputProps={{ maxLength: 300 }}
+            size="small"
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+          />
+
+          {error && <Alert severity="error" sx={{ borderRadius: 2 }}>{error}</Alert>}
+        </Stack>
+      </DialogContent>
+
+      <DialogActions sx={{ px: 3, pb: 2.5 }}>
+        <Button variant="outlined" onClick={onClose} sx={{ borderRadius: 999 }}>Bỏ qua</Button>
+        <Button
+          variant="contained"
+          onClick={() => void handleSubmit()}
+          disabled={submitting}
+          startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : undefined}
+          sx={{ borderRadius: 999, px: 3 }}
+        >
+          Gửi đánh giá
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
 
 const getDriverName = (ride: Ride) => {
   const fullName = `${ride.driver?.firstName || ''} ${ride.driver?.lastName || ''}`.trim();
@@ -232,6 +432,8 @@ const RideHistory: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRide, setSelectedRide] = useState<Ride | null>(null);
   const [selectedRideLoading, setSelectedRideLoading] = useState(false);
+  const [reviewRide, setReviewRide] = useState<Ride | null>(null);
+  const [reviewedRideIds, setReviewedRideIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -308,6 +510,27 @@ const RideHistory: React.FC = () => {
     } finally {
       setSelectedRideLoading(false);
     }
+  };
+
+  const handleOpenReview = async (ride: Ride) => {
+    // Check if customer already reviewed this ride
+    if (reviewedRideIds.has(ride.id)) return;
+    try {
+      const existing = await reviewApi.getMyReviewForRide(ride.id);
+      if (existing) {
+        setReviewedRideIds((prev) => new Set(prev).add(ride.id));
+        return;
+      }
+    } catch { /* ignore — open modal anyway */ }
+    setReviewRide(ride);
+  };
+
+  const handleReviewSubmitted = () => {
+    if (reviewRide) {
+      setReviewedRideIds((prev) => new Set(prev).add(reviewRide.id));
+    }
+    setReviewRide(null);
+    setSelectedRide(null);
   };
 
   return (
@@ -456,17 +679,42 @@ const RideHistory: React.FC = () => {
                   <Typography variant="subtitle2" fontWeight={800} color="primary.main">
                     {ride.fare ? formatCurrency(ride.fare) : t('common.na')}
                   </Typography>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    sx={{ borderRadius: 2 }}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void handleOpenRideDetails(ride);
-                    }}
-                  >
-                    Xem chi tiết
-                  </Button>
+                  <Stack direction="row" spacing={0.75}>
+                    {ride.status === 'COMPLETED' && ride.driverId && !reviewedRideIds.has(ride.id) && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="warning"
+                        startIcon={<StarRounded fontSize="small" />}
+                        sx={{ borderRadius: 2, fontWeight: 700 }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleOpenReview(ride);
+                        }}
+                      >
+                        Đánh giá
+                      </Button>
+                    )}
+                    {ride.status === 'COMPLETED' && ride.driverId && reviewedRideIds.has(ride.id) && (
+                      <Chip
+                        icon={<CheckCircleRounded sx={{ fontSize: '14px !important' }} />}
+                        label="Đã đánh giá"
+                        size="small"
+                        sx={{ bgcolor: '#dcfce7', color: '#15803d', fontWeight: 700, fontSize: 11 }}
+                      />
+                    )}
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      sx={{ borderRadius: 2 }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleOpenRideDetails(ride);
+                      }}
+                    >
+                      Xem chi tiết
+                    </Button>
+                  </Stack>
                 </Stack>
 
                 {showRefundBadge && payment && (
@@ -590,24 +838,26 @@ const RideHistory: React.FC = () => {
                       <Typography variant="body2" fontWeight={700}>{getVehicleTypeLabel(selectedRide.vehicleType)}</Typography>
                     </Box>
                   </Stack>
-                  {selectedRide.distance && (
+                  {selectedRide.distance != null && selectedRide.distance > 0 && (
                     <Stack direction="row" spacing={1} alignItems="center">
                       <RouteRounded color="action" fontSize="small" />
                       <Box>
-                        <Typography variant="caption" color="text.secondary">Khoảng cách</Typography>
+                        <Typography variant="caption" color="text.secondary">Quãng đường chuyến đi</Typography>
                         <Typography variant="body2" fontWeight={700}>
-                          {selectedRide.distance > 100 ? `${(selectedRide.distance / 1000).toFixed(1)} km` : `${selectedRide.distance.toFixed(1)} km`}
+                          {selectedRide.distance < 1
+                            ? `${Math.round(selectedRide.distance * 1000)} m`
+                            : `${selectedRide.distance.toFixed(1)} km`}
                         </Typography>
                       </Box>
                     </Stack>
                   )}
-                  {selectedRide.duration && (
+                  {selectedRide.duration != null && selectedRide.duration > 0 && (
                     <Stack direction="row" spacing={1} alignItems="center">
                       <AccessTimeRounded color="action" fontSize="small" />
                       <Box>
-                        <Typography variant="caption" color="text.secondary">Thời gian</Typography>
+                        <Typography variant="caption" color="text.secondary">Thời gian ước tính</Typography>
                         <Typography variant="body2" fontWeight={700}>
-                          {selectedRide.duration > 180 ? `${Math.round(selectedRide.duration / 60)} phút` : `${selectedRide.duration} phút`}
+                          {`${Math.max(1, Math.round(selectedRide.duration / 60))} phút`}
                         </Typography>
                       </Box>
                     </Stack>
@@ -624,20 +874,27 @@ const RideHistory: React.FC = () => {
                     {selectedRide.requestedAt && (
                       <Stack direction="row" spacing={1} alignItems="center">
                         <EventRounded color="action" fontSize="small" />
-                        <Typography variant="body2" color="text.secondary">Đặt lúc:</Typography>
+                        <Typography variant="body2" color="text.secondary">Tạo lúc:</Typography>
                         <Typography variant="body2">{formatDate(selectedRide.requestedAt)}</Typography>
+                      </Stack>
+                    )}
+                    {selectedRide.startedAt && (
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <EventRounded color="action" fontSize="small" sx={{ color: '#16a34a' }} />
+                        <Typography variant="body2" color="text.secondary">Bắt đầu:</Typography>
+                        <Typography variant="body2">{formatDate(selectedRide.startedAt)}</Typography>
                       </Stack>
                     )}
                     {selectedRide.completedAt && (
                       <Stack direction="row" spacing={1} alignItems="center">
-                        <EventRounded color="action" fontSize="small" />
+                        <EventRounded color="action" fontSize="small" sx={{ color: '#2563eb' }} />
                         <Typography variant="body2" color="text.secondary">Hoàn tất:</Typography>
                         <Typography variant="body2">{formatDate(selectedRide.completedAt)}</Typography>
                       </Stack>
                     )}
                     {selectedRide.cancelledAt && (
                       <Stack direction="row" spacing={1} alignItems="center">
-                        <EventRounded color="action" fontSize="small" />
+                        <EventRounded color="action" fontSize="small" sx={{ color: '#dc2626' }} />
                         <Typography variant="body2" color="text.secondary">Hủy lúc:</Typography>
                         <Typography variant="body2">{formatDate(selectedRide.cancelledAt)}</Typography>
                       </Stack>
@@ -665,7 +922,27 @@ const RideHistory: React.FC = () => {
               </Stack>
             </DialogContent>
 
-            <DialogActions sx={{ p: 2 }}>
+            <DialogActions sx={{ p: 2, gap: 1 }}>
+              {selectedRide.status === 'COMPLETED' && selectedRide.driverId && (
+                reviewedRideIds.has(selectedRide.id)
+                  ? (
+                    <Chip
+                      icon={<CheckCircleRounded sx={{ fontSize: '14px !important' }} />}
+                      label="Đã đánh giá tài xế"
+                      sx={{ bgcolor: '#dcfce7', color: '#15803d', fontWeight: 700 }}
+                    />
+                  ) : (
+                    <Button
+                      variant="outlined"
+                      color="warning"
+                      startIcon={<StarRounded />}
+                      onClick={() => void handleOpenReview(selectedRide)}
+                      sx={{ borderRadius: 999 }}
+                    >
+                      Đánh giá tài xế
+                    </Button>
+                  )
+              )}
               <Button variant="contained" onClick={() => setSelectedRide(null)} sx={{ borderRadius: 999, px: 3 }}>
                 Đóng
               </Button>
@@ -673,6 +950,16 @@ const RideHistory: React.FC = () => {
           </>
         )}
       </Dialog>
+
+      {/* Review modal */}
+      {reviewRide && (
+        <ReviewModal
+          open={Boolean(reviewRide)}
+          ride={reviewRide}
+          onClose={() => setReviewRide(null)}
+          onSubmitted={handleReviewSubmitted}
+        />
+      )}
     </Box>
   );
 };

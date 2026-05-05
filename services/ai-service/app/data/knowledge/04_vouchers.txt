@@ -1,42 +1,34 @@
 TIÊU ĐỀ: Voucher và mã giảm giá FoxGo
-DANH MỤC: voucher, mã giảm giá, khuyến mãi, discount, coupon, promo, giảm giá, ưu đãi
+DANH MỤC: voucher, mã giảm giá, khuyến mãi, discount, coupon, promo, giảm giá, ưu đãi, thu thập voucher, áp mã, mã không dùng được, voucher hết hạn, voucher không áp dụng được
 
-Cách sử dụng voucher:
-1. Vào mục "Voucher" trong ứng dụng → tab "Có sẵn" để xem các mã chưa thu thập.
-2. Nhấn "Thu thập" để lưu voucher vào ví của bạn (chuyển sang tab "Của tôi").
-3. Khi đặt xe, chọn voucher muốn áp dụng ở bước xem giá, trước khi xác nhận đặt chuyến.
-4. Giảm giá tự động được trừ khỏi tổng tiền.
+Voucher FoxGo chia làm 2 loại: giảm tiền cố định (ví dụ giảm thẳng 20.000đ) và giảm theo phần trăm (ví dụ giảm 15%, tối đa 50.000đ). Mỗi voucher đều có điều kiện sử dụng — thường là thời hạn, loại xe, phương thức thanh toán, và đơn tối thiểu.
 
-Các loại voucher:
-• Giảm theo số tiền cố định: ví dụ giảm 20.000đ cho bất kỳ chuyến nào.
-• Giảm theo phần trăm: ví dụ giảm 10%, tối đa 50.000đ mỗi chuyến.
+Cách dùng: vào mục "Ưu đãi" trong app, thu thập voucher trước (tab "Có sẵn"), sau đó khi đặt xe ở bước xác nhận sẽ có ô chọn voucher. App tự động gợi ý voucher tiết kiệm nhất cho chuyến của bạn.
 
-Điều kiện sử dụng voucher:
-• Mỗi voucher có ngày hết hạn — xem ở góc dưới mỗi voucher.
-• Một số voucher chỉ áp dụng cho loại xe nhất định (ví dụ: chỉ cho xe máy).
-• Một số voucher chỉ áp dụng khi thanh toán online (MoMo hoặc VNPay).
-• Mỗi tài khoản chỉ dùng mỗi mã voucher một lần.
-• Không thể kết hợp nhiều voucher trong cùng một chuyến.
-• Giảm giá không vượt quá tổng tiền chuyến — không hoàn lại tiền thừa.
-
-Tab voucher:
-• Tab "Có sẵn": voucher chưa thu thập, ai cũng nhận được.
-• Tab "Của tôi": voucher đã thu thập, sẵn sàng dùng.
-• Tab "Hết hạn": voucher quá hạn, không dùng được nữa.
-
+---
 Hỏi: Tại sao voucher của tôi không áp dụng được?
-Đáp: Kiểm tra các điều kiện sau:
-• Voucher có còn trong thời hạn không? (xem ngày hết hạn)
-• Loại xe bạn chọn có được hỗ trợ không?
-• Phương thức thanh toán có phù hợp không? (một số voucher chỉ dùng được với online)
-• Bạn đã dùng voucher này trước đây chưa? (mỗi mã chỉ dùng 1 lần)
-Nếu tất cả đều đúng mà vẫn lỗi, liên hệ support@foxgo.vn.
+Đáp: Có mấy lý do thường gặp bạn ơi: (1) Voucher đã quá hạn sử dụng. (2) Chuyến chưa đạt đơn tối thiểu — ví dụ voucher yêu cầu đơn 50.000đ nhưng chuyến bạn chỉ 35.000đ. (3) Voucher chỉ áp dụng cho loại xe nhất định nhưng bạn đang chọn loại khác. (4) Voucher chỉ dùng với thanh toán online (MoMo/VNPay) nhưng bạn chọn tiền mặt. (5) Bạn đã dùng mã này rồi — mỗi mã chỉ dùng 1 lần. Kiểm tra lại từng điều kiện nhé.
 
-Hỏi: Tôi không thấy voucher trong ứng dụng?
-Đáp: Voucher phải được "Thu thập" trước mới xuất hiện trong tab "Của tôi". Vào mục Voucher → tab "Có sẵn" để nhận. Nếu không thấy voucher nào, có thể mã đã hết hạn hoặc bạn dùng tài khoản không đủ điều kiện nhận ưu đãi đó.
+---
+Hỏi: Tôi không thấy voucher trong app, phải làm sao?
+Đáp: Voucher phải "Thu thập" trước mới xuất hiện trong "Của tôi". Bạn vào mục Ưu đãi → tab "Có sẵn" → nhấn Thu thập trên voucher muốn dùng. Nếu tab "Có sẵn" cũng trống thì có thể chưa có đợt khuyến mãi nào đang chạy, hoặc tài khoản của bạn không đủ điều kiện nhận voucher đó (ví dụ voucher chỉ dành cho khách mới).
 
-Hỏi: Tôi nhập mã voucher ở đâu?
-Đáp: FoxGo sử dụng hệ thống "thu thập" voucher, không nhập mã tay. Bạn vào mục Voucher trong app, thu thập trước, sau đó chọn khi đặt xe.
+---
+Hỏi: Dùng nhiều voucher cùng một chuyến được không?
+Đáp: Không được, mỗi chuyến chỉ áp dụng 1 voucher. App sẽ gợi ý voucher tiết kiệm nhất cho bạn, hoặc bạn chọn thủ công cái nào phù hợp hơn.
 
+---
 Hỏi: Voucher hết hạn có được gia hạn không?
-Đáp: Không. Voucher hết hạn không thể gia hạn. Tuy nhiên, FoxGo thường xuyên tung các chương trình khuyến mãi mới — hãy theo dõi tab "Có sẵn" để không bỏ lỡ.
+Đáp: Tiếc là không bạn ơi, voucher hết hạn rồi thì không dùng được nữa và FoxGo cũng không gia hạn. Nhưng FoxGo hay tung khuyến mãi mới, bạn thỉnh thoảng check tab "Có sẵn" để không bỏ lỡ nhé.
+
+---
+Hỏi: Tôi nhập mã voucher ở đâu?
+Đáp: FoxGo dùng hệ thống "Thu thập" — bạn không cần nhập mã tay. Cứ vào mục Ưu đãi, tìm voucher phù hợp, nhấn Thu thập là lưu về ví ưu đãi. Khi đặt xe, chọn voucher trong ô ưu đãi ở bước xác nhận.
+
+---
+Hỏi: Giảm giá voucher có vượt quá tổng tiền chuyến không? Có được hoàn tiền thừa không?
+Đáp: Không bạn nhé. Giảm giá tối đa bằng tổng tiền chuyến, tức là tệ nhất thì đi miễn phí, không bao giờ FoxGo hoàn tiền thừa ra ngoài. Ví dụ voucher giảm 50.000đ mà chuyến 40.000đ thì bạn đi miễn phí, không được nhận lại 10.000đ.
+
+---
+Hỏi: Voucher khách mới là gì? Tôi có được dùng không?
+Đáp: Voucher khách mới chỉ dành cho tài khoản chưa từng đặt chuyến nào trên FoxGo. Nếu bạn đã đặt ít nhất 1 chuyến rồi thì không áp dụng được nữa. Bù lại, FoxGo có nhiều voucher khác cho khách thường xuyên — check tab "Có sẵn" nhé.

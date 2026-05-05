@@ -1,0 +1,11 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
+flowchart TD
+  A[Open app] --> B[Pick locations]
+  B --> C[Get quote]
+  C --> D{Confirm booking}
+  D -->|Yes| E[Match driver]
+  D -->|No| B
+  E --> F[Driver accepts]
+  F --> G[Trip in progress]
+  G --> H[Complete trip]
+  H --> I[Rate pay]

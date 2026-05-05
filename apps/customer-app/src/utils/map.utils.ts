@@ -443,9 +443,8 @@ export const getCurrentLocation = (options?: { preferFresh?: boolean }): Promise
         .query({ name: 'geolocation' as PermissionName })
         .then((result) => {
           if (result.state === 'denied') {
-            if (resolveFromLastKnownLocation()) {
-              return;
-            }
+            // Do NOT fall back to cached location when GPS is explicitly denied by the user.
+            // The cache fallback is only appropriate for transient errors (timeout / unavailable).
             reject({ code: 1, message: 'Bạn đã từ chối quyền truy cập vị trí' } as GeolocationPositionError);
             return;
           }

@@ -111,13 +111,13 @@ services:
       - MATCHING_MAX_WAIT_MS=${MATCHING_MAX_WAIT_MS:-120000}
       - MATCHING_ROUNDS=${MATCHING_ROUNDS:-2:1:1.0,3:3:1.1,5:5:1.2}
       - MATCHING_SCORE_LOG_VERBOSE=${MATCHING_SCORE_LOG_VERBOSE:-false}
-      - MATCHING_AI_ADJUSTMENT_ENABLED=${MATCHING_AI_ADJUSTMENT_ENABLED:-false}
+      - MATCHING_AI_ADJUSTMENT_ENABLED=${MATCHING_AI_ADJUSTMENT_ENABLED:-true}
       - MATCHING_AI_ADJUSTMENT_DELTA_MAX=${MATCHING_AI_ADJUSTMENT_DELTA_MAX:-0.08}
       - MATCHING_AI_TIMEOUT_MS=${MATCHING_AI_TIMEOUT_MS:-150}
-      - MATCHING_PACCEPT_ENABLED=${MATCHING_PACCEPT_ENABLED:-false}
+      - MATCHING_PACCEPT_ENABLED=${MATCHING_PACCEPT_ENABLED:-true}
       - MATCHING_PACCEPT_CLAMP_MIN=${MATCHING_PACCEPT_CLAMP_MIN:-0.3}
       - MATCHING_PACCEPT_CLAMP_MAX=${MATCHING_PACCEPT_CLAMP_MAX:-1.2}
-      - MATCHING_WAIT_PREDICTION_ENABLED=${MATCHING_WAIT_PREDICTION_ENABLED:-false}
+      - MATCHING_WAIT_PREDICTION_ENABLED=${MATCHING_WAIT_PREDICTION_ENABLED:-true}
       - MATCHING_WAIT_THRESHOLD_MINUTES=${MATCHING_WAIT_THRESHOLD_MINUTES:-8}
       - MATCHING_MAX_RADIUS_KM=${MATCHING_MAX_RADIUS_KM:-5}
       - CUSTOMER_NEARBY_DRIVER_MAX_RADIUS_KM=${CUSTOMER_NEARBY_DRIVER_MAX_RADIUS_KM:-3}
@@ -230,6 +230,7 @@ services:
       - DRIVER_SERVICE_URL=http://driver-service:3003
       - DRIVER_GRPC_ADDRESS=driver-service:50055
       - PAYMENT_SERVICE_URL=http://payment-service:3004
+      - WALLET_SERVICE_URL=http://wallet-service:3006
       - JWT_SECRET=${JWT_SECRET:-test-jwt-secret}
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
       - RIDE_SEARCH_TIMEOUT_MS=${RIDE_SEARCH_TIMEOUT_MS:-120000}
@@ -242,6 +243,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      wallet-service:
+        condition: service_started
     restart: unless-stopped
 
   driver-service:
@@ -353,6 +356,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     restart: unless-stopped
 
   review-service:
@@ -454,6 +459,16 @@ services:
       - SUGGESTED_RADIUS_MAX_KM=${SUGGESTED_RADIUS_MAX_KM:-5.0}
       - SUGGESTED_SURGE_MIN=${SUGGESTED_SURGE_MIN:-1.0}
       - SUGGESTED_SURGE_MAX=${SUGGESTED_SURGE_MAX:-2.0}
+      # RAG chatbot — set at least one LLM key for human-like answers
+      # Priority order: Claude → Groq → OpenAI → template fallback
+      - RAG_LLM_PROVIDER=${RAG_LLM_PROVIDER:-auto}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - RAG_LLM_MODEL_CLAUDE=${RAG_LLM_MODEL_CLAUDE:-claude-haiku-4-5-20251001}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - RAG_LLM_MODEL=${RAG_LLM_MODEL:-llama3-8b-8192}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - RAG_LLM_TIMEOUT_S=${RAG_LLM_TIMEOUT_S:-10}
+      - RAG_EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-paraphrase-multilingual-MiniLM-L12-v2}
     healthcheck:
       test: ["CMD", "python", "-c", "from urllib.request import urlopen; raise SystemExit(0 if urlopen('http://localhost:8000/api/health').status == 200 else 1)"]
       interval: 30s

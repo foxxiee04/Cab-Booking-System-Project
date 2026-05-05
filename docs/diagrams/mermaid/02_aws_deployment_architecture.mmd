@@ -1,0 +1,44 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
+flowchart TB
+  U[Internet users & mobile apps]
+
+  subgraph AWS["AWS — deployment view (reference)"]
+    direction TB
+
+    subgraph EDGE["Edge — routing & TLS"]
+      direction LR
+      R53[Route 53]
+      CF[CloudFront]
+    end
+
+    subgraph VPC["VPC"]
+      direction TB
+      subgraph PUB["Public subnet"]
+        ALB[ALB HTTPS<br/>certificate ACM]
+      end
+      subgraph APP["Private subnet — compute"]
+        ECS[ECS Fargate / EC2<br/>gateway + microservices + AI]
+      end
+      subgraph DATA["Private subnet — data"]
+        direction LR
+        RDS[(RDS PostgreSQL)]
+        CACHE[(ElastiCache Redis)]
+        AMQ[Amazon MQ]
+        DOC[(MongoDB / DocumentDB)]
+      end
+      ALB --> ECS
+      ECS --> RDS & CACHE & AMQ & DOC
+    end
+
+    R53 --> CF --> ALB
+  end
+
+  subgraph OPS["Shared operations"]
+    direction LR
+    S3[S3 — static · ML artifacts]
+    SM[Secrets Manager]
+    CW[CloudWatch]
+  end
+
+  U --> R53
+  ECS --> SM & S3 & CW

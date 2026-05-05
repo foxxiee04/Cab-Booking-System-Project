@@ -1,0 +1,12 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
+flowchart TD
+  S[Payment requested] --> M{Method}
+  M -->|Cash| C[Close cash ledger]
+  M -->|Wallet| W[Debit wallet]
+  M -->|Gateway| G[MoMo or VNPay]
+  G -->|IPN OK| H[Post wallet payment]
+  G -->|Fail| R[Retry void]
+  W --> H
+  H --> F[Emit wallet events]
+  C --> Z[Done]
+  F --> Z

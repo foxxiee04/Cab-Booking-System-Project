@@ -1,0 +1,32 @@
+TIÊU ĐỀ: Khiếu nại, tranh chấp và xử lý sự cố FoxGo
+DANH MỤC: khiếu nại, tranh chấp, tài xế không tốt, bị overcharge, tính tiền sai, giá sai, không hoàn tiền, báo cáo tài xế, tài xế vi phạm, xử lý khiếu nại, thời gian giải quyết, tài xế đòi tiền thêm, chuyến bị tính nhầm
+
+Khi có vấn đề với chuyến đi, FoxGo cam kết xử lý trong vòng 24–72 giờ tùy mức độ phức tạp. Cách báo cáo nhanh nhất: vào "Lịch sử chuyến" → chọn chuyến có vấn đề → "Báo cáo vấn đề". Mô tả càng chi tiết, ảnh chụp màn hình càng nhiều thì xử lý càng nhanh.
+
+---
+Hỏi: Tôi bị tính tiền sai, giá khác với ước tính ban đầu?
+Đáp: Giá thực tế khác ước tính là bình thường nếu lộ trình thay đổi — nhưng nếu chênh lệch lớn và vô lý, bạn có quyền khiếu nại. Vào "Lịch sử chuyến" → chọn chuyến → "Báo cáo vấn đề" → "Giá không đúng". Cung cấp mô tả lộ trình thực tế. FoxGo kiểm tra dữ liệu GPS và điều chỉnh nếu cần.
+
+---
+Hỏi: Tài xế tính thêm tiền ngoài app, tôi phải làm gì?
+Đáp: Tuyệt đối từ chối thanh toán thêm ngoài app — đây là vi phạm nghiêm trọng. Nếu tài xế ép buộc, ghi lại (nếu an toàn), và báo cáo ngay sau chuyến kèm mô tả chi tiết. FoxGo xử lý nghiêm các trường hợp này, có thể đình chỉ tài xế vĩnh viễn.
+
+---
+Hỏi: Tôi đã trả tiền nhưng tài xế nói chưa nhận được, phải làm gì?
+Đáp: Với thanh toán online (MoMo/VNPay), tiền được xử lý qua hệ thống — tài xế không thể không nhận được nếu giao dịch thành công từ phía bạn. Chụp màn hình xác nhận giao dịch và liên hệ support@foxgo.vn. Với tiền mặt thì không có bằng chứng điện tử — cố gắng không để xảy ra tranh chấp.
+
+---
+Hỏi: Tài xế không đến rồi hủy, tôi bị mất tiền không?
+Đáp: Không — khi tài xế hủy chuyến, bạn không bị tính bất kỳ phí nào. Nếu đã thanh toán online, tiền hoàn về trong 3–5 ngày. Bạn cũng nên báo cáo tài xế hủy nhiều lần để FoxGo ghi nhận và xử lý.
+
+---
+Hỏi: Tôi khiếu nại rồi, bao lâu FoxGo phản hồi?
+Đáp: Thường trong 24–48 giờ với các vấn đề thông thường. Trường hợp phức tạp (tranh chấp tiền, điều tra tài xế) có thể 3–5 ngày làm việc. FoxGo gửi email phản hồi khi có kết quả. Nếu quá 72 giờ chưa có phản hồi, bạn có thể follow up qua hotline 1900-1234.
+
+---
+Hỏi: Tôi muốn xin lại hóa đơn hoặc bằng chứng giao dịch cho mục đích bảo hiểm?
+Đáp: Liên hệ support@foxgo.vn kèm mã chuyến, thời gian chuyến, và lý do cần tài liệu. FoxGo cung cấp biên lai chi tiết và lịch sử giao dịch theo yêu cầu trong vòng 2–3 ngày làm việc.
+
+---
+Hỏi: FoxGo có bồi thường nếu xảy ra tai nạn trong chuyến không?
+Đáp: FoxGo yêu cầu tài xế có bảo hiểm xe hợp lệ. Trong trường hợp tai nạn, bồi thường xử lý qua bảo hiểm của tài xế. FoxGo hỗ trợ cung cấp thông tin chuyến và thông tin tài xế để phục vụ giải quyết bảo hiểm. Liên hệ support@foxgo.vn ngay sau sự cố kèm đầy đủ thông tin.

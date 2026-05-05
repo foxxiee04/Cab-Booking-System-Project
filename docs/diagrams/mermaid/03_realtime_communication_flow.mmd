@@ -1,0 +1,31 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
+flowchart TB
+  subgraph MOB["Mobile clients"]
+    direction LR
+    C[Customer]
+    T[Driver]
+  end
+
+  G[Socket server in gateway<br/>rooms by user]
+
+  subgraph SVC["Services"]
+    direction LR
+    R[Ride]
+    D[Driver]
+    N[Notify]
+  end
+
+  Q[Message broker]
+
+  subgraph RT["Realtime data"]
+    direction LR
+    GEO[Redis GEO<br/>drivers online]
+    DB[(Operational DB)]
+  end
+
+  C & T <-->|WebSocket| G
+  G <-->|HTTP| SVC
+  G --> GEO
+  R & D & N <-->|AMQP| Q
+  R & D --> DB
+  D -->|GPS updates| GEO

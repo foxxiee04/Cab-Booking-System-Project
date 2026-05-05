@@ -1,0 +1,29 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
+flowchart LR
+  subgraph CUST["Customer journeys"]
+    direction TB
+    UC1[Search book ride]
+    UC2[Track cancel pay]
+    UC3[Wallet history rate]
+    UC4[AI chat help]
+  end
+
+  subgraph DRV["Driver journeys"]
+    direction TB
+    UD1[Go online offers]
+    UD2[Navigate complete]
+    UD3[Earnings withdraw]
+    UD4[AI route tips]
+  end
+
+  subgraph ADM["Admin journeys"]
+    direction TB
+    UA1[Users drivers]
+    UA2[Rides disputes]
+    UA3[Vouchers reports]
+    UA4[System config AI]
+  end
+
+  SYS(("Core platform<br/>auth payment matching"))
+
+  CUST & DRV & ADM --> SYS

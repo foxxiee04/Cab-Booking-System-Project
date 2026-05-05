@@ -1,0 +1,32 @@
+TIÊU ĐỀ: Tính năng theo dõi thời gian thực và chat trong FoxGo
+DANH MỤC: theo dõi chuyến, track chuyến, bản đồ thời gian thực, chat tài xế, nhắn tin tài xế, gọi điện tài xế, chia sẻ hành trình, link theo dõi, ETA, thời gian đến, vị trí tài xế, call tài xế, số điện thoại ẩn
+
+Một trong những tính năng hữu ích nhất của FoxGo là theo dõi chuyến thời gian thực. Khi tài xế nhận chuyến, bạn thấy vị trí tài xế trên bản đồ cập nhật liên tục, cùng thời gian ước tính đến điểm đón. Trong chuyến, bạn cũng thấy lộ trình và thời gian đến điểm đến.
+
+---
+Hỏi: Làm sao liên hệ với tài xế đang trên đường đến?
+Đáp: Trong màn hình theo dõi chuyến có 2 nút: điện thoại và chat. Nhấn nút điện thoại để gọi qua hệ thống ẩn số — cuộc gọi đi qua server FoxGo nên cả 2 không thấy số thật của nhau. Nhấn nút chat để nhắn tin text — tiện hơn khi tài xế đang lái mà bạn muốn gửi ghi chú nhỏ.
+
+---
+Hỏi: Chia sẻ hành trình với người thân như thế nào?
+Đáp: Trong màn hình theo dõi chuyến, tìm nút "Chia sẻ hành trình" (thường ở góc màn hình). Nhấn vào tạo ra một link — gửi link đó cho người thân qua Zalo, Facebook, tin nhắn... Người nhận link mở bằng browser là xem được vị trí bạn và tài xế theo thời gian thực, không cần cài app FoxGo.
+
+---
+Hỏi: ETA (thời gian đến) có chính xác không?
+Đáp: ETA khá chính xác trong điều kiện giao thông bình thường, sai số thường ±2 phút. Kẹt xe đột ngột hoặc tắc đường lớn có thể làm ETA sai lệch nhiều hơn — hệ thống cập nhật liên tục khi tài xế di chuyển.
+
+---
+Hỏi: Tôi nhắn tin tài xế nhưng họ không trả lời?
+Đáp: Tài xế đang lái xe nên có thể không đọc tin nhắn ngay. Nếu cần thông báo gấp (như thay đổi điểm đón nhỏ), gọi điện trực tiếp sẽ hiệu quả hơn. Sau chuyến, chat bị đóng — bạn không thể nhắn tin cho tài xế nữa (trừ trong 30 phút để hỏi về đồ bỏ quên qua hotline).
+
+---
+Hỏi: Sau chuyến tôi có liên hệ lại tài xế được không?
+Đáp: Không — sau 30 phút khi chuyến kết thúc, kênh liên lạc ẩn số bị đóng. Đây là thiết kế cố ý để bảo vệ quyền riêng tư của cả 2 bên. Nếu cần liên lạc vì quên đồ, phải làm trong 30 phút đó hoặc báo cáo qua app.
+
+---
+Hỏi: Tôi thấy vị trí tài xế nhảy lung tung trên bản đồ?
+Đáp: Thường do GPS của tài xế bị nhiễu (trong hẻm nhỏ, dưới cầu, gần tòa nhà cao). Vị trí sẽ ổn định lại khi tài xế ra chỗ thoáng hơn. Nếu ETA vẫn hợp lý thì không có vấn đề gì — tài xế vẫn đang đến bình thường.
+
+---
+Hỏi: Khi nào thì màn hình theo dõi chuyến xuất hiện?
+Đáp: Ngay sau khi tài xế nhận chuyến, app tự động chuyển sang màn hình theo dõi. Trước đó (đang tìm tài xế) bạn thấy màn hình "Đang tìm tài xế" với vòng tròn loading. Bạn có thể minimize app — khi tài xế nhận chuyến, app gửi thông báo đẩy ngay.

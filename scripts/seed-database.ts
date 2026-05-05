@@ -1,352 +1,637 @@
 /// <reference types="node" />
 
 /**
- * Cab Booking System - Database Seed Script
- * Seeds all databases with sample data for development/testing
+ * Cab Booking System - Pure-API Database Seed Script
  *
- * Usage: npx tsx scripts/seed-database.ts
+ * Mọi entity đều được tạo qua API gateway (http://localhost:3000) NGOẠI TRỪ
+ * 1 ngoại lệ kỹ thuật DUY NHẤT: bootstrap admin user (vì auth-service không có
+ * public endpoint tạo admin). Admin được insert thẳng vào auth_db rồi mọi
+ * thao tác sau đều dùng admin token thật.
  *
- * Prerequisites: All databases must exist and Prisma migrations applied
+ * Trình tự:
+ *   1. Bootstrap admin → auth_db direct INSERT (1 row only)
+ *   2. Admin login qua /api/auth/login
+ *   3. Tạo 5 voucher qua /api/voucher/admin
+ *   4. Tạo 4 incentive rule qua /api/admin/wallet/incentive-rules
+ *   5. Đăng ký 10 customer qua register-phone/start → verify → complete
+ *      (OTP lấy từ auth-service /internal/dev/otp với INTERNAL_SERVICE_TOKEN)
+ *   6. Đăng ký 15 driver tương tự
+ *   7. Mỗi driver: POST /api/drivers/register (vehicle + license)
+ *   8. Admin approve 12 driver đầu (3 cuối để PENDING demo flow)
+ *   9. Mỗi driver được approve: top-up ví 300k qua /api/wallet/top-up/init
+ *      + sandbox-confirm để kích hoạt wallet
+ *  10. Mỗi driver được approve: goOnline + updateLocation theo cụm
+ *  11. Tạo 12 ride: 8 CASH completed, 2 MOMO completed (mock webhook),
+ *      2 CANCELLED — KHÔNG có ride đang diễn ra hay FINDING_DRIVER.
+ *  12. Sau khi ride xong, đặt TẤT CẢ driver OFFLINE để DB sạch.
+ *  13. Generate docs/seed-accounts-reference.md từ GET API thật
+ *
+ * Lý do không seed ride FINDING_DRIVER / IN_PROGRESS:
+ *   - Sau reset + seed, nếu login lại driver app sẽ thấy "đang diễn ra" — không hợp lí
+ *   - Matching algorithm tiếp tục dispatch cho các ride đó dù không ai thao tác
+ *   - Chuyến chỉ nên ở COMPLETED hoặc CANCELLED để lịch sử rõ ràng
+ *
+ * Usage:
+ *   npx tsx scripts/seed-database.ts
+ *
+ * Yêu cầu:
+ *   - Toàn bộ docker stack đang chạy (api-gateway, auth-service, ... )
+ *   - reset-database.bat đã chạy (DB rỗng, schema mới push)
+ *   - Sau reset cần `docker compose restart wallet-service` để wallet-service
+ *     re-seed SystemBankAccount (tự chạy ở startup)
  */
 
 import path from 'node:path';
 import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import bcrypt from 'bcryptjs';
 
-// Use direct connection URLs for local development
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+const GATEWAY_BASE = process.env.GATEWAY_BASE_URL || 'http://localhost:3000';
+const AUTH_INTERNAL_BASE = process.env.AUTH_INTERNAL_URL || 'http://localhost:3001';
+const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || 'test-internal-token';
+
 const POSTGRES_HOST = process.env.POSTGRES_HOST || 'localhost';
 const POSTGRES_PORT = process.env.POSTGRES_PORT || '5433';
 const POSTGRES_USER = process.env.POSTGRES_USER || 'postgres';
 const POSTGRES_PASSWORD = process.env.POSTGRES_PASSWORD || 'postgres';
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
-const DRIVER_GEO_KEY = 'drivers:geo:online';
+const SEED_PASSWORD = 'Password@1';
+const ACTIVATION_BALANCE = 300_000;
 const SEED_REFERENCE_OUTPUT = path.resolve(process.cwd(), 'docs', 'seed-accounts-reference.md');
 
-type SeededDriverLocation = {
-  driverId: string;
-  lat: number;
-  lng: number;
-  isOnline: boolean;
+const DELAY_AFTER_RIDE_CREATE_MS = 4_000;
+const DRIVER_ACCEPT_RETRY_MAX = 8;
+const DRIVER_ACCEPT_RETRY_DELAY_MS = 2_000;
+
+// ─── Bootstrap admin (DB-direct) ─────────────────────────────────────────────
+// EXCEPTION: Chỉ duy nhất chỗ này ghi DB trực tiếp vì auth-service KHÔNG có
+// public endpoint /api/auth/register-admin. Mọi thứ khác đi qua API thật.
+
+const ADMIN = {
+  phone: '0900000001',
+  email: 'admin@cabbooking.com',
+  firstName: 'System',
+  lastName: 'Admin',
 };
-
-// Default password for all seed users: Password@1
-const SEED_PASSWORD_HASH = bcrypt.hashSync('Password@1', 10);
-
-// ─── Pricing formula (mirrors services/pricing-service/src/config/index.ts) ──
-// baseFare + vehicleServiceFee + distance×perKmRate + minutes×perMinuteRate + shortTripFee
-// shortTripFee applies when distance < 2.5 km (only for SCOOTER and CAR variants)
-const PRICING = {
-  MOTORBIKE: { base: 10_000, svc: 0,      perKm: 6_200,  perMin: 450,   stFee: 0 },
-  SCOOTER:   { base: 14_000, svc: 1_500,  perKm: 8_400,  perMin: 700,   stFee: 1_500 },
-  CAR_4:     { base: 24_000, svc: 6_000,  perKm: 15_000, perMin: 1_900, stFee: 6_000 },
-  CAR_7:     { base: 32_000, svc: 10_000, perKm: 18_500, perMin: 2_400, stFee: 9_000 },
-} as const;
-const SHORT_TRIP_THRESHOLD_KM = 2.5;
-const MINIMUM_FARE = 15_000;
-
-function calcFare(
-  vehicleType: keyof typeof PRICING,
-  distanceKm: number,
-  durationSeconds: number,
-  surgeMultiplier = 1.0,
-): number {
-  const cfg = PRICING[vehicleType];
-  const mins = durationSeconds / 60;
-  const isShort = distanceKm < SHORT_TRIP_THRESHOLD_KM;
-  const subtotal =
-    cfg.base + cfg.svc +
-    distanceKm * cfg.perKm +
-    mins * cfg.perMin +
-    (isShort ? cfg.stFee : 0);
-  // Round to nearest 1 000 VND, then apply minimum fare
-  return Math.max(Math.round((subtotal * surgeMultiplier) / 1_000) * 1_000, MINIMUM_FARE);
-}
 
 function pgUrl(db: string) {
   return `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${db}`;
 }
 
-function createServicePrismaClient(serviceName: string, dbName: string) {
+function loadAuthPrismaClient() {
   const clientModulePath = path.resolve(
     process.cwd(),
     'services',
-    serviceName,
+    'auth-service',
     'src',
     'generated',
-    'prisma-client'
+    'prisma-client',
   );
   const { PrismaClient } = require(clientModulePath);
-
-  return new PrismaClient({
-    datasources: { db: { url: pgUrl(dbName) } },
-  });
+  return new PrismaClient({ datasources: { db: { url: pgUrl('auth_db') } } });
 }
 
-function createRedisClient() {
-  const driverRedisModulePath = path.resolve(
-    process.cwd(),
-    'services',
-    'driver-service',
-    'node_modules',
-    'ioredis'
-  );
-
-  let Redis: any;
-
+async function bootstrapAdmin(): Promise<string> {
+  const prisma = loadAuthPrismaClient();
   try {
-    // Prefer service-local dependency resolution.
-    Redis = require(driverRedisModulePath);
-  } catch {
-    Redis = require('ioredis');
-  }
+    const passwordHash = bcrypt.hashSync(SEED_PASSWORD, 10);
 
-  return new Redis(REDIS_URL);
-}
+    const admin = await prisma.user.upsert({
+      where: { phone: ADMIN.phone },
+      update: {
+        email: ADMIN.email,
+        role: 'ADMIN',
+        status: 'ACTIVE',
+        firstName: ADMIN.firstName,
+        lastName: ADMIN.lastName,
+        passwordHash,
+      },
+      create: {
+        phone: ADMIN.phone,
+        email: ADMIN.email,
+        role: 'ADMIN',
+        status: 'ACTIVE',
+        firstName: ADMIN.firstName,
+        lastName: ADMIN.lastName,
+        passwordHash,
+      },
+    });
 
-async function seedDriverGeoIndex(
-  locations: SeededDriverLocation[]
-) {
-  const redis = createRedisClient();
-
-  try {
-    await redis.del(DRIVER_GEO_KEY);
-
-    const onlineLocations = locations.filter((item) => item.isOnline);
-    if (onlineLocations.length === 0) {
-      console.log('    Redis geo index skipped (no online drivers)');
-      return;
-    }
-
-    const geoArgs: Array<string | number> = [];
-    for (const item of onlineLocations) {
-      geoArgs.push(item.lng, item.lat, item.driverId);
-    }
-
-    await redis.geoadd(DRIVER_GEO_KEY, ...geoArgs);
-    console.log(`    Redis geo index seeded: ${onlineLocations.length} online drivers`);
+    console.log(`  [bootstrap] admin user ready: ${admin.id}`);
+    return admin.id;
   } finally {
-    redis.disconnect();
+    await prisma.$disconnect();
   }
 }
 
-// ============ SEED DATA ============
+// ─── HTTP helpers ────────────────────────────────────────────────────────────
 
-const CUSTOMERS = [
-  { email: 'customer1@example.com',  phone: '0901234561', firstName: 'Nguyen', lastName: 'Van A' },
-  { email: 'customer2@example.com',  phone: '0901234562', firstName: 'Tran',   lastName: 'Thi B' },
-  { email: 'customer3@example.com',  phone: '0901234563', firstName: 'Le',     lastName: 'Van C' },
-  { email: 'customer4@example.com',  phone: '0901234564', firstName: 'Pham',   lastName: 'Minh D' },
-  { email: 'customer5@example.com',  phone: '0901234565', firstName: 'Hoang',  lastName: 'Van E' },
-  { email: 'customer6@example.com',  phone: '0901234566', firstName: 'Dang',   lastName: 'Thi F' },
-  { email: 'customer7@example.com',  phone: '0901234567', firstName: 'Vu',     lastName: 'Minh G' },
-  { email: 'customer8@example.com',  phone: '0901234568', firstName: 'Bui',    lastName: 'Thi H' },
-  { email: 'customer9@example.com',  phone: '0901234569', firstName: 'Ngo',    lastName: 'Van I' },
-  { email: 'customer10@example.com', phone: '0901234570', firstName: 'Dinh',   lastName: 'Thi J' },
-  { email: 'customer11@example.com', phone: '0901234571', firstName: 'Ly',     lastName: 'Van K' },
-  { email: 'customer12@example.com', phone: '0901234572', firstName: 'Do',     lastName: 'Thi L' },
-  { email: 'customer13@example.com', phone: '0901234573', firstName: 'Trinh',  lastName: 'Van M' },
-  { email: 'customer14@example.com', phone: '0901234574', firstName: 'Ha',     lastName: 'Thi N' },
-  { email: 'customer15@example.com', phone: '0901234575', firstName: 'Cao',    lastName: 'Van O' },
-  { email: 'customer16@example.com', phone: '0901234576', firstName: 'Duong',  lastName: 'Thi P' },
-  { email: 'customer17@example.com', phone: '0901234577', firstName: 'Mai',    lastName: 'Van Q' },
-  { email: 'customer18@example.com', phone: '0901234578', firstName: 'Truong', lastName: 'Thi R' },
-  { email: 'customer19@example.com', phone: '0901234579', firstName: 'Lam',    lastName: 'Van S' },
-  { email: 'customer20@example.com', phone: '0901234580', firstName: 'Huynh',  lastName: 'Thi T' },
+type RequestOptions = {
+  method?: string;
+  token?: string | null;
+  body?: unknown;
+  baseUrl?: string;
+  headers?: Record<string, string>;
+  expectedStatuses?: number[];
+};
+
+async function http<T = any>(pathOrUrl: string, opts: RequestOptions = {}): Promise<T> {
+  const method = opts.method || 'GET';
+  const baseUrl = opts.baseUrl || GATEWAY_BASE;
+  const url = pathOrUrl.startsWith('http') ? pathOrUrl : `${baseUrl}${pathOrUrl}`;
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    ...opts.headers,
+  };
+  if (opts.body !== undefined && !['GET', 'HEAD'].includes(method)) {
+    headers['Content-Type'] = 'application/json';
+  }
+  if (opts.token) {
+    headers.Authorization = `Bearer ${opts.token}`;
+  }
+
+  const expectedStatuses = opts.expectedStatuses || [200, 201];
+
+  let lastError: any;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        method,
+        headers,
+        body: opts.body !== undefined && !['GET', 'HEAD'].includes(method)
+          ? JSON.stringify(opts.body)
+          : undefined,
+      });
+
+      const text = await response.text();
+      let payload: any = null;
+      if (text) {
+        try { payload = JSON.parse(text); } catch { payload = text; }
+      }
+
+      if (!expectedStatuses.includes(response.status)) {
+        const error: any = new Error(
+          `HTTP ${method} ${url} → ${response.status}: ${
+            typeof payload === 'object' ? JSON.stringify(payload) : payload
+          }`,
+        );
+        error.status = response.status;
+        error.payload = payload;
+        throw error;
+      }
+
+      return payload as T;
+    } catch (err: any) {
+      lastError = err;
+      // Retry only on network errors / 5xx; not on 4xx
+      if (err.status && err.status < 500) {
+        throw err;
+      }
+      if (attempt < 3) {
+        await sleep(500 * attempt);
+        continue;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ─── Redis rate-limit cleanup ────────────────────────────────────────────────
+// Auth-service enforces OTP rate limits in Redis: 10 OTP / 60s per IP.
+// Since we register 25 users from one machine sequentially, we proactively
+// clear these keys via docker exec to keep the seed deterministic.
+
+function clearOtpRateLimits(silent = false) {
+  try {
+    const scan = spawnSync(
+      'docker',
+      ['exec', 'cab-redis', 'redis-cli', '--scan', '--pattern', 'otp:rate:*'],
+      { encoding: 'utf8' },
+    );
+    if (scan.status !== 0) return;
+    const keys = (scan.stdout || '').split(/\r?\n/).map((k) => k.trim()).filter(Boolean);
+    if (keys.length === 0) return;
+    spawnSync('docker', ['exec', 'cab-redis', 'redis-cli', 'DEL', ...keys], { stdio: 'pipe' });
+    if (!silent) {
+      console.log(`    [redis] cleared ${keys.length} OTP rate-limit key(s)`);
+    }
+  } catch {
+    // docker not available — assume rate limits are configured generously
+  }
+}
+
+// ─── OTP fetch via auth-service internal ─────────────────────────────────────
+
+async function fetchOtp(phone: string, purpose = 'register'): Promise<string> {
+  const data = await http<{ success: boolean; otp: string }>(
+    `/internal/dev/otp?phone=${encodeURIComponent(phone)}&purpose=${purpose}`,
+    {
+      baseUrl: AUTH_INTERNAL_BASE,
+      headers: { 'x-internal-token': INTERNAL_TOKEN },
+    },
+  );
+  if (!data?.otp) {
+    throw new Error(`OTP not found for ${phone} (${purpose})`);
+  }
+  return data.otp;
+}
+
+// ─── Admin login ─────────────────────────────────────────────────────────────
+
+async function loginAdmin(): Promise<string> {
+  const data = await http<{ data: { tokens: { accessToken: string } } }>(
+    '/api/auth/login',
+    {
+      method: 'POST',
+      body: { phone: ADMIN.phone, password: SEED_PASSWORD },
+    },
+  );
+  const token = data?.data?.tokens?.accessToken;
+  if (!token) {
+    throw new Error(`Admin login failed: ${JSON.stringify(data)}`);
+  }
+  console.log('  [auth] admin token acquired');
+  return token;
+}
+
+// ─── Voucher seed ────────────────────────────────────────────────────────────
+
+const VOUCHER_SEEDS = [
+  {
+    code: 'WELCOME20',
+    description: 'Giảm 20% tối đa 50.000đ cho khách mới',
+    audienceType: 'NEW_CUSTOMERS',
+    discountType: 'PERCENT',
+    discountValue: 20,
+    maxDiscount: 50_000,
+    minFare: 0,
+    usageLimit: 200,
+    perUserLimit: 1,
+    isActive: true,
+  },
+  {
+    code: 'FLAT30K',
+    description: 'Giảm thẳng 30.000đ cho chuyến từ 80.000đ',
+    audienceType: 'ALL_CUSTOMERS',
+    discountType: 'FIXED',
+    discountValue: 30_000,
+    minFare: 80_000,
+    usageLimit: 500,
+    perUserLimit: 3,
+    isActive: true,
+  },
+  {
+    code: 'NEWUSER50',
+    description: 'Ưu đãi 50% tối đa 100.000đ dành riêng khách mới',
+    audienceType: 'NEW_CUSTOMERS',
+    discountType: 'PERCENT',
+    discountValue: 50,
+    maxDiscount: 100_000,
+    minFare: 0,
+    usageLimit: 100,
+    perUserLimit: 1,
+    isActive: true,
+  },
+  {
+    code: 'WEEKEND10',
+    description: 'Giảm 10% cuối tuần (tối đa 30.000đ)',
+    audienceType: 'ALL_CUSTOMERS',
+    discountType: 'PERCENT',
+    discountValue: 10,
+    maxDiscount: 30_000,
+    minFare: 0,
+    usageLimit: 1000,
+    perUserLimit: 5,
+    isActive: true,
+  },
+  {
+    code: 'OLDUSER15',
+    description: 'Tri ân khách hàng thân thiết: giảm 15% (tối đa 40.000đ)',
+    audienceType: 'RETURNING_CUSTOMERS',
+    discountType: 'PERCENT',
+    discountValue: 15,
+    maxDiscount: 40_000,
+    minFare: 50_000,
+    usageLimit: 300,
+    perUserLimit: 2,
+    isActive: true,
+  },
+] as const;
+
+async function seedVouchers(adminToken: string) {
+  console.log('  [vouchers] creating via /api/voucher/admin...');
+  const now = new Date();
+  const past30 = new Date(now.getTime() - 30 * 86_400_000);
+  const future30 = new Date(now.getTime() + 30 * 86_400_000);
+
+  for (const v of VOUCHER_SEEDS) {
+    try {
+      await http('/api/voucher/admin', {
+        method: 'POST',
+        token: adminToken,
+        body: {
+          ...v,
+          startTime: past30.toISOString(),
+          endTime: future30.toISOString(),
+        },
+      });
+      console.log(`    + voucher ${v.code}`);
+    } catch (err: any) {
+      // Voucher may already exist if seed ran before; skip duplicate
+      if (err?.status === 409 || err?.payload?.error?.message?.includes('đã')) {
+        console.log(`    = voucher ${v.code} already exists`);
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
+// ─── Incentive rules ─────────────────────────────────────────────────────────
+
+const INCENTIVE_RULES = [
+  { type: 'TRIP_COUNT', conditionValue: 10, rewardAmount: 50_000, description: 'Chạy >= 10 cuốc/ngày thưởng 50.000 đ' },
+  { type: 'TRIP_COUNT', conditionValue: 20, rewardAmount: 120_000, description: 'Chạy >= 20 cuốc/ngày thưởng 120.000 đ' },
+  { type: 'DISTANCE_KM', conditionValue: 50, rewardAmount: 30_000, description: 'Đạt >= 50 km/ngày thưởng 30.000 đ' },
+  { type: 'PEAK_HOUR', conditionValue: 0, rewardAmount: 10_000, description: 'Mỗi cuốc trong giờ cao điểm thưởng 10.000 đ' },
 ];
 
-// Biển số format: ô tô (1 chữ cái) XX A-NNN.NN, xe máy/ga (2 chữ cái) XX AB-NNN.NN
-// Số GPLX: đúng 12 chữ số
+async function seedIncentiveRules(adminToken: string) {
+  console.log('  [incentive-rules] creating via /api/admin/wallet/incentive-rules...');
+  for (const rule of INCENTIVE_RULES) {
+    try {
+      await http('/api/admin/wallet/incentive-rules', {
+        method: 'POST',
+        token: adminToken,
+        body: rule,
+      });
+      console.log(`    + ${rule.type} (${rule.conditionValue}) → ${rule.rewardAmount}đ`);
+    } catch (err: any) {
+      console.log(`    ! incentive rule ${rule.type} skipped: ${err.message?.slice(0, 80)}`);
+    }
+  }
+}
+
+// ─── User registration via OTP flow ──────────────────────────────────────────
+
+type RegisteredUser = {
+  userId: string;
+  accessToken: string;
+  refreshToken: string;
+  phone: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+};
+
+async function registerUser(
+  phone: string,
+  firstName: string,
+  lastName: string,
+  role: 'CUSTOMER' | 'DRIVER',
+): Promise<RegisteredUser> {
+  // Proactively clear rate-limit keys so seed is deterministic regardless of
+  // OTP_RATE_MAX_PER_IP env config (default 10 / 60s).
+  clearOtpRateLimits(true);
+
+  // Step 1: start phone registration
+  await http('/api/auth/register-phone/start', {
+    method: 'POST',
+    body: { phone },
+  });
+
+  // Step 2: fetch OTP from internal endpoint
+  const otp = await fetchOtp(phone, 'register');
+
+  // Step 3: verify OTP
+  await http('/api/auth/register-phone/verify', {
+    method: 'POST',
+    body: { phone, otp },
+  });
+
+  // Step 4: complete registration with profile + password → returns tokens
+  const completeRes = await http<any>('/api/auth/register-phone/complete', {
+    method: 'POST',
+    body: { phone, password: SEED_PASSWORD, firstName, lastName, role },
+    expectedStatuses: [200, 201],
+  });
+
+  const user = completeRes?.data?.user;
+  const tokens = completeRes?.data?.tokens;
+
+  if (!user?.id || !tokens?.accessToken) {
+    throw new Error(`Registration response malformed for ${phone}: ${JSON.stringify(completeRes)}`);
+  }
+
+  return {
+    userId: user.id,
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    phone: user.phone,
+    firstName: user.firstName || firstName,
+    lastName: user.lastName || lastName,
+    email: user.email,
+  };
+}
+
+// ─── Customer seed list ──────────────────────────────────────────────────────
+
+const CUSTOMERS = [
+  { phone: '0901234561', firstName: 'Nguyen', lastName: 'Van A' },
+  { phone: '0901234562', firstName: 'Tran', lastName: 'Thi B' },
+  { phone: '0901234563', firstName: 'Le', lastName: 'Van C' },
+  { phone: '0901234564', firstName: 'Pham', lastName: 'Minh D' },
+  { phone: '0901234565', firstName: 'Hoang', lastName: 'Van E' },
+  { phone: '0901234566', firstName: 'Dang', lastName: 'Thi F' },
+  { phone: '0901234567', firstName: 'Vu', lastName: 'Minh G' },
+  { phone: '0901234568', firstName: 'Bui', lastName: 'Thi H' },
+  { phone: '0901234569', firstName: 'Ngo', lastName: 'Van I' },
+  { phone: '0901234570', firstName: 'Dinh', lastName: 'Thi J' },
+  // Demo customer tại khu vực Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp
+  { phone: '0901234571', firstName: 'Nguyen', lastName: 'Thi Demo' },
+  // Khách hàng demo cho multi-user test scenarios (3C-1D, payment, AI)
+  { phone: '0901999001', firstName: 'Phuong',  lastName: 'Nguyen Test' },
+  { phone: '0901999002', firstName: 'Khoa',    lastName: 'Tran Test'   },
+  { phone: '0901999003', firstName: 'Linh',    lastName: 'Le Test'     },
+  { phone: '0901999004', firstName: 'Minh',    lastName: 'Pham Test'   },
+];
+
+async function registerCustomers(): Promise<RegisteredUser[]> {
+  console.log(`  [customers] registering ${CUSTOMERS.length} customers...`);
+  const results: RegisteredUser[] = [];
+  for (let i = 0; i < CUSTOMERS.length; i += 1) {
+    const c = CUSTOMERS[i];
+    const user = await registerUser(c.phone, c.firstName, c.lastName, 'CUSTOMER');
+    results.push(user);
+    console.log(`    + customer #${i + 1} ${user.phone} (${user.userId.slice(0, 8)}...)`);
+  }
+  return results;
+}
+
+// ─── Driver seed list ────────────────────────────────────────────────────────
+// Vehicle plate format:
+//   - CAR_4 / CAR_7: NN[A-Z]-NNN.NN     (1 letter)
+//   - MOTORBIKE / SCOOTER: NN[A-Z][A-Z]-NNN.NN (2 letters)
+// License number: exactly 12 digits
+
 const DRIVERS = [
+  // Cluster Bến Thành — 3 CAR_4 drivers, ratings 1/2/3 stars (focused test rating)
   {
-    email: 'driver1@example.com',
-    phone: '0911234561',
-    firstName: 'Pham',
-    lastName: 'Van D',
-    vehicle: {
-      type: 'CAR_4',
-      brand: 'Toyota',
-      model: 'Vios',
-      plate: '51A-123.45',
-      color: 'White',
-      year: 2022,
-    },
-    license: {
-      class: 'B',
-      number: '100000000001',
-      expiryDate: new Date('2027-12-31'),
-    },
+    phone: '0911234561', firstName: 'Pham', lastName: 'Van D',
+    cluster: 'Bến Thành',
+    location: { lat: 10.77295, lng: 106.69905 },
+    vehicle: { type: 'CAR_4', brand: 'Toyota', model: 'Vios', plate: '51A-123.45', color: 'White', year: 2022 },
+    license: { class: 'B', number: '100000000001', expiryYear: 2027 },
   },
   {
-    email: 'driver2@example.com',
-    phone: '0911234562',
-    firstName: 'Vo',
-    lastName: 'Thi E',
-    vehicle: {
-      type: 'CAR_4',
-      brand: 'Honda',
-      model: 'City',
-      plate: '51A-678.90',
-      color: 'Black',
-      year: 2023,
-    },
-    license: {
-      class: 'B',
-      number: '100000000002',
-      expiryDate: new Date('2028-06-30'),
-    },
+    phone: '0911234562', firstName: 'Vo', lastName: 'Thi E',
+    cluster: 'Bến Thành',
+    location: { lat: 10.77195, lng: 106.69855 },
+    vehicle: { type: 'CAR_4', brand: 'Honda', model: 'City', plate: '51A-678.90', color: 'Black', year: 2023 },
+    license: { class: 'B', number: '100000000002', expiryYear: 2028 },
   },
   {
-    email: 'driver3@example.com',
-    phone: '0911234563',
-    firstName: 'Hoang',
-    lastName: 'Van F',
-    vehicle: {
-      type: 'CAR_7',
-      brand: 'Ford',
-      model: 'Everest',
-      plate: '51A-111.11',
-      color: 'Silver',
-      year: 2023,
-    },
-    license: {
-      class: 'D2',
-      number: '100000000003',
-      expiryDate: new Date('2028-12-31'),
-    },
+    phone: '0911234568', firstName: 'Pham', lastName: 'Van M',
+    cluster: 'Bến Thành',
+    location: { lat: 10.77215, lng: 106.69675 },
+    vehicle: { type: 'CAR_4', brand: 'Hyundai', model: 'Accent', plate: '51B-444.44', color: 'Silver', year: 2024 },
+    license: { class: 'B', number: '100000000008', expiryYear: 2029 },
+  },
+  // Cluster Tân Sơn Nhất — 3 CAR_4 drivers
+  {
+    phone: '0911234571', firstName: 'Nguyen', lastName: 'Van K',
+    cluster: 'Tân Sơn Nhất',
+    location: { lat: 10.81925, lng: 106.65795 },
+    vehicle: { type: 'CAR_4', brand: 'Mazda', model: 'Mazda3', plate: '59C-100.10', color: 'Red', year: 2023 },
+    license: { class: 'B', number: '100000000011', expiryYear: 2029 },
   },
   {
-    email: 'driver4@example.com',
-    phone: '0911234564',
-    firstName: 'Dang',
-    lastName: 'Thi G',
-    vehicle: {
-      type: 'SCOOTER',
-      brand: 'Honda',
-      model: 'Vision',
-      plate: '59XA-246.80',   // SCOOTER: 2-letter prefix
-      color: 'Red',
-      year: 2024,
-    },
-    license: {
-      class: 'A1',
-      number: '100000000004',
-      expiryDate: new Date('2029-03-31'),
-    },
+    phone: '0911234572', firstName: 'Tran', lastName: 'Thi L',
+    cluster: 'Tân Sơn Nhất',
+    location: { lat: 10.81745, lng: 106.66085 },
+    vehicle: { type: 'CAR_4', brand: 'Hyundai', model: 'Elantra', plate: '59C-200.20', color: 'White', year: 2022 },
+    license: { class: 'B', number: '100000000012', expiryYear: 2028 },
   },
   {
-    email: 'driver5@example.com',
-    phone: '0911234565',
-    firstName: 'Nguyen',
-    lastName: 'Van H',
-    vehicle: {
-      type: 'CAR_7',
-      brand: 'Toyota',
-      model: 'Innova',
-      plate: '51B-111.11',
-      color: 'Gray',
-      year: 2022,
-    },
-    license: {
-      class: 'D2',
-      number: '100000000005',
-      expiryDate: new Date('2028-09-30'),
-    },
+    phone: '0911234573', firstName: 'Le', lastName: 'Minh N',
+    cluster: 'Tân Sơn Nhất',
+    location: { lat: 10.81325, lng: 106.66295 },
+    vehicle: { type: 'CAR_4', brand: 'Kia', model: 'K3', plate: '59C-300.30', color: 'Blue', year: 2024 },
+    license: { class: 'B', number: '100000000013', expiryYear: 2029 },
+  },
+  // Cluster Phú Mỹ Hưng — 2 mixed (CAR_7 + SCOOTER)
+  {
+    phone: '0911234574', firstName: 'Hoang', lastName: 'Van P',
+    cluster: 'Phú Mỹ Hưng',
+    location: { lat: 10.7301, lng: 106.7194 },
+    vehicle: { type: 'CAR_7', brand: 'Toyota', model: 'Innova', plate: '51B-111.11', color: 'Gray', year: 2022 },
+    license: { class: 'D2', number: '100000000014', expiryYear: 2028 },
   },
   {
-    email: 'driver6@example.com',
-    phone: '0911234566',
-    firstName: 'Tran',
-    lastName: 'Van K',
-    vehicle: {
-      type: 'CAR_7',
-      brand: 'Mitsubishi',
-      model: 'Xpander',
-      plate: '51B-222.22',
-      color: 'Blue',
-      year: 2023,
-    },
-    license: {
-      class: 'D2',
-      number: '100000000006',
-      expiryDate: new Date('2027-06-30'),
-    },
+    phone: '0911234575', firstName: 'Bui', lastName: 'Thi Q',
+    cluster: 'Phú Mỹ Hưng',
+    location: { lat: 10.7287, lng: 106.7180 },
+    vehicle: { type: 'SCOOTER', brand: 'Honda', model: 'Vision', plate: '59XA-246.80', color: 'Red', year: 2024 },
+    license: { class: 'A1', number: '100000000015', expiryYear: 2029 },
+  },
+  // Cluster Thủ Đức — 2 mixed
+  {
+    phone: '0911234576', firstName: 'Vu', lastName: 'Van R',
+    cluster: 'Thủ Đức',
+    location: { lat: 10.8500, lng: 106.7720 },
+    vehicle: { type: 'MOTORBIKE', brand: 'Honda', model: 'Wave Alpha', plate: '59BA-333.33', color: 'Blue', year: 2023 },
+    license: { class: 'A1', number: '100000000016', expiryYear: 2029 },
   },
   {
-    email: 'driver7@example.com',
-    phone: '0911234567',
-    firstName: 'Le',
-    lastName: 'Thi L',
-    vehicle: {
-      type: 'MOTORBIKE',
-      brand: 'Honda',
-      model: 'Wave Alpha',
-      plate: '59BA-333.33',   // MOTORBIKE: 2-letter prefix
-      color: 'Blue',
-      year: 2023,
-    },
-    license: {
-      class: 'A1',
-      number: '100000000007',
-      expiryDate: new Date('2029-12-31'),
-    },
+    phone: '0911234577', firstName: 'Dang', lastName: 'Thi S',
+    cluster: 'Thủ Đức',
+    location: { lat: 10.8489, lng: 106.7715 },
+    vehicle: { type: 'CAR_4', brand: 'Honda', model: 'Civic', plate: '51B-555.55', color: 'Black', year: 2023 },
+    license: { class: 'B', number: '100000000017', expiryYear: 2029 },
+  },
+  // Backup approved drivers (cluster Bến Thành extra) for race / browse-mode tests
+  {
+    phone: '0911234578', firstName: 'Cao', lastName: 'Van T',
+    cluster: 'Bến Thành',
+    location: { lat: 10.77150, lng: 106.69950 },
+    vehicle: { type: 'CAR_4', brand: 'Toyota', model: 'Yaris Cross', plate: '51A-999.99', color: 'White', year: 2024 },
+    license: { class: 'B', number: '100000000018', expiryYear: 2029 },
   },
   {
-    email: 'driver8@example.com',
-    phone: '0911234568',
-    firstName: 'Pham',
-    lastName: 'Van M',
-    vehicle: {
-      type: 'CAR_4',
-      brand: 'Hyundai',
-      model: 'Accent',
-      plate: '51B-444.44',
-      color: 'White',
-      year: 2024,
-    },
-    license: {
-      class: 'B',
-      number: '100000000008',
-      expiryDate: new Date('2029-06-30'),
-    },
+    phone: '0911234579', firstName: 'Mai', lastName: 'Van U',
+    cluster: 'Bến Thành',
+    location: { lat: 10.77310, lng: 106.69820 },
+    vehicle: { type: 'MOTORBIKE', brand: 'Yamaha', model: 'Sirius', plate: '59BA-555.55', color: 'Blue', year: 2023 },
+    license: { class: 'A1', number: '100000000019', expiryYear: 2029 },
+  },
+  // Cluster Gò Vấp / Hạnh Thông Tây — 5 tài xế cho demo giám khảo (Nguyễn Văn Bảo area)
+  {
+    phone: '0911234583', firstName: 'Pham', lastName: 'Van Bao',
+    cluster: 'Gò Vấp / Hạnh Thông',
+    location: { lat: 10.8178, lng: 106.6645 },
+    vehicle: { type: 'CAR_4', brand: 'Toyota', model: 'Vios', plate: '59A-100.10', color: 'White', year: 2023 },
+    license: { class: 'B', number: '100000000023', expiryYear: 2028 },
   },
   {
-    email: 'driver9@example.com',
-    phone: '0911234569',
-    firstName: 'Vo',
-    lastName: 'Thi N',
-    vehicle: {
-      type: 'CAR_7',
-      brand: 'Kia',
-      model: 'Sorento',
-      plate: '51B-555.55',
-      color: 'Black',
-      year: 2023,
-    },
-    license: {
-      class: 'D2',
-      number: '100000000009',
-      expiryDate: new Date('2028-03-31'),
-    },
+    phone: '0911234584', firstName: 'Tran', lastName: 'Van Hung',
+    cluster: 'Gò Vấp / Hạnh Thông',
+    location: { lat: 10.8165, lng: 106.6622 },
+    vehicle: { type: 'MOTORBIKE', brand: 'Honda', model: 'Wave Alpha', plate: '59BA-100.20', color: 'Black', year: 2023 },
+    license: { class: 'A1', number: '100000000024', expiryYear: 2029 },
   },
   {
-    email: 'driver10@example.com',
-    phone: '0911234570',
-    firstName: 'Dao',
-    lastName: 'Van O',
-    vehicle: {
-      type: 'CAR_7',
-      brand: 'Toyota',
-      model: 'Fortuner',
-      plate: '51B-666.66',
-      color: 'Silver',
-      year: 2022,
-    },
-    license: {
-      class: 'D2',
-      number: '100000000010',
-      expiryDate: new Date('2027-09-30'),
-    },
+    phone: '0911234585', firstName: 'Le', lastName: 'Thi Mai',
+    cluster: 'Gò Vấp / Hạnh Thông',
+    location: { lat: 10.8198, lng: 106.6655 },
+    vehicle: { type: 'CAR_4', brand: 'Hyundai', model: 'Accent', plate: '59A-100.30', color: 'Silver', year: 2024 },
+    license: { class: 'B', number: '100000000025', expiryYear: 2029 },
+  },
+  {
+    phone: '0911234586', firstName: 'Hoang', lastName: 'Van Lam',
+    cluster: 'Gò Vấp / Hạnh Thông',
+    location: { lat: 10.8152, lng: 106.6662 },
+    vehicle: { type: 'CAR_7', brand: 'Toyota', model: 'Innova', plate: '59C-100.40', color: 'Gray', year: 2022 },
+    license: { class: 'D2', number: '100000000026', expiryYear: 2028 },
+  },
+  {
+    phone: '0911234587', firstName: 'Bui', lastName: 'Thi Lan',
+    cluster: 'Gò Vấp / Hạnh Thông',
+    location: { lat: 10.8222, lng: 106.6615 },
+    vehicle: { type: 'SCOOTER', brand: 'Honda', model: 'Vision', plate: '59XA-100.50', color: 'Red', year: 2024 },
+    license: { class: 'A1', number: '100000000027', expiryYear: 2029 },
+  },
+  // 3 PENDING drivers for admin approval test
+  {
+    phone: '0911234580', firstName: 'Truong', lastName: 'Van V',
+    cluster: 'Bến Thành',
+    location: { lat: 10.77260, lng: 106.69800 },
+    pending: true,
+    vehicle: { type: 'CAR_4', brand: 'Mazda', model: 'Mazda2', plate: '51A-777.77', color: 'Silver', year: 2024 },
+    license: { class: 'B', number: '100000000020', expiryYear: 2029 },
+  },
+  {
+    phone: '0911234581', firstName: 'Lam', lastName: 'Thi W',
+    cluster: 'Tân Sơn Nhất',
+    location: { lat: 10.8190, lng: 106.6590 },
+    pending: true,
+    vehicle: { type: 'SCOOTER', brand: 'Honda', model: 'Air Blade', plate: '59XA-777.77', color: 'Black', year: 2024 },
+    license: { class: 'A1', number: '100000000021', expiryYear: 2029 },
+  },
+  {
+    phone: '0911234582', firstName: 'Huynh', lastName: 'Van X',
+    cluster: 'Thủ Đức',
+    location: { lat: 10.8500, lng: 106.7710 },
+    pending: true,
+    vehicle: { type: 'CAR_7', brand: 'Mitsubishi', model: 'Xpander', plate: '51B-222.22', color: 'Blue', year: 2023 },
+    license: { class: 'D2', number: '100000000022', expiryYear: 2028 },
   },
 ];
 
@@ -356,2543 +641,1032 @@ const VEHICLE_IMAGE_BY_TYPE: Record<string, string> = {
   CAR_4: '4-cho.jpg',
   CAR_7: '7-cho.jpg',
 };
-
 const VEHICLE_IMAGE_BY_MODEL: Record<string, string> = {
   'Wave Alpha': 'wave-alpha.jpg',
-  'Winner X': 'winner-x.jpg',
   'Sirius': 'sirius.jpg',
-  'Raider': 'raider.jpg',
   'Vios': 'vios.jpg',
   'City': 'city.jpg',
   'Accent': 'accent.jpg',
-  'Elantra': 'elantra.jpg',
-  'K3': 'k3.jpg',
-  'Civic': 'civic.jpg',
   'Mazda2': 'mazda2.jpg',
   'Mazda3': 'mazda3.jpg',
+  'Civic': 'civic.jpg',
   'Vision': 'vision.jpg',
   'Air Blade': 'air-blade.jpg',
-  'Lead': 'lead.jpg',
-  'Janus': 'janus.jpg',
-  'Corolla Altis': 'altis.jpg',
-  'Yaris Cross': 'yaris.jpg',
   'Innova': 'innova.jpg',
-  'Fortuner': 'fortuner.jpg',
-  'Stargazer': 'stargazer.jpg',
   'Xpander': 'xpander.jpg',
-  'Everest': 'everest.jpg',
-  'Sorento': 'sorento.jpg',
-  'VF e34': 'vin34.jpg',
-  'VF 6': 'vin6.jpg',
+  'Yaris Cross': 'yaris.jpg',
+  'Elantra': 'elantra.jpg',
+  'K3': 'k3.jpg',
 };
-
-function resolveVehicleImagePath(vehicle: { type: string; model: string }) {
-  const fileName = VEHICLE_IMAGE_BY_MODEL[vehicle.model] || VEHICLE_IMAGE_BY_TYPE[vehicle.type] || '4-cho.jpg';
-  return `/vehicle-images/${fileName}`;
+function vehicleImageUrl(model: string, type: string) {
+  const file = VEHICLE_IMAGE_BY_MODEL[model] || VEHICLE_IMAGE_BY_TYPE[type] || '4-cho.jpg';
+  return `/vehicle-images/${file}`;
 }
 
-function getLicenseClassByVehicleType(vehicleType: string) {
-  if (vehicleType === 'MOTORBIKE' || vehicleType === 'SCOOTER') {
-    return 'A1';
+async function registerDrivers(): Promise<RegisteredUser[]> {
+  console.log(`  [drivers] registering ${DRIVERS.length} driver auth accounts...`);
+  const results: RegisteredUser[] = [];
+  for (let i = 0; i < DRIVERS.length; i += 1) {
+    const d = DRIVERS[i];
+    const user = await registerUser(d.phone, d.firstName, d.lastName, 'DRIVER');
+    results.push(user);
+    console.log(`    + driver #${i + 1} ${user.phone} (${user.userId.slice(0, 8)}...)`);
   }
-
-  if (vehicleType === 'CAR_7') {
-    return 'D2';
-  }
-
-  return 'B';
+  return results;
 }
 
-const EXTRA_DRIVER_COUNT = 30;
-const EXTRA_VEHICLE_TYPES = ['CAR_4', 'CAR_7', 'MOTORBIKE', 'SCOOTER'] as const;
-const EXTRA_VEHICLE_COLORS = ['White', 'Black', 'Silver', 'Blue', 'Red'] as const;
+type DriverProfile = { driverId: string; userId: string; pending: boolean };
 
-const EXTRA_VEHICLES_BY_TYPE: Record<typeof EXTRA_VEHICLE_TYPES[number], Array<{ brand: string; model: string }>> = {
-  CAR_4: [
-    { brand: 'Toyota', model: 'Vios' },
-    { brand: 'Toyota', model: 'Corolla Altis' },
-    { brand: 'Toyota', model: 'Yaris Cross' },
-    { brand: 'Hyundai', model: 'Accent' },
-    { brand: 'Hyundai', model: 'Elantra' },
-    { brand: 'Kia', model: 'K3' },
-    { brand: 'Honda', model: 'City' },
-    { brand: 'Honda', model: 'Civic' },
-    { brand: 'Mazda', model: 'Mazda2' },
-    { brand: 'Mazda', model: 'Mazda3' },
-    { brand: 'VinFast', model: 'VF e34' },
-    { brand: 'VinFast', model: 'VF 6' },
-  ],
-  CAR_7: [
-    { brand: 'Toyota', model: 'Innova' },
-    { brand: 'Toyota', model: 'Fortuner' },
-    { brand: 'Hyundai', model: 'Stargazer' },
-    { brand: 'Mitsubishi', model: 'Xpander' },
-    { brand: 'Ford', model: 'Everest' },
-    { brand: 'Kia', model: 'Sorento' },
-  ],
-  MOTORBIKE: [
-    { brand: 'Honda', model: 'Wave Alpha' },
-    { brand: 'Honda', model: 'Winner X' },
-    { brand: 'Yamaha', model: 'Sirius' },
-    { brand: 'Suzuki', model: 'Raider' },
-  ],
-  SCOOTER: [
-    { brand: 'Honda', model: 'Vision' },
-    { brand: 'Honda', model: 'Air Blade' },
-    { brand: 'Honda', model: 'Lead' },
-    { brand: 'Yamaha', model: 'Janus' },
-  ],
-};
+async function registerDriverProfiles(driverUsers: RegisteredUser[]): Promise<DriverProfile[]> {
+  console.log('  [driver-profiles] POST /api/drivers/register for each driver...');
+  const profiles: DriverProfile[] = [];
+  for (let i = 0; i < driverUsers.length; i += 1) {
+    const meta = DRIVERS[i];
+    const user = driverUsers[i];
+    const expiry = new Date(Date.UTC(meta.license.expiryYear, 11, 31));
 
-for (let i = 0; i < EXTRA_DRIVER_COUNT; i += 1) {
-  const serial = i + 11;
-  const phone = `0919${String(100000 + i).slice(-6)}`;
-  const email = `driver${serial}@example.com`;
-  const vehicleType = EXTRA_VEHICLE_TYPES[i % EXTRA_VEHICLE_TYPES.length];
-  const vehicleOptions = EXTRA_VEHICLES_BY_TYPE[vehicleType];
-  const selectedVehicle = vehicleOptions[i % vehicleOptions.length];
+    const res = await http<any>('/api/drivers/register', {
+      method: 'POST',
+      token: user.accessToken,
+      body: {
+        vehicle: {
+          type: meta.vehicle.type,
+          brand: meta.vehicle.brand,
+          model: meta.vehicle.model,
+          plate: meta.vehicle.plate,
+          color: meta.vehicle.color,
+          year: meta.vehicle.year,
+          imageUrl: vehicleImageUrl(meta.vehicle.model, meta.vehicle.type),
+        },
+        license: {
+          class: meta.license.class,
+          number: meta.license.number,
+          expiryDate: expiry.toISOString(),
+        },
+      },
+    });
+    const driver = res?.data?.driver;
+    if (!driver?.id) {
+      throw new Error(`Driver register response malformed for ${user.phone}: ${JSON.stringify(res)}`);
+    }
+    profiles.push({ driverId: driver.id, userId: user.userId, pending: !!meta.pending });
+    console.log(`    + profile ${meta.vehicle.plate} (${driver.id.slice(0, 8)}...) ${meta.pending ? '[PENDING]' : ''}`);
+  }
+  return profiles;
+}
 
-  // Biển số: ô tô/7 chỗ dùng 1 chữ cái (59Z-NNN.NN), xe máy/ga dùng 2 chữ cái (59ZA-NNN.NN)
-  const isTwoWheeler = vehicleType === 'MOTORBIKE' || vehicleType === 'SCOOTER';
-  const platePrefix = isTwoWheeler ? '59ZA' : '59Z';
-  const serialDigits = String(10000 + serial).slice(-5); // 5 digits: 10011..10040
-  const plateNumber = `${serialDigits.slice(0, 3)}.${serialDigits.slice(3)}`; // NNN.NN
-  const plate = `${platePrefix}-${plateNumber}`;
+async function approveDrivers(adminToken: string, profiles: DriverProfile[]) {
+  console.log('  [approve] approving non-pending drivers via /api/admin/drivers/:id/approve...');
+  for (const p of profiles) {
+    if (p.pending) continue;
+    await http(`/api/admin/drivers/${p.driverId}/approve`, {
+      method: 'POST',
+      token: adminToken,
+    });
+    console.log(`    + approved ${p.driverId.slice(0, 8)}...`);
+  }
+}
 
-  // Số GPLX: 12 chữ số, bắt đầu từ 200000000011
-  const licenseNumber = String(200000000000 + serial);
+// ─── Wallet top-up ───────────────────────────────────────────────────────────
 
-  DRIVERS.push({
-    email,
-    phone,
-    firstName: `Seed${serial}`,
-    lastName: 'Driver',
-    vehicle: {
-      type: vehicleType,
-      brand: selectedVehicle.brand,
-      model: selectedVehicle.model,
-      plate,
-      color: EXTRA_VEHICLE_COLORS[i % EXTRA_VEHICLE_COLORS.length],
-      year: 2021 + (i % 4),
+async function topUpDriverWallet(driverToken: string, phone: string) {
+  // Step A — payment-service top-up gateway flow:
+  //   /top-up/init creates a WalletTopUpOrder keyed by auth userId, then
+  //   /top-up/sandbox-confirm flips it to COMPLETED which (1) credits
+  //   payment-service DriverWallet for userId and (2) pings wallet-service
+  //   /internal/topup-completed to credit wallet-service ledger (also keyed
+  //   by userId). This is what unblocks the driver-service goOnline check
+  //   (`/internal/driver/${userId}/can-accept` queries wallet-service).
+  const initRes = await http<any>('/api/wallet/top-up/init', {
+    method: 'POST',
+    token: driverToken,
+    body: {
+      amount: ACTIVATION_BALANCE,
+      provider: 'MOMO',
+      returnUrl: 'http://localhost:4001/wallet/top-up/return',
     },
-    license: {
-      class: getLicenseClassByVehicleType(vehicleType),
-      number: licenseNumber,
-      expiryDate: new Date('2029-12-31'),
-    },
+    expectedStatuses: [200, 201],
+  });
+  const topUpId = initRes?.data?.topUpId || initRes?.data?.id;
+  if (!topUpId) {
+    throw new Error(`top-up init malformed for ${phone}: ${JSON.stringify(initRes)}`);
+  }
+  await http('/api/wallet/top-up/sandbox-confirm', {
+    method: 'POST',
+    token: driverToken,
+    body: { topUpId, success: true },
+    expectedStatuses: [200, 201],
+  });
+
+  // Step B — payment-service driver-profile-keyed top-up:
+  //   The ride-accept hook calls payment-service `/api/wallet/driver/:driverId/can-accept-cash`
+  //   where :driverId is the driver-service profile id (NOT auth userId).
+  //   That row is unaffected by step A (which keys by userId). Calling
+  //   POST /api/wallet/top-up uses resolveDriverId(userId) which looks up
+  //   the driver profile id and credits THAT row, satisfying the activation
+  //   threshold for can-accept-cash.
+  await http('/api/wallet/top-up', {
+    method: 'POST',
+    token: driverToken,
+    body: { amount: ACTIVATION_BALANCE },
+    expectedStatuses: [200, 201],
   });
 }
 
-const DRIVER_LOCATION_HUBS = [
-  { name: 'Cụm Bến Thành - Quận 1', lat: 10.7726, lng: 106.6980 },
-  { name: 'Cụm Tân Sơn Nhất - Tân Bình', lat: 10.8185, lng: 106.6588 },
-  { name: 'Cụm Phú Mỹ Hưng - Quận 7', lat: 10.7294, lng: 106.7187 },
-  { name: 'Cụm Thủ Đức', lat: 10.8495, lng: 106.7718 },
-  { name: 'Cụm Quận 5 - Chợ Rẫy', lat: 10.7628, lng: 106.6825 },
-  { name: 'Cụm Tân Phú', lat: 10.8018, lng: 106.6187 },
-];
-
-const FOCUSED_TEST_GROUPS = [
-  {
-    label: 'Bến Thành',
-    hubName: 'Cụm Bến Thành - Quận 1',
-    vehicleType: 'CAR_4',
-    customers: [
-      { index: 0, address: 'Cửa Nam Chợ Bến Thành, Q1, TP.HCM', lat: 10.77255, lng: 106.69815 },
-      { index: 1, address: 'Ga Metro Bến Thành, Q1, TP.HCM', lat: 10.77305, lng: 106.69775 },
-      { index: 2, address: 'Công viên 23/9 - Bến Thành, Q1, TP.HCM', lat: 10.77095, lng: 106.69710 },
-    ],
-    drivers: [
-      { index: 0, lat: 10.77295, lng: 106.69905, ratingAverage: 1, ratingCount: 12 },
-      { index: 1, lat: 10.77195, lng: 106.69855, ratingAverage: 2, ratingCount: 15 },
-      { index: 7, lat: 10.77215, lng: 106.69675, ratingAverage: 3, ratingCount: 18 },
-    ],
-  },
-  {
-    label: 'Tân Sơn Nhất',
-    hubName: 'Cụm Tân Sơn Nhất - Tân Bình',
-    vehicleType: 'CAR_4',
-    customers: [
-      { index: 3, address: 'Ga Quốc Nội - Sân bay Tân Sơn Nhất, TP.HCM', lat: 10.81895, lng: 106.65840 },
-      { index: 4, address: 'Ga Quốc Tế - Sân bay Tân Sơn Nhất, TP.HCM', lat: 10.81785, lng: 106.66455 },
-      { index: 5, address: 'Đường Trường Sơn - cổng sân bay Tân Sơn Nhất, TP.HCM', lat: 10.81265, lng: 106.66410 },
-    ],
-    drivers: [
-      { index: 10, lat: 10.81925, lng: 106.65795, ratingAverage: 1, ratingCount: 12 },
-      { index: 14, lat: 10.81745, lng: 106.66085, ratingAverage: 2, ratingCount: 15 },
-      { index: 18, lat: 10.81325, lng: 106.66295, ratingAverage: 3, ratingCount: 18 },
-    ],
-  },
-] as const;
-
-const FOCUSED_DRIVER_OVERRIDES = new Map<number, {
-  label: string;
-  hubName: string;
-  vehicleType: string;
-  lat: number;
-  lng: number;
-  ratingAverage: number;
-  ratingCount: number;
-}>();
-
-const FOCUSED_CUSTOMER_REFERENCES = new Map<number, {
-  label: string;
-  hubName: string;
-  address: string;
-  lat: number;
-  lng: number;
-}>();
-
-const FOCUSED_REVIEW_RATINGS: number[] = [];
-
-for (const group of FOCUSED_TEST_GROUPS) {
-  for (const customer of group.customers) {
-    FOCUSED_CUSTOMER_REFERENCES.set(customer.index, {
-      label: group.label,
-      hubName: group.hubName,
-      address: customer.address,
-      lat: customer.lat,
-      lng: customer.lng,
-    });
-  }
-
-  for (const driver of group.drivers) {
-    FOCUSED_DRIVER_OVERRIDES.set(driver.index, {
-      label: group.label,
-      hubName: group.hubName,
-      vehicleType: group.vehicleType,
-      lat: driver.lat,
-      lng: driver.lng,
-      ratingAverage: driver.ratingAverage,
-      ratingCount: driver.ratingCount,
-    });
-    FOCUSED_REVIEW_RATINGS.push(driver.ratingAverage);
+async function topUpAllDriverWallets(profiles: DriverProfile[], driverUsers: RegisteredUser[]) {
+  console.log('  [wallet-topup] activating wallets via /api/wallet/top-up/* ...');
+  for (let i = 0; i < profiles.length; i += 1) {
+    if (profiles[i].pending) continue;
+    const user = driverUsers[i];
+    await topUpDriverWallet(user.accessToken, user.phone);
+    console.log(`    + wallet activated for ${user.phone} (+${ACTIVATION_BALANCE.toLocaleString('vi-VN')}đ)`);
   }
 }
 
-function seededDriverLocation(index: number) {
-  const hub = DRIVER_LOCATION_HUBS[index % DRIVER_LOCATION_HUBS.length];
-  const ring = 0.003 + (index % 7) * 0.0016;
-  const angle = (index * 37 * Math.PI) / 180;
-  return {
-    lat: hub.lat + Math.sin(angle) * ring,
-    lng: hub.lng + Math.cos(angle) * ring,
-  };
+// ─── Driver online + location ────────────────────────────────────────────────
+
+async function setDriverOnline(driverToken: string, lat: number, lng: number) {
+  // 1. goOnline (status check + add to geo-index if location already set)
+  await http('/api/drivers/me/online', { method: 'POST', token: driverToken });
+  // 2. updateLocation (now driver is ONLINE so this works AND adds to geo-index)
+  await http('/api/drivers/me/location', {
+    method: 'POST',
+    token: driverToken,
+    body: { lat, lng },
+  });
 }
 
-const ADMIN = {
-  email: 'admin@cabbooking.com',
-  phone: '0900000001',
-  firstName: 'System',
-  lastName: 'Admin',
+async function setApprovedDriversOnline(profiles: DriverProfile[], driverUsers: RegisteredUser[]) {
+  console.log('  [drivers-online] going online + setting location...');
+  for (let i = 0; i < profiles.length; i += 1) {
+    if (profiles[i].pending) continue;
+    const user = driverUsers[i];
+    const meta = DRIVERS[i];
+    await setDriverOnline(user.accessToken, meta.location.lat, meta.location.lng);
+    console.log(`    + ${user.phone} online @ (${meta.location.lat}, ${meta.location.lng}) — ${meta.cluster}`);
+  }
+}
+
+async function setApprovedDriversOffline(profiles: DriverProfile[], driverUsers: RegisteredUser[]) {
+  // After rides are seeded, put all drivers OFFLINE so DB is clean.
+  // Without this, drivers would appear ONLINE on next login with no active rides,
+  // and the matching algorithm would keep dispatching for stale state.
+  console.log('  [drivers-offline] setting all approved drivers OFFLINE...');
+  let count = 0;
+  for (let i = 0; i < profiles.length; i += 1) {
+    if (profiles[i].pending) continue;
+    const user = driverUsers[i];
+    try {
+      await http('/api/drivers/me/offline', {
+        method: 'POST',
+        token: user.accessToken,
+        expectedStatuses: [200, 201],
+      });
+      count += 1;
+    } catch (err: any) {
+      // Non-fatal — driver may already be offline or endpoint unavailable
+      console.log(`    ! could not set ${user.phone} offline: ${err.message?.slice(0, 60)}`);
+    }
+  }
+  console.log(`    → ${count} driver(s) set OFFLINE`);
+}
+
+// ─── Ride seed plans ─────────────────────────────────────────────────────────
+// 8 CASH completed + 2 MOMO completed + 2 cancelled = 12 rides total
+// NO in-progress or FINDING_DRIVER rides — DB must be clean after seed.
+
+type RideSeedPlan = {
+  customerIndex: number;
+  driverIndex?: number;
+  status: 'COMPLETED' | 'CANCELLED';
+  vehicleType: 'CAR_4' | 'CAR_7' | 'MOTORBIKE' | 'SCOOTER';
+  paymentMethod: 'CASH' | 'MOMO' | 'VNPAY';
+  voucherCode?: string;
+  pickup: { address: string; lat: number; lng: number };
+  dropoff: { address: string; lat: number; lng: number };
+  reviewRating?: number;
+  cancelReason?: string;
 };
 
-const BOOKINGS = [
+const RIDE_PLANS: RideSeedPlan[] = [
+  // CASH completed × 8 - cụm Bến Thành 3, Tân Sơn Nhất 3, hỗn hợp 2
   {
-    pickupAddress: '227 Nguyen Van Cu, Q5, TP.HCM',
-    pickupLat: 10.7628, pickupLng: 106.6825,
-    dropoffAddress: 'Saigon Centre, Le Loi, Q1, TP.HCM',
-    dropoffLat: 10.7721, dropoffLng: 106.7002,
+    customerIndex: 0, driverIndex: 0, status: 'COMPLETED',
     vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    estimatedDistance: 3.5, estimatedDuration: 900,
-    estimatedFare: calcFare('CAR_4', 3.5, 900),           // ~111 000
+    pickup: { address: 'Cửa Nam Chợ Bến Thành, Q1, TP.HCM', lat: 10.77255, lng: 106.69815 },
+    dropoff: { address: 'Saigon Centre, Q1, TP.HCM', lat: 10.77210, lng: 106.70020 },
+    reviewRating: 1,
   },
   {
-    pickupAddress: 'Ben Thanh Market, Q1, TP.HCM',
-    pickupLat: 10.7726, pickupLng: 106.698,
-    dropoffAddress: 'Tan Son Nhat Airport, TP.HCM',
-    dropoffLat: 10.8185, dropoffLng: 106.6588,
-    vehicleType: 'CAR_4', paymentMethod: 'CARD',
-    estimatedDistance: 8.2, estimatedDuration: 1800,
-    estimatedFare: calcFare('CAR_4', 8.2, 1800),          // ~210 000
-  },
-  {
-    pickupAddress: 'Phu My Hung, Q7, TP.HCM',
-    pickupLat: 10.7294, pickupLng: 106.7187,
-    dropoffAddress: 'Thu Thiem, TP.HCM',
-    dropoffLat: 10.7875, dropoffLng: 106.7342,
-    vehicleType: 'CAR_7', paymentMethod: 'WALLET',
-    estimatedDistance: 12.5, estimatedDuration: 2400,
-    estimatedFare: calcFare('CAR_7', 12.5, 2400),         // ~369 000
-  },
-  {
-    pickupAddress: 'Landmark 81, Binh Thanh, TP.HCM',
-    pickupLat: 10.7949, pickupLng: 106.7219,
-    dropoffAddress: 'Crescent Mall, Q7, TP.HCM',
-    dropoffLat: 10.7299, dropoffLng: 106.7212,
+    customerIndex: 1, driverIndex: 1, status: 'COMPLETED',
     vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    estimatedDistance: 10.7, estimatedDuration: 2100,
-    estimatedFare: calcFare('CAR_4', 10.7, 2100),         // ~257 000
+    pickup: { address: 'Ga Metro Bến Thành, Q1, TP.HCM', lat: 10.77305, lng: 106.69775 },
+    dropoff: { address: 'Bưu điện trung tâm, Q1, TP.HCM', lat: 10.78000, lng: 106.69992 },
+    reviewRating: 2,
   },
   {
-    pickupAddress: 'Vinhomes Grand Park, Thu Duc, TP.HCM',
-    pickupLat: 10.8434, pickupLng: 106.8287,
-    dropoffAddress: 'Ben Xe Mien Dong Moi, Thu Duc, TP.HCM',
-    dropoffLat: 10.8412, dropoffLng: 106.8098,
+    customerIndex: 2, driverIndex: 2, status: 'COMPLETED',
     vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    estimatedDistance: 6.4, estimatedDuration: 960,
-    estimatedFare: calcFare('CAR_4', 6.4, 960),           // ~156 000
+    pickup: { address: 'Công viên 23/9, Q1, TP.HCM', lat: 10.77095, lng: 106.69710 },
+    dropoff: { address: 'Hồ Con Rùa, Q3, TP.HCM', lat: 10.77930, lng: 106.69570 },
+    reviewRating: 3,
   },
   {
-    pickupAddress: 'Aeon Mall Tan Phu, TP.HCM',
-    pickupLat: 10.8018, pickupLng: 106.6187,
-    dropoffAddress: 'University of Economics HCMC, Q10, TP.HCM',
-    dropoffLat: 10.7623, dropoffLng: 106.6825,
-    vehicleType: 'CAR_7', paymentMethod: 'WALLET',
-    estimatedDistance: 14.2, estimatedDuration: 2280,
-    estimatedFare: calcFare('CAR_7', 14.2, 2280),         // ~396 000
+    customerIndex: 3, driverIndex: 3, status: 'COMPLETED',
+    vehicleType: 'CAR_4', paymentMethod: 'CASH',
+    pickup: { address: 'Ga Quốc Nội Tân Sơn Nhất, TP.HCM', lat: 10.81895, lng: 106.65840 },
+    dropoff: { address: 'Công viên Hoàng Văn Thụ, Tân Bình', lat: 10.80130, lng: 106.65710 },
+    reviewRating: 5,
   },
   {
-    pickupAddress: 'Bệnh viện Chợ Rẫy, Q5, TP.HCM',
-    pickupLat: 10.7555, pickupLng: 106.6721,
-    dropoffAddress: 'Bệnh viện Đại học Y Dược, Q5, TP.HCM',
-    dropoffLat: 10.7614, dropoffLng: 106.6779,
+    customerIndex: 4, driverIndex: 4, status: 'COMPLETED',
+    vehicleType: 'CAR_4', paymentMethod: 'CASH',
+    pickup: { address: 'Ga Quốc Tế Tân Sơn Nhất, TP.HCM', lat: 10.81785, lng: 106.66455 },
+    dropoff: { address: 'Lăng Cha Cả, Tân Bình', lat: 10.80455, lng: 106.65635 },
+    reviewRating: 5,
+  },
+  {
+    customerIndex: 5, driverIndex: 5, status: 'COMPLETED',
+    vehicleType: 'CAR_4', paymentMethod: 'CASH',
+    pickup: { address: 'Đường Trường Sơn, Tân Bình', lat: 10.81265, lng: 106.66410 },
+    dropoff: { address: 'E.Town Cộng Hòa, Tân Bình', lat: 10.80120, lng: 106.65320 },
+    reviewRating: 4,
+  },
+  {
+    customerIndex: 6, driverIndex: 7, status: 'COMPLETED', // SCOOTER PMH
+    vehicleType: 'SCOOTER', paymentMethod: 'CASH',
+    pickup: { address: 'Phú Mỹ Hưng, Q7', lat: 10.7294, lng: 106.7187 },
+    dropoff: { address: 'RMIT Sài Gòn, Q7', lat: 10.7316, lng: 106.7222 },
+    reviewRating: 5,
+  },
+  {
+    customerIndex: 7, driverIndex: 8, status: 'COMPLETED', // MOTORBIKE Thủ Đức
     vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
-    estimatedDistance: 1.8, estimatedDuration: 420,
-    estimatedFare: calcFare('MOTORBIKE', 1.8, 420),       // ~24 000
+    pickup: { address: 'Vinhomes Grand Park, Thủ Đức', lat: 10.8434, lng: 106.8287 },
+    dropoff: { address: 'Bến xe Miền Đông Mới, Thủ Đức', lat: 10.8412, lng: 106.8098 },
+    reviewRating: 5,
+  },
+  // MOMO completed × 2 - dùng webhook mock để hoàn tất payment
+  {
+    customerIndex: 8, driverIndex: 6, status: 'COMPLETED', // CAR_7 PMH
+    vehicleType: 'CAR_7', paymentMethod: 'MOMO',
+    voucherCode: 'WELCOME20',
+    pickup: { address: 'Phú Mỹ Hưng, Q7', lat: 10.7294, lng: 106.7187 },
+    dropoff: { address: 'Crescent Mall, Q7', lat: 10.7299, lng: 106.7212 },
+    reviewRating: 5,
   },
   {
-    pickupAddress: 'Đại học Bách Khoa TPHCM, Q10',
-    pickupLat: 10.7721, pickupLng: 106.6589,
-    dropoffAddress: 'Hồ Con Rùa, Q3, TP.HCM',
-    dropoffLat: 10.7793, dropoffLng: 106.6957,
-    vehicleType: 'SCOOTER', paymentMethod: 'CARD',
-    estimatedDistance: 2.4, estimatedDuration: 600,
-    estimatedFare: calcFare('SCOOTER', 2.4, 600),         // ~44 000 (short trip)
+    customerIndex: 9, driverIndex: 9, status: 'COMPLETED', // CAR_4 Thủ Đức
+    vehicleType: 'CAR_4', paymentMethod: 'MOMO',
+    pickup: { address: 'Khu đô thị Sala, Thủ Đức', lat: 10.7857, lng: 106.7466 },
+    dropoff: { address: 'Bảo tàng TP.HCM, Q1', lat: 10.7773, lng: 106.7008 },
+    reviewRating: 4,
   },
+  // Cancelled × 2 — hủy trước khi tài xế nhận (free cancel)
   {
-    pickupAddress: 'Sân vận động Thống Nhất, Q10',
-    pickupLat: 10.7817, pickupLng: 106.6834,
-    dropoffAddress: 'Dinh Độc Lập, Q1, TP.HCM',
-    dropoffLat: 10.7793, dropoffLng: 106.6957,
+    customerIndex: 0, status: 'CANCELLED',
     vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    estimatedDistance: 2.9, estimatedDuration: 720,
-    estimatedFare: calcFare('CAR_4', 2.9, 720),           // ~96 000
+    pickup: { address: 'Nhà hàng Phở Hòa, Q10', lat: 10.7762, lng: 106.6751 },
+    dropoff: { address: 'Chợ Bình Thới, Q11', lat: 10.7688, lng: 106.6573 },
+    cancelReason: 'Đặt nhầm chuyến',
   },
   {
-    pickupAddress: 'Lotte Mart Gò Vấp, TP.HCM',
-    pickupLat: 10.8312, pickupLng: 106.6837,
-    dropoffAddress: 'Công viên Hoàng Văn Thụ, Tân Bình',
-    dropoffLat: 10.8013, dropoffLng: 106.6571,
-    vehicleType: 'CAR_7', paymentMethod: 'WALLET',
-    estimatedDistance: 5.8, estimatedDuration: 1200,
-    estimatedFare: calcFare('CAR_7', 5.8, 1200),          // ~197 000
+    customerIndex: 1, status: 'CANCELLED',
+    vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
+    pickup: { address: 'Trường THPT Lê Hồng Phong, Q5', lat: 10.7519, lng: 106.6742 },
+    dropoff: { address: 'Công viên Lê Văn Tám, Q1', lat: 10.7838, lng: 106.7013 },
+    cancelReason: 'Thay đổi kế hoạch',
+  },
+  // ─── Khu vực Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp (điểm demo giám khảo) ───
+  {
+    customerIndex: 10, driverIndex: 12, status: 'COMPLETED',
+    vehicleType: 'CAR_4', paymentMethod: 'CASH',
+    pickup: { address: 'Nguyễn Văn Bảo, Phường Hạnh Thông Tây, Gò Vấp, TP.HCM', lat: 10.8180, lng: 106.6635 },
+    dropoff: { address: 'Vincom Gò Vấp, Quang Trung, Gò Vấp, TP.HCM', lat: 10.8340, lng: 106.6648 },
+    reviewRating: 5,
+  },
+  {
+    customerIndex: 10, driverIndex: 13, status: 'COMPLETED',
+    vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
+    pickup: { address: 'Chợ Hạnh Thông Tây, Gò Vấp, TP.HCM', lat: 10.8190, lng: 106.6643 },
+    dropoff: { address: 'Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp, TP.HCM', lat: 10.8175, lng: 106.6628 },
+    reviewRating: 4,
+  },
+  {
+    customerIndex: 10, driverIndex: 14, status: 'COMPLETED',
+    vehicleType: 'CAR_4', paymentMethod: 'MOMO',
+    voucherCode: 'WEEKEND10',
+    pickup: { address: 'Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp, TP.HCM', lat: 10.8180, lng: 106.6635 },
+    dropoff: { address: 'Bệnh viện Ung Bướu, Nơ Trang Long, Bình Thạnh, TP.HCM', lat: 10.8066, lng: 106.6591 },
+    reviewRating: 5,
+  },
+  {
+    customerIndex: 3, driverIndex: 15, status: 'COMPLETED',
+    vehicleType: 'CAR_7', paymentMethod: 'CASH',
+    pickup: { address: 'Lotte Mart Gò Vấp, TP.HCM', lat: 10.8325, lng: 106.6635 },
+    dropoff: { address: 'Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp, TP.HCM', lat: 10.8180, lng: 106.6635 },
+    reviewRating: 5,
+  },
+  {
+    customerIndex: 10, status: 'CANCELLED',
+    vehicleType: 'SCOOTER', paymentMethod: 'CASH',
+    pickup: { address: 'Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp, TP.HCM', lat: 10.8180, lng: 106.6635 },
+    dropoff: { address: 'Sân bay Tân Sơn Nhất, TP.HCM', lat: 10.8189, lng: 106.6519 },
+    cancelReason: 'Thay đổi kế hoạch',
+  },
+
+  // ═══════════════════════════════════════════════════════════════════
+  // DISPATCH DEMO RIDES — Xây dựng rating phân biệt cho tài xế Hạnh Thông
+  // Mục tiêu sau seed:
+  //   0911234583 Pham Van Bao  (CAR_4, 250m từ NVB): rating ~4.8 ★★★★★
+  //   0911234585 Le Thi Mai    (CAR_4, 450m từ NVB): rating ~3.5 ★★★½
+  //   → Khi book CAR_4 tại NVB: 83 thắng scoring (gần + rating cao) → dispatch first
+  //   → Demo từ chối → 85 nhận chuyến thứ 2
+  // ═══════════════════════════════════════════════════════════════════
+
+  // 0911234583 (driverIndex 12, CAR_4) — 4 rides thêm: 3×⭐5 + 1×⭐4 → avg 4.8
+  {
+    customerIndex: 11, driverIndex: 12, status: 'COMPLETED',
+    vehicleType: 'CAR_4', paymentMethod: 'CASH',
+    pickup: { address: '295 Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp', lat: 10.8158, lng: 106.6636 },
+    dropoff: { address: 'Vincom Gò Vấp, 12 Phạm Văn Đồng, Gò Vấp', lat: 10.8340, lng: 106.6648 },
+    reviewRating: 5,
+  },
+  {
+    customerIndex: 12, driverIndex: 12, status: 'COMPLETED',
+    vehicleType: 'CAR_4', paymentMethod: 'CASH',
+    pickup: { address: 'Chợ Hạnh Thông Tây, Thống Nhất, Gò Vấp', lat: 10.8200, lng: 106.6650 },
+    dropoff: { address: 'Lotte Mart Gò Vấp, 242 Nguyễn Văn Lượng', lat: 10.8330, lng: 106.6645 },
+    reviewRating: 5,
+  },
+  {
+    customerIndex: 13, driverIndex: 12, status: 'COMPLETED',
+    vehicleType: 'CAR_4', paymentMethod: 'MOMO',
+    pickup: { address: '295 Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp', lat: 10.8158, lng: 106.6636 },
+    dropoff: { address: 'BV Nhân dân Gò Vấp, Nguyễn Kiệm, Gò Vấp', lat: 10.8050, lng: 106.6680 },
+    reviewRating: 5,
+  },
+  {
+    customerIndex: 14, driverIndex: 12, status: 'COMPLETED',
+    vehicleType: 'CAR_4', paymentMethod: 'CASH',
+    pickup: { address: 'Emart Gò Vấp, 986 Quang Trung, Gò Vấp', lat: 10.8329, lng: 106.6618 },
+    dropoff: { address: '295 Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp', lat: 10.8158, lng: 106.6636 },
+    reviewRating: 4,
+  },
+
+  // 0911234585 (driverIndex 14, CAR_4) — 3 rides thêm: 1×⭐4 + 1×⭐3 + 1×⭐2 → avg 3.5
+  {
+    customerIndex: 11, driverIndex: 14, status: 'COMPLETED',
+    vehicleType: 'CAR_4', paymentMethod: 'CASH',
+    pickup: { address: '295 Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp', lat: 10.8158, lng: 106.6636 },
+    dropoff: { address: 'Sân bay Tân Sơn Nhất, Trường Sơn, Tân Bình', lat: 10.8184, lng: 106.6519 },
+    reviewRating: 4,
+  },
+  {
+    customerIndex: 12, driverIndex: 14, status: 'COMPLETED',
+    vehicleType: 'CAR_4', paymentMethod: 'CASH',
+    pickup: { address: 'Vincom Gò Vấp, 12 Phạm Văn Đồng, Gò Vấp', lat: 10.8340, lng: 106.6648 },
+    dropoff: { address: '295 Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp', lat: 10.8158, lng: 106.6636 },
+    reviewRating: 3,
+  },
+  {
+    customerIndex: 13, driverIndex: 14, status: 'COMPLETED',
+    vehicleType: 'CAR_4', paymentMethod: 'CASH',
+    pickup: { address: 'Chợ Hạnh Thông Tây, Thống Nhất, Gò Vấp', lat: 10.8200, lng: 106.6650 },
+    dropoff: { address: 'Lotte Mart Gò Vấp, 242 Nguyễn Văn Lượng', lat: 10.8330, lng: 106.6645 },
+    reviewRating: 2,
+  },
+
+  // 0911234584 (driverIndex 13, MOTORBIKE) — 2 rides ⭐5 → rating 4.7
+  {
+    customerIndex: 11, driverIndex: 13, status: 'COMPLETED',
+    vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
+    pickup: { address: '295 Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp', lat: 10.8158, lng: 106.6636 },
+    dropoff: { address: 'Chợ Hạnh Thông Tây, Thống Nhất, Gò Vấp', lat: 10.8200, lng: 106.6650 },
+    reviewRating: 5,
+  },
+  {
+    customerIndex: 14, driverIndex: 13, status: 'COMPLETED',
+    vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
+    pickup: { address: 'BV Nhân dân Gò Vấp, Nguyễn Kiệm, Gò Vấp', lat: 10.8050, lng: 106.6680 },
+    dropoff: { address: '295 Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp', lat: 10.8158, lng: 106.6636 },
+    reviewRating: 5,
+  },
+
+  // 0911234587 (driverIndex 16, SCOOTER) — 2 rides → rating 4.5
+  {
+    customerIndex: 11, driverIndex: 16, status: 'COMPLETED',
+    vehicleType: 'SCOOTER', paymentMethod: 'CASH',
+    pickup: { address: '295 Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp', lat: 10.8158, lng: 106.6636 },
+    dropoff: { address: 'Emart Gò Vấp, 986 Quang Trung, Gò Vấp', lat: 10.8329, lng: 106.6618 },
+    reviewRating: 5,
+  },
+  {
+    customerIndex: 12, driverIndex: 16, status: 'COMPLETED',
+    vehicleType: 'SCOOTER', paymentMethod: 'CASH',
+    pickup: { address: 'Vincom Gò Vấp, 12 Phạm Văn Đồng, Gò Vấp', lat: 10.8340, lng: 106.6648 },
+    dropoff: { address: 'Chợ Hạnh Thông Tây, Thống Nhất, Gò Vấp', lat: 10.8200, lng: 106.6650 },
+    reviewRating: 4,
+  },
+
+  // ─── Cancelled thêm để phong phú history ────────────────────────────────
+  {
+    customerIndex: 11, status: 'CANCELLED',
+    vehicleType: 'CAR_4', paymentMethod: 'CASH',
+    pickup: { address: '295 Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp', lat: 10.8158, lng: 106.6636 },
+    dropoff: { address: 'Vincom Gò Vấp, 12 Phạm Văn Đồng', lat: 10.8340, lng: 106.6648 },
+    cancelReason: 'Đặt nhầm chuyến',
+  },
+  {
+    customerIndex: 12, status: 'CANCELLED',
+    vehicleType: 'MOMO', paymentMethod: 'CASH',
+    pickup: { address: 'Lotte Mart Gò Vấp, 242 Nguyễn Văn Lượng', lat: 10.8330, lng: 106.6645 },
+    dropoff: { address: '295 Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp', lat: 10.8158, lng: 106.6636 },
+    cancelReason: 'Thay đổi kế hoạch',
+    vehicleType: 'MOTORBIKE',
   },
 ];
 
-const RIDE_SEEDS = [
-  // ---- COMPLETED rides ----
-  // [AI coverage] off-peak short trip, cash, CAR_4
-  {
-    customerIndex: 0, driverIndex: 0, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    pickupAddress: '227 Nguyen Van Cu, Q5, TP.HCM', pickupLat: 10.7628, pickupLng: 106.6825,
-    dropoffAddress: 'Saigon Centre, Le Loi, Q1, TP.HCM', dropoffLat: 10.7721, dropoffLng: 106.7002,
-    distance: 3.5, duration: 900,
-    fare: calcFare('CAR_4', 3.5, 900),                    // 111 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
-  },
-  // [AI coverage] rush-hour medium trip, MOMO, CAR_4
-  {
-    customerIndex: 1, driverIndex: 1, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'MOMO',
-    pickupAddress: 'Ben Thanh Market, Q1, TP.HCM', pickupLat: 10.7726, pickupLng: 106.698,
-    dropoffAddress: 'Tan Son Nhat Airport, TP.HCM', dropoffLat: 10.8185, dropoffLng: 106.6588,
-    distance: 8.2, duration: 1800,
-    fare: calcFare('CAR_4', 8.2, 1800),                   // 210 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
-  },
-  // [AI coverage] rush-hour long trip, VNPAY, CAR_7
-  {
-    customerIndex: 2, driverIndex: 2, status: 'COMPLETED', vehicleType: 'CAR_7', paymentMethod: 'VNPAY',
-    pickupAddress: 'Phu My Hung, Q7, TP.HCM', pickupLat: 10.7294, pickupLng: 106.7187,
-    dropoffAddress: 'Thu Thiem, TP.HCM', dropoffLat: 10.7875, dropoffLng: 106.7342,
-    distance: 12.5, duration: 2400,
-    fare: calcFare('CAR_7', 12.5, 2400),                  // 369 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
-  },
-  // [AI coverage] off-peak very short trip, cash, MOTORBIKE
-  {
-    customerIndex: 3, driverIndex: 3, status: 'COMPLETED', vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
-    pickupAddress: 'Chợ Bến Thành, Q1, TP.HCM', pickupLat: 10.7726, pickupLng: 106.6981,
-    dropoffAddress: 'Nhà thờ Đức Bà, Q1, TP.HCM', dropoffLat: 10.7798, dropoffLng: 106.699,
-    distance: 1.2, duration: 360,
-    fare: calcFare('MOTORBIKE', 1.2, 360),                // 20 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
-  },
-  // [AI coverage] off-peak medium trip, MOMO, SCOOTER
-  {
-    customerIndex: 4, driverIndex: 4, status: 'COMPLETED', vehicleType: 'SCOOTER', paymentMethod: 'MOMO',
-    pickupAddress: 'Đại học Bách Khoa TPHCM, Q10', pickupLat: 10.7721, pickupLng: 106.6589,
-    dropoffAddress: 'Công viên 23/9, Q1, TP.HCM', dropoffLat: 10.7707, dropoffLng: 106.6972,
-    distance: 3.8, duration: 780,
-    fare: calcFare('SCOOTER', 3.8, 780),                  // 57 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
-  },
-  // [AI coverage] rush-hour long trip, cash, CAR_4
-  {
-    customerIndex: 5, driverIndex: 5, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    pickupAddress: 'Landmark 81, Binh Thanh, TP.HCM', pickupLat: 10.7949, pickupLng: 106.7219,
-    dropoffAddress: 'Crescent Mall, Q7, TP.HCM', dropoffLat: 10.7299, dropoffLng: 106.7212,
-    distance: 10.7, duration: 2100,
-    fare: calcFare('CAR_4', 10.7, 2100),                  // 257 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
-  },
-  // [AI coverage] off-peak medium trip, VNPAY, CAR_4
-  {
-    customerIndex: 6, driverIndex: 6, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'VNPAY',
-    pickupAddress: 'Lotte Mart Gò Vấp, TP.HCM', pickupLat: 10.8312, pickupLng: 106.6837,
-    dropoffAddress: 'Bệnh viện Gia Định, Bình Thạnh', dropoffLat: 10.8156, dropoffLng: 106.7021,
-    distance: 5.8, duration: 1080,
-    fare: calcFare('CAR_4', 5.8, 1080),                   // 151 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
-  },
-  // [AI coverage] off-peak very short trip, cash, MOTORBIKE
-  {
-    customerIndex: 7, driverIndex: 7, status: 'COMPLETED', vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
-    pickupAddress: 'Ga Sài Gòn, Q3, TP.HCM', pickupLat: 10.7814, pickupLng: 106.6819,
-    dropoffAddress: 'Hồ Con Rùa, Q3, TP.HCM', dropoffLat: 10.7793, dropoffLng: 106.6957,
-    distance: 1.5, duration: 480,
-    fare: calcFare('MOTORBIKE', 1.5, 480),                // 23 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
-  },
-  // [AI coverage] off-peak medium trip, MOMO, CAR_7
-  {
-    customerIndex: 8, driverIndex: 8, status: 'COMPLETED', vehicleType: 'CAR_7', paymentMethod: 'MOMO',
-    pickupAddress: 'Vinhomes Grand Park, Thu Duc, TP.HCM', pickupLat: 10.8434, pickupLng: 106.8287,
-    dropoffAddress: 'Ben Xe Mien Dong Moi, Thu Duc', dropoffLat: 10.8412, dropoffLng: 106.8098,
-    distance: 6.4, duration: 960,
-    fare: calcFare('CAR_7', 6.4, 960),                    // 199 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
-  },
-  // [AI coverage] rush-hour very long trip, cash, CAR_4
-  {
-    customerIndex: 9, driverIndex: 9, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    pickupAddress: 'Aeon Mall Tan Phu, TP.HCM', pickupLat: 10.8018, pickupLng: 106.6187,
-    dropoffAddress: 'Trường ĐH Kinh Tế TP.HCM, Q10', dropoffLat: 10.7623, dropoffLng: 106.6825,
-    distance: 14.2, duration: 2280,
-    fare: calcFare('CAR_4', 14.2, 2280),                  // 315 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
-  },
-  // [AI coverage] off-peak short trip (<2.5km), VNPAY, SCOOTER
-  {
-    customerIndex: 10, driverIndex: 0, status: 'COMPLETED', vehicleType: 'SCOOTER', paymentMethod: 'VNPAY',
-    pickupAddress: 'RMIT Sài Gòn, Q7, TP.HCM', pickupLat: 10.7316, pickupLng: 106.7222,
-    dropoffAddress: 'Phú Mỹ Hưng, Q7, TP.HCM', dropoffLat: 10.7294, dropoffLng: 106.7187,
-    distance: 2.1, duration: 540,
-    fare: calcFare('SCOOTER', 2.1, 540),                  // 41 000 (short trip)
-    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
-  },
-  // [AI coverage] off-peak ultra-short trip (<2.5km), MOMO, CAR_4
-  {
-    customerIndex: 11, driverIndex: 1, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'MOMO',
-    pickupAddress: 'Dinh Độc Lập, Q1, TP.HCM', pickupLat: 10.7793, pickupLng: 106.6957,
-    dropoffAddress: 'Bảo tàng Chiến tranh, Q3, TP.HCM', dropoffLat: 10.7785, dropoffLng: 106.6896,
-    distance: 0.9, duration: 300,
-    fare: calcFare('CAR_4', 0.9, 300),                    // 59 000 (short trip)
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
-  },
-  // [AI coverage] off-peak medium trip, cash, MOTORBIKE
-  {
-    customerIndex: 12, driverIndex: 2, status: 'COMPLETED', vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
-    pickupAddress: 'Sân vận động Thống Nhất, Q10', pickupLat: 10.7817, pickupLng: 106.6834,
-    dropoffAddress: 'Bệnh viện Chợ Rẫy, Q5, TP.HCM', dropoffLat: 10.7555, dropoffLng: 106.6721,
-    distance: 4.1, duration: 840,
-    fare: calcFare('MOTORBIKE', 4.1, 840),                // 42 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
-  },
-  // [AI coverage] rush-hour medium trip, VNPAY, CAR_7
-  {
-    customerIndex: 13, driverIndex: 3, status: 'COMPLETED', vehicleType: 'CAR_7', paymentMethod: 'VNPAY',
-    pickupAddress: 'Bến cảng Nhà Rồng, Q4, TP.HCM', pickupLat: 10.7647, pickupLng: 106.7046,
-    dropoffAddress: 'Khu đô thị Sala, TP.Thủ Đức', dropoffLat: 10.7857, dropoffLng: 106.7466,
-    distance: 7.3, duration: 1380,
-    fare: calcFare('CAR_7', 7.3, 1380),                   // 232 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
-  },
-  // [AI coverage] off-peak short trip, cash, CAR_4
-  {
-    customerIndex: 14, driverIndex: 4, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    pickupAddress: 'Chợ Tân Bình, TP.HCM', pickupLat: 10.7967, pickupLng: 106.6516,
-    dropoffAddress: 'Sân bay Tân Sơn Nhất, TP.HCM', dropoffLat: 10.8185, dropoffLng: 106.6588,
-    distance: 3.2, duration: 720,
-    fare: calcFare('CAR_4', 3.2, 720),                    // 101 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
-  },
-  // ---- CANCELLED rides ----
-  {
-    customerIndex: 15, driverIndex: 5, status: 'CANCELLED', vehicleType: 'CAR_4', paymentMethod: 'MOMO',
-    pickupAddress: 'Nhà hàng Phở Hòa, Q10, TP.HCM', pickupLat: 10.7762, pickupLng: 106.6751,
-    dropoffAddress: 'Chợ Bình Thới, Q11, TP.HCM', dropoffLat: 10.7688, dropoffLng: 106.6573,
-    distance: 2.8, duration: 660,
-    fare: calcFare('CAR_4', 2.8, 660),                    // 93 000
-    paymentStatus: 'FAILED', paymentProvider: 'MOMO', paymentCompleted: false,
-  },
-  {
-    customerIndex: 16, driverIndex: undefined, status: 'CANCELLED', vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
-    pickupAddress: 'Trường THPT Lê Hồng Phong, Q5', pickupLat: 10.7519, pickupLng: 106.6742,
-    dropoffAddress: 'Công viên Lê Văn Tám, Q1', dropoffLat: 10.7838, dropoffLng: 106.7013,
-    distance: 4.7, duration: 900,
-    fare: calcFare('MOTORBIKE', 4.7, 900),                // 46 000
-    paymentStatus: 'FAILED', paymentProvider: 'MOCK', paymentCompleted: false,
-  },
-  // ---- ASSIGNED (driver matched, not picked up yet) ----
-  {
-    customerIndex: 17, driverIndex: 6, status: 'ASSIGNED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    pickupAddress: 'Vinhomes Central Park, Bình Thạnh', pickupLat: 10.7941, pickupLng: 106.7207,
-    dropoffAddress: 'Bạch Đằng Wharf, Q1, TP.HCM', dropoffLat: 10.7768, dropoffLng: 106.7067,
-    distance: 5.1, duration: 840,
-    fare: calcFare('CAR_4', 5.1, 840),                    // 133 000
-    paymentStatus: 'PENDING', paymentProvider: 'MOCK', paymentCompleted: false,
-  },
-  // ---- PICKING_UP (driver on the way to customer) ----
-  {
-    customerIndex: 18, driverIndex: 7, status: 'PICKING_UP', vehicleType: 'CAR_7', paymentMethod: 'VNPAY',
-    pickupAddress: 'BigC An Lạc, Bình Tân, TP.HCM', pickupLat: 10.7521, pickupLng: 106.6092,
-    dropoffAddress: 'Đầm Sen, Q11, TP.HCM', dropoffLat: 10.7666, dropoffLng: 106.6382,
-    distance: 5.4, duration: 1020,
-    fare: calcFare('CAR_7', 5.4, 1020),                   // 183 000
-    paymentStatus: 'PENDING', paymentProvider: 'VNPAY', paymentCompleted: false,
-  },
-  // ---- IN_PROGRESS (ride currently happening) ----
-  {
-    customerIndex: 19, driverIndex: 8, status: 'IN_PROGRESS', vehicleType: 'CAR_4', paymentMethod: 'MOMO',
-    pickupAddress: 'Landmark 81, Bình Thạnh, TP.HCM', pickupLat: 10.7949, pickupLng: 106.7219,
-    dropoffAddress: 'Crescent Mall, Q7, TP.HCM', dropoffLat: 10.7299, dropoffLng: 106.7212,
-    distance: 10.7, duration: 2100,
-    fare: calcFare('CAR_4', 10.7, 2100),                  // 257 000
-    paymentStatus: 'PROCESSING', paymentProvider: 'MOMO', paymentCompleted: false,
-  },
-  // ---- FINDING_DRIVER (surge 1.2 — rush-hour demand spike) ----
-  {
-    customerIndex: 0, driverIndex: undefined, status: 'FINDING_DRIVER', vehicleType: 'CAR_7', paymentMethod: 'MOMO',
-    pickupAddress: 'Aeon Mall Tân Phú, TP.HCM', pickupLat: 10.8018, pickupLng: 106.6187,
-    dropoffAddress: 'Trường ĐH Kinh Tế TP.HCM, Q10', dropoffLat: 10.7623, dropoffLng: 106.6825,
-    distance: 14.2, duration: 2280,
-    fare: calcFare('CAR_7', 14.2, 2280, 1.2),             // 475 000 (surge 1.2)
-    paymentStatus: 'REQUIRES_ACTION', paymentProvider: 'MOMO', paymentCompleted: false,
-  },
-  // ---- More COMPLETED (varied distances, all vehicle types) ----
-  {
-    customerIndex: 1, driverIndex: 9, status: 'COMPLETED', vehicleType: 'SCOOTER', paymentMethod: 'CASH',
-    pickupAddress: 'Trường ĐH Sư Phạm TPHCM, Q5', pickupLat: 10.7627, pickupLng: 106.6844,
-    dropoffAddress: 'Siêu thị Co.opmart Đinh Tiên Hoàng, Bình Thạnh', dropoffLat: 10.8024, dropoffLng: 106.7113,
-    distance: 5.9, duration: 1140,
-    fare: calcFare('SCOOTER', 5.9, 1140),                 // 78 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
-  },
-  {
-    customerIndex: 2, driverIndex: 0, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'VNPAY',
-    pickupAddress: 'Bệnh viện Đại học Y Dược, Q5, TP.HCM', pickupLat: 10.7614, pickupLng: 106.6779,
-    dropoffAddress: 'Trung tâm thương mại Bitexco, Q1', dropoffLat: 10.7722, dropoffLng: 106.7047,
-    distance: 2.7, duration: 660,
-    fare: calcFare('CAR_4', 2.7, 660),                    // 91 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
-  },
-  {
-    customerIndex: 3, driverIndex: 1, status: 'COMPLETED', vehicleType: 'MOTORBIKE', paymentMethod: 'MOMO',
-    pickupAddress: 'Công viên Hoàng Văn Thụ, Tân Bình', pickupLat: 10.8013, pickupLng: 106.6571,
-    dropoffAddress: 'Chợ Phạm Văn Hai, Tân Bình', dropoffLat: 10.7986, dropoffLng: 106.6493,
-    distance: 1.0, duration: 300,
-    fare: calcFare('MOTORBIKE', 1.0, 300),                // 18 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
-  },
-  {
-    customerIndex: 4, driverIndex: 2, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    pickupAddress: 'Đại học Quốc gia TP.HCM, Thu Duc', pickupLat: 10.8701, pickupLng: 106.8037,
-    dropoffAddress: 'QTSC, Quận 12, TP.HCM', dropoffLat: 10.8642, dropoffLng: 106.7978,
-    distance: 2.3, duration: 480,
-    fare: calcFare('CAR_4', 2.3, 480),                    // 86 000 (short trip)
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
-  },
-  {
-    customerIndex: 5, driverIndex: 3, status: 'COMPLETED', vehicleType: 'CAR_7', paymentMethod: 'VNPAY',
-    pickupAddress: 'Khu đô thị Sala, TP.Thủ Đức', pickupLat: 10.7857, pickupLng: 106.7466,
-    dropoffAddress: 'Bảo tàng TP.HCM, Q1', dropoffLat: 10.7773, dropoffLng: 106.7008,
-    distance: 8.6, duration: 1560,
-    fare: calcFare('CAR_7', 8.6, 1560),                   // 264 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
-  },
-];
+// ─── Ride lifecycle helpers ──────────────────────────────────────────────────
 
-const FOCUSED_COMPLETED_RIDE_SEEDS: typeof RIDE_SEEDS = [
-  // Bến Thành cluster — short trips for UI distance/rating test
-  {
-    customerIndex: 0, driverIndex: 0, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    pickupAddress: 'Cửa Nam Chợ Bến Thành, Q1, TP.HCM', pickupLat: 10.77255, pickupLng: 106.69815,
-    dropoffAddress: 'Dinh Độc Lập, Q1, TP.HCM', dropoffLat: 10.77930, dropoffLng: 106.69570,
-    distance: 1.1, duration: 360,
-    fare: calcFare('CAR_4', 1.1, 360),                    // 64 000 (short trip)
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
-  },
-  {
-    customerIndex: 1, driverIndex: 1, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'MOMO',
-    pickupAddress: 'Ga Metro Bến Thành, Q1, TP.HCM', pickupLat: 10.77305, pickupLng: 106.69775,
-    dropoffAddress: 'Saigon Centre, Q1, TP.HCM', dropoffLat: 10.77210, dropoffLng: 106.70020,
-    distance: 1.4, duration: 420,
-    fare: calcFare('CAR_4', 1.4, 420),                    // 70 000 (short trip)
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
-  },
-  {
-    customerIndex: 2, driverIndex: 7, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'VNPAY',
-    pickupAddress: 'Công viên 23/9 - Bến Thành, Q1, TP.HCM', pickupLat: 10.77095, pickupLng: 106.69710,
-    dropoffAddress: 'Hồ Con Rùa, Q3, TP.HCM', dropoffLat: 10.77930, dropoffLng: 106.69570,
-    distance: 2.0, duration: 540,
-    fare: calcFare('CAR_4', 2.0, 540),                    // 83 000 (short trip)
-    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
-  },
-  // Tân Sơn Nhất cluster
-  {
-    customerIndex: 3, driverIndex: 10, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'CASH',
-    pickupAddress: 'Ga Quốc Nội - Sân bay Tân Sơn Nhất, TP.HCM', pickupLat: 10.81895, pickupLng: 106.65840,
-    dropoffAddress: 'Công viên Hoàng Văn Thụ, Tân Bình, TP.HCM', dropoffLat: 10.80130, dropoffLng: 106.65710,
-    distance: 2.3, duration: 600,
-    fare: calcFare('CAR_4', 2.3, 600),                    // 90 000 (short trip)
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOCK', paymentCompleted: true,
-  },
-  {
-    customerIndex: 4, driverIndex: 14, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'MOMO',
-    pickupAddress: 'Ga Quốc Tế - Sân bay Tân Sơn Nhất, TP.HCM', pickupLat: 10.81785, pickupLng: 106.66455,
-    dropoffAddress: 'Lăng Cha Cả, Tân Bình, TP.HCM', dropoffLat: 10.80455, dropoffLng: 106.65635,
-    distance: 2.8, duration: 720,
-    fare: calcFare('CAR_4', 2.8, 720),                    // 95 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'MOMO', paymentCompleted: true,
-  },
-  {
-    customerIndex: 5, driverIndex: 18, status: 'COMPLETED', vehicleType: 'CAR_4', paymentMethod: 'VNPAY',
-    pickupAddress: 'Đường Trường Sơn - cổng sân bay Tân Sơn Nhất, TP.HCM', pickupLat: 10.81265, pickupLng: 106.66410,
-    dropoffAddress: 'E.Town Cộng Hòa, Tân Bình, TP.HCM', dropoffLat: 10.80120, dropoffLng: 106.65320,
-    distance: 3.1, duration: 780,
-    fare: calcFare('CAR_4', 3.1, 780),                    // 101 000
-    paymentStatus: 'COMPLETED', paymentProvider: 'VNPAY', paymentCompleted: true,
-  },
-];
-
-RIDE_SEEDS.splice(0, FOCUSED_COMPLETED_RIDE_SEEDS.length, ...FOCUSED_COMPLETED_RIDE_SEEDS);
-
-function hoursAgo(hours: number) {
-  return new Date(Date.now() - hours * 60 * 60 * 1000);
-}
-
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
-  const toRad = (value: number) => (value * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const startLat = toRad(lat1);
-  const endLat = toRad(lat2);
-
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(startLat) * Math.cos(endLat) * Math.sin(dLng / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return 6371 * c;
-}
-
-function formatCoordinate(lat: number, lng: number) {
-  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-}
-
-function getVehicleTypeLabel(vehicleType: string) {
-  if (vehicleType === 'MOTORBIKE') {
-    return 'Xe máy số';
-  }
-  if (vehicleType === 'SCOOTER') {
-    return 'Xe tay ga';
-  }
-  if (vehicleType === 'CAR_4') {
-    return 'Ô tô 4 chỗ';
-  }
-  if (vehicleType === 'CAR_7') {
-    return 'Ô tô 7 chỗ';
-  }
-  return vehicleType;
-}
-
-function getNearestDriverHub(lat: number, lng: number) {
-  return DRIVER_LOCATION_HUBS
-    .map((hub) => ({
-      ...hub,
-      distanceKm: haversineKm(lat, lng, hub.lat, hub.lng),
-    }))
-    .sort((left, right) => left.distanceKm - right.distanceKm)[0];
-}
-
-function getCustomerReference(index: number) {
-  const focusedReference = FOCUSED_CUSTOMER_REFERENCES.get(index);
-  if (focusedReference) {
-    return {
-      address: focusedReference.address,
-      lat: focusedReference.lat,
-      lng: focusedReference.lng,
-    };
-  }
-
-  const rideSeed = RIDE_SEEDS.find((item) => item.customerIndex === index);
-  if (rideSeed) {
-    return {
-      address: rideSeed.pickupAddress,
-      lat: rideSeed.pickupLat,
-      lng: rideSeed.pickupLng,
-    };
-  }
-
-  const booking = BOOKINGS[index % BOOKINGS.length];
-  return {
-    address: booking.pickupAddress,
-    lat: booking.pickupLat,
-    lng: booking.pickupLng,
+async function createRideViaCustomer(customer: RegisteredUser, plan: RideSeedPlan): Promise<string> {
+  const body: any = {
+    pickup: plan.pickup,
+    dropoff: plan.dropoff,
+    vehicleType: plan.vehicleType,
+    paymentMethod: plan.paymentMethod,
   };
+  if (plan.voucherCode) body.voucherCode = plan.voucherCode;
+
+  const res = await http<any>('/api/rides', {
+    method: 'POST',
+    token: customer.accessToken,
+    body,
+    expectedStatuses: [200, 201],
+  });
+  const rideId = res?.data?.ride?.id || res?.data?.id;
+  if (!rideId) {
+    throw new Error(`createRide response malformed: ${JSON.stringify(res)}`);
+  }
+  return rideId;
 }
 
-function getSeedRideTimeline(index: number, rideSeed: typeof RIDE_SEEDS[number]) {
-  const requestedAt = hoursAgo(24 - index * 3);
-  const assignedAt = rideSeed.driverIndex !== undefined ? new Date(requestedAt.getTime() + 5 * 60 * 1000) : null;
-  const startedAt = rideSeed.status === 'IN_PROGRESS' || rideSeed.status === 'COMPLETED'
-    ? new Date(requestedAt.getTime() + 18 * 60 * 1000)
-    : null;
-  const completedAt = rideSeed.status === 'COMPLETED'
-    ? new Date(requestedAt.getTime() + (rideSeed.duration + 25 * 60) * 1000)
-    : null;
-  const cancelledAt = rideSeed.status === 'CANCELLED'
-    ? new Date(requestedAt.getTime() + 9 * 60 * 1000)
-    : null;
+async function payRideOnlineMock(customer: RegisteredUser, rideId: string, amount: number, provider: 'MOMO' | 'VNPAY') {
+  // Step 1 — initiate payment so the gateway / payment-service create a
+  // Payment row keyed by rideId (orderId).
+  const endpoint = provider === 'MOMO' ? '/api/payments/momo/create' : '/api/payments/vnpay/create';
+  await http(endpoint, {
+    method: 'POST',
+    token: customer.accessToken,
+    body: {
+      rideId,
+      amount,
+      returnUrl: 'http://localhost:4000/payment/return',
+    },
+    expectedStatuses: [200, 201],
+  });
 
-  return {
-    requestedAt,
-    assignedAt,
-    startedAt,
-    completedAt,
-    cancelledAt,
-  };
-}
-
-function getSeedCommissionRate(vehicleType: string) {
-  switch (vehicleType) {
-    case 'CAR_7':    return 0.15;
-    case 'CAR_4':    return 0.18;
-    case 'SCOOTER':  return 0.18;
-    default:         return 0.20; // MOTORBIKE
+  // Step 2 — mark COMPLETED via the IPN endpoints by rideId.
+  // handleMomoWebhook only verifies signature when one is provided; we omit
+  // signature so the seed deterministically marks the ride COMPLETED without
+  // having to fake the partner secret.
+  if (provider === 'MOMO') {
+    await http('/api/payments/ipn/momo', {
+      method: 'POST',
+      body: {
+        orderId: rideId,
+        resultCode: 0,
+        transId: `SEED-MOMO-${Date.now()}`,
+        message: 'Sandbox seed success',
+      },
+      expectedStatuses: [200, 201],
+    });
+  } else {
+    await http('/api/payments/ipn/vnpay', {
+      method: 'POST',
+      body: {
+        vnp_TxnRef: rideId.replace(/-/g, '').slice(0, 8),
+        vnp_ResponseCode: '00',
+        vnp_TransactionStatus: '00',
+        vnp_TransactionNo: `SEED-VNPAY-${Date.now()}`,
+        vnp_OrderInfo: `PAY_RIDE_${rideId}`,
+        orderId: rideId,
+      },
+      expectedStatuses: [200, 201],
+    });
   }
 }
 
-function getSeedRideBonus(index: number, rideSeed: typeof RIDE_SEEDS[number]) {
-  let bonus = 0;
-
-  if (rideSeed.fare >= 100_000) {
-    bonus += 6_000;
+async function pollDriverAcceptable(driverToken: string, rideId: string): Promise<boolean> {
+  // Driver-service /me/rides/:rideId/accept proxies to ride-service /driver-accept
+  // which checks status === FINDING_DRIVER. We poll until ride is in that state.
+  for (let i = 0; i < DRIVER_ACCEPT_RETRY_MAX; i += 1) {
+    try {
+      const res = await http<any>(`/api/rides/${rideId}`, {
+        method: 'GET',
+        token: driverToken,
+      });
+      const status = res?.data?.ride?.status;
+      if (status === 'FINDING_DRIVER') return true;
+      if (status === 'ASSIGNED' || status === 'ACCEPTED') return false; // already taken
+    } catch {
+      // ignore — keep polling
+    }
+    await sleep(DRIVER_ACCEPT_RETRY_DELAY_MS);
   }
+  return false;
+}
 
-  if (index % 5 === 0) {
-    bonus += 4_000;
+async function driverAcceptViaDriverService(driver: RegisteredUser, rideId: string): Promise<boolean> {
+  for (let attempt = 1; attempt <= DRIVER_ACCEPT_RETRY_MAX; attempt += 1) {
+    try {
+      await http(`/api/drivers/me/rides/${rideId}/accept`, {
+        method: 'POST',
+        token: driver.accessToken,
+        expectedStatuses: [200, 201],
+      });
+      return true;
+    } catch (err: any) {
+      const msg = String(err?.message || '');
+      if (msg.includes('400') || msg.includes('409')) {
+        // ride still being matched, retry
+        if (attempt < DRIVER_ACCEPT_RETRY_MAX) {
+          await sleep(DRIVER_ACCEPT_RETRY_DELAY_MS);
+          continue;
+        }
+      }
+      throw err;
+    }
   }
-
-  return bonus;
+  return false;
 }
 
-function getSeedRidePenalty(index: number) {
-  return index % 7 === 0 ? 2_000 : 0;
+async function rideTransition(driverToken: string, rideId: string, action: 'accept' | 'pickup' | 'start' | 'complete') {
+  await http(`/api/rides/${rideId}/${action}`, {
+    method: 'POST',
+    token: driverToken,
+    expectedStatuses: [200, 201],
+  });
 }
 
-function getSeedDriverEarnings(index: number, rideSeed: typeof RIDE_SEEDS[number]) {
-  const grossFare = rideSeed.fare;
-  const commissionRate = getSeedCommissionRate(rideSeed.vehicleType);
-  const platformFee = Math.round(grossFare * commissionRate);
-  const bonus = getSeedRideBonus(index, rideSeed);
-  const penalty = getSeedRidePenalty(index);
-  const netEarnings = Math.max(0, grossFare - platformFee + bonus - penalty);
-  const driverCollected = rideSeed.paymentMethod === 'CASH';
-  const cashDebt = driverCollected ? Math.max(0, platformFee - bonus + penalty) : 0;
-
-  return {
-    grossFare,
-    commissionRate,
-    platformFee,
-    bonus,
-    penalty,
-    netEarnings,
-    driverCollected,
-    cashDebt,
-  };
+async function customerCancelRide(customer: RegisteredUser, rideId: string, reason: string) {
+  await http(`/api/rides/${rideId}/cancel`, {
+    method: 'POST',
+    token: customer.accessToken,
+    body: { reason },
+    expectedStatuses: [200, 201],
+  });
 }
 
-function isSeedPeakHour(date: Date) {
-  const vnHour = (date.getUTCHours() + 7) % 24;
-  return (vnHour >= 6 && vnHour < 9) || (vnHour >= 16 && vnHour < 19);
-}
-
-function getVietnamCalendarDate(date: Date) {
-  const shifted = new Date(date.getTime() + 7 * 60 * 60 * 1000);
-  return new Date(Date.UTC(
-    shifted.getUTCFullYear(),
-    shifted.getUTCMonth(),
-    shifted.getUTCDate(),
-  ));
-}
-
-async function generateSeedReferenceReport(
-  adminId: string,
-  customerIds: string[],
-  driverUserIds: string[],
-  driverIds: string[]
+async function submitReview(
+  reviewerToken: string,
+  rideId: string,
+  type: 'CUSTOMER_TO_DRIVER' | 'DRIVER_TO_CUSTOMER',
+  revieweeId: string,
+  revieweeName: string,
+  rating: number,
+  comment: string,
 ) {
-  const authPrisma = createServicePrismaClient('auth-service', 'auth_db');
-  const driverPrisma = createServicePrismaClient('driver-service', 'driver_db');
+  await http('/api/reviews', {
+    method: 'POST',
+    token: reviewerToken,
+    body: { rideId, type, revieweeId, revieweeName, rating, comment },
+    expectedStatuses: [200, 201],
+  });
+}
 
-  try {
-    const [customerUsers, driverUsers, drivers]: [any[], any[], any[]] = await Promise.all([
-      authPrisma.user.findMany({ where: { id: { in: customerIds } } }),
-      authPrisma.user.findMany({ where: { id: { in: driverUserIds } } }),
-      driverPrisma.driver.findMany({ where: { id: { in: driverIds } } }),
-    ]);
+// ─── Ride seed orchestration ─────────────────────────────────────────────────
 
-    const customerUsersById = new Map(customerUsers.map((user: any) => [user.id, user]));
-    const driverUsersById = new Map(driverUsers.map((user: any) => [user.id, user]));
-    const driversById = new Map(drivers.map((driver: any) => [driver.id, driver]));
+type SeededRide = {
+  rideId: string;
+  status: 'COMPLETED' | 'CANCELLED';
+  customerPhone: string;
+  driverPhone?: string;
+  vehicleType: string;
+  paymentMethod: string;
+  fare?: number;
+};
 
-    const driverRows = driverIds.map((driverId, index) => {
-      const driver = driversById.get(driverId) as any;
-      const authUser = driverUsersById.get(driver?.userId || driverUserIds[index]);
-      const nearestHub = getNearestDriverHub(driver.lastLocationLat, driver.lastLocationLng);
-      const focusedDriver = FOCUSED_DRIVER_OVERRIDES.get(index);
+function reviewCommentForRating(rating: number): string {
+  if (rating >= 5) return 'Tài xế chuyên nghiệp, xe sạch, đúng giờ.';
+  if (rating === 4) return 'Chuyến đi ổn, tài xế thân thiện.';
+  if (rating === 3) return 'Chuyến đi bình thường, không có gì đặc biệt.';
+  if (rating === 2) return 'Tài xế đến chậm, chất lượng phục vụ chưa tốt.';
+  return 'Trải nghiệm chưa hài lòng, mong cải thiện.';
+}
 
-      return {
-        index: index + 1,
-        id: driverId,
-        name: `${authUser?.firstName || DRIVERS[index].firstName} ${authUser?.lastName || DRIVERS[index].lastName}`,
-        email: authUser?.email || DRIVERS[index].email,
-        phone: authUser?.phone || DRIVERS[index].phone,
-        status: driver.status,
-        availabilityStatus: driver.availabilityStatus,
-        vehicleType: driver.vehicleType,
-        vehicleLabel: getVehicleTypeLabel(driver.vehicleType),
-        vehicleName: `${driver.vehicleBrand} ${driver.vehicleModel}`,
-        plate: driver.vehiclePlate,
-        imageUrl: driver.vehicleImageUrl,
-        ratingAverage: Number(driver.ratingAverage || 0),
-        ratingCount: Number(driver.ratingCount || 0),
-        lat: Number(driver.lastLocationLat),
-        lng: Number(driver.lastLocationLng),
-        nearestHubName: nearestHub.name,
-        nearestHubDistanceKm: nearestHub.distanceKm,
-        focusedScenarioLabel: focusedDriver?.label || null,
-      };
+async function seedRides(
+  customers: RegisteredUser[],
+  drivers: RegisteredUser[],
+  driverProfiles: DriverProfile[],
+): Promise<SeededRide[]> {
+  console.log(`  [rides] orchestrating ${RIDE_PLANS.length} rides via API lifecycle...`);
+  const rides: SeededRide[] = [];
+
+  for (let i = 0; i < RIDE_PLANS.length; i += 1) {
+    const plan = RIDE_PLANS[i];
+    const customer = customers[plan.customerIndex];
+    const driverUser = plan.driverIndex !== undefined ? drivers[plan.driverIndex] : undefined;
+    const driverProfile = plan.driverIndex !== undefined ? driverProfiles[plan.driverIndex] : undefined;
+    const driverMeta = plan.driverIndex !== undefined ? DRIVERS[plan.driverIndex] : undefined;
+
+    console.log(`    [ride ${i + 1}/${RIDE_PLANS.length}] ${plan.status} ${plan.vehicleType} ${plan.paymentMethod}` +
+      `${plan.voucherCode ? ` voucher=${plan.voucherCode}` : ''}` +
+      ` customer=${customer.phone}${driverUser ? ` driver=${driverUser.phone}` : ''}`);
+
+    let rideId: string;
+    try {
+      rideId = await createRideViaCustomer(customer, plan);
+    } catch (err: any) {
+      console.log(`      ! createRide failed: ${err.message?.slice(0, 200)}`);
+      continue;
+    }
+
+    // For online payment: pay first to push ride into FINDING_DRIVER
+    if (plan.paymentMethod === 'MOMO' || plan.paymentMethod === 'VNPAY') {
+      await sleep(500);
+      // Fetch ride to know fare
+      const rideInfo = await http<any>(`/api/rides/${rideId}`, {
+        method: 'GET', token: customer.accessToken,
+      });
+      const fare = Math.round(rideInfo?.data?.ride?.fare || 100_000);
+      await payRideOnlineMock(customer, rideId, fare, plan.paymentMethod as 'MOMO' | 'VNPAY');
+    }
+
+    if (plan.status === 'CANCELLED') {
+      // Wait briefly then cancel
+      await sleep(1500);
+      await customerCancelRide(customer, rideId, plan.cancelReason || 'Khách hủy');
+      rides.push({
+        rideId,
+        status: 'CANCELLED',
+        customerPhone: customer.phone,
+        vehicleType: plan.vehicleType,
+        paymentMethod: plan.paymentMethod,
+      });
+      console.log(`      = ride CANCELLED (${plan.cancelReason})`);
+      continue;
+    }
+
+    // COMPLETED — wait for FINDING_DRIVER, then driver accepts and runs lifecycle
+    if (!driverUser || !driverProfile || !driverMeta) {
+      console.log(`      ! plan missing driver, skipping`);
+      continue;
+    }
+
+    await sleep(DELAY_AFTER_RIDE_CREATE_MS);
+
+    // Driver-accept (FINDING_DRIVER → ASSIGNED). Use driver-service which proxies to /driver-accept.
+    const accepted = await driverAcceptViaDriverService(driverUser, rideId);
+    if (!accepted) {
+      console.log(`      ! driver could not accept ride after retries`);
+      continue;
+    }
+
+    // Then full lifecycle: accept (ASSIGNED → ACCEPTED) → pickup → start → complete
+    await rideTransition(driverUser.accessToken, rideId, 'accept');
+    await sleep(300);
+    await rideTransition(driverUser.accessToken, rideId, 'pickup');
+    await sleep(300);
+    await rideTransition(driverUser.accessToken, rideId, 'start');
+    await sleep(300);
+    await rideTransition(driverUser.accessToken, rideId, 'complete');
+
+    // Reviews
+    if (plan.reviewRating) {
+      await sleep(300);
+      try {
+        await submitReview(
+          customer.accessToken,
+          rideId,
+          'CUSTOMER_TO_DRIVER',
+          driverProfile.driverId,
+          `${driverUser.firstName} ${driverUser.lastName}`,
+          plan.reviewRating,
+          reviewCommentForRating(plan.reviewRating),
+        );
+      } catch (err: any) {
+        console.log(`      ! customer review failed: ${err.message?.slice(0, 120)}`);
+      }
+      try {
+        await submitReview(
+          driverUser.accessToken,
+          rideId,
+          'DRIVER_TO_CUSTOMER',
+          customer.userId,
+          `${customer.firstName} ${customer.lastName}`,
+          5,
+          'Khách hàng lịch sự, đúng giờ.',
+        );
+      } catch (err: any) {
+        console.log(`      ! driver review failed: ${err.message?.slice(0, 120)}`);
+      }
+    }
+
+    // Fetch final fare for report
+    let finalFare = 0;
+    try {
+      const rideInfo = await http<any>(`/api/rides/${rideId}`, { method: 'GET', token: customer.accessToken });
+      finalFare = Math.round(rideInfo?.data?.ride?.fare || 0);
+    } catch {/* ignore */}
+
+    rides.push({
+      rideId,
+      status: 'COMPLETED',
+      customerPhone: customer.phone,
+      driverPhone: driverUser.phone,
+      vehicleType: plan.vehicleType,
+      paymentMethod: plan.paymentMethod,
+      fare: finalFare,
     });
+    console.log(`      = ride COMPLETED fare=${finalFare.toLocaleString('vi-VN')}đ`);
+  }
 
-    const customerRows = customerIds.map((customerId, index) => {
-      const authUser = customerUsersById.get(customerId) as any;
-      const reference = getCustomerReference(index);
-      const focusedCustomer = FOCUSED_CUSTOMER_REFERENCES.get(index);
+  return rides;
+}
 
-      return {
-        index: index + 1,
-        id: customerId,
-        name: `${authUser?.firstName || CUSTOMERS[index].firstName} ${authUser?.lastName || CUSTOMERS[index].lastName}`,
-        email: authUser?.email || CUSTOMERS[index].email,
-        phone: authUser?.phone || CUSTOMERS[index].phone,
-        address: reference.address,
-        lat: reference.lat,
-        lng: reference.lng,
-        focusedScenarioLabel: focusedCustomer?.label || null,
-      };
+// ─── Generate seed reference doc ─────────────────────────────────────────────
+
+async function generateSeedReference(
+  adminToken: string,
+  customers: RegisteredUser[],
+  drivers: RegisteredUser[],
+  driverProfiles: DriverProfile[],
+  rides: SeededRide[],
+) {
+  console.log('  [report] querying APIs to build seed-accounts-reference.md...');
+
+  // Fetch wallet balance per driver from wallet-service (the canonical ledger
+  // keyed by auth userId). GET /api/wallet/balance → wallet-service returns
+  // { balance, lockedBalance, availableBalance, status, ... }.
+  const driverWallets = new Map<string, number>();
+  for (const drv of drivers) {
+    try {
+      const res = await http<any>('/api/wallet/balance', {
+        method: 'GET',
+        token: drv.accessToken,
+      });
+      const balance = Number(res?.data?.balance ?? res?.data?.availableBalance ?? 0);
+      driverWallets.set(drv.userId, balance);
+    } catch {
+      driverWallets.set(drv.userId, 0);
+    }
+  }
+
+  // Fetch driver list via admin endpoint
+  let adminDrivers: any[] = [];
+  try {
+    const res = await http<any>('/api/admin/drivers?limit=100&offset=0', {
+      method: 'GET',
+      token: adminToken,
     });
+    adminDrivers = res?.data?.drivers || [];
+  } catch (err: any) {
+    console.log(`    ! admin drivers fetch failed: ${err.message?.slice(0, 80)}`);
+  }
+  const driverByDriverId = new Map<string, any>(adminDrivers.map((d: any) => [d.id, d]));
 
-    const driverRowsByIndex = new Map(driverRows.map((driver) => [driver.index - 1, driver]));
-    const customerRowsByIndex = new Map(customerRows.map((customer) => [customer.index - 1, customer]));
+  // Fetch vouchers via admin endpoint
+  let voucherRows: any[] = [];
+  try {
+    const res = await http<any>('/api/voucher/admin', { method: 'GET', token: adminToken });
+    voucherRows = res?.data?.vouchers || res?.data || [];
+    if (!Array.isArray(voucherRows)) voucherRows = [];
+  } catch (err: any) {
+    console.log(`    ! voucher list fetch failed: ${err.message?.slice(0, 80)}`);
+  }
 
-    const clusterRows = DRIVER_LOCATION_HUBS.map((hub) => {
-      const driversInCluster = driverRows.filter((driver) => driver.nearestHubName === hub.name);
-      return {
-        hub,
-        drivers: driversInCluster,
-      };
+  // Build report
+  const lines: string[] = [];
+  const generatedAt = new Date();
+  lines.push('# Seed Accounts Reference');
+  lines.push('');
+  lines.push(`> Sinh tự động bởi pure-API seed script (\`scripts/seed-database.ts\`).`);
+  lines.push(`> Mọi tài khoản và dữ liệu dưới đây đều được tạo qua API gateway thật, KHÔNG ghi DB trực tiếp.`);
+  lines.push(`> Ngoại lệ duy nhất: bootstrap admin user (1 INSERT vào \`auth_db\`).`);
+  lines.push('');
+  lines.push(`Generated at: ${generatedAt.toLocaleString('vi-VN')}`);
+  lines.push('');
+
+  lines.push('## Credentials chung');
+  lines.push('');
+  lines.push(`- Mật khẩu chung cho mọi tài khoản: \`${SEED_PASSWORD}\``);
+  lines.push(`- API Gateway: ${GATEWAY_BASE}`);
+  lines.push(`- Customer app: http://localhost:4000`);
+  lines.push(`- Driver app: http://localhost:4001`);
+  lines.push(`- Admin dashboard: http://localhost:4002`);
+  lines.push('');
+
+  lines.push('## Admin');
+  lines.push('');
+  lines.push(`- Phone: \`${ADMIN.phone}\` — Email: \`${ADMIN.email}\` — Họ tên: \`${ADMIN.firstName} ${ADMIN.lastName}\``);
+  lines.push('');
+
+  lines.push('## Customers');
+  lines.push('');
+  lines.push('| # | Phone | Họ tên | UserId |');
+  lines.push('|---|-------|--------|--------|');
+  customers.forEach((c, i) => {
+    lines.push(`| ${i + 1} | \`${c.phone}\` | ${c.firstName} ${c.lastName} | \`${c.userId}\` |`);
+  });
+  lines.push('');
+
+  lines.push('## Drivers');
+  lines.push('');
+  lines.push('Cluster + vehicle + license + vị trí seed. Ví kích hoạt 300.000đ (trừ commission sau ride). Tất cả OFFLINE sau seed — cần bật Online thủ công khi test.');
+  lines.push('');
+  lines.push('| # | Phone | Họ tên | Cluster | Vehicle | Plate | License | Status | Wallet (đ) | DriverId |');
+  lines.push('|---|-------|--------|---------|---------|-------|---------|--------|-----------|----------|');
+  drivers.forEach((u, i) => {
+    const meta = DRIVERS[i];
+    const profile = driverProfiles[i];
+    const live = driverByDriverId.get(profile.driverId);
+    const status = profile.pending ? 'PENDING' : (live?.status || 'APPROVED');
+    const wallet = driverWallets.get(u.userId) || 0;
+    lines.push(`| ${i + 1} | \`${u.phone}\` | ${u.firstName} ${u.lastName} | ${meta.cluster} | ${meta.vehicle.brand} ${meta.vehicle.model} (${meta.vehicle.type}) | \`${meta.vehicle.plate}\` | ${meta.license.class} ${meta.license.number} | ${status} | ${wallet.toLocaleString('vi-VN')} | \`${profile.driverId}\` |`);
+  });
+  lines.push('');
+
+  // Pending drivers
+  const pendingDrivers = driverProfiles
+    .map((p, i) => ({ p, meta: DRIVERS[i], user: drivers[i] }))
+    .filter(({ p }) => p.pending);
+  if (pendingDrivers.length > 0) {
+    lines.push('## Driver chờ duyệt (cho TC admin approve)');
+    lines.push('');
+    lines.push('| Phone | Họ tên | Cluster | Vehicle | DriverId |');
+    lines.push('|-------|--------|---------|---------|----------|');
+    pendingDrivers.forEach(({ p, meta, user }) => {
+      lines.push(`| \`${user.phone}\` | ${user.firstName} ${user.lastName} | ${meta.cluster} | ${meta.vehicle.type} ${meta.vehicle.plate} | \`${p.driverId}\` |`);
     });
+    lines.push('');
+  }
 
-    const nearbyScenarioRows = customerRows.map((customer) => {
-      const distances = driverRows
-        .filter((driver) => driver.status === 'APPROVED')
-        .map((driver) => ({
-          ...driver,
-          distanceKm: haversineKm(customer.lat, customer.lng, driver.lat, driver.lng),
-        }))
-        .sort((left, right) => left.distanceKm - right.distanceKm);
-
-      return {
-        customer,
-        within3km: distances.filter((driver) => driver.distanceKm <= 3).slice(0, 5),
-        outside3km: distances.filter((driver) => driver.distanceKm > 3).slice(0, 5),
-      };
+  lines.push('## Cụm tài xế approved');
+  lines.push('');
+  const clusters = new Map<string, Array<{ phone: string; vehicle: string; plate: string; lat: number; lng: number }>>();
+  driverProfiles.forEach((p, i) => {
+    if (p.pending) return;
+    const meta = DRIVERS[i];
+    const u = drivers[i];
+    const arr = clusters.get(meta.cluster) || [];
+    arr.push({
+      phone: u.phone,
+      vehicle: `${meta.vehicle.brand} ${meta.vehicle.model}`,
+      plate: meta.vehicle.plate,
+      lat: meta.location.lat,
+      lng: meta.location.lng,
     });
-
-    const lines: string[] = [];
-    lines.push('# Seed Account Reference');
+    clusters.set(meta.cluster, arr);
+  });
+  for (const [name, list] of clusters.entries()) {
+    lines.push(`### ${name}`);
     lines.push('');
-    lines.push(`Generated at: ${new Date().toLocaleString('vi-VN')}`);
-    lines.push('');
-    lines.push('## Credentials');
-    lines.push('');
-    lines.push(`- Admin: ${ADMIN.email} / ${ADMIN.phone}`);
-    lines.push('- Password chung: Password@1');
-    lines.push(`- Admin userId: ${adminId}`);
-    lines.push('');
-    lines.push('## Tài khoản test trọng điểm');
-    lines.push('');
-    lines.push('- 6 tài xế ưu tiên đều dùng chung loại xe Ô tô 4 chỗ để test ghép chuyến và popup khoảng cách.');
-    lines.push('- Bộ rating trọng điểm theo từng cụm là 1 sao, 2 sao, 3 sao.');
-    lines.push('');
-    for (const group of FOCUSED_TEST_GROUPS) {
-      lines.push(`### ${group.label}`);
-      lines.push('');
-      lines.push('| Vai trò | Họ tên | Điện thoại | Email | Rating | Ghi chú |');
-      lines.push('| --- | --- | --- | --- | --- | --- |');
-
-      for (let i = 0; i < group.drivers.length; i++) {
-        const driver = driverRowsByIndex.get(group.drivers[i].index);
-        const customer = customerRowsByIndex.get(group.customers[i].index);
-
-        if (driver) {
-          lines.push(`| Driver ${i + 1} | ${driver.name} | ${driver.phone} | ${driver.email} | ${driver.ratingAverage.toFixed(1)} (${driver.ratingCount}) | ${driver.vehicleName} - ${driver.plate} |`);
-        }
-
-        if (customer) {
-          lines.push(`| Customer ${i + 1} | ${customer.name} | ${customer.phone} | ${customer.email} | ${group.drivers[i].ratingAverage} sao | ${customer.address} |`);
-        }
-      }
-
-      lines.push('');
-    }
-
-    lines.push('## Driver Accounts');
-    lines.push('');
-    lines.push('| # | Tài xế | Điện thoại | Trạng thái | Loại xe | Xe | Biển số | Rating | Ảnh | Vị trí hiện tại | Cụm gần nhất |');
-    lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
-    for (const driver of driverRows) {
-      lines.push(`| ${driver.index} | ${driver.name} | ${driver.phone} | ${driver.status} / ${driver.availabilityStatus} | ${driver.vehicleLabel} | ${driver.vehicleName} | ${driver.plate} | ${driver.ratingAverage.toFixed(1)} (${driver.ratingCount}) | ${driver.imageUrl} | ${formatCoordinate(driver.lat, driver.lng)} | ${driver.nearestHubName} (${driver.nearestHubDistanceKm.toFixed(2)} km) |`);
+    lines.push('| Phone | Xe | Plate | Toạ độ |');
+    lines.push('|-------|----|-------|---------|');
+    for (const d of list) {
+      lines.push(`| \`${d.phone}\` | ${d.vehicle} | \`${d.plate}\` | ${d.lat}, ${d.lng} |`);
     }
     lines.push('');
-    lines.push('## Customer Accounts');
-    lines.push('');
-    lines.push('| # | Khách hàng | Điện thoại | Email | Điểm seed tham chiếu | Tọa độ |');
-    lines.push('| --- | --- | --- | --- | --- | --- |');
-    for (const customer of customerRows) {
-      lines.push(`| ${customer.index} | ${customer.name} | ${customer.phone} | ${customer.email} | ${customer.address} | ${formatCoordinate(customer.lat, customer.lng)} |`);
-    }
-    lines.push('');
-    lines.push('## Driver Clusters');
-    lines.push('');
-    for (const cluster of clusterRows) {
-      lines.push(`### ${cluster.hub.name}`);
-      lines.push('');
-      if (cluster.drivers.length === 0) {
-        lines.push('- Không có tài xế trong cụm này.');
-        lines.push('');
-        continue;
-      }
-
-      for (const driver of cluster.drivers) {
-        lines.push(`- ${driver.phone} - ${driver.name} - ${driver.vehicleName} - ${driver.plate} - ${formatCoordinate(driver.lat, driver.lng)}`);
-      }
-      lines.push('');
-    }
-    lines.push('## Kịch bản tài xế trong và ngoài 3 km theo từng khách hàng');
-    lines.push('');
-    for (const scenario of nearbyScenarioRows) {
-      lines.push(`### ${scenario.customer.phone} - ${scenario.customer.name}`);
-      lines.push(`- Điểm tham chiếu: ${scenario.customer.address} (${formatCoordinate(scenario.customer.lat, scenario.customer.lng)})`);
-      lines.push('- Tài xế trong 3 km:');
-      if (scenario.within3km.length === 0) {
-        lines.push('  Không có tài xế nào trong bán kính 3 km.');
-      } else {
-        for (const driver of scenario.within3km) {
-          lines.push(`  ${driver.phone} - ${driver.vehicleName} - ${driver.plate} - ${driver.distanceKm.toFixed(2)} km - ${driver.nearestHubName}`);
-        }
-      }
-      lines.push('- Tài xế ngoài 3 km gần nhất:');
-      if (scenario.outside3km.length === 0) {
-        lines.push('  Không có tài xế ngoài 3 km.');
-      } else {
-        for (const driver of scenario.outside3km) {
-          lines.push(`  ${driver.phone} - ${driver.vehicleName} - ${driver.plate} - ${driver.distanceKm.toFixed(2)} km - ${driver.nearestHubName}`);
-        }
-      }
-      lines.push('');
-    }
-
-    fs.writeFileSync(SEED_REFERENCE_OUTPUT, `${lines.join('\n')}\n`, 'utf8');
-    console.log(`   Seed account reference: ${SEED_REFERENCE_OUTPUT}`);
-  } finally {
-    await authPrisma.$disconnect();
-    await driverPrisma.$disconnect();
   }
-}
 
-// ============ SEED FUNCTIONS ============
-
-async function seedAuthDB() {
-  console.log('  Seeding auth_db...');
-  const prisma = createServicePrismaClient('auth-service', 'auth_db');
-
-  try {
-    // Seed admin
-    const admin = await prisma.user.upsert({
-      where: { phone: ADMIN.phone },
-      update: { passwordHash: SEED_PASSWORD_HASH, status: 'ACTIVE' },
-      create: {
-        email: ADMIN.email,
-        phone: ADMIN.phone,
-        role: 'ADMIN',
-        status: 'ACTIVE',
-        firstName: ADMIN.firstName,
-        lastName: ADMIN.lastName,
-        passwordHash: SEED_PASSWORD_HASH,
-      },
+  lines.push('## Vouchers');
+  lines.push('');
+  lines.push('| Code | Audience | Discount | Min fare | Max discount | UsageLimit | Active |');
+  lines.push('|------|----------|----------|----------|--------------|------------|--------|');
+  if (voucherRows.length > 0) {
+    voucherRows.forEach((v: any) => {
+      const discount = v.discountType === 'PERCENT' ? `${v.discountValue}%` : `${Number(v.discountValue).toLocaleString('vi-VN')}đ`;
+      lines.push(`| \`${v.code}\` | ${v.audienceType || '—'} | ${discount} | ${v.minFare ? Number(v.minFare).toLocaleString('vi-VN') + 'đ' : '0đ'} | ${v.maxDiscount ? Number(v.maxDiscount).toLocaleString('vi-VN') + 'đ' : '—'} | ${v.usageLimit || '∞'} | ${v.isActive ? '✓' : '✗'} |`);
     });
-    console.log(`    Admin: ${admin.phone} (${admin.id})`);
-
-    // Seed customers
-    const customerIds: string[] = [];
-    for (const c of CUSTOMERS) {
-      const user = await prisma.user.upsert({
-        where: { phone: c.phone },
-        update: { passwordHash: SEED_PASSWORD_HASH, status: 'ACTIVE' },
-        create: {
-          email: c.email,
-          phone: c.phone,
-          role: 'CUSTOMER',
-          status: 'ACTIVE',
-          firstName: c.firstName,
-          lastName: c.lastName,
-          passwordHash: SEED_PASSWORD_HASH,
-        },
-      });
-      customerIds.push(user.id);
-      console.log(`    Customer: ${user.phone} (${user.id})`);
-    }
-
-    // Seed driver users
-    const driverUserIds: string[] = [];
-    for (const d of DRIVERS) {
-      const user = await prisma.user.upsert({
-        where: { email: d.email },
-        update: {
-          phone: d.phone,
-          role: 'DRIVER',
-          status: 'ACTIVE',
-          firstName: d.firstName,
-          lastName: d.lastName,
-          passwordHash: SEED_PASSWORD_HASH,
-        },
-        create: {
-          email: d.email,
-          phone: d.phone,
-          role: 'DRIVER',
-          status: 'ACTIVE',
-          firstName: d.firstName,
-          lastName: d.lastName,
-          passwordHash: SEED_PASSWORD_HASH,
-        },
-      });
-      driverUserIds.push(user.id);
-      console.log(`    Driver user: ${user.phone} (${user.id})`);
-    }
-
-    await prisma.$disconnect();
-    return { customerIds, driverUserIds, adminId: admin.id };
-  } catch (error) {
-    await prisma.$disconnect();
-    throw error;
-  }
-}
-
-async function seedUserDB(customerIds: string[], driverUserIds: string[], adminId: string) {
-  console.log('  Seeding user_db...');
-  const prisma = createServicePrismaClient('user-service', 'user_db');
-
-  try {
-    await prisma.userProfile.upsert({
-      where: { userId: adminId },
-      update: {},
-      create: {
-        userId: adminId,
-        firstName: ADMIN.firstName,
-        lastName: ADMIN.lastName,
-        phone: ADMIN.phone,
-        status: 'ACTIVE',
-      },
+  } else {
+    VOUCHER_SEEDS.forEach((v) => {
+      const discount = v.discountType === 'PERCENT' ? `${v.discountValue}%` : `${v.discountValue.toLocaleString('vi-VN')}đ`;
+      lines.push(`| \`${v.code}\` | ${v.audienceType} | ${discount} | ${(v.minFare || 0).toLocaleString('vi-VN')}đ | ${'maxDiscount' in v && v.maxDiscount ? Number(v.maxDiscount).toLocaleString('vi-VN') + 'đ' : '—'} | ${v.usageLimit || '∞'} | ${v.isActive ? '✓' : '✗'} |`);
     });
-
-    // Seed customer profiles
-    for (let i = 0; i < customerIds.length; i++) {
-      await prisma.userProfile.upsert({
-        where: { userId: customerIds[i] },
-        update: {},
-        create: {
-          userId: customerIds[i],
-          firstName: CUSTOMERS[i].firstName,
-          lastName: CUSTOMERS[i].lastName,
-          phone: CUSTOMERS[i].phone,
-          status: 'ACTIVE',
-        },
-      });
-    }
-
-    // Seed driver profiles
-    for (let i = 0; i < driverUserIds.length; i++) {
-      await prisma.userProfile.upsert({
-        where: { userId: driverUserIds[i] },
-        update: {},
-        create: {
-          userId: driverUserIds[i],
-          firstName: DRIVERS[i].firstName,
-          lastName: DRIVERS[i].lastName,
-          phone: DRIVERS[i].phone,
-          status: 'ACTIVE',
-        },
-      });
-    }
-
-    console.log(`    ${1 + customerIds.length + driverUserIds.length} profiles created`);
-    await prisma.$disconnect();
-  } catch (error) {
-    await prisma.$disconnect();
-    throw error;
   }
+  lines.push('');
+
+  const completedRides = rides.filter(r => r.status === 'COMPLETED');
+  const cancelledRides = rides.filter(r => r.status === 'CANCELLED');
+  lines.push(`## Rides đã seed (${rides.length} tổng: ${completedRides.length} COMPLETED, ${cancelledRides.length} CANCELLED)`);
+  lines.push('');
+  lines.push('> Không có ride FINDING_DRIVER hay IN_PROGRESS sau seed. Toàn bộ driver đã OFFLINE.');
+  lines.push('');
+  lines.push('| # | Status | Vehicle | Payment | Customer | Driver | Fare (đ) | RideId |');
+  lines.push('|---|--------|---------|---------|----------|--------|---------|--------|');
+  rides.forEach((r, i) => {
+    lines.push(`| ${i + 1} | ${r.status} | ${r.vehicleType} | ${r.paymentMethod} | \`${r.customerPhone}\` | ${r.driverPhone ? '`' + r.driverPhone + '`' : '—'} | ${r.fare ? r.fare.toLocaleString('vi-VN') : '—'} | \`${r.rideId}\` |`);
+  });
+  lines.push('');
+
+  lines.push('## Incentive rules');
+  lines.push('');
+  lines.push('| Type | Condition | Reward (đ) | Description |');
+  lines.push('|------|-----------|-----------|-------------|');
+  for (const r of INCENTIVE_RULES) {
+    lines.push(`| ${r.type} | ${r.conditionValue} | ${r.rewardAmount.toLocaleString('vi-VN')} | ${r.description} |`);
+  }
+  lines.push('');
+
+  fs.writeFileSync(SEED_REFERENCE_OUTPUT, lines.join('\n') + '\n', 'utf8');
+  console.log(`  [report] written: ${SEED_REFERENCE_OUTPUT}`);
 }
 
-async function seedDriverDB(driverUserIds: string[]) {
-  console.log('  Seeding driver_db...');
-  const prisma = createServicePrismaClient('driver-service', 'driver_db');
+// ─── Wait for services healthy ───────────────────────────────────────────────
 
-  try {
-    const driverIds: string[] = [];
-    const seededLocations: SeededDriverLocation[] = [];
-
-    for (let i = 0; i < driverUserIds.length; i++) {
-      const d = DRIVERS[i];
-      const focusedDriver = FOCUSED_DRIVER_OVERRIDES.get(i);
-      const location = focusedDriver
-        ? { lat: focusedDriver.lat, lng: focusedDriver.lng }
-        : seededDriverLocation(i);
-      const seedPendingApproval = i >= driverUserIds.length - 3;
-      const availabilityStatus = seedPendingApproval ? 'OFFLINE' : (focusedDriver ? 'ONLINE' : (i % 9 === 0 ? 'OFFLINE' : 'ONLINE'));
-      const status = seedPendingApproval ? 'PENDING' : 'APPROVED';
-      const ratingAverage = seedPendingApproval ? 0 : (focusedDriver?.ratingAverage ?? (4.3 + (i % 7) * 0.08));
-      const ratingCount = seedPendingApproval ? 0 : (focusedDriver?.ratingCount ?? (25 + i * 3));
-
-      const driver = await prisma.driver.upsert({
-        where: { userId: driverUserIds[i] },
-        update: {
-          status,
-          availabilityStatus,
-          vehicleType: d.vehicle.type,
-          vehicleBrand: d.vehicle.brand,
-          vehicleModel: d.vehicle.model,
-          vehiclePlate: d.vehicle.plate,
-          vehicleColor: d.vehicle.color,
-          vehicleYear: d.vehicle.year,
-          vehicleImageUrl: resolveVehicleImagePath(d.vehicle),
-          licenseClass: d.license.class || getLicenseClassByVehicleType(d.vehicle.type),
-          licenseNumber: d.license.number,
-          licenseExpiryDate: d.license.expiryDate,
-          licenseVerified: !seedPendingApproval,
-          ratingAverage,
-          ratingCount,
-          lastLocationLat: location.lat,
-          lastLocationLng: location.lng,
-          lastLocationTime: new Date(),
-        },
-        create: {
-          userId: driverUserIds[i],
-          status,
-          availabilityStatus,
-          vehicleType: d.vehicle.type,
-          vehicleBrand: d.vehicle.brand,
-          vehicleModel: d.vehicle.model,
-          vehiclePlate: d.vehicle.plate,
-          vehicleColor: d.vehicle.color,
-          vehicleYear: d.vehicle.year,
-          vehicleImageUrl: resolveVehicleImagePath(d.vehicle),
-          licenseClass: d.license.class || getLicenseClassByVehicleType(d.vehicle.type),
-          licenseNumber: d.license.number,
-          licenseExpiryDate: d.license.expiryDate,
-          licenseVerified: !seedPendingApproval,
-          ratingAverage,
-          ratingCount,
-          lastLocationLat: location.lat,
-          lastLocationLng: location.lng,
-          lastLocationTime: new Date(),
-        },
-      });
-      driverIds.push(driver.id);
-      seededLocations.push({
-        driverId: driver.id,
-        lat: location.lat,
-        lng: location.lng,
-        isOnline: availabilityStatus === 'ONLINE',
-      });
-      console.log(`    Driver: ${d.vehicle.plate} (${driver.id})`);
-    }
-
-    await seedDriverGeoIndex(seededLocations);
-
-    await prisma.$disconnect();
-    return { driverIds, seededLocations };
-  } catch (error) {
-    await prisma.$disconnect();
-    throw error;
+async function waitForGateway() {
+  for (let i = 0; i < 30; i += 1) {
+    try {
+      const res = await fetch(`${GATEWAY_BASE}/health`);
+      if (res.ok) return;
+    } catch {/* ignore */}
+    await sleep(1000);
   }
+  throw new Error(`Gateway ${GATEWAY_BASE} not responding`);
 }
 
-async function seedBookingDB(customerIds: string[]) {
-  console.log('  Seeding booking_db...');
-  const prisma = createServicePrismaClient('booking-service', 'booking_db');
-
-  try {
-    const bookingIds: string[] = [];
-
-    for (let i = 0; i < BOOKINGS.length; i++) {
-      const b = BOOKINGS[i];
-      const booking = await prisma.booking.create({
-        data: {
-          customerId: customerIds[i % customerIds.length],
-          pickupAddress: b.pickupAddress,
-          pickupLat: b.pickupLat,
-          pickupLng: b.pickupLng,
-          dropoffAddress: b.dropoffAddress,
-          dropoffLat: b.dropoffLat,
-          dropoffLng: b.dropoffLng,
-          vehicleType: b.vehicleType,
-          paymentMethod: b.paymentMethod,
-          estimatedFare: b.estimatedFare,
-          estimatedDistance: b.estimatedDistance,
-          estimatedDuration: b.estimatedDuration,
-          status: 'CONFIRMED',
-          confirmedAt: new Date(),
-        },
-      });
-      bookingIds.push(booking.id);
-      console.log(`    Booking: ${booking.id} (${b.pickupAddress} -> ${b.dropoffAddress})`);
-    }
-
-    await prisma.$disconnect();
-    return bookingIds;
-  } catch (error) {
-    await prisma.$disconnect();
-    throw error;
-  }
-}
-
-async function seedRideDB(customerIds: string[], driverIds: string[]) {
-  console.log('  Seeding ride_db...');
-  const prisma = createServicePrismaClient('ride-service', 'ride_db');
-
-  try {
-    const rides: Array<{ id: string; status: string }> = [];
-
-    for (let index = 0; index < RIDE_SEEDS.length; index += 1) {
-      const rideSeed = RIDE_SEEDS[index];
-      const timeline = getSeedRideTimeline(index, rideSeed);
-      const acceptedAt = rideSeed.driverIndex !== undefined
-        && ['ACCEPTED', 'PICKING_UP', 'IN_PROGRESS', 'COMPLETED'].includes(rideSeed.status)
-        && timeline.assignedAt
-        ? new Date(timeline.assignedAt.getTime() + 2 * 60 * 1000)
-        : null;
-
-      const ride = await prisma.ride.create({
-        data: {
-          customerId: customerIds[rideSeed.customerIndex],
-          driverId: rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null,
-          status: rideSeed.status,
-          vehicleType: rideSeed.vehicleType,
-          paymentMethod: rideSeed.paymentMethod,
-          pickupAddress: rideSeed.pickupAddress,
-          pickupLat: rideSeed.pickupLat,
-          pickupLng: rideSeed.pickupLng,
-          dropoffAddress: rideSeed.dropoffAddress,
-          dropoffLat: rideSeed.dropoffLat,
-          dropoffLng: rideSeed.dropoffLng,
-          distance: rideSeed.distance,
-          duration: rideSeed.duration,
-          fare: rideSeed.fare,
-          surgeMultiplier: rideSeed.status === 'FINDING_DRIVER' ? 1.2 : 1,
-          suggestedDriverIds: rideSeed.driverIndex !== undefined ? [driverIds[rideSeed.driverIndex]] : [],
-          offeredDriverIds: rideSeed.driverIndex !== undefined ? [driverIds[rideSeed.driverIndex]] : [],
-          acceptedDriverId: ['ASSIGNED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS', 'COMPLETED'].includes(rideSeed.status)
-            ? (rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null)
-            : null,
-          requestedAt: timeline.requestedAt,
-          offeredAt: timeline.assignedAt,
-          assignedAt: timeline.assignedAt,
-          acceptedAt,
-          startedAt: timeline.startedAt,
-          completedAt: timeline.completedAt,
-          cancelledAt: timeline.cancelledAt,
-          cancelReason: rideSeed.status === 'CANCELLED' ? 'Khách hàng đổi kế hoạch' : null,
-          cancelledBy: rideSeed.status === 'CANCELLED' ? 'CUSTOMER' : null,
-        },
-      });
-
-      rides.push({ id: ride.id, status: rideSeed.status });
-
-      const transitions = [
-        {
-          rideId: ride.id,
-          fromStatus: null,
-          toStatus: 'CREATED',
-          actorId: customerIds[rideSeed.customerIndex],
-          actorType: 'CUSTOMER',
-          occurredAt: timeline.requestedAt,
-        },
-      ];
-
-      if (rideSeed.status === 'FINDING_DRIVER') {
-        transitions.push({
-          rideId: ride.id,
-          fromStatus: 'CREATED',
-          toStatus: 'FINDING_DRIVER',
-          actorId: null,
-          actorType: 'SYSTEM',
-          occurredAt: timeline.requestedAt,
-        });
-      }
-
-      if (rideSeed.driverIndex !== undefined && timeline.assignedAt) {
-        transitions.push({
-          rideId: ride.id,
-          fromStatus: 'CREATED',
-          toStatus: 'ASSIGNED',
-          actorId: driverIds[rideSeed.driverIndex],
-          actorType: 'SYSTEM',
-          occurredAt: timeline.assignedAt,
-        });
-      }
-
-      if (acceptedAt && ['ACCEPTED', 'PICKING_UP', 'IN_PROGRESS', 'COMPLETED'].includes(rideSeed.status)) {
-        transitions.push({
-          rideId: ride.id,
-          fromStatus: 'ASSIGNED',
-          toStatus: 'ACCEPTED',
-          actorId: rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null,
-          actorType: 'DRIVER',
-          occurredAt: acceptedAt,
-        });
-      }
-
-      if (acceptedAt && ['PICKING_UP', 'IN_PROGRESS', 'COMPLETED'].includes(rideSeed.status)) {
-        transitions.push({
-          rideId: ride.id,
-          fromStatus: 'ACCEPTED',
-          toStatus: 'PICKING_UP',
-          actorId: rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null,
-          actorType: 'DRIVER',
-          occurredAt: new Date(acceptedAt.getTime() + 4 * 60 * 1000),
-        });
-      }
-
-      if (timeline.startedAt && ['IN_PROGRESS', 'COMPLETED'].includes(rideSeed.status)) {
-        transitions.push({
-          rideId: ride.id,
-          fromStatus: 'PICKING_UP',
-          toStatus: 'IN_PROGRESS',
-          actorId: rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null,
-          actorType: 'DRIVER',
-          occurredAt: timeline.startedAt,
-        });
-      }
-
-      if (timeline.completedAt && rideSeed.status === 'COMPLETED') {
-        transitions.push({
-          rideId: ride.id,
-          fromStatus: 'IN_PROGRESS',
-          toStatus: 'COMPLETED',
-          actorId: rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null,
-          actorType: 'DRIVER',
-          occurredAt: timeline.completedAt,
-        });
-      }
-
-      if (timeline.cancelledAt && rideSeed.status === 'CANCELLED') {
-        transitions.push({
-          rideId: ride.id,
-          fromStatus: rideSeed.driverIndex !== undefined ? 'ASSIGNED' : 'CREATED',
-          toStatus: 'CANCELLED',
-          actorId: customerIds[rideSeed.customerIndex],
-          actorType: 'CUSTOMER',
-          occurredAt: timeline.cancelledAt,
-        });
-      }
-
-      await prisma.rideStateTransition.createMany({
-        data: transitions,
-      });
-
-      console.log(`    Ride: ${ride.id} (${rideSeed.status})`);
-    }
-
-    await prisma.$disconnect();
-    return rides;
-  } catch (error) {
-    await prisma.$disconnect();
-    throw error;
-  }
-}
-
-// ─── Seed wallet-service (wallet_db) ─────────────────────────────────────────
-// Seeds the wallet-service database for the deposit-based wallet model,
-// including driver wallets, top-up orders, merchant ledger snapshot,
-// bank simulation data, incentive rules, and daily stats.
-async function seedWalletDB(driverIds: string[]) {
-  console.log('  Seeding wallet_db (wallet-service)...');
-  const prisma = createServicePrismaClient('wallet-service', 'wallet_db');
-
-  const ACTIVATION_BALANCE = 300_000;
-  const DEMO_WITHDRAWABLE_BALANCE = 150_000;
-  const DEMO_NET_EARNINGS = DEMO_WITHDRAWABLE_BALANCE;
-  const DEMO_COMMISSION_RATE = 0.2;
-  const DEMO_GROSS_FARE = Math.round(DEMO_NET_EARNINGS / (1 - DEMO_COMMISSION_RATE));
-  const DEMO_PLATFORM_FEE = DEMO_GROSS_FARE - DEMO_NET_EARNINGS;
-
-  const systemBankAccounts = [
-    {
-      id: 'MAIN_ACCOUNT',
-      bankName: 'Techcombank',
-      accountNumber: '8000511204',
-      accountHolder: 'CONG TY TNHH CAB BOOKING SYSTEM',
-      type: 'SETTLEMENT_ACCOUNT',
-      description: 'Tài khoản nhận thanh toán online và nạp ví tài xế',
-      isActive: true,
-    },
-    {
-      id: 'PAYOUT_ACCOUNT',
-      bankName: 'Techcombank',
-      accountNumber: '8000511204',
-      accountHolder: 'CONG TY TNHH CAB BOOKING SYSTEM',
-      type: 'PAYOUT_ACCOUNT',
-      description: 'Tài khoản chi trả khi tài xế rút tiền',
-      isActive: true,
-    },
-  ];
-
-  const rules = [
-    { type: 'TRIP_COUNT', conditionValue: 10, rewardAmount: 50_000, isActive: true, description: 'Chạy >= 10 cuốc/ngày thưởng 50.000 đ' },
-    { type: 'TRIP_COUNT', conditionValue: 20, rewardAmount: 120_000, isActive: true, description: 'Chạy >= 20 cuốc/ngày thưởng 120.000 đ' },
-    { type: 'DISTANCE_KM', conditionValue: 50, rewardAmount: 30_000, isActive: true, description: 'Đạt >= 50 km/ngày thưởng 30.000 đ' },
-    { type: 'PEAK_HOUR', conditionValue: 0, rewardAmount: 10_000, isActive: true, description: 'Mỗi cuốc trong giờ cao điểm thưởng 10.000 đ' },
-  ];
-
-  try {
-    const upsertSeedBankTransaction = async (data: {
-      fromAccount: string;
-      toAccount: string;
-      amount: number;
-      type: string;
-      referenceId: string;
-      description: string;
-      metadata?: Record<string, unknown>;
-      createdAt: Date;
-    }) => {
-      const existing = await (prisma as any).bankTransaction.findFirst({
-        where: {
-          referenceId: data.referenceId,
-          type: data.type,
-        },
-      });
-
-      if (existing) {
-        await (prisma as any).bankTransaction.update({
-          where: { id: existing.id },
-          data,
-        });
-        return;
-      }
-
-      await (prisma as any).bankTransaction.create({ data });
-    };
-
-    const upsertSeedIncentiveRule = async (rule: typeof rules[number]) => {
-      const existingRules = await (prisma as any).incentiveRule.findMany({
-        where: {
-          type: rule.type,
-          conditionValue: rule.conditionValue,
-          rewardAmount: rule.rewardAmount,
-        },
-        orderBy: { createdAt: 'asc' },
-      });
-
-      if (existingRules.length === 0) {
-        await (prisma as any).incentiveRule.create({ data: rule });
-        return;
-      }
-
-      await (prisma as any).incentiveRule.update({
-        where: { id: existingRules[0].id },
-        data: {
-          isActive: rule.isActive,
-          description: rule.description,
-          conditionValue: rule.conditionValue,
-          rewardAmount: rule.rewardAmount,
-        },
-      });
-
-      if (existingRules.length > 1) {
-        await (prisma as any).incentiveRule.deleteMany({
-          where: {
-            id: {
-              in: existingRules.slice(1).map((item: any) => item.id),
-            },
-          },
-        });
-      }
-    };
-
-    for (const account of systemBankAccounts) {
-      await (prisma as any).systemBankAccount.upsert({
-        where: { id: account.id },
-        create: account,
-        update: {
-          bankName: account.bankName,
-          accountNumber: account.accountNumber,
-          accountHolder: account.accountHolder,
-          type: account.type,
-          description: account.description,
-          isActive: account.isActive,
-        },
-      });
-    }
-
-    for (const rule of rules) {
-      await upsertSeedIncentiveRule(rule);
-    }
-
-    for (const [index, driverId] of driverIds.entries()) {
-      const provider = index % 2 === 0 ? 'MOMO' : 'VNPAY';
-      const activationOrderId = `seed_wallet_activation_order_${driverId}`;
-      const activationGatewayTxnId = `SEED_${provider}_${driverId.slice(0, 8).toUpperCase()}`;
-      const activationCreatedAt = hoursAgo(120 - Math.min(index, 48));
-      const activationCompletedAt = new Date(activationCreatedAt.getTime() + 5 * 60 * 1000);
-      const earningReferenceId = `seed_wallet_earning_${driverId}`;
-      const earningCreatedAt = hoursAgo(24 - (index % 6));
-      const totalBalance = ACTIVATION_BALANCE + DEMO_WITHDRAWABLE_BALANCE;
-      const statsDate = getVietnamCalendarDate(earningCreatedAt);
-
-      await prisma.$transaction(async (tx: any) => {
-        await tx.driverWallet.upsert({
-          where: { driverId },
-          update: {
-            balance: totalBalance,
-            availableBalance: totalBalance,
-            lockedBalance: ACTIVATION_BALANCE,
-            debt: 0,
-            status: 'ACTIVE',
-            initialActivationCompleted: true,
-          },
-          create: {
-            driverId,
-            balance: totalBalance,
-            availableBalance: totalBalance,
-            lockedBalance: ACTIVATION_BALANCE,
-            debt: 0,
-            status: 'ACTIVE',
-            initialActivationCompleted: true,
-          },
-        });
-
-        await tx.walletTopUpOrder.upsert({
-          where: { orderId: activationOrderId },
-          update: {
-            driverId,
-            amount: ACTIVATION_BALANCE,
-            provider,
-            status: 'COMPLETED',
-            gatewayTxnId: activationGatewayTxnId,
-            gatewayResponse: {
-              seeded: true,
-              source: 'seed-database',
-              provider,
-            },
-            completedAt: activationCompletedAt,
-            failedAt: null,
-            createdAt: activationCreatedAt,
-          },
-          create: {
-            driverId,
-            amount: ACTIVATION_BALANCE,
-            provider,
-            status: 'COMPLETED',
-            orderId: activationOrderId,
-            gatewayTxnId: activationGatewayTxnId,
-            gatewayResponse: {
-              seeded: true,
-              source: 'seed-database',
-              provider,
-            },
-            createdAt: activationCreatedAt,
-            completedAt: activationCompletedAt,
-          },
-        });
-
-        await tx.walletTransaction.upsert({
-          where: { idempotencyKey: `seed_wallet_activation_${driverId}` },
-          update: {
-            driverId,
-            type: 'TOP_UP',
-            direction: 'CREDIT',
-            amount: ACTIVATION_BALANCE,
-            balanceAfter: ACTIVATION_BALANCE,
-            description: 'Nạp ký quỹ kích hoạt tài khoản tài xế',
-            referenceId: activationOrderId,
-            metadata: {
-              seeded: true,
-              source: 'seed-database',
-              provider,
-              activation: true,
-            },
-            createdAt: activationCompletedAt,
-          },
-          create: {
-            driverId,
-            type: 'TOP_UP',
-            direction: 'CREDIT',
-            amount: ACTIVATION_BALANCE,
-            balanceAfter: ACTIVATION_BALANCE,
-            description: 'Nạp ký quỹ kích hoạt tài khoản tài xế',
-            referenceId: activationOrderId,
-            idempotencyKey: `seed_wallet_activation_${driverId}`,
-            metadata: {
-              seeded: true,
-              source: 'seed-database',
-              provider,
-              activation: true,
-            },
-            createdAt: activationCompletedAt,
-          },
-        });
-
-        await tx.walletTransaction.upsert({
-          where: { idempotencyKey: `seed_wallet_earn_${driverId}` },
-          update: {
-            driverId,
-            type: 'EARN',
-            direction: 'CREDIT',
-            amount: DEMO_NET_EARNINGS,
-            balanceAfter: totalBalance,
-            description: 'Thu nhập cuốc xe online mẫu cho ví tài xế',
-            referenceId: earningReferenceId,
-            metadata: {
-              seeded: true,
-              source: 'seed-database',
-              grossFare: DEMO_GROSS_FARE,
-              platformFee: DEMO_PLATFORM_FEE,
-            },
-            createdAt: earningCreatedAt,
-          },
-          create: {
-            driverId,
-            type: 'EARN',
-            direction: 'CREDIT',
-            amount: DEMO_NET_EARNINGS,
-            balanceAfter: totalBalance,
-            description: 'Thu nhập cuốc xe online mẫu cho ví tài xế',
-            referenceId: earningReferenceId,
-            idempotencyKey: `seed_wallet_earn_${driverId}`,
-            metadata: {
-              seeded: true,
-              source: 'seed-database',
-              grossFare: DEMO_GROSS_FARE,
-              platformFee: DEMO_PLATFORM_FEE,
-            },
-            createdAt: earningCreatedAt,
-          },
-        });
-
-        await tx.merchantLedger.upsert({
-          where: { idempotencyKey: `seed_wallet_ledger_topup_${driverId}` },
-          update: {
-            type: 'IN',
-            category: 'TOP_UP',
-            amount: ACTIVATION_BALANCE,
-            referenceId: activationOrderId,
-            description: 'Nạp tiền ký quỹ tài xế',
-            metadata: {
-              seeded: true,
-              source: 'seed-database',
-              provider,
-            },
-            createdAt: activationCompletedAt,
-          },
-          create: {
-            type: 'IN',
-            category: 'TOP_UP',
-            amount: ACTIVATION_BALANCE,
-            referenceId: activationOrderId,
-            description: 'Nạp tiền ký quỹ tài xế',
-            idempotencyKey: `seed_wallet_ledger_topup_${driverId}`,
-            metadata: {
-              seeded: true,
-              source: 'seed-database',
-              provider,
-            },
-            createdAt: activationCompletedAt,
-          },
-        });
-
-        await tx.merchantLedger.upsert({
-          where: { idempotencyKey: `seed_wallet_ledger_payment_${driverId}` },
-          update: {
-            type: 'IN',
-            category: 'PAYMENT',
-            amount: DEMO_GROSS_FARE,
-            referenceId: earningReferenceId,
-            description: 'Khách thanh toán chuyến đi online mẫu',
-            metadata: {
-              seeded: true,
-              source: 'seed-database',
-              grossFare: DEMO_GROSS_FARE,
-              platformFee: DEMO_PLATFORM_FEE,
-              netEarnings: DEMO_NET_EARNINGS,
-              voucherDiscount: 0,
-            },
-            createdAt: earningCreatedAt,
-          },
-          create: {
-            type: 'IN',
-            category: 'PAYMENT',
-            amount: DEMO_GROSS_FARE,
-            referenceId: earningReferenceId,
-            description: 'Khách thanh toán chuyến đi online mẫu',
-            idempotencyKey: `seed_wallet_ledger_payment_${driverId}`,
-            metadata: {
-              seeded: true,
-              source: 'seed-database',
-              grossFare: DEMO_GROSS_FARE,
-              platformFee: DEMO_PLATFORM_FEE,
-              netEarnings: DEMO_NET_EARNINGS,
-              voucherDiscount: 0,
-            },
-            createdAt: earningCreatedAt,
-          },
-        });
-
-        await tx.merchantLedger.upsert({
-          where: { idempotencyKey: `seed_wallet_ledger_payout_${driverId}` },
-          update: {
-            type: 'OUT',
-            category: 'PAYOUT',
-            amount: DEMO_NET_EARNINGS,
-            referenceId: earningReferenceId,
-            description: 'Chi trả thu nhập tài xế mẫu',
-            metadata: {
-              seeded: true,
-              source: 'seed-database',
-            },
-            createdAt: earningCreatedAt,
-          },
-          create: {
-            type: 'OUT',
-            category: 'PAYOUT',
-            amount: DEMO_NET_EARNINGS,
-            referenceId: earningReferenceId,
-            description: 'Chi trả thu nhập tài xế mẫu',
-            idempotencyKey: `seed_wallet_ledger_payout_${driverId}`,
-            metadata: {
-              seeded: true,
-              source: 'seed-database',
-            },
-            createdAt: earningCreatedAt,
-          },
-        });
-
-        await tx.driverDailyStats.upsert({
-          where: {
-            driverId_date: {
-              driverId,
-              date: statsDate,
-            },
-          },
-          update: {
-            tripsCompleted: 8 + (index % 5),
-            distanceKm: Number((42 + index * 1.35).toFixed(1)),
-            peakTrips: 1 + (index % 3),
-            bonusAwarded: 0,
-          },
-          create: {
-            driverId,
-            date: statsDate,
-            tripsCompleted: 8 + (index % 5),
-            distanceKm: Number((42 + index * 1.35).toFixed(1)),
-            peakTrips: 1 + (index % 3),
-            bonusAwarded: 0,
-          },
-        });
-      });
-
-      await upsertSeedBankTransaction({
-        fromAccount: `DRIVER_${provider}`,
-        toAccount: 'MAIN_ACCOUNT',
-        amount: ACTIVATION_BALANCE,
-        type: 'TOP_UP',
-        referenceId: activationOrderId,
-        description: `Tài xế nạp tiền ví qua ${provider}`,
-        metadata: {
-          seeded: true,
-          source: 'seed-database',
-          driverId,
-          provider,
-          gatewayTxnId: activationGatewayTxnId,
-        },
-        createdAt: activationCompletedAt,
-      });
-
-      await upsertSeedBankTransaction({
-        fromAccount: 'CUSTOMER_BANK',
-        toAccount: 'MAIN_ACCOUNT',
-        amount: DEMO_GROSS_FARE,
-        type: 'PAYMENT',
-        referenceId: earningReferenceId,
-        description: 'Khách thanh toán chuyến đi online mẫu',
-        metadata: {
-          seeded: true,
-          source: 'seed-database',
-          driverId,
-          grossFare: DEMO_GROSS_FARE,
-          platformFee: DEMO_PLATFORM_FEE,
-          netEarnings: DEMO_NET_EARNINGS,
-        },
-        createdAt: earningCreatedAt,
-      });
-    }
-
-    const [merchantInAgg, merchantOutAgg] = await Promise.all([
-      (prisma as any).merchantLedger.aggregate({ where: { type: 'IN' }, _sum: { amount: true } }),
-      (prisma as any).merchantLedger.aggregate({ where: { type: 'OUT' }, _sum: { amount: true } }),
-    ]);
-
-    const totalIn = merchantInAgg._sum.amount ?? 0;
-    const totalOut = merchantOutAgg._sum.amount ?? 0;
-
-    await (prisma as any).merchantBalance.upsert({
-      where: { id: 1 },
-      create: {
-        id: 1,
-        balance: totalIn - totalOut,
-        totalIn,
-        totalOut,
-      },
-      update: {
-        balance: totalIn - totalOut,
-        totalIn,
-        totalOut,
-      },
-    });
-
-    console.log(`    ${driverIds.length} driver wallets synchronized`);
-    console.log(`    ${driverIds.length} activation top-up orders synchronized`);
-    console.log(`    ${driverIds.length * 2} wallet transactions synchronized`);
-    console.log(`    ${driverIds.length * 3} merchant ledger entries synchronized`);
-    console.log(`    ${driverIds.length * 2} bank transactions synchronized`);
-    console.log(`    ${driverIds.length} driver daily stats synchronized`);
-    console.log(`    ${rules.length} incentive rules synchronized`);
-    console.log(`    ${systemBankAccounts.length} system bank accounts synchronized`);
-  } finally {
-    await prisma.$disconnect();
-  }
-}
-
-// Initial wallet balance seeded in payment_db (mirrors ACTIVATION_BALANCE + DEMO_WITHDRAWABLE_BALANCE in wallet_db)
-const SEED_DRIVER_INITIAL_WALLET_BALANCE = 450_000;
-
-async function seedPaymentDB(rides: Array<{ id: string; status: string }>, customerIds: string[], driverIds: string[]) {
-  console.log('  Seeding payment_db...');
-  const prisma = createServicePrismaClient('payment-service', 'payment_db');
-
-  try {
-    const upsertPaymentWalletTransaction = async (input: {
-      driverId: string;
-      type: 'TOP_UP' | 'COMMISSION' | 'EARN';
-      amount: number;
-      balanceAfter: number;
-      description: string;
-      createdAt: Date;
-      rideId?: string | null;
-    }) => {
-      const transactionData = {
-        driverId: input.driverId,
-        type: input.type,
-        amount: input.amount,
-        balanceAfter: input.balanceAfter,
-        description: input.description,
-        rideId: input.rideId ?? null,
-        createdAt: input.createdAt,
-      };
-
-      const existing = await prisma.walletTransaction.findFirst({
-        where: {
-          driverId: input.driverId,
-          type: input.type,
-          rideId: input.rideId ?? null,
-          description: input.description,
-        },
-      });
-
-      if (existing) {
-        await prisma.walletTransaction.update({
-          where: { id: existing.id },
-          data: transactionData,
-        });
-        return;
-      }
-
-      await prisma.walletTransaction.create({ data: transactionData });
-    };
-
-    const walletBalances = new Map<string, number>();
-    const dailyStats = new Map<string, {
-      driverId: string;
-      date: Date;
-      tripsCompleted: number;
-      distanceKm: number;
-      peakTrips: number;
-      bonusAwarded: number;
-    }>();
-    let seededDriverEarningsCount = 0;
-    let seededWalletTransactionCount = 0;
-
-    for (const driverId of driverIds) {
-      walletBalances.set(driverId, SEED_DRIVER_INITIAL_WALLET_BALANCE);
-
-      await prisma.driverWallet.upsert({
-        where: { driverId },
-        update: { balance: SEED_DRIVER_INITIAL_WALLET_BALANCE },
-        create: {
-          driverId,
-          balance: SEED_DRIVER_INITIAL_WALLET_BALANCE,
-        },
-      });
-
-      await upsertPaymentWalletTransaction({
-        driverId,
-        type: 'TOP_UP',
-        amount: SEED_DRIVER_INITIAL_WALLET_BALANCE,
-        balanceAfter: SEED_DRIVER_INITIAL_WALLET_BALANCE,
-        description: 'So du khoi tao seed driver wallet',
-        createdAt: hoursAgo(96),
-      });
-
-      seededWalletTransactionCount += 1;
-    }
-
-    for (let index = 0; index < RIDE_SEEDS.length; index += 1) {
-      const rideSeed = RIDE_SEEDS[index];
-      const ride = rides[index];
-      const initiatedAt = hoursAgo(23 - index * 3);
-      const timeline = getSeedRideTimeline(index, rideSeed);
-
-      await prisma.fare.upsert({
-        where: { rideId: ride.id },
-        update: {
-          rideId: ride.id,
-          baseFare: Math.round(rideSeed.fare * 0.45),
-          distanceFare: Math.round(rideSeed.fare * 0.4),
-          timeFare: Math.round(rideSeed.fare * 0.15),
-          surgeMultiplier: rideSeed.status === 'FINDING_DRIVER' ? 1.2 : 1,
-          totalFare: rideSeed.fare,
-          distanceKm: rideSeed.distance,
-          durationMinutes: Math.max(1, Math.round(rideSeed.duration / 60)),
-          currency: 'VND',
-        },
-        create: {
-          rideId: ride.id,
-          baseFare: Math.round(rideSeed.fare * 0.45),
-          distanceFare: Math.round(rideSeed.fare * 0.4),
-          timeFare: Math.round(rideSeed.fare * 0.15),
-          surgeMultiplier: rideSeed.status === 'FINDING_DRIVER' ? 1.2 : 1,
-          totalFare: rideSeed.fare,
-          distanceKm: rideSeed.distance,
-          durationMinutes: Math.max(1, Math.round(rideSeed.duration / 60)),
-          currency: 'VND',
-        },
-      });
-
-      await prisma.payment.upsert({
-        where: { rideId: ride.id },
-        update: {
-          rideId: ride.id,
-          customerId: customerIds[rideSeed.customerIndex],
-          driverId: rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null,
-          amount: rideSeed.fare,
-          currency: 'VND',
-          method: rideSeed.paymentMethod,
-          provider: rideSeed.paymentProvider,
-          status: rideSeed.paymentStatus,
-          transactionId: rideSeed.paymentStatus === 'COMPLETED' ? `TXN-${ride.id.slice(0, 8).toUpperCase()}` : null,
-          paymentIntentId: `PI-${ride.id.slice(0, 12)}`,
-          initiatedAt,
-          completedAt: rideSeed.paymentCompleted ? new Date(initiatedAt.getTime() + 7 * 60 * 1000) : null,
-          failedAt: rideSeed.paymentStatus === 'FAILED' ? new Date(initiatedAt.getTime() + 5 * 60 * 1000) : null,
-          failureReason: rideSeed.paymentStatus === 'FAILED' ? 'Khách hàng hủy thanh toán tại cổng' : null,
-          metadata: {
-            seeded: true,
-            source: 'seed-database',
-            rideStatus: ride.status,
-          },
-        },
-        create: {
-          rideId: ride.id,
-          customerId: customerIds[rideSeed.customerIndex],
-          driverId: rideSeed.driverIndex !== undefined ? driverIds[rideSeed.driverIndex] : null,
-          amount: rideSeed.fare,
-          currency: 'VND',
-          method: rideSeed.paymentMethod,
-          provider: rideSeed.paymentProvider,
-          status: rideSeed.paymentStatus,
-          transactionId: rideSeed.paymentStatus === 'COMPLETED' ? `TXN-${ride.id.slice(0, 8).toUpperCase()}` : null,
-          paymentIntentId: `PI-${ride.id.slice(0, 12)}`,
-          initiatedAt,
-          completedAt: rideSeed.paymentCompleted ? new Date(initiatedAt.getTime() + 7 * 60 * 1000) : null,
-          failedAt: rideSeed.paymentStatus === 'FAILED' ? new Date(initiatedAt.getTime() + 5 * 60 * 1000) : null,
-          failureReason: rideSeed.paymentStatus === 'FAILED' ? 'Khách hàng hủy thanh toán tại cổng' : null,
-          metadata: {
-            seeded: true,
-            source: 'seed-database',
-            rideStatus: ride.status,
-          },
-        },
-      });
-
-      if (rideSeed.status === 'COMPLETED' && rideSeed.driverIndex !== undefined) {
-        const driverId = driverIds[rideSeed.driverIndex];
-        const completedAt = timeline.completedAt || new Date(initiatedAt.getTime() + rideSeed.duration * 1000);
-        const earnings = getSeedDriverEarnings(index, rideSeed);
-
-        await prisma.driverEarnings.upsert({
-          where: { rideId: ride.id },
-          update: {
-            rideId: ride.id,
-            driverId,
-            grossFare: earnings.grossFare,
-            commissionRate: earnings.commissionRate,
-            platformFee: earnings.platformFee,
-            bonus: earnings.bonus,
-            penalty: earnings.penalty,
-            netEarnings: earnings.netEarnings,
-            paymentMethod: rideSeed.paymentMethod,
-            driverCollected: earnings.driverCollected,
-            cashDebt: earnings.cashDebt,
-            isPaid: true,
-            paidAt: completedAt,
-            bonusBreakdown: earnings.bonus > 0 ? { seededPerformanceBonus: earnings.bonus } : null,
-            penaltyBreakdown: earnings.penalty > 0 ? { seededAdjustment: earnings.penalty } : null,
-            createdAt: completedAt,
-          },
-          create: {
-            rideId: ride.id,
-            driverId,
-            grossFare: earnings.grossFare,
-            commissionRate: earnings.commissionRate,
-            platformFee: earnings.platformFee,
-            bonus: earnings.bonus,
-            penalty: earnings.penalty,
-            netEarnings: earnings.netEarnings,
-            paymentMethod: rideSeed.paymentMethod,
-            driverCollected: earnings.driverCollected,
-            cashDebt: earnings.cashDebt,
-            isPaid: true,
-            paidAt: completedAt,
-            bonusBreakdown: earnings.bonus > 0 ? { seededPerformanceBonus: earnings.bonus } : null,
-            penaltyBreakdown: earnings.penalty > 0 ? { seededAdjustment: earnings.penalty } : null,
-            createdAt: completedAt,
-          },
-        });
-        seededDriverEarningsCount += 1;
-
-        let currentBalance = walletBalances.get(driverId) ?? SEED_DRIVER_INITIAL_WALLET_BALANCE;
-
-        if (earnings.driverCollected) {
-          if (earnings.cashDebt > 0) {
-            currentBalance -= earnings.cashDebt;
-            await upsertPaymentWalletTransaction({
-              driverId,
-              type: 'COMMISSION',
-              amount: earnings.cashDebt,
-              balanceAfter: currentBalance,
-              description: 'Khau tru cong no cuoc tien mat seed',
-              rideId: ride.id,
-              createdAt: completedAt,
-            });
-            seededWalletTransactionCount += 1;
-          }
-        } else if (earnings.netEarnings > 0) {
-          currentBalance += earnings.netEarnings;
-          await upsertPaymentWalletTransaction({
-            driverId,
-            type: 'EARN',
-            amount: earnings.netEarnings,
-            balanceAfter: currentBalance,
-            description: 'Thu nhap cuoc online seed',
-            rideId: ride.id,
-            createdAt: completedAt,
-          });
-          seededWalletTransactionCount += 1;
-        }
-
-        walletBalances.set(driverId, currentBalance);
-
-        const statsDate = getVietnamCalendarDate(completedAt);
-        const statsKey = `${driverId}:${statsDate.toISOString()}`;
-        const currentStats = dailyStats.get(statsKey) || {
-          driverId,
-          date: statsDate,
-          tripsCompleted: 0,
-          distanceKm: 0,
-          peakTrips: 0,
-          bonusAwarded: 0,
-        };
-
-        currentStats.tripsCompleted += 1;
-        currentStats.distanceKm += rideSeed.distance;
-        currentStats.peakTrips += isSeedPeakHour(completedAt) ? 1 : 0;
-        currentStats.bonusAwarded += earnings.bonus;
-        dailyStats.set(statsKey, currentStats);
-      }
-    }
-
-    for (const [driverId, balance] of walletBalances.entries()) {
-      await prisma.driverWallet.update({
-        where: { driverId },
-        data: { balance },
-      });
-    }
-
-    for (const stats of dailyStats.values()) {
-      await prisma.driverDailyStats.upsert({
-        where: {
-          driverId_date: {
-            driverId: stats.driverId,
-            date: stats.date,
-          },
-        },
-        update: {
-          tripsCompleted: stats.tripsCompleted,
-          distanceKm: Number(stats.distanceKm.toFixed(2)),
-          peakTrips: stats.peakTrips,
-          bonusAwarded: stats.bonusAwarded,
-        },
-        create: {
-          driverId: stats.driverId,
-          date: stats.date,
-          tripsCompleted: stats.tripsCompleted,
-          distanceKm: Number(stats.distanceKm.toFixed(2)),
-          peakTrips: stats.peakTrips,
-          bonusAwarded: stats.bonusAwarded,
-        },
-      });
-    }
-
-    console.log(`    ${RIDE_SEEDS.length} fares synchronized`);
-    console.log(`    ${RIDE_SEEDS.length} payments synchronized`);
-    console.log(`    ${seededDriverEarningsCount} driver earnings rows synchronized`);
-    console.log(`    ${seededWalletTransactionCount} wallet transactions synchronized`);
-    console.log(`    ${dailyStats.size} driver daily stats rows synchronized`);
-
-    // Seed vouchers
-    const now = new Date();
-    const past30 = new Date(now.getTime() - 30 * 86_400_000);
-    const future30 = new Date(now.getTime() + 30 * 86_400_000);
-    const future7 = new Date(now.getTime() + 7 * 86_400_000);
-    const voucherSeeds = [
-      {
-        code: 'WELCOME20',
-        description: 'Giảm 20% tối đa 50.000đ cho khách mới',
-        audienceType: 'NEW_CUSTOMERS' as const,
-        discountType: 'PERCENT' as const,
-        discountValue: 20,
-        maxDiscount: 50_000,
-        minFare: 0,
-        startTime: past30,
-        endTime: future30,
-        usageLimit: 200,
-        perUserLimit: 1,
-        isActive: true,
-      },
-      {
-        code: 'FLAT30K',
-        description: 'Giảm thẳng 30.000đ cho chuyến từ 80.000đ',
-        audienceType: 'ALL_CUSTOMERS' as const,
-        discountType: 'FIXED' as const,
-        discountValue: 30_000,
-        maxDiscount: null,
-        minFare: 80_000,
-        startTime: past30,
-        endTime: future30,
-        usageLimit: 500,
-        perUserLimit: 3,
-        isActive: true,
-      },
-      {
-        code: 'NEWUSER50',
-        description: 'Ưu đãi 50% tối đa 100.000đ dành riêng khách mới',
-        audienceType: 'NEW_CUSTOMERS' as const,
-        discountType: 'PERCENT' as const,
-        discountValue: 50,
-        maxDiscount: 100_000,
-        minFare: 0,
-        startTime: past30,
-        endTime: future30,
-        usageLimit: 100,
-        perUserLimit: 1,
-        isActive: true,
-      },
-      {
-        code: 'WEEKEND10',
-        description: 'Giảm 10% cuối tuần (tối đa 30.000đ)',
-        audienceType: 'ALL_CUSTOMERS' as const,
-        discountType: 'PERCENT' as const,
-        discountValue: 10,
-        maxDiscount: 30_000,
-        minFare: 0,
-        startTime: past30,
-        endTime: future7,
-        usageLimit: 1000,
-        perUserLimit: 5,
-        isActive: true,
-      },
-      {
-        code: 'OLDUSER15',
-        description: 'Tri ân khách hàng thân thiết: giảm 15% (tối đa 40.000đ)',
-        audienceType: 'RETURNING_CUSTOMERS' as const,
-        discountType: 'PERCENT' as const,
-        discountValue: 15,
-        maxDiscount: 40_000,
-        minFare: 50_000,
-        startTime: past30,
-        endTime: future30,
-        usageLimit: 300,
-        perUserLimit: 2,
-        isActive: true,
-      },
-    ];
-    let voucherCount = 0;
-    for (const v of voucherSeeds) {
-      await prisma.voucher.upsert({
-        where: { code: v.code },
-        update: { ...v },
-        create: { ...v },
-      });
-      voucherCount += 1;
-    }
-    console.log(`    ${voucherCount} vouchers seeded`);
-
-    await prisma.$disconnect();
-  } catch (error) {
-    await prisma.$disconnect();
-    throw error;
-  }
-}
-
-async function syncDriverRideAssignments(driverIds: string[], rides: Array<{ id: string; status: string }>) {
-  console.log('  Syncing driver current rides...');
-  const prisma = createServicePrismaClient('driver-service', 'driver_db');
-
-  try {
-    for (let index = 0; index < RIDE_SEEDS.length; index += 1) {
-      const rideSeed = RIDE_SEEDS[index];
-      if (rideSeed.driverIndex === undefined) {
-        continue;
-      }
-
-      const availabilityStatus = ['ASSIGNED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS'].includes(rideSeed.status)
-        ? 'BUSY'
-        : 'ONLINE';
-
-      await prisma.driver.update({
-        where: { id: driverIds[rideSeed.driverIndex] },
-        data: {
-          currentRideId: ['ASSIGNED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS'].includes(rideSeed.status) ? rides[index].id : null,
-          availabilityStatus,
-        },
-      });
-    }
-
-    await prisma.$disconnect();
-  } catch (error) {
-    await prisma.$disconnect();
-    throw error;
-  }
-}
-
-async function seedMongoDB(rides: Array<{ id: string; status: string }>, bookingIds: string[], customerIds: string[], driverIds: string[]) {
-  console.log('  Seeding MongoDB (notification_db, review_db)...');
-
-  const MONGO_HOST = process.env.MONGO_HOST || 'localhost';
-  const MONGO_PORT = process.env.MONGO_PORT || '27017';
-  const MONGO_USER = process.env.MONGO_USER || 'mongo';
-  const MONGO_PASSWORD = process.env.MONGO_PASSWORD || 'mongo';
-
-  try {
-    const mongoose = require('mongoose');
-
-    // Seed notification_db
-    const notifConn = await mongoose.createConnection(
-      `mongodb://${MONGO_USER}:${MONGO_PASSWORD}@${MONGO_HOST}:${MONGO_PORT}/notification_db?authSource=admin`
-    );
-    const NotifSchema = new mongoose.Schema({
-      userId: String,
-      type: String,
-      recipient: String,
-      subject: String,
-      message: String,
-      status: String,
-      priority: String,
-      retryCount: Number,
-      sentAt: Date,
-    }, { timestamps: true });
-    const Notification = notifConn.model('Notification', NotifSchema);
-
-    const notifRecords: any[] = [];
-    // Welcome emails for first 10 customers
-    for (let i = 0; i < Math.min(10, customerIds.length); i++) {
-      notifRecords.push({
-        userId: customerIds[i],
-        type: 'EMAIL',
-        recipient: `customer${i + 1}@example.com`,
-        subject: 'Chào mừng đến với Cab Booking',
-        message: `Xin chào! Tài khoản của bạn đã được tạo thành công. Chúc bạn có những chuyến đi tuyệt vời.`,
-        status: 'SENT',
-        priority: 'MEDIUM',
-        retryCount: 0,
-        sentAt: new Date(Date.now() - (10 - i) * 3600_000),
-      });
-    }
-    // Booking confirmation SMS for each booking
-    for (let i = 0; i < Math.min(bookingIds.length, customerIds.length); i++) {
-      notifRecords.push({
-        userId: customerIds[i % customerIds.length],
-        type: 'SMS',
-        recipient: `+849012345${61 + (i % 20)}`,
-        message: `Đặt xe thành công! Tài xế đang trên đường đến đón bạn.`,
-        status: 'SENT',
-        priority: 'HIGH',
-        retryCount: 0,
-        sentAt: new Date(Date.now() - (bookingIds.length - i) * 1800_000),
-      });
-    }
-    // Ride completed push notifications for completed rides
-    const completedRideIds = rides.filter(r => r.status === 'COMPLETED').map(r => r.id);
-    for (let i = 0; i < completedRideIds.length; i++) {
-      notifRecords.push({
-        userId: customerIds[i % customerIds.length],
-        type: 'PUSH',
-        recipient: customerIds[i % customerIds.length],
-        subject: 'Chuyến đi hoàn thành',
-        message: `Chuyến đi của bạn đã hoàn thành. Cảm ơn bạn đã sử dụng dịch vụ!`,
-        status: 'SENT',
-        priority: 'MEDIUM',
-        retryCount: 0,
-        sentAt: new Date(Date.now() - (completedRideIds.length - i + 1) * 900_000),
-      });
-    }
-    // Promo notification
-    notifRecords.push({
-      userId: customerIds[0],
-      type: 'EMAIL',
-      recipient: 'customer1@example.com',
-      subject: 'Ưu đãi đặc biệt cho bạn',
-      message: 'Nhân dịp cuối tuần, giảm 20% cho tất cả chuyến đi từ 11:00 - 14:00. Sử dụng mã WEEKEND20.',
-      status: 'SENT',
-      priority: 'LOW',
-      retryCount: 0,
-      sentAt: new Date(Date.now() - 2 * 3600_000),
-    });
-    // Failed payment notification
-    notifRecords.push({
-      userId: customerIds[2],
-      type: 'PUSH',
-      recipient: customerIds[2],
-      subject: 'Thanh toán thất bại',
-      message: 'Thanh toán cho chuyến đi của bạn thất bại. Vui lòng kiểm tra lại thông tin thanh toán.',
-      status: 'SENT',
-      priority: 'HIGH',
-      retryCount: 1,
-      sentAt: new Date(Date.now() - 1800_000),
-    });
-    await Notification.create(notifRecords);
-    console.log(`    ${notifRecords.length} notifications created`);
-    await notifConn.close();
-
-    // Seed review_db
-    const reviewConn = await mongoose.createConnection(
-      `mongodb://${MONGO_USER}:${MONGO_PASSWORD}@${MONGO_HOST}:${MONGO_PORT}/review_db?authSource=admin`
-    );
-    const ReviewSchema = new mongoose.Schema({
-      rideId: String,
-      bookingId: String,
-      type: String,
-      reviewerId: String,
-      reviewerName: String,
-      revieweeId: String,
-      revieweeName: String,
-      rating: Number,
-      comment: String,
-      tags: [String],
-    }, { timestamps: true });
-    const Review = reviewConn.model('Review', ReviewSchema);
-
-    const reviewRecords: any[] = [];
-    const customerNames = [
-      'Nguyễn Văn A','Trần Thị B','Lê Văn C','Phạm Thị D','Hoàng Văn E',
-      'Ngô Thị F','Đặng Văn G','Bùi Thị H','Vũ Văn I','Đỗ Thị J',
-      'Lý Văn K','Đỗ Thị L','Trịnh Văn M','Hà Thị N','Cao Văn O',
-      'Dương Thị P','Mai Văn Q','Trương Thị R','Lâm Văn S','Huỳnh Thị T',
-    ];
-    const driverNames = [
-      'Pham Van D1','Nguyen Van E1','Tran Thi F1','Le Van G1','Hoang Thi H1',
-      'Ngo Van I1','Dang Van J1','Bui Thi K1','Vu Van L1','Do Van M1',
-    ];
-    const positiveComments = [
-      'Tài xế rất chuyên nghiệp, phong cách phục vụ tốt!',
-      'Xe sạch sẽ, tài xế lái cẩn thận. Rất hài lòng!',
-      'Đúng giờ, thái độ thân thiện. Sẽ đặt lại lần sau.',
-      'Chuyến đi tuyệt vời, không gian xe thoải mái.',
-      'Tài xế biết đường, không đi vòng. Giá hợp lý.',
-    ];
-    const criticalComments = [
-      'Tài xế đến muộn và hỗ trợ chưa tốt.',
-      'Chuyến đi chưa ổn, tài xế cần cải thiện thái độ phục vụ.',
-      'Xe chưa sạch và lộ trình chưa tối ưu.',
-    ];
-    const neutralComments = [
-      'Chuyến đi bình thường, không có gì đặc biệt.',
-      'Tài xế tạm ổn, xe cũ một chút nhưng an toàn.',
-      'Đúng giờ, đi đúng đường. Ổn.',
-    ];
-    for (let i = 0; i < completedRideIds.length && i < 15; i++) {
-      const custIdx = i % customerIds.length;
-      const drvIdx = i % driverIds.length;
-      const rating = FOCUSED_REVIEW_RATINGS[i] ?? (i % 5 === 0 ? 4 : i % 7 === 0 ? 3 : 5);
-      const comment = rating >= 5
-        ? positiveComments[i % positiveComments.length]
-        : rating <= 2
-          ? criticalComments[i % criticalComments.length]
-          : neutralComments[i % neutralComments.length];
-      const tags = rating >= 5
-        ? ['professional', 'safe_driving', 'clean_car'].slice(0, (i % 3) + 1)
-        : rating <= 2
-          ? ['late_pickup', 'service_issue', 'vehicle_cleanliness'].slice(0, (i % 3) + 1)
-          : ['on_time'];
-      // Customer → Driver review
-      reviewRecords.push({
-        rideId: completedRideIds[i],
-        bookingId: bookingIds[i % bookingIds.length],
-        type: 'CUSTOMER_TO_DRIVER',
-        reviewerId: customerIds[custIdx],
-        reviewerName: customerNames[custIdx] || `Customer ${custIdx + 1}`,
-        revieweeId: driverIds[drvIdx],
-        revieweeName: driverNames[drvIdx] || `Driver ${drvIdx + 1}`,
-        rating,
-        comment,
-        tags,
-      });
-      // Driver → Customer review (for every other ride)
-      if (i % 2 === 0 || i < FOCUSED_REVIEW_RATINGS.length) {
-        reviewRecords.push({
-          rideId: completedRideIds[i],
-          bookingId: bookingIds[i % bookingIds.length],
-          type: 'DRIVER_TO_CUSTOMER',
-          reviewerId: driverIds[drvIdx],
-          reviewerName: driverNames[drvIdx] || `Driver ${drvIdx + 1}`,
-          revieweeId: customerIds[custIdx],
-          revieweeName: customerNames[custIdx] || `Customer ${custIdx + 1}`,
-          rating: i < FOCUSED_REVIEW_RATINGS.length ? rating : (rating >= 5 ? 5 : 4),
-          comment: i < FOCUSED_REVIEW_RATINGS.length
-            ? (rating <= 2 ? 'Khách hàng đổi điểm đón hoặc phản hồi chậm trong chuyến seed kiểm thử.' : 'Khách hàng phối hợp ổn, phù hợp kịch bản rating seed.')
-            : 'Khách hàng lịch sự, đúng giờ.',
-          tags: i < FOCUSED_REVIEW_RATINGS.length
-            ? (rating <= 2 ? ['slow_response', 'route_change'] : ['cooperative', 'punctual'])
-            : ['friendly', 'punctual'],
-        });
-      }
-    }
-    await Review.create(reviewRecords);
-    console.log(`    ${reviewRecords.length} reviews created`);
-    await reviewConn.close();
-    return {
-      notificationCount: notifRecords.length,
-      reviewCount: reviewRecords.length,
-    };
-  } catch (error: any) {
-    console.log(`    MongoDB seed skipped: ${error.message}`);
-    return {
-      notificationCount: 0,
-      reviewCount: 0,
-    };
-  }
-}
-
-// ============ MAIN ============
+// ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
+  const startTime = Date.now();
   console.log('');
-  console.log('========================================');
-  console.log(' Cab Booking System - Database Seeding');
-  console.log('========================================');
+  console.log('================================================================');
+  console.log(' Cab Booking System - Pure-API Database Seeding');
+  console.log('================================================================');
   console.log('');
 
-  try {
-    // 1. Seed auth database (creates users first)
-    const { customerIds, driverUserIds, adminId } = await seedAuthDB();
+  await waitForGateway();
+  console.log('  [pre-flight] gateway healthy');
 
-    // 2. Seed user profiles
-    await seedUserDB(customerIds, driverUserIds, adminId);
+  // Step 1 — admin DB bootstrap (the ONLY DB-direct write)
+  await bootstrapAdmin();
 
-    // 3. Seed driver database
-    const { driverIds } = await seedDriverDB(driverUserIds);
+  // Step 2 — admin login via API
+  const adminToken = await loginAdmin();
 
-    // 4. Seed wallet database (keyed by auth user IDs, NOT driver profile IDs)
-    await seedWalletDB(driverUserIds);
+  // Step 3 — vouchers via /api/voucher/admin
+  await seedVouchers(adminToken);
 
-    // 5. Seed bookings
-    const bookingIds = await seedBookingDB(customerIds);
+  // Step 4 — incentive rules via /api/admin/wallet/incentive-rules
+  await seedIncentiveRules(adminToken);
 
-    // 6. Seed rides + payment lifecycle data
-    const rides = await seedRideDB(customerIds, driverIds);
-    await seedPaymentDB(rides, customerIds, driverIds);
-    await syncDriverRideAssignments(driverIds, rides);
+  // Step 5 — register customers via OTP flow
+  const customers = await registerCustomers();
 
-    // 7. Seed MongoDB (notifications + reviews)
-    const mongoSeedSummary = await seedMongoDB(rides, bookingIds, customerIds, driverIds);
-    await generateSeedReferenceReport(adminId, customerIds, driverUserIds, driverIds);
+  // Step 6 — register drivers via OTP flow (auth users only)
+  const driverUsers = await registerDrivers();
 
-    console.log('');
-    console.log('========================================');
-    console.log(' Seeding completed successfully!');
-    console.log('========================================');
-    console.log('');
-    console.log(' Summary:');
-    console.log(`   Admin:       1 (${adminId})`);
-    console.log(`   Customers:   ${customerIds.length}`);
-    console.log(`   Drivers:     ${driverIds.length}`);
-    console.log(`   Bookings:    ${bookingIds.length}`);
-    console.log(`   Rides:       ${rides.length}`);
-    console.log(`   Payments:    ${RIDE_SEEDS.length}`);
-    console.log(`   Notifications: ${mongoSeedSummary.notificationCount}`);
-    console.log(`   Reviews:     ${mongoSeedSummary.reviewCount}`);
-    console.log('');
-    console.log(' Test credentials:');
-  console.log('   All users password: Password@1');
-  console.log('   Admin: admin@cabbooking.com / 0900000001');
-  console.log('   Customers: 0901234561 – 0901234570');
-  console.log('   Drivers:   0911234561 – 0911234570, plus 30 seeded phones (prefix 0919xxxxxx)');
-  console.log('   Focused Ben Thanh drivers: 0911234561, 0911234562, 0911234568');
-  console.log('   Focused Tan Son Nhat drivers: 0919100000, 0919100004, 0919100008');
-  console.log(`   Seed report: ${SEED_REFERENCE_OUTPUT}`);
-    console.log('');
-  } catch (error: any) {
-    console.error('');
-    console.error('Seeding failed:', error.message);
-    console.error('');
-    console.error('Make sure:');
-    console.error('  1. PostgreSQL is running on port 5433');
-    console.error('  2. MongoDB is running on port 27017');
-    console.error('  3. All databases exist (run reset-database script first)');
-    console.error('  4. Prisma migrations have been applied');
-    process.exit(1);
-  }
+  // Step 7 — register driver profiles via /api/drivers/register
+  const driverProfiles = await registerDriverProfiles(driverUsers);
+
+  // Step 8 — admin approve non-pending drivers
+  await approveDrivers(adminToken, driverProfiles);
+
+  // Step 9 — top-up wallet 300k for approved drivers
+  await topUpAllDriverWallets(driverProfiles, driverUsers);
+
+  // Step 10 — drivers go online + set location
+  await setApprovedDriversOnline(driverProfiles, driverUsers);
+
+  // Step 11 — orchestrate 12 rides via API (COMPLETED + CANCELLED only)
+  const rides = await seedRides(customers, driverUsers, driverProfiles);
+
+  // Step 12 — set all drivers OFFLINE so DB is clean after seed
+  await setApprovedDriversOffline(driverProfiles, driverUsers);
+
+  // Step 13 — generate seed-accounts-reference.md
+  await generateSeedReference(adminToken, customers, driverUsers, driverProfiles, rides);
+
+  const elapsed = Math.round((Date.now() - startTime) / 1000);
+
+  console.log('');
+  console.log('================================================================');
+  console.log(' Seeding completed successfully!');
+  console.log('================================================================');
+  console.log(`  Elapsed: ${elapsed}s`);
+  const completed = rides.filter(r => r.status === 'COMPLETED').length;
+  const cancelled = rides.filter(r => r.status === 'CANCELLED').length;
+  console.log(`  Customers:    ${customers.length}`);
+  console.log(`  Drivers:      ${driverUsers.length} (${driverProfiles.filter(p => !p.pending).length} approved OFFLINE + ${driverProfiles.filter(p => p.pending).length} pending)`);
+  console.log(`  Rides:        ${rides.length} (${completed} COMPLETED, ${cancelled} CANCELLED — no active rides)`);
+  console.log(`  Vouchers:     ${VOUCHER_SEEDS.length}`);
+  console.log(`  IncentiveRules:${INCENTIVE_RULES.length}`);
+  console.log(`  Report:       ${SEED_REFERENCE_OUTPUT}`);
+  console.log('');
+  console.log('  Test credentials:');
+  console.log(`    Password: ${SEED_PASSWORD}`);
+  console.log(`    Admin: ${ADMIN.phone}`);
+  console.log(`    Customer 1: ${customers[0]?.phone}`);
+  console.log(`    Driver 1: ${driverUsers[0]?.phone}`);
+  console.log('');
 }
 
-main();
+main().catch((err) => {
+  console.error('');
+  console.error('SEED FAILED:', err);
+  if (err?.payload) {
+    console.error('Response payload:', JSON.stringify(err.payload, null, 2));
+  }
+  process.exit(1);
+});

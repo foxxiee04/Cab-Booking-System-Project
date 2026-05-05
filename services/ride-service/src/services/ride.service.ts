@@ -1331,18 +1331,22 @@ export class RideService {
     const ride = await this.prisma.ride.findUnique({ where: { id: rideId } });
     if (!ride) throw new Error('Ride not found');
 
-    if (ride.status !== RideStatus.OFFERED) {
-      throw new Error(`Ride is not in OFFERED status`);
+    // Allow rejection from OFFERED (formal dispatch) or FINDING_DRIVER (socket NEW_RIDE_AVAILABLE dispatch)
+    if (ride.status !== RideStatus.OFFERED && ride.status !== RideStatus.FINDING_DRIVER) {
+      throw new Error(`Ride is not in a rejectable status (current: ${ride.status})`);
     }
 
-    if (ride.driverId !== driverId) {
+    // For OFFERED status, verify the ride was explicitly assigned to this driver
+    if (ride.status === RideStatus.OFFERED && ride.driverId !== driverId) {
       throw new Error('This ride was not offered to you');
     }
 
-    // Cancel offer
-    await this.offerManager.cancelOffer(rideId, 'rejected');
+    // Cancel formal offer in Redis only when in OFFERED state
+    if (ride.status === RideStatus.OFFERED) {
+      await this.offerManager.cancelOffer(rideId, 'rejected');
+    }
 
-    // Update ride
+    // Update ride — always transition back to / stay in FINDING_DRIVER
     const updatedRide = await this.prisma.ride.update({
       where: { id: rideId },
       data: {
@@ -1354,7 +1358,7 @@ export class RideService {
         },
         transitions: {
           create: {
-            fromStatus: RideStatus.OFFERED,
+            fromStatus: ride.status,
             toStatus: RideStatus.FINDING_DRIVER,
             actorId: driverId,
             actorType: 'DRIVER',

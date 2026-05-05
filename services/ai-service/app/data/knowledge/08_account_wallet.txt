@@ -1,42 +1,34 @@
-TIÊU ĐỀ: Tài khoản và ví điện tử FoxGo
-DANH MỤC: tài khoản, ví, nạp tiền, rút tiền, đăng ký, đăng nhập, mật khẩu, OTP, quên mật khẩu, hồ sơ
+TIÊU ĐỀ: Tài khoản, đăng ký, đăng nhập và bảo mật FoxGo
+DANH MỤC: tài khoản, ví, nạp tiền, rút tiền, đăng ký, đăng nhập, mật khẩu, OTP, quên mật khẩu, hồ sơ, tài khoản bị khóa, không nhận được OTP, đổi mật khẩu, thông tin cá nhân, bảo mật tài khoản, lừa đảo OTP
 
-Đăng ký tài khoản FoxGo:
-1. Mở ứng dụng và nhấn "Đăng ký".
-2. Nhập số điện thoại → nhận mã OTP xác minh (gửi qua SMS).
-3. Điền họ tên, email và tạo mật khẩu.
-4. Mật khẩu phải có ít nhất 8 ký tự, gồm chữ hoa, chữ thường và số.
+Đăng ký FoxGo chỉ cần số điện thoại — nhận OTP xác minh, điền họ tên và email, đặt mật khẩu là xong. Mật khẩu cần ít nhất 8 ký tự với cả chữ hoa, chữ thường và số. Đăng nhập bằng số điện thoại + mật khẩu, hoặc dùng OTP nếu quên mật khẩu.
 
-Đăng nhập:
-• Dùng số điện thoại + mật khẩu đã đăng ký.
-• Nếu quên mật khẩu: nhấn "Quên mật khẩu" → nhập số điện thoại → nhận OTP → đặt mật khẩu mới.
+Lưu ý bảo mật quan trọng: FoxGo KHÔNG BAO GIỜ yêu cầu mã OTP qua điện thoại hay tin nhắn. Nếu ai đó tự xưng là nhân viên FoxGo và hỏi xin OTP — đó là lừa đảo, hãy cúp máy ngay.
 
-Ví FoxGo (dành cho tài xế):
-• Tài xế nhận thu nhập từ chuyến online vào ví FoxGo.
-• Nạp tiền vào ví qua MoMo hoặc VNPay để đảm bảo số dư tối thiểu.
-• Số dư tối thiểu cần duy trì: 50.000đ để tiếp tục nhận chuyến.
-• Rút tiền về tài khoản ngân hàng: xử lý trong 1–3 ngày làm việc.
+---
+Hỏi: Tôi không nhận được OTP thì làm sao?
+Đáp: Thử lần lượt: (1) Kiểm tra xem nhập đúng số điện thoại chưa. (2) Tắt tính năng chặn SMS lạ trên điện thoại. (3) Đợi 60 giây rồi nhấn "Gửi lại OTP". (4) Kiểm tra kết nối mạng. (5) Nếu dùng SIM mới, SIM có thể chưa kích hoạt dịch vụ SMS. Vẫn không được thì liên hệ support@foxgo.vn với số điện thoại bạn đang dùng.
 
-Chỉnh sửa thông tin tài khoản:
-• Vào "Hồ sơ của tôi" để thay đổi ảnh đại diện, họ tên, email.
-• Số điện thoại KHÔNG thể thay đổi — là định danh chính và không thể sửa sau đăng ký.
+---
+Hỏi: Quên mật khẩu phải làm sao?
+Đáp: Dễ lắm — nhấn "Quên mật khẩu" trên màn hình đăng nhập, nhập số điện thoại, nhận OTP, xác nhận OTP rồi đặt mật khẩu mới. Mật khẩu mới cần ít nhất 8 ký tự với chữ hoa, chữ thường và số.
 
-Bảo mật tài khoản:
-• KHÔNG bao giờ chia sẻ mã OTP với bất kỳ ai, kể cả nhân viên tự xưng là FoxGo.
-• Nhân viên FoxGo KHÔNG BAO GIỜ yêu cầu OTP qua điện thoại hay tin nhắn.
-• Đăng xuất trên thiết bị không dùng nữa (Cài đặt → Đăng xuất).
+---
+Hỏi: Tôi có thể đổi số điện thoại đăng ký không?
+Đáp: Không bạn ơi. Số điện thoại là định danh chính của tài khoản FoxGo và không thể thay đổi sau khi đăng ký. Nếu mất SIM hoặc đổi số, liên hệ support@foxgo.vn để được hỗ trợ — có thể cần xác minh danh tính để bảo vệ tài khoản của bạn.
 
-Hỏi: Tôi không nhận được OTP thì sao?
-Đáp: Kiểm tra: (1) Số điện thoại nhập có đúng không. (2) Điện thoại có bị chặn SMS lạ không — tắt chặn spam nếu có. (3) Đợi 60 giây và nhấn "Gửi lại OTP". (4) Kiểm tra kết nối mạng. Nếu vẫn không nhận được, liên hệ support@foxgo.vn kèm số điện thoại.
+---
+Hỏi: Đổi tên, email trong hồ sơ được không?
+Đáp: Được. Vào "Hồ sơ của tôi" trong app → chọn thông tin muốn sửa → lưu. Tên và email đổi được bình thường, chỉ số điện thoại là không đổi được.
 
-Hỏi: Tôi quên mật khẩu phải làm sao?
-Đáp: Nhấn "Quên mật khẩu" ở màn hình đăng nhập → nhập số điện thoại → nhận OTP → xác nhận OTP → đặt mật khẩu mới. Mật khẩu mới phải có ít nhất 8 ký tự gồm chữ hoa, thường và số.
-
+---
 Hỏi: Tài khoản bị khóa phải làm sao?
-Đáp: Tài khoản có thể bị khóa do vi phạm chính sách (hủy nhiều lần, báo cáo từ tài xế...). Liên hệ support@foxgo.vn với số điện thoại và họ tên để được xem xét mở khóa.
+Đáp: Liên hệ support@foxgo.vn kèm số điện thoại và họ tên. Tài khoản thường bị khóa do vi phạm chính sách (hủy nhiều lần, báo cáo từ tài xế, hoặc phát hiện gian lận). Đội hỗ trợ sẽ xem xét và phản hồi trong 24–48 giờ.
 
-Hỏi: Đổi email hay họ tên được không?
-Đáp: Được. Vào "Hồ sơ của tôi" trong ứng dụng → chọn thông tin muốn sửa → lưu. Riêng số điện thoại là định danh cố định, không thể thay đổi.
+---
+Hỏi: Tôi bị mất điện thoại, tài khoản có an toàn không?
+Đáp: Đăng nhập trên thiết bị mới đòi hỏi OTP gửi đến SIM của bạn — ai cầm máy mà không có SIM thì không vào được tài khoản. Khi có điện thoại/SIM mới, đăng nhập lại và đổi mật khẩu ngay. Nếu lo ngại bị lạm dụng, liên hệ support@foxgo.vn để tạm khóa tài khoản trong khi xử lý.
 
-Hỏi: Tôi bị mất điện thoại, tài khoản có bị lộ không?
-Đáp: Đăng nhập trên thiết bị mới sẽ yêu cầu OTP xác minh gửi đến SIM của bạn. Ngay khi có điện thoại mới/SIM mới, đăng nhập lại và đổi mật khẩu ngay. Để an toàn hơn, liên hệ support@foxgo.vn để tạm khóa tài khoản.
+---
+Hỏi: Tôi bị đăng xuất liên tục dù đã đăng nhập đúng?
+Đáp: Có thể do: phiên đăng nhập hết hạn, tài khoản bị đăng nhập ở thiết bị khác (đẩy bạn ra), hoặc phiên bản app cũ. Thử đăng xuất hoàn toàn rồi đăng nhập lại, cập nhật app lên bản mới nhất. Nếu vẫn lỗi, đổi mật khẩu để thu hồi tất cả phiên đăng nhập cũ.

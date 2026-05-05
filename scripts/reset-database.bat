@@ -66,6 +66,24 @@ for %%s in (auth-service booking-service driver-service payment-service ride-ser
 )
 
 echo.
+echo [4/5] Flushing Redis (geo-index, cache, sessions)...
+echo.
+docker exec cab-redis redis-cli FLUSHALL >nul 2>&1
+if errorlevel 1 echo   Redis flush skipped (container unavailable)
+echo   Redis flushed.
+
+echo.
+echo [5/5] Restarting services so they re-seed startup data and reconnect Prisma pool...
+echo.
+
+REM wallet-service auto-seeds SystemBankAccount at startup (must run after schema reset)
+docker compose restart wallet-service auth-service user-service driver-service ride-service payment-service booking-service notification-service review-service api-gateway >nul 2>&1
+if errorlevel 1 echo   Service restart skipped (docker compose unavailable)
+
+echo   Waiting 10s for services to become healthy...
+timeout /t 10 /nobreak >nul
+
+echo.
 echo ============================================
 echo  Schema reset complete!
 echo ============================================

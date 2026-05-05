@@ -35,6 +35,13 @@ const PUBLIC_PATHS = [
   '/api/wallet/top-up/vnpay/return', // VNPay wallet top-up browser return
   '/api/wallet/top-up/momo-ipn',    // MoMo wallet top-up IPN (called by MoMo servers)
   '/api/wallet/top-up/vnpay-ipn',   // VNPay wallet top-up IPN (called by VNPay servers)
+  '/api/payments/webhook/mock',     // Mock payment webhook (dev/seed only)
+  '/api/payments/webhooks/mock',    // Mock payment webhook alias (dev/seed only)
+  '/api/payments/momo/webhook',     // MoMo IPN (called by MoMo servers)
+  '/api/payments/webhooks/momo',    // MoMo IPN legacy alias
+  '/api/payments/ipn/momo',         // Unified MoMo IPN
+  '/api/payments/ipn/vnpay',        // Unified VNPay IPN
+  '/api/payments/vnpay/ipn',        // VNPay IPN GET
   '/api/map',
   '/health',
   '/api/ai/ride/estimate',

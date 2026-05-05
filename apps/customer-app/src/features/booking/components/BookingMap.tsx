@@ -911,6 +911,9 @@ export const BookingMap: React.FC<BookingMapProps> = ({
       style={{ width: '100%', height: '100%' }}
       zoomControl
       scrollWheelZoom
+      zoomAnimation={false}
+      fadeAnimation={false}
+      markerZoomAnimation={false}
       ref={leafletMapRef}
     >
       <LeafletTileLayer

@@ -20,6 +20,10 @@ import {
   AccessTime,
   AttachMoney,
   TrendingUp,
+  MoneyOff,
+  AccountBalanceWallet,
+  AccountBalance,
+  FiberNew,
 } from '@mui/icons-material';
 import { Ride } from '../../types';
 import { formatCurrency, getVehicleTypeLabel } from '../../utils/format.utils';
@@ -29,6 +33,20 @@ import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '../../store/hooks';
 import DriverTripMap from '../../features/trip/components/DriverTripMap';
 import SwipeToConfirm from '../../features/trip/components/SwipeToConfirm';
+
+const PAYMENT_LABEL: Record<string, string> = {
+  CASH: 'Tiền mặt',
+  MOMO: 'Ví MoMo',
+  VNPAY: 'VNPay',
+  CARD: 'Thẻ ngân hàng',
+  WALLET: 'Ví FoxGo',
+};
+
+const PaymentIcon: React.FC<{ method?: string }> = ({ method }) => {
+  if (method === 'MOMO') return <AccountBalanceWallet sx={{ fontSize: 14 }} />;
+  if (method === 'VNPAY' || method === 'CARD') return <AccountBalance sx={{ fontSize: 14 }} />;
+  return <MoneyOff sx={{ fontSize: 14 }} />;
+};
 
 const normalizeDistanceMeters = (distance?: number): number | undefined => {
   if (!distance || Number.isNaN(distance) || distance <= 0) {
@@ -164,11 +182,19 @@ const RideRequestModal: React.FC<RideRequestModalProps> = ({
           }}
         >
           <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-            <Timer sx={{ fontSize: 22 }} />
+            <FiberNew sx={{ fontSize: 28, color: '#fbbf24' }} />
             <Typography variant="subtitle1" fontWeight={800} letterSpacing={0.5}>
-              {t('rideRequest.title', 'Cuốc xe mới')}
+              {t('rideRequest.title', 'Cuốc xe mới!')}
             </Typography>
             <Box sx={{ flex: 1 }} />
+            {ride?.paymentMethod && (
+              <Chip
+                icon={<PaymentIcon method={ride.paymentMethod} />}
+                label={PAYMENT_LABEL[ride.paymentMethod] || ride.paymentMethod}
+                size="small"
+                sx={{ bgcolor: 'rgba(255,255,255,0.18)', color: 'white', fontWeight: 700, fontSize: 11, '& .MuiChip-icon': { color: 'white' } }}
+              />
+            )}
             <Chip
               label={`#${rideCode}`}
               size="small"

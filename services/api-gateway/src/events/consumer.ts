@@ -1224,6 +1224,23 @@ export class EventConsumer {
     if (payload.driverId) {
       this.redis.hset(driverStatsKey(payload.driverId), 'lastTripEndAt', String(Date.now())).catch(() => {});
     }
+
+    // Schedule auto 5-star rating if customer doesn't rate within 24h
+    if (payload.customerId && payload.driverId) {
+      axios.post(
+        `${config.services.review}/api/internal/schedule-auto-rating`,
+        {
+          rideId: payload.rideId,
+          bookingId: (payload as any).bookingId || payload.rideId,
+          customerId: payload.customerId,
+          driverId: payload.driverId,
+        },
+        {
+          headers: { 'x-internal-token': config.internalServiceToken },
+          timeout: 3000,
+        }
+      ).catch((err: any) => logger.warn('Failed to schedule auto-rating:', err?.message));
+    }
   }
 
   private async handleRideCancelled(payload: RideEventPayload): Promise<void> {

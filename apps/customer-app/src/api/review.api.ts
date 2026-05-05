@@ -11,6 +11,7 @@ export interface RideReview {
   revieweeName: string;
   rating: number;
   comment?: string;
+  tags?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -39,6 +40,7 @@ export const reviewApi = {
     revieweeName: string;
     rating: number;
     comment?: string;
+    tags?: string[];
   }): Promise<CreateReviewResponse> => {
     const response = await axiosInstance.post('/reviews', {
       ...payload,
@@ -47,5 +49,11 @@ export const reviewApi = {
     });
 
     return response.data;
+  },
+
+  getMyReviewForRide: async (rideId: string): Promise<RideReview | null> => {
+    const response = await axiosInstance.get(`/reviews/ride/${rideId}`);
+    const reviews: RideReview[] = response.data?.reviews ?? [];
+    return reviews.find((r) => r.type === 'CUSTOMER_TO_DRIVER') ?? null;
   },
 };

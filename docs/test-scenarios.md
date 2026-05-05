@@ -1,243 +1,276 @@
-# Kịch bản kiểm thử thủ công — FoxGo Cab Booking
+# Kịch bản Demo FoxGo — KLTN 2025
 
-> Phiên bản: 01/05/2026  
-> Môi trường: dev local (Docker Compose)  
-> Tất cả mật khẩu: `Password@1`  
-> OTP (dev): `docker logs cab-auth-service 2>&1 | findstr OTP`
+> **Điểm test chính:** 295 Nguyễn Văn Bảo, P. Hạnh Thông Tây, Gò Vấp, TP.HCM · `10.8158, 106.6636`
+> **Mật khẩu mọi tài khoản:** `Password@1`
 
 ---
 
-## Tài khoản seed
+## Tổng quan tài khoản demo
 
-| Loại     | Số điện thoại | Tên           | Ghi chú                                      |
-|----------|---------------|---------------|----------------------------------------------|
-| Customer | 0901234561    | Nguyen Van A  | Customer 1 (chính)                           |
-| Customer | 0901234562    | Nguyen Van B  | Customer 2                                   |
-| Customer | 0901234563    | Nguyen Van C  | Customer 3                                   |
-| Driver   | 0911234561    | Pham Van D    | Toyota Vios 51A-123.45, CAR_4, Bến Thành     |
-| Driver   | 0911234562    | Vo Thi E      | Honda City 51A-678.90, CAR_4, Bến Thành      |
-| Driver   | 0911234568    | (Driver 3)    | CAR_4, Bến Thành cluster                     |
-| Admin    | 0900000001    | —             | Đăng nhập `http://localhost:4002`            |
-
----
-
-## TC-01: Hủy chuyến seeded và đặt chuyến mới (1 khách, 1 tài xế)
-
-**Mục tiêu:** Full booking flow từ đầu đến cuối với tiền mặt.
-
-**Tài khoản:** Customer 1 + Driver 1
-
-### Bước thực hiện
-
-1. Mở `http://localhost:4000` → đăng nhập Customer 1 (`0901234561`)
-2. Nếu có chuyến seeded đang ở trạng thái `FINDING_DRIVER`:
-   - Nhấn **Hủy chuyến** → chọn lý do (vd: "Đặt nhầm chuyến") → **Xác nhận hủy**
-   - Lặp lại nếu còn chuyến seeded khác
-   - Nhấn **Quay về trang chủ**
-3. Mở `http://localhost:4001` (tab khác cùng trình duyệt, hoặc cửa sổ khác) → đăng nhập Driver 1 (`0911234561`)
-   - Kiểm tra tài xế đang **Trực tuyến** và loại xe **Ô tô 4 chỗ**
-4. Trở về trang khách hàng → nhập điểm đón: `Bến Thành` → chọn **Phường Bến Thành, TP. HCM**
-   - Nhập điểm đến: `Sân bay Tân Sơn Nhất` → chọn **Sân bay quốc tế Tân Sơn Nhất**
-   - Nhấn **Tiếp tục đặt xe**
-5. Chọn **Xe 4 chỗ** → nhấn **Tiếp tục**
-6. Chọn thanh toán **Tiền mặt** → nhấn **Tiếp tục**
-7. Xem xác nhận (7.7 km, ~11 phút, 166.100 ₫) → nhấn **Xác nhận và tìm tài xế**
-
-### Kết quả mong đợi (Customer)
-- Chuyển sang trang theo dõi → hiển thị **"Đang tìm tài xế phù hợp"**
-
-### Bước tiếp theo (Driver)
-8. Driver 1 nhận được thông báo dispatch (countdown ~30s)
-   - Nhấn **Nhận ngay** (hoặc nếu hết giờ: ride vẫn hiện trong danh sách cuốc, nhấn **✓ Nhận ngay**)
-
-### Kết quả mong đợi (Customer sau accept)
-- Trang tracking cập nhật: **"Đã tìm được tài xế"**
-- Hiển thị tên tài xế: **Pham Van D**, xe **Toyota Vios White**, biển **51A-123.45**
-- Panel ETA/khoảng cách hiện ra (vd: "khoảng 1 phút · 0.5 km") — **không** hiển thị nếu chưa có dữ liệu GPS ✓
-- Có thể nhấn icon điện thoại để gọi tài xế ✓
-
-### Bước tiếp theo (Driver)
-9. Driver: nhấn **Đã tới điểm đón** → trạng thái "Đã tới điểm đón"
-10. Driver: nhấn **Đã đến - Bắt đầu** → trạng thái "Đang chở khách"
-
-### Kết quả mong đợi (Customer)
-- Tracking cập nhật: **"Đang trong chuyến đi"**
-- Không hiển thị nút Nhắn tin tài xế riêng ngoài panel ✓
-
-11. Driver: nhấn **Hoàn tất chuyến**
-
-### Kết quả mong đợi
-- Driver: toast **"Chuyến tiền mặt hoàn thành"** — hiển thị phí nền tảng 18% ✓
-- Customer: hiển thị trang hoàn tất + **Hóa đơn** + form **Đánh giá tài xế**
-  - Trạng thái thanh toán: **Đã thanh toán** (tiền mặt tự động) ✓
-  - Rating 5 sao → nhấn **Gửi đánh giá** → form chuyển sang "Đánh giá của bạn" ✓
+| Vai trò | Phone | Họ tên | App | GPS |
+|---------|-------|--------|-----|-----|
+| **Khách hàng demo** | `0901234571` | Nguyen Thi Demo | http://localhost:4000 | Không (kéo pin trên bản đồ) |
+| **Tài xế demo** | `0911234583` | Pham Van Bao · CAR_4 | http://localhost:4001 | Chrome Sensors 10.8178, 106.6645 |
+| **Admin** | `0900000001` | System Admin | http://localhost:4002 | Không |
+| Background driver | `0911234584` | Tran Van Hung · MOTORBIKE | — | set-drivers-online.mjs |
+| Background driver | `0911234585` | Le Thi Mai · CAR_4 | — | set-drivers-online.mjs |
+| Background driver | `0911234586` | Hoang Van Lam · CAR_7 | — | set-drivers-online.mjs |
+| Background driver | `0911234587` | Bui Thi Lan · SCOOTER | — | set-drivers-online.mjs |
 
 ---
 
-## TC-02: Race condition 3 tài xế, 1 khách (3D-1C)
+## Chuẩn bị (1 lần trước demo)
 
-**Mục tiêu:** Kiểm tra chỉ 1 tài xế được nhận; lỗi trả về tiếng Việt; nút Bỏ qua hoạt động độc lập.
+### Bước 1 — Khởi động stack
+```cmd
+npm run docker:up
+```
 
-**Tài khoản:** Customer 1, Driver 1, Driver 2
+### Bước 2 — Reset DB + seed (chỉ khi cần DB sạch)
+```cmd
+scripts\reset-database.bat
+npx tsx scripts/seed-database.ts
+```
 
-### Bước thực hiện
+> `seed-database.ts` tạo toàn bộ accounts, 5 vouchers, 28 rides lịch sử, ratings phân biệt cho tài xế.
+> **Không cần chạy `seed-flows.ts` nữa** — đã gộp vào `seed-database.ts`.
 
-1. Mở 3 tab/cửa sổ riêng:
-   - Tab A (Customer 1): `http://localhost:4000`
-   - Tab B (Driver 1): `http://localhost:4001` → đăng nhập `0911234561`
-   - Tab C (Driver 2): `http://localhost:4001` (cửa sổ mới) → đăng nhập `0911234562`
-   
-   > **Lưu ý:** Nhờ sessionStorage, mỗi tab lưu token độc lập — không bị ghi đè nhau ✓
+### Bước 3 — Bật tài xế background online
+```cmd
+node scripts/set-drivers-online.mjs
+```
 
-2. Đảm bảo cả 2 tài xế **Trực tuyến**
-3. Customer 1 đặt chuyến **Xe 4 chỗ**, khu vực **Bến Thành** (cả 2 tài xế đều gần)
-4. Quan sát thông báo dispatch trên cả 2 tab tài xế
-5. Cả 2 tài xế nhấn **✓ Nhận ngay** gần như cùng lúc
+### Bước 4 — Mở 3 tab browser
 
-### Kết quả mong đợi
-- Chỉ 1 tài xế thành công → chuyển sang `/active-ride`
-- Tài xế còn lại thấy lỗi: **"Chuyến đi đã có tài xế."** (tiếng Việt, không phải English) ✓
-- Khách thấy đúng 1 tài xế được gán ✓
+| Tab | URL | Tài khoản |
+|-----|-----|-----------|
+| Chrome thường | http://localhost:4001 | `0911234583` / `Password@1` |
+| Chrome Incognito | http://localhost:4000 | `0901234571` / `Password@1` |
+| Chrome tab mới | http://localhost:4002 | `0900000001` / `Password@1` |
 
-### Kiểm tra nút Bỏ qua
-6. Trên tab tài xế đang ở dashboard (có danh sách cuốc):
-   - Nhấn **Bỏ qua** trên một ride → ride đó biến khỏi danh sách
-   - Nút Bỏ qua của ride khác **không bị disabled** trong khi đang nhấn Nhận ngay ride kia ✓
-
----
-
-## TC-03: Browse mode (tài xế nhận chuyến qua danh sách, không qua dispatch)
-
-**Mục tiêu:** Kiểm tra cơ chế browse-mode (suggestedDriverIds gate đã bị xóa).
-
-**Tài khoản:** Customer 1, Driver 1
-
-### Bước thực hiện
-
-1. Customer đặt chuyến **Xe 4 chỗ**
-2. **Không** tương tác với tab Driver trong vòng 30s (để dispatch timer hết)
-3. Sau khi hết timer, ride xuất hiện trong **"Danh sách cuốc đang chờ nhận"** của Driver 1
-4. Driver nhấn **✓ Nhận ngay** từ danh sách
-
-### Kết quả mong đợi
-- Ride được accept thành công (không bị chặn bởi `suggestedDriverIds`) ✓
-- Customer nhận được thông báo tài xế đã tìm thấy ✓
+### Bước 5 — GPS tài xế demo (0911234583)
+1. Tab driver app (4001) → **F12** → **More tools → Sensors**
+2. **Location** → **Custom location** → Lat: `10.8178` · Lng: `106.6645`
+3. Bật **Trực tuyến** trong app
 
 ---
 
-## TC-04: Đặt chuyến tiền mặt — kiểm tra wallet driver (cash debt)
+## Rating tài xế sau seed — Dispatch Demo
 
-**Mục tiêu:** Driver nhận tiền mặt → nợ platform fee → ví trừ tự động.
-
-**Tài khoản:** Driver 1 (xem ví trước và sau chuyến)
-
-### Bước thực hiện
-
-1. Driver 1 vào **Ví tiền** → ghi lại số dư hiện tại
-2. Chạy 1 chuyến tiền mặt (TC-01)
-3. Sau khi hoàn tất, driver xem thông báo: **"Chuyến tiền mặt hoàn thành — Phí nền tảng X ₫ (18%) đã ghi nợ"**
-4. Vào **Ví tiền** → kiểm tra số dư giảm đúng bằng `18% × cước phí`
-
-### Kết quả mong đợi
-- Số dư giảm đúng commission rate: MOTORBIKE 20%, CAR_4 18%, CAR_7 15% ✓
+| Tài xế | Phone | Xe | Khoảng cách NVB | Rating sau seed |
+|--------|-------|-----|-----------------|-----------------|
+| Pham Van Bao | `0911234583` | CAR_4 | 250m | **4.8 ★** (5 chuyến: 4×⭐5 + 1×⭐4) |
+| Le Thi Mai | `0911234585` | CAR_4 | 450m | **3.5 ★** (4 chuyến: ⭐5+⭐4+⭐3+⭐2) |
+| Tran Van Hung | `0911234584` | MOTORBIKE | 130m | **4.7 ★** (3 chuyến: 2×⭐5 + 1×⭐4) |
+| Bui Thi Lan | `0911234587` | SCOOTER | 650m | **4.5 ★** (2 chuyến: ⭐5+⭐4) |
+| Hoang Van Lam | `0911234586` | CAR_7 | 300m | **5.0 ★** (1 chuyến ⭐5) |
 
 ---
 
-## TC-05: Kiểm tra Admin Dashboard
+## Luồng A — Full Lifecycle (1C-1D)
 
-**Mục tiêu:** UUID truncation + bank account section + đăng nhập thành công.
+**Mục tiêu:** End-to-end: đặt xe → nhận → di chuyển → hoàn tất → đánh giá
 
-**Tài khoản:** Admin (`0900000001`)
+**Browser cần mở:** Customer (Incognito/4000) + Driver (4001 + GPS Sensors)
 
-### Bước thực hiện
+1. **[Customer 4000]** Pin điểm đón tại `10.8158, 106.6636` · Điểm đến: Vincom Gò Vấp
+2. Chọn **Ô tô 4 chỗ** · Thanh toán: **Tiền mặt** · **Đặt xe**
+3. **[Driver 4001]** Popup xuất hiện (20 giây) → **Vuốt phải / Nhận chuyến**
+4. Customer thấy icon tài xế + tên + biển số trên bản đồ
+5. Driver: **Đã đến điểm đón** → **Đón khách** → **Bắt đầu chuyến** → **Hoàn tất**
+6. Customer: đánh giá ⭐⭐⭐⭐⭐ → **Gửi**
 
-1. Mở `http://localhost:4002` → đăng nhập admin
-   - **Mong đợi:** Dashboard load thành công, không bị redirect về login ✓ (đã fix sessionStorage bug)
+**Verify:** Customer lịch sử → COMPLETED. Driver ví → COMMISSION trừ 18% (CAR_4). Admin → ride mới.
 
-2. Vào **Tài xế** (sidebar)
-   - Cột ID hiển thị 8 ký tự uppercase, vd: `ABCD1234` ✓
-   - Hover vào ID → tooltip hiện đầy đủ UUID 36 ký tự ✓
+### Thử các loại xe khác
 
-3. Vào **Khách hàng** (sidebar)
-   - Cột ID: tương tự truncate 8 ký tự ✓
-
-4. Vào **Chuyến đi** (sidebar)
-   - Cột ID: tương tự truncate 8 ký tự ✓
-
-5. Vào **Tài chính** → **Ví thương nhân** (merchant wallet)
-   - Section "Tài khoản ngân hàng hệ thống": hiển thị 1 card duy nhất (dedup theo accountNumber) ✓
-   - Không phân biệt type SETTLEMENT/PAYOUT nữa ✓
-
----
-
-## TC-06: Đăng ký tài khoản mới (registration flow)
-
-**Mục tiêu:** End-to-end registration với OTP mock.
-
-### Bước thực hiện
-
-1. Mở `http://localhost:4000` → nhấn **Đăng ký ngay**
-2. Nhập số điện thoại mới (vd: `0901999001`), họ tên, mật khẩu `Password@1`
-3. Nhấn **Gửi OTP**
-4. Lấy OTP từ docker logs:
-   ```
-   docker logs cab-auth-service 2>&1 | findstr OTP
-   ```
-5. Nhập OTP → nhấn **Xác nhận**
-
-### Kết quả mong đợi
-- Tài khoản được tạo → tự động đăng nhập → chuyển về trang chủ ✓
-- Có thể đặt chuyến ngay ✓
+| Loại xe | Driver | Chọn trên app |
+|---------|--------|---------------|
+| Xe máy | `0911234584` Tran Van Hung | "Xe máy" |
+| Ô tô 4 chỗ | `0911234583` hoặc `0911234585` | "Ô tô 4 chỗ" |
+| Ô tô 7 chỗ | `0911234586` Hoang Van Lam | "Ô tô 7 chỗ" |
+| Xe tay ga | `0911234587` Bui Thi Lan | "Xe tay ga" |
 
 ---
 
-## TC-07: Kiểm tra tab isolation (sessionStorage)
+## Luồng B — Dispatch Scoring Demo (1C-2D)
 
-**Mục tiêu:** Tab riêng không chia sẻ session, kể cả trong cùng cửa sổ incognito.
+**Mục tiêu:** Thể hiện scoring algorithm: distance 40% + rating 25% + idle 15% + acceptance 15%
 
-### Bước thực hiện
+**Setup:** Driver 83 mở browser (GPS Sensors on) + `set-drivers-online.mjs` đã chạy (85 online)
 
-1. Mở 2 tab cùng `http://localhost:4000` trong cùng cửa sổ Chrome
-2. Tab 1: đăng nhập Customer 1 (`0901234561`)
-3. Tab 2: đăng nhập Customer 2 (`0901234562`)
-4. Kiểm tra:
-   - Tab 1 vẫn hiện "Xin chào, Nguyen!" (Customer 1) ✓
-   - Tab 2 hiện tên Customer 2 ✓
-   - Đăng xuất ở Tab 2 → Tab 1 không bị đăng xuất ✓
+### Lý thuyết scoring
 
----
+Khi customer book CAR_4 tại NVB, có 2 CAR_4 driver trong bán kính 2km:
 
-## TC-08: Gọi điện tài xế từ chat widget
+| Driver | Khoảng cách | Rating | Dự đoán dispatch |
+|--------|-------------|--------|------------------|
+| **0911234583** Pham Van Bao | 250m | **4.8 ★** | **1st — dispatch ngay** |
+| 0911234585 Le Thi Mai | 450m | 3.5 ★ | 2nd — nhận nếu 83 từ chối |
 
-**Mục tiêu:** Nút điện thoại trong panel nhắn tin driver.
+Cả 2 yếu tố (gần hơn + rating cao hơn) đều có lợi cho 83 → 83 luôn được dispatch trước.
 
-**Bước thực hiện** (trong khi đang có chuyến PICKING_UP / IN_PROGRESS):
-1. Customer nhấn icon chat/bell → mở widget chat
-2. Chuyển sang tab **"Nhắn tin tài xế"**
-3. Kiểm tra có icon điện thoại (📞) ở góc trên bên phải panel
-4. Nhấn → trình duyệt mở `tel:0911234561` ✓
+### Thực hiện — Demo từ chối
 
----
+1. Customer book CAR_4 tại NVB
+2. Driver 83 nhận notification → **Bấm X (từ chối)** hoặc chờ 20 giây hết giờ
+3. Hệ thống tự chuyển sang Driver 85 → background driver nhận chuyến
+4. Giải thích: không broadcast, chỉ 1 tài xế nhận notification tại 1 thời điểm
 
-## Thứ tự chạy đề xuất
+### Điểm nhấn kỹ thuật
 
-| Thứ tự | Test Case | Thời gian ước tính |
-|--------|-----------|-------------------|
-| 1      | TC-07 (tab isolation)      | 2 phút  |
-| 2      | TC-01 (1C-1D full flow)    | 8 phút  |
-| 3      | TC-04 (cash wallet check)  | 3 phút  |
-| 4      | TC-02 (3D-1C race)         | 5 phút  |
-| 5      | TC-03 (browse mode)        | 4 phút  |
-| 6      | TC-05 (admin dashboard)    | 3 phút  |
-| 7      | TC-06 (registration)       | 3 phút  |
-| 8      | TC-08 (call button)        | 1 phút  |
+- Vòng dispatch: **2km × 1 tài xế** → **3km × 3** → **5km × 5**
+- Driver từ chối nhiều → acceptance rate giảm → điểm giảm về sau
+- AI adjustment: nếu ai-service bật, accept-probability từ ML model tinh chỉnh score ±5%
 
-**Tổng: ~29 phút**
+### Demo 3 notification lần lượt (nâng cao)
+
+1. Mở tab incognito → http://localhost:4001 → đăng nhập `0911234585`
+2. F12 → Sensors → Lat: `10.8198`, Lng: `106.6655` → Bật Online
+3. Customer book CAR_4 → notification đến 83 → 83 từ chối → notification đến 85 → 85 từ chối → vòng 2 mở rộng
 
 ---
 
-## Lỗi đã biết / không cần test
+## Luồng C — Thanh toán Online + Voucher
 
-- Map tiles lỗi 404: bình thường trong dev (OpenStreetMap bị chặn hoặc network timeout)
-- GPS warning trên driver app: bình thường (browser không có GPS)
-- `adminToken` từ localStorage: đã fix sang `sessionStorage.getItem('accessToken')`
+**Mục tiêu:** Demo MoMo/VNPay sandbox, voucher discount, refund flow
+
+1. Customer book: Điểm đón NVB · Điểm đến Sân bay TSN · Xe CAR_4 · Thanh toán **MoMo**
+2. Nhấn **"Áp voucher"** → nhập `WEEKEND10` (giảm 10%, tối đa 30k)
+3. **Đặt xe** → trang Sandbox → **"Thanh toán (Sandbox)"** → redirect về app
+4. Driver (background) nhận → hoàn tất
+
+**Demo refund:** Sau sandbox confirm, trong lúc FINDING_DRIVER → Customer **Hủy chuyến** → badge vàng "Đang hoàn về ví MoMo" → Admin → Payments → thấy record REFUNDED.
+
+### Voucher codes
+
+| Code | Giảm | Điều kiện |
+|------|------|-----------|
+| `WEEKEND10` | 10%, tối đa 30k | Không giới hạn |
+| `FLAT30K` | 30.000đ | Chuyến ≥ 80.000đ |
+| `NEWUSER50` | 50%, tối đa 100k | Khách mới |
+| `WELCOME20` | 20%, tối đa 50k | Khách mới |
+| `OLDUSER15` | 15%, tối đa 40k | Chuyến ≥ 50.000đ |
+
+---
+
+## Luồng D — Chat & Đánh giá Realtime
+
+**Trong khi chuyến đang chạy (sau "Đón khách"):**
+
+1. Customer app → icon chat → tab **"Tài xế"** → gõ tin nhắn
+2. Driver app nhận ngay (Socket.IO realtime)
+3. Driver reply → Customer thấy ngay, không reload
+
+**Review sau chuyến:** Driver hoàn tất → Customer màn hình rating → 5 sao + comment → Admin xem rating tài xế thay đổi realtime.
+
+---
+
+## Luồng E — AI Chatbot (FoxGo Assistant)
+
+**Customer app** → icon chat nổi (góc phải) → tab **"Trợ lý FoxGo"**
+
+| Câu hỏi | Hành vi mong đợi | Kỹ thuật |
+|---------|---------|----------|
+| `bảng giá xe máy` | <500ms | Pattern matching |
+| `voucher giảm giá dùng như thế nào?` | Hướng dẫn chi tiết | RAG từ knowledge base |
+| `tôi bị trừ tiền nhưng không thấy chuyến đâu` | Giải thích + contact | RAG + intent classification |
+| `phí hủy bao nhiêu?` → `còn tài xế hủy thì sao?` | Trả lời đúng follow-up | Multi-turn context |
+
+**Driver app** → icon chat → "Trợ lý tài xế":
+
+| Câu hỏi | Hành vi |
+|---------|---------|
+| `hoa hồng xe 4 chỗ bao nhiêu?` | "CAR_4: 18% mỗi cuốc..." |
+| `tại sao không nhận được cuốc?` | Kiểm tra ví, GPS, online status |
+| `làm sao tăng rating?` | Tips cụ thể |
+
+**Điểm nhấn:** AI fallback trong 150ms — hệ thống hoạt động bình thường khi ai-service offline.
+
+---
+
+## Luồng F — Admin Dashboard
+
+**Login:** http://localhost:4002 · `0900000001`
+
+| Chức năng | Menu | Thấy gì |
+|-----------|------|---------|
+| Tổng quan | Dashboard | Rides hôm nay, doanh thu, driver online |
+| Duyệt tài xế | Tài xế → Chờ duyệt | 3 PENDING: Truong Van V, Lam Thi W, Huynh Van X |
+| Chuyến đi | Chuyến đi | 28 rides seeded, filter theo status |
+| Voucher | Voucher | 5 vouchers active |
+| Ví công ty | Ví → Merchant | Số dư, IN/OUT history, logo Techcombank |
+| Ví tài xế | Ví → Tài xế | Xem debt từng driver |
+
+**Live: Duyệt tài xế mới**
+1. Tài xế → Chờ duyệt → chọn `Truong Van V` → xem hồ sơ, xe Toyota Mazda2, bằng B
+2. Nhấn **"Phê duyệt"**
+3. Mở tab mới → http://localhost:4001 → đăng nhập `0911234580` → nút Trực tuyến mở khóa
+
+---
+
+## Luồng G — Ví Tài xế & T+24h Settlement
+
+**Driver app (0911234583) → Ví:**
+- **Tổng số dư** / **Khả dụng** / **Chờ thanh toán** (MOMO earnings, mở sau 24h) / **Ký quỹ** 300k
+
+**Top-up demo:** Ví → Nạp tiền → MoMo → Sandbox → Xác nhận → số dư tăng ngay.
+
+**Simulate T+24h:**
+```cmd
+docker exec cab-postgres psql -U postgres -d wallet_db -c "UPDATE pending_earnings SET \"settleAt\" = NOW() - INTERVAL '25 hours' WHERE \"settledAt\" IS NULL;"
+```
+
+→ Reload trang Ví → "Chờ thanh toán" về 0, "Khả dụng" tăng (lazy settlement trigger khi GET /balance).
+
+---
+
+## Bản đồ khu vực test
+
+| Địa điểm | Toạ độ | Cách điểm đón |
+|----------|--------|---------------|
+| **[Điểm đón] 295 Nguyễn Văn Bảo** | `10.8158, 106.6636` | — |
+| Vincom Gò Vấp | `10.8340, 106.6648` | ~2km |
+| Lotte Mart Gò Vấp | `10.8330, 106.6645` | ~2km |
+| Chợ Hạnh Thông Tây | `10.8200, 106.6650` | ~500m |
+| BV Nhân dân Gò Vấp | `10.8050, 106.6680` | ~1.5km |
+| Sân bay Tân Sơn Nhất | `10.8184, 106.6519` | ~1.5km |
+
+## Vị trí tài xế background
+
+| Tài xế | Phone | Xe | Toạ độ | Cách điểm đón |
+|--------|-------|-----|--------|--------------|
+| Tran Van Hung | `0911234584` | MOTORBIKE Wave Alpha | `10.8165, 106.6622` | 130m |
+| Pham Van Bao *(demo)* | `0911234583` | CAR_4 Toyota Vios | `10.8178, 106.6645` | 250m |
+| Hoang Van Lam | `0911234586` | CAR_7 Toyota Innova | `10.8152, 106.6662` | 300m |
+| Le Thi Mai | `0911234585` | CAR_4 Hyundai Accent | `10.8198, 106.6655` | 450m |
+| Bui Thi Lan | `0911234587` | SCOOTER Honda Vision | `10.8222, 106.6615` | 650m |
+
+---
+
+## Rebuild nhanh trước demo
+
+```cmd
+scripts\reset-database.bat
+npx tsx scripts/seed-database.ts
+node scripts/set-drivers-online.mjs
+```
+
+---
+
+## FAQ
+
+**Q: Dispatch không gửi notification cho tài xế demo (83)?**
+A: (1) GPS Sensors đã bật chưa? (2) Đã nhấn "Trực tuyến" chưa? (3) Chọn đúng vehicle type?
+
+**Q: Không thấy tài xế background trên bản đồ?**
+A: Chạy lại `node scripts/set-drivers-online.mjs` — driver tự OFFLINE sau khi hoàn tất chuyến.
+
+**Q: Ví tài xế âm quá ngưỡng, không nhận cuốc?**
+A: Driver app → Ví → Nạp tiền → MoMo → Sandbox confirm.
+
+**Q: seed-database.ts báo lỗi "user already exists"?**
+A: Chạy `scripts\reset-database.bat` trước.
+
+**Q: seed-flows.ts có cần chạy không?**
+A: **Không.** Đã gộp toàn bộ vào seed-database.ts.

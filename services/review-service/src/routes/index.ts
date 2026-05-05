@@ -1,7 +1,25 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { reviewController } from '../controllers/review.controller';
+import { reviewService } from '../services/review.service';
+import { config } from '../config';
 
 const router = Router();
+
+// Internal: schedule auto-rating 24h after ride.completed
+router.post('/internal/schedule-auto-rating', (req: Request, res: Response) => {
+  if (req.headers['x-internal-token'] !== config.internalServiceToken) {
+    res.status(403).json({ success: false, message: 'Forbidden' });
+    return;
+  }
+  const { rideId, bookingId, customerId, driverId } = req.body ?? {};
+  if (!rideId || !customerId || !driverId) {
+    res.status(400).json({ success: false, message: 'rideId, customerId and driverId are required' });
+    return;
+  }
+  reviewService.scheduleAutoRating({ rideId, bookingId: bookingId || rideId, customerId, driverId })
+    .then(() => res.json({ success: true }))
+    .catch((err: any) => res.status(500).json({ success: false, message: err.message }));
+});
 
 // Create review
 router.post('/reviews', reviewController.createReview);

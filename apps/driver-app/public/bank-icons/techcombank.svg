@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 112 56" width="112" height="56">
+  <!-- Left diamond: vertices at (28,4) top, (52,28) right, (28,52) bottom, (4,28) left -->
+  <polygon points="28,4 52,28 28,52 4,28"
+    fill="none" stroke="#cc0000" stroke-width="6.5" stroke-linejoin="miter"/>
+  <!-- Right diamond: vertices at (84,4) top, (108,28) right, (84,52) bottom, (60,28) left -->
+  <polygon points="84,4 108,28 84,52 60,28"
+    fill="none" stroke="#cc0000" stroke-width="6.5" stroke-linejoin="miter"/>
+  <!-- White cover to merge the shared inner area cleanly -->
+  <polygon points="52,28 56,24 60,28 56,32"
+    fill="white" stroke="none"/>
+</svg>

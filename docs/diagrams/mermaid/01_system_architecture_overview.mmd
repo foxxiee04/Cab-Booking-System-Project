@@ -1,0 +1,67 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
+graph TB
+  subgraph Frontend["Frontend — React SPAs"]
+    Customer["Customer :4000"]
+    Driver["Driver :4001"]
+    Admin["Admin :4002"]
+  end
+
+  subgraph Gateway["Gateway layer"]
+    APIGW["API Gateway :3000<br/>JWT · HTTP proxy · Socket.IO<br/>matching engine · RabbitMQ consumer"]
+  end
+
+  subgraph BusinessServices["Business services"]
+    Auth["Auth :3001<br/>gRPC :50051"]
+    User["User :3007<br/>gRPC :50052"]
+    Booking["Booking :3008<br/>gRPC :50053"]
+    Ride["Ride :3002<br/>gRPC :50054"]
+    DriverSvc["Driver :3003<br/>gRPC :50055"]
+    Payment["Payment :3004<br/>gRPC :50056"]
+    Pricing["Pricing :3009<br/>gRPC :50057"]
+    Wallet["Wallet :3006"]
+    Notification["Notification :3005"]
+    Review["Review :3010"]
+  end
+
+  subgraph AILayer["AI layer"]
+    AI["AI :8000<br/>FastAPI · ML · RAG"]
+  end
+
+  subgraph DataLayer["Data and infra"]
+    PG[("PostgreSQL :5433<br/>7 databases")]
+    Mongo[("MongoDB :27017<br/>2 databases")]
+    Redis[("Redis :6379<br/>GEO · cache · adapter")]
+    Rabbit["RabbitMQ :5672<br/>domain events"]
+  end
+
+  subgraph External["External APIs"]
+    MoMo[MoMo]
+    VNPay[VNPay]
+    OSRM[OSRM]
+    Maps[Maps API]
+  end
+
+  Customer & Driver & Admin --> APIGW
+
+  APIGW -- "HTTP proxy" --> Auth & User & Ride & DriverSvc
+  APIGW -- "HTTP proxy" --> Booking & Payment & Wallet & Notification & Review
+  APIGW -- "gRPC bridge" --> Pricing
+  APIGW -- "gRPC" --> DriverSvc
+  Pricing -- "HTTP → AI" --> AI
+
+  Auth & User & Ride & DriverSvc --> PG
+  Booking & Payment & Wallet --> PG
+  Notification --> Mongo
+  Review --> Mongo
+  DriverSvc & Pricing --> Redis
+  APIGW -- "Socket.IO adapter" --> Redis
+
+  Ride & Booking -- "publish" --> Rabbit
+  Payment & Wallet -- "outbox" --> Rabbit
+  Rabbit -- "consume" --> APIGW & Notification & Wallet & Review
+
+  Payment --> MoMo & VNPay
+  Ride --> OSRM & Maps
+
+  classDef gate fill:#e0f2fe,stroke:#0284c7,stroke-width:2px
+  class APIGW gate

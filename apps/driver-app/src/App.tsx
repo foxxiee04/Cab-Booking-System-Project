@@ -15,6 +15,7 @@ import Profile from './pages/Profile';
 import DriverMobileShell from './components/layout/DriverMobileShell';
 import Wallet from './pages/Wallet';
 import WalletTopUpReturn from './pages/WalletTopUpReturn';
+import AIAssistWidget from './components/AIAssistWidget';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -28,6 +29,17 @@ const PublicRoute: React.FC<{ children: React.ReactElement }> = ({ children }) =
   return !isAuthenticated ? children : <Navigate to="/dashboard" replace />;
 };
 
+// Authenticated shell that includes global widgets
+const AuthenticatedShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
+  return (
+    <>
+      {children}
+      {isAuthenticated && <AIAssistWidget />}
+    </>
+  );
+};
+
 const App: React.FC = () => {
   return (
     <Router
@@ -36,7 +48,8 @@ const App: React.FC = () => {
         v7_relativeSplatPath: true,
       }}
     >
-      <Routes>
+      <AuthenticatedShell>
+        <Routes>
         {/* Public Routes */}
         <Route
           path="/login"
@@ -96,6 +109,7 @@ const App: React.FC = () => {
         <Route path="/wallet/topup/return" element={<WalletTopUpReturn />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
+      </AuthenticatedShell>
     </Router>
   );
 };

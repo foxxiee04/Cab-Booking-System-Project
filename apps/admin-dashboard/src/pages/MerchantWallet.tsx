@@ -59,6 +59,13 @@ import { copyToClipboard } from '../utils/clipboard.utils';
 // So WALLET_ADMIN path starts AFTER the /api prefix
 const WALLET_ADMIN = '/admin/wallet';
 
+const BANK_LOGO_MAP: Record<string, string> = {
+  'Techcombank': '/bank-icons/techcombank.svg',
+  'TCB':         '/bank-icons/techcombank.svg',
+};
+const getBankLogoUrl = (bankName: string): string | null =>
+  BANK_LOGO_MAP[bankName] ?? null;
+
 function useAuthHeaders() {
   const { accessToken } = useAppSelector((s) => s.auth);
   return accessToken;
@@ -201,7 +208,7 @@ const BANK_ACCOUNT_TYPE_LABEL: Record<string, string> = {
 const SYSTEM_ACCOUNT_LABEL: Record<string, string> = {
   MAIN_ACCOUNT:   'Techcombank 8000511204',
   PAYOUT_ACCOUNT: 'Techcombank 8000511204',
-  CUSTOMER_BANK:  'Ví/Ngân hàng khách hàng',
+  CUSTOMER_BANK:  'Ví VNPay',
   DRIVER_BANK:    'Ngân hàng tài xế',
   DRIVER_MOMO:    'Ví MoMo',
   DRIVER_VNPAY:   'Ví VNPay',
@@ -867,7 +874,10 @@ const MerchantWallet: React.FC = () => {
                       gap: 2,
                     }}
                   >
-                    <AccountBalanceWallet sx={{ fontSize: 40, color: 'primary.main', flexShrink: 0 }} />
+                    {getBankLogoUrl(a.bankName)
+                      ? <img src={getBankLogoUrl(a.bankName)!} alt={a.bankName} style={{ height: 44, flexShrink: 0 }} />
+                      : <AccountBalanceWallet sx={{ fontSize: 40, color: 'primary.main', flexShrink: 0 }} />
+                    }
                     <Box>
                       <Typography variant="subtitle1" fontWeight={800} color="primary.dark">
                         {a.bankName}

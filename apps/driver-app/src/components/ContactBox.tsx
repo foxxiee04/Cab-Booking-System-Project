@@ -206,7 +206,7 @@ const ContactBox: React.FC<ContactBoxProps> = ({
         sx={{
           position: floatingPanel ? 'fixed' : 'relative',
           bottom: floatingPanel ? { xs: 144, sm: 96 } : 'auto',
-          left: floatingPanel ? { xs: 16, sm: 24 } : 'auto',
+          right: floatingPanel ? { xs: 16, sm: 24 } : 'auto',
           mt: floatingPanel ? 0 : 1.25,
           width: floatingPanel
             ? { xs: 'calc(100vw - 32px)', sm: 420 }
@@ -306,24 +306,6 @@ const ContactBox: React.FC<ContactBoxProps> = ({
                 bgcolor: '#ffffff',
               }}
             >
-              {lastCallSummary && (
-                <Box
-                  sx={{
-                    alignSelf: 'center',
-                    mb: 1.25,
-                    px: 1.25,
-                    py: 0.7,
-                    borderRadius: 999,
-                    bgcolor: '#eff6ff',
-                    color: '#1d4ed8',
-                    maxWidth: '90%',
-                  }}
-                >
-                  <Typography variant="caption" sx={{ fontWeight: 700, textAlign: 'center', display: 'block' }}>
-                    {lastCallSummary.text}
-                  </Typography>
-                </Box>
-              )}
               {messages.length === 0 && (
                 <Box sx={{ m: 'auto', textAlign: 'center', color: 'text.secondary', py: 3 }}>
                   <ChatBubbleRounded sx={{ fontSize: 36, opacity: 0.15, mb: 0.75 }} />
@@ -335,6 +317,25 @@ const ContactBox: React.FC<ContactBoxProps> = ({
               {messages.map((msg, i) => (
                 <MessageBubble key={i} msg={msg} />
               ))}
+              {lastCallSummary && (
+                <Box
+                  sx={{
+                    alignSelf: 'center',
+                    my: 0.75,
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: 999,
+                    bgcolor: '#eff6ff',
+                    color: '#1d4ed8',
+                    maxWidth: '90%',
+                    border: '1px solid #c7d7fb',
+                  }}
+                >
+                  <Typography variant="caption" sx={{ fontWeight: 600, textAlign: 'center', display: 'block', fontSize: '0.72rem' }}>
+                    📞 {lastCallSummary.text}
+                  </Typography>
+                </Box>
+              )}
               <div ref={bottomRef} />
             </Box>
 
@@ -394,12 +395,12 @@ const ContactBox: React.FC<ContactBoxProps> = ({
       sx={{
         position: !inlineTrigger && floatingPanel ? 'fixed' : 'relative',
         bottom: !inlineTrigger && floatingPanel ? { xs: 80, sm: 24 } : 'auto',
-        left: !inlineTrigger && floatingPanel ? { xs: 16, sm: 24 } : 'auto',
+        right: !inlineTrigger && floatingPanel ? { xs: 16, sm: 24 } : 'auto',
         zIndex: floatingPanel ? 1300 : 4,
         width: inlineTrigger && fullWidthTrigger ? '100%' : 'auto',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: inlineTrigger && fullWidthTrigger ? 'stretch' : 'flex-start',
+        alignItems: inlineTrigger && fullWidthTrigger ? 'stretch' : 'flex-end',
       }}
     >
       {floatingPanel && panelContent}

@@ -259,9 +259,18 @@ export class CommissionService {
 
   private getBaseRate(vehicleType: string): number {
     switch (vehicleType.toUpperCase()) {
-      case 'COMFORT': return this.cfg.rates.comfort;
-      case 'PREMIUM': return this.cfg.rates.premium;
-      default:        return this.cfg.rates.economy; // ECONOMY + unknown types
+      case 'MOTORBIKE':
+      case 'SCOOTER':
+      case 'ECONOMY':
+        return this.cfg.rates.economy;   // 20%
+      case 'CAR_4':
+      case 'COMFORT':
+        return this.cfg.rates.comfort;   // 18%
+      case 'CAR_7':
+      case 'PREMIUM':
+        return this.cfg.rates.premium;   // 15%
+      default:
+        return this.cfg.rates.economy;   // unknown types → economy rate
     }
   }
 

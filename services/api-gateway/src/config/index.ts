@@ -47,7 +47,6 @@ export const config = {
     ride: process.env.RIDE_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.RIDE_SERVICE_URL || 'http://localhost:3002', 50054),
     driver: process.env.DRIVER_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.DRIVER_SERVICE_URL || 'http://localhost:3003', 50055),
     payment: process.env.PAYMENT_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.PAYMENT_SERVICE_URL || 'http://localhost:3004', 50056),
-    wallet: process.env.WALLET_SERVICE_URL || 'http://localhost:3006',
     pricing: process.env.PRICING_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.PRICING_SERVICE_URL || 'http://localhost:3009', 50057),
     notification: process.env.NOTIFICATION_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3005', 50058),
     review: process.env.REVIEW_GRPC_ADDRESS || grpcAddressFromHttpUrl(process.env.REVIEW_SERVICE_URL || 'http://localhost:3010', 50059),

@@ -1,0 +1,8 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
+stateDiagram-v2
+  [*] --> ACTIVE
+  ACTIVE --> PENDING_SETTLEMENT: ride payable event
+  PENDING_SETTLEMENT --> SETTLED: fees posts
+  ACTIVE --> LOCKED: compliance hold
+  LOCKED --> ACTIVE: release
+  SETTLED --> [*]

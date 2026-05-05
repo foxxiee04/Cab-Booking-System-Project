@@ -137,26 +137,21 @@ const Account: React.FC = () => {
     setError('');
     setSuccess('');
 
-    if (!formData.firstName.trim() || !formData.lastName.trim()) {
-      setError('Vui lòng nhập đầy đủ họ và tên.');
+    if (!formData.email.trim()) {
+      setError('Vui lòng nhập email.');
       return;
     }
 
     setSaving(true);
     try {
       const response = await authApi.updateMe({
-        profile: {
-          firstName: formData.firstName.trim(),
-          lastName: formData.lastName.trim(),
-          avatar: formData.avatar.trim() || undefined,
-        },
         email: formData.email.trim(),
       });
 
       if (response.success) {
         dispatch(updateUser(response.data.user));
         setEditing(false);
-        setSuccess('Đã cập nhật thông tin tài khoản.');
+        setSuccess('Đã cập nhật email tài khoản.');
       }
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể cập nhật tài khoản.');
@@ -274,19 +269,22 @@ const Account: React.FC = () => {
                         <Typography variant="subtitle1" fontWeight={800}>Thông tin tài khoản</Typography>
                       </Stack>
                       <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth label="Họ" value={formData.firstName} onChange={handleChange('firstName')} />
+                        <Grid item xs={12}>
+                          <TextField
+                            fullWidth
+                            label="Email"
+                            value={formData.email}
+                            onChange={handleChange('email')}
+                            placeholder="name@example.com"
+                            helperText="Chỉ email có thể được cập nhật. Họ tên và số điện thoại không thể thay đổi."
+                          />
                         </Grid>
                         <Grid item xs={12} sm={6}>
-                          <TextField fullWidth label="Tên" value={formData.lastName} onChange={handleChange('lastName')} />
+                          <TextField fullWidth label="Họ và tên" value={`${user?.firstName || ''} ${user?.lastName || ''}`.trim()} disabled helperText="Không thể thay đổi họ và tên." />
                         </Grid>
                         <Grid item xs={12} sm={6}>
-                          <TextField fullWidth label="Email" value={formData.email} onChange={handleChange('email')} placeholder="name@example.com" />
+                          <TextField fullWidth label="Số điện thoại" value={user?.phoneNumber || ''} disabled helperText="Không thể thay đổi số điện thoại." />
                         </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <TextField fullWidth label="Số điện thoại" value={user?.phoneNumber || ''} disabled helperText="Số điện thoại được quản lý theo tài khoản đăng ký." />
-                        </Grid>
-
                       </Grid>
                       <Stack direction="row" spacing={1.25} justifyContent="center" flexWrap="wrap" useFlexGap sx={{ mt: 2.5 }}>
                         <Button variant="contained" onClick={handleSaveProfile} disabled={saving}>

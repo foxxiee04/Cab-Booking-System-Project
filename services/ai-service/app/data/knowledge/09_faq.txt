@@ -1,32 +1,36 @@
 TIÊU ĐỀ: Câu hỏi thường gặp về FoxGo
-DANH MỤC: FAQ, câu hỏi thường gặp, thường hỏi, FoxGo là gì, ứng dụng gọi xe
+DANH MỤC: FAQ, câu hỏi thường gặp, FoxGo là gì, ứng dụng gọi xe, khu vực hoạt động, đặt xe cho người khác, hỗ trợ iOS Android, cập nhật app, hóa đơn biên lai, điện thoại yếu pin, kết nối internet, đặt xe không cần internet
 
-FoxGo là gì?
-FoxGo là ứng dụng gọi xe công nghệ tại Việt Nam, kết nối hành khách với tài xế xe máy và ô tô. Hỗ trợ 4 loại xe: Xe máy số (MOTORBIKE), Xe tay ga (SCOOTER), Ô tô 4 chỗ (CAR_4), Ô tô 7 chỗ (CAR_7).
+FoxGo là ứng dụng gọi xe công nghệ Việt Nam, kết nối hành khách với tài xế xe máy và ô tô. Hỗ trợ 4 loại xe: Xe máy số, Xe tay ga, Ô tô 4 chỗ, Ô tô 7 chỗ. Mục tiêu của FoxGo là mang lại trải nghiệm đặt xe nhanh, an toàn và giá minh bạch cho người Việt.
 
+---
 Hỏi: FoxGo hoạt động ở những khu vực nào?
-Đáp: FoxGo hiện đang mở rộng dần. Bạn sẽ thấy các loại xe khả dụng trong khu vực của mình khi mở app và nhập điểm đến. Nếu không có xe nào, khu vực của bạn chưa được phủ sóng.
+Đáp: FoxGo đang mở rộng dần. Khi mở app và nhập điểm đến, bạn sẽ thấy loại xe nào có sẵn trong khu vực của mình. Nếu không có xe nào hiển thị giá thì khu vực đó chưa được phủ sóng. Xe máy thường có ở nhiều khu vực hơn ô tô.
 
-Hỏi: Tại sao không tìm được tài xế?
-Đáp: Một số lý do: (1) Không có tài xế trực tuyến gần bạn lúc này. (2) Giờ cao điểm — nhu cầu cao hơn cung. (3) Khu vực chưa được phủ sóng. Thử lại sau vài phút hoặc chọn loại xe khác (thường xe máy dễ tìm hơn ô tô).
+---
+Hỏi: Tại sao tôi không tìm được tài xế?
+Đáp: Một số lý do phổ biến: không có tài xế trực tuyến gần bạn lúc đó, giờ cao điểm cầu vượt cung, hoặc khu vực chưa có nhiều tài xế. Mẹo nhỏ: thử chọn xe máy thay vì ô tô — xe máy dễ tìm hơn nhiều. Hoặc đợi vài phút rồi thử lại.
 
-Hỏi: Tôi có thể đặt xe cho người khác không?
-Đáp: Có. Bạn đặt xe bình thường, chỉ cần nhập đúng điểm đón và điểm đến của người đó. Tuy nhiên việc thanh toán vẫn qua tài khoản của bạn. Hãy chia sẻ link theo dõi chuyến cho người đó để họ biết tài xế đang đến.
-
+---
 Hỏi: App FoxGo chạy trên điện thoại nào?
-Đáp: FoxGo hỗ trợ iOS 12 trở lên và Android 6.0 trở lên. Nếu app bị lỗi, thử cập nhật lên phiên bản mới nhất hoặc cài lại app.
+Đáp: FoxGo hỗ trợ iOS 12 trở lên và Android 6.0 trở lên. Nếu app bị lỗi hoặc crash, thử cập nhật lên phiên bản mới nhất trên App Store hoặc Google Play. Cài lại app không làm mất dữ liệu tài khoản vì tất cả lưu trên server.
 
-Hỏi: Tôi có thể đặt xe không có internet không?
-Đáp: Không. FoxGo cần kết nối internet để đặt xe, theo dõi tài xế và thanh toán online. Bạn cần 3G/4G hoặc WiFi. Khi đã đặt xong và chọn tiền mặt, bạn không cần internet để thanh toán.
+---
+Hỏi: Tôi có thể lấy hóa đơn/biên lai chuyến không?
+Đáp: Sau mỗi chuyến hoàn thành, FoxGo tự gửi biên lai điện tử về email đã đăng ký. Bạn cũng xem lại được trong "Lịch sử chuyến" → chọn chuyến bất kỳ. Nếu cần hóa đơn VAT chính thức cho công ty, liên hệ support@foxgo.vn kèm thông tin chuyến và thông tin công ty.
 
-Hỏi: Tôi thấy tài xế ở gần nhưng app báo không tìm được?
-Đáp: Tài xế nhìn thấy trên bản đồ có thể đang thực hiện chuyến khác hoặc đang ngoại tuyến. Hệ thống chỉ dispatch đến tài xế đang trực tuyến và rảnh. Thử đặt lại sau 1–2 phút.
+---
+Hỏi: Tôi thấy tài xế ở gần trên bản đồ nhưng app báo không tìm được?
+Đáp: Tài xế nhìn thấy trên bản đồ có thể đang bận chuyến khác hoặc đã offline. Hệ thống chỉ dispatch đến tài xế đang trực tuyến và thực sự rảnh. Thử lại sau 1–2 phút — tài xế đó có thể xong chuyến ngay thôi.
 
+---
+Hỏi: Đặt xe FoxGo có cần internet suốt chuyến không?
+Đáp: Cần internet để đặt xe, theo dõi tài xế và thanh toán online. Nhưng khi đã lên xe và chọn tiền mặt, bạn không cần internet nữa — cứ để điện thoại yên là được. Tất nhiên tài xế vẫn cần mạng để cập nhật trạng thái chuyến.
+
+---
 Hỏi: FoxGo có hỗ trợ người khuyết tật không?
-Đáp: Khi đặt xe, bạn có thể nhắn tin cho tài xế qua chat để thông báo nhu cầu đặc biệt. FoxGo đang phát triển thêm tính năng hỗ trợ người khuyết tật trong các bản cập nhật tới.
+Đáp: Hiện tại bạn có thể nhắn tin cho tài xế qua chat trong app để thông báo nhu cầu đặc biệt (cần ghế xe lăn, cần hỗ trợ lên xuống xe...). FoxGo đang phát triển thêm tính năng hỗ trợ người khuyết tật trong các bản cập nhật tới.
 
-Hỏi: Làm sao cập nhật ứng dụng FoxGo?
-Đáp: Vào App Store (iOS) hoặc Google Play Store (Android), tìm "FoxGo" và nhấn "Cập nhật". Nên bật tự động cập nhật để luôn có phiên bản mới nhất với các tính năng và bảo mật tốt hơn.
-
-Hỏi: Tôi cần hóa đơn/biên lai cho chuyến đi?
-Đáp: Sau mỗi chuyến hoàn thành, FoxGo tự động gửi biên lai điện tử về email đã đăng ký. Bạn cũng có thể xem lịch sử giao dịch trong mục "Ví của tôi" hoặc "Lịch sử chuyến" trong ứng dụng.
+---
+Hỏi: Tôi đặt xe cho người khác, họ có thể theo dõi tài xế không?
+Đáp: Được. Sau khi đặt thành công, trong màn hình theo dõi chuyến có nút "Chia sẻ hành trình" — nhấn vào để lấy link chia sẻ. Gửi link đó cho người kia, họ dùng browser mở link là xem được vị trí tài xế theo thời gian thực mà không cần cài app.

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAppSelector } from '../store/hooks';
 import {
   Alert,
   Box,
@@ -63,7 +64,7 @@ const DEFAULT_BUSINESS_ACCOUNTS = {
     accountNumber: '8000 511 204',
     accountHolder: 'Cab Booking System Co., Ltd.',
     description: 'Tai khoan doanh nghiep nhan tien nap vi, ky quy kich hoat va doi soat cong no.',
-    note: 'NAPKYQUY [SO_DIEN_THOAI_TAI_XE]',
+    note: 'NAPVI [SO_DIEN_THOAI_TAI_XE]',
   },
   payoutAccount: {
     bankName: 'Techcombank',
@@ -81,6 +82,13 @@ const BANK_OPTIONS = [
   { name: 'ACB',         short: 'ACB', color: '#2563eb', minDigits: 8,  maxDigits: 13 },
   { name: 'VPBank',      short: 'VPB', color: '#059669', minDigits: 10, maxDigits: 14 },
 ];
+
+const BANK_LOGO_MAP: Record<string, string> = {
+  'Techcombank': '/bank-icons/techcombank.svg',
+  'TCB':         '/bank-icons/techcombank.svg',
+};
+const getBankLogoUrl = (bankName: string): string | null =>
+  BANK_LOGO_MAP[bankName] ?? null;
 
 type TxFilter = 'ALL' | 'EARN' | 'DEBT' | 'WITHDRAW';
 
@@ -177,6 +185,7 @@ const STATUS_CHIP: Record<'INACTIVE' | 'ACTIVE' | 'BLOCKED', { label: string; bg
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function WalletPage() {
+  const { user } = useAppSelector((state) => state.auth);
   const [tab, setTab] = useState(0);
 
   const [walletState, setWalletState] = useState<WalletState | null>(null);
@@ -603,7 +612,7 @@ export default function WalletPage() {
                   onClick={() => openTopUp()}
                   sx={{ bgcolor: 'rgba(255,255,255,0.2)', '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' }, color: '#fff', fontWeight: 700, borderRadius: 3, py: 1.1 }}
                 >
-                  + Nạp vào doanh nghiệp
+                  + Nạp tiền vào ví
                 </Button>
                 <Button
                   variant="contained" fullWidth
@@ -669,9 +678,14 @@ export default function WalletPage() {
     return (
       <Card variant="outlined" sx={{ borderRadius: 3, borderColor: 'warning.light', bgcolor: 'warning.50' }}>
         <CardContent sx={{ p: 2.5 }}>
-          <Typography variant="subtitle2" fontWeight={800} color="#92400e" gutterBottom>
-            Tài khoản nhận ký quỹ
-          </Typography>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+            <Typography variant="subtitle2" fontWeight={800} color="#92400e">
+              Tài khoản nhận ký quỹ
+            </Typography>
+            {getBankLogoUrl(topUpBusinessAccount.bankName) && (
+              <img src={getBankLogoUrl(topUpBusinessAccount.bankName)!} alt={topUpBusinessAccount.bankName} style={{ height: 28 }} />
+            )}
+          </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
             Tài xế có thể chuyển khoản trực tiếp tới tài khoản doanh nghiệp hoặc chọn nạp qua MoMo / VNPay để kích hoạt ví.
           </Typography>
@@ -680,7 +694,7 @@ export default function WalletPage() {
               ['Ngân hàng',   topUpBusinessAccount.bankName],
               ['Số tài khoản', topUpBusinessAccount.accountNumber],
               ['Chủ tài khoản', topUpBusinessAccount.accountHolder],
-              ['Nội dung CK', topUpBusinessAccount.note || DEFAULT_BUSINESS_ACCOUNTS.topUpAccount.note],
+              ['Nội dung CK', (topUpBusinessAccount.note || DEFAULT_BUSINESS_ACCOUNTS.topUpAccount.note).replace('[SO_DIEN_THOAI_TAI_XE]', user?.phoneNumber ?? 'SĐT của bạn')],
               ['Số tiền',     `${formatCurrency(activationThreshold)} (tối thiểu)`],
             ] as const).map(([k, v]) => (
               <Stack key={k} direction="row" justifyContent="space-between" alignItems="flex-start">
@@ -1076,9 +1090,14 @@ export default function WalletPage() {
               {/* Source account info */}
               <Card variant="outlined" sx={{ borderRadius: 2.5, bgcolor: '#eff6ff', borderColor: '#bfdbfe' }}>
                 <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-                  <Typography variant="caption" color="primary.dark" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1 }}>
-                    Nguồn chuyển tiền (tài khoản doanh nghiệp)
-                  </Typography>
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                    <Typography variant="caption" color="primary.dark" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Nguồn chuyển tiền (tài khoản doanh nghiệp)
+                    </Typography>
+                    {getBankLogoUrl(payoutBusinessAccount.bankName) && (
+                      <img src={getBankLogoUrl(payoutBusinessAccount.bankName)!} alt={payoutBusinessAccount.bankName} style={{ height: 24 }} />
+                    )}
+                  </Stack>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                     Hệ thống sẽ chuyển tiền từ tài khoản doanh nghiệp về ngân hàng cá nhân mà bạn khai báo.
                   </Typography>
@@ -1249,9 +1268,14 @@ export default function WalletPage() {
             {/* Business account info */}
             <Card variant="outlined" sx={{ borderRadius: 2.5, bgcolor: '#f0fdf4', borderColor: '#bbf7d0' }}>
               <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-                <Typography variant="caption" color="success.dark" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1 }}>
-                  Tài khoản của doanh nghiệp
-                </Typography>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                  <Typography variant="caption" color="success.dark" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Tài khoản của doanh nghiệp
+                  </Typography>
+                  {getBankLogoUrl(topUpBusinessAccount.bankName) && (
+                    <img src={getBankLogoUrl(topUpBusinessAccount.bankName)!} alt={topUpBusinessAccount.bankName} style={{ height: 24 }} />
+                  )}
+                </Stack>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                   Tài khoản này nhận tiền ký quỹ kích hoạt, tiền nạp ví và tiền tài xế dùng để thanh toán công nợ chuyến tiền mặt.
                 </Typography>
@@ -1260,7 +1284,7 @@ export default function WalletPage() {
                     ['Ngân hàng',   topUpBusinessAccount.bankName],
                     ['Số tài khoản', topUpBusinessAccount.accountNumber],
                     ['Chủ tài khoản', topUpBusinessAccount.accountHolder],
-                    ['Nội dung',    topUpBusinessAccount.note || DEFAULT_BUSINESS_ACCOUNTS.topUpAccount.note],
+                    ['Nội dung',    (topUpBusinessAccount.note || DEFAULT_BUSINESS_ACCOUNTS.topUpAccount.note).replace('[SO_DIEN_THOAI_TAI_XE]', user?.phoneNumber ?? 'SĐT của bạn')],
                   ] as const).map(([k, v]) => (
                     <Stack key={k} direction="row" justifyContent="space-between" alignItems="flex-start">
                       <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>{k}</Typography>

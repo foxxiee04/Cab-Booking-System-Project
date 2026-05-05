@@ -65,7 +65,18 @@ done
 cd "$PROJECT_DIR"
 
 echo ""
-echo "[4/4] Seeding database..."
+echo "[4/5] Restarting services so they re-seed startup data and reconnect Prisma pool..."
+echo ""
+
+# wallet-service auto-seeds SystemBankAccount at startup (must run after schema reset)
+docker compose restart wallet-service auth-service user-service driver-service ride-service payment-service booking-service notification-service review-service api-gateway >/dev/null 2>&1 \
+    || echo "  Service restart skipped (docker compose unavailable)"
+
+echo "  Waiting 10s for services to become healthy..."
+sleep 10
+
+echo ""
+echo "[5/5] Seeding database..."
 echo ""
 
 npx tsx scripts/seed-database.ts

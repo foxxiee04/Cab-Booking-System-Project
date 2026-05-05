@@ -1,0 +1,27 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
+flowchart LR
+  subgraph A["Per-service stores"]
+    direction TB
+    Auth --> ADB[(auth_db)]
+    Ride --> RDB[(ride_db)]
+    Driver --> DDR[(driver_db)]
+    Payment --> PDB[(payment_db)]
+    Wallet --> WDB[(wallet_db)]
+    User --> UDB[(user_db)]
+    Booking --> BDB[(booking_db)]
+  end
+
+  subgraph B["Document"]
+    direction TB
+    Notify --> NDB[(notifications)]
+    Review --> MDB[(reviews)]
+  end
+
+  subgraph C["Shared runtime"]
+    direction LR
+    RED[(Redis)]
+    MQ[RabbitMQ]
+  end
+
+  Auth & Ride & Driver & Payment & Wallet & User & Booking -.->|cache · events| RED
+  Auth & Ride & Driver & Payment & Wallet & User & Booking -.->|async| MQ

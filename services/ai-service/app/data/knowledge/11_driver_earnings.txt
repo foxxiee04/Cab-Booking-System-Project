@@ -1,0 +1,39 @@
+TIÊU ĐỀ: Thu nhập, hoa hồng và ví tiền tài xế FoxGo
+DANH MỤC: thu nhập tài xế, hoa hồng, commission, tiền mặt cuốc, chuyến online, ví tài xế, nạp ký quỹ, rút tiền, pending balance, thu nhập chờ duyệt, debt limit, nợ nền tảng, lịch sử thu nhập, báo cáo thu nhập
+
+Cơ chế thu nhập tài xế FoxGo hoạt động khác nhau tùy loại thanh toán của khách. Quan trọng nhất cần hiểu là: FoxGo thu hoa hồng từ mỗi chuyến, phần còn lại là của tài xế.
+
+Tỷ lệ hoa hồng: Xe máy/ga 20% · Ô tô 4 chỗ 18% · Ô tô 7 chỗ 15%
+
+Ví dụ cụ thể:
+Cuốc 80.000đ bằng xe máy → bạn nhận 64.000đ, FoxGo 16.000đ
+Cuốc 150.000đ bằng ô tô 4 chỗ → bạn nhận 123.000đ, FoxGo 27.000đ
+Cuốc 200.000đ bằng ô tô 7 chỗ → bạn nhận 170.000đ, FoxGo 30.000đ
+
+---
+Hỏi: Chuyến tiền mặt tôi nhận tiền thế nào?
+Đáp: Khách trả bạn trực tiếp toàn bộ tiền mặt. Sau khi hoàn thành chuyến, FoxGo tự động trừ phần hoa hồng vào số dư ví của bạn. Ví dụ: cuốc 100.000đ xe máy — bạn nhận 100.000đ từ khách, ví bị trừ 20.000đ. Nếu ví không đủ để bị trừ, số âm đó ghi vào nợ — khi nạp tiền sau thì trừ trước.
+
+---
+Hỏi: Chuyến online (MoMo/VNPay) tôi nhận tiền khi nào?
+Đáp: Với chuyến online, khách thanh toán qua cổng điện tử trước. Sau khi chuyến hoàn thành, FoxGo ghi nhận doanh thu và chuyển thu nhập của bạn (sau khi trừ hoa hồng) vào ví FoxGo Driver trong vòng 24 giờ. Bạn thấy khoản "Chờ xử lý" trước, sau 24 giờ nó chuyển thành số dư thực.
+
+---
+Hỏi: Thu nhập "Đang chờ" (pending) là gì?
+Đáp: Là thu nhập từ các chuyến online chưa được quyết toán — FoxGo giữ tạm 24 giờ để đảm bảo không có tranh chấp hoặc yêu cầu hoàn tiền từ khách. Sau 24 giờ, số tiền đó tự động vào số dư ví thật của bạn và rút được. Đây là quy trình chuẩn của fintech.
+
+---
+Hỏi: Tại sao không nhận được chuyến dù đang online — có phải do số dư ví?
+Đáp: Đúng rồi — nếu số dư ví của bạn xuống dưới ngưỡng tối thiểu (50.000đ), hệ thống tự khóa chế độ online và bạn không nhận được chuyến mới. Giải pháp: nạp thêm tiền vào ví qua MoMo hoặc VNPay trong mục "Ví" → "Nạp tiền". Sau khi nạp thành công, bật lại trực tuyến là nhận chuyến được ngay.
+
+---
+Hỏi: Nạp tiền ký quỹ vào ví FoxGo Driver như thế nào?
+Đáp: Vào mục "Ví" trong app FoxGo Driver → "Nạp tiền" → chọn MoMo hoặc VNPay → nhập số tiền cần nạp → xác nhận thanh toán. Tiền vào ví ngay sau khi thanh toán thành công.
+
+---
+Hỏi: Rút tiền từ ví về ngân hàng như thế nào?
+Đáp: Vào "Ví" → "Rút tiền" → nhập số tiền muốn rút (tối thiểu 50.000đ) → chọn tài khoản ngân hàng đã liên kết → xác nhận. Tiền về trong 1–3 ngày làm việc. Phải giữ lại đủ 50.000đ trong ví sau khi rút để tiếp tục nhận chuyến.
+
+---
+Hỏi: Xem lịch sử thu nhập ở đâu?
+Đáp: Trong app FoxGo Driver, mục "Thu nhập" hoặc "Ví" → "Lịch sử giao dịch". Bạn thấy được từng chuyến, khoản hoa hồng, nạp/rút tiền. Nếu cần báo cáo thu nhập để khai thuế, liên hệ support@foxgo.vn — đội hỗ trợ xuất file chi tiết cho bạn.

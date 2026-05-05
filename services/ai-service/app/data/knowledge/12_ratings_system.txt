@@ -1,0 +1,34 @@
+TIÊU ĐỀ: Hệ thống đánh giá và xếp hạng FoxGo
+DANH MỤC: đánh giá, rating, sao, điểm, xếp hạng, đánh giá tài xế, tài xế bị đánh giá thấp, cải thiện rating, tỉ lệ chấp nhận, tỉ lệ hoàn thành, khách hàng đánh giá tài xế, tài xế đánh giá khách, điểm bị ảnh hưởng
+
+Hệ thống đánh giá của FoxGo hoạt động 2 chiều: khách đánh giá tài xế và tài xế cũng đánh giá khách. Cả hai phía đều có điểm rating từ 1–5 sao.
+
+Với khách hàng: sau mỗi chuyến hoàn thành, màn hình đánh giá xuất hiện tự động. Bạn chọn 1–5 sao và để lại nhận xét tùy ý. Đánh giá của bạn ảnh hưởng trực tiếp đến thu nhập và cơ hội nhận chuyến của tài xế — hãy đánh giá trung thực.
+
+---
+Hỏi: Rating tài xế được tính như thế nào?
+Đáp: Rating tài xế là trung bình cộng của tất cả đánh giá trong 30 ngày gần nhất — không phải tổng từ trước đến nay. Nghĩa là tài xế có thể cải thiện hoặc bị ảnh hưởng rating tương đối nhanh. Rating dưới 4.5 bắt đầu bị hạn chế nhận chuyến giờ cao điểm, dưới 4.0 có thể bị khóa tài khoản tạm thời.
+
+---
+Hỏi: Tôi là tài xế, làm sao tăng rating?
+Đáp: Mấy điều quan trọng nhất: đến đón đúng giờ (khách ghét chờ nhất), thái độ lịch sự và thân thiện, giữ xe sạch và có mùi dễ chịu, không nghe điện thoại khi lái, hỏi khách có cần điều chỉnh điều hòa không. Những chi tiết nhỏ như vậy hay tạo ra đánh giá 5 sao lắm.
+
+---
+Hỏi: Tỉ lệ chấp nhận chuyến là gì? Ảnh hưởng thế nào?
+Đáp: Tỉ lệ chấp nhận là phần trăm cuốc bạn nhận so với tổng cuốc hệ thống gửi đến. Tỉ lệ thấp ảnh hưởng đến thứ tự ưu tiên ghép chuyến — tài xế có tỉ lệ cao được ghép cuốc trước. FoxGo không phạt nặng việc từ chối chuyến, nhưng từ chối liên tục sẽ giảm cơ hội nhận cuốc tốt.
+
+---
+Hỏi: Tỉ lệ hoàn thành chuyến là gì?
+Đáp: Là tỉ lệ chuyến hoàn thành trên tổng chuyến đã nhận. Hủy sau khi nhận làm giảm chỉ số này. Dưới 80% bắt đầu ảnh hưởng đến xếp hạng và ưu tiên ghép chuyến. Dưới 70% có thể bị hạn chế nhận chuyến.
+
+---
+Hỏi: Khách cho tôi đánh giá xấu vô lý, tôi có khiếu nại được không?
+Đáp: Được. Vào "Lịch sử chuyến" → chọn chuyến → "Khiếu nại đánh giá" (hoặc liên hệ support@foxgo.vn kèm mã chuyến). FoxGo xem xét từng trường hợp — đánh giá có dấu hiệu spam hoặc không liên quan đến chuyến thực tế có thể được gỡ. Tuy nhiên FoxGo cũng không gỡ mọi đánh giá thấp — chỉ những trường hợp rõ ràng không hợp lý.
+
+---
+Hỏi: Tài xế có biết ai đánh giá thấp họ không?
+Đáp: Không. Đánh giá là ẩn danh — tài xế chỉ thấy điểm số tổng hợp và nhận xét text (nếu có), không biết cụ thể khách nào cho đánh giá đó. Điều này giúp khách đánh giá trung thực mà không lo bị tài xế "trả thù".
+
+---
+Hỏi: Khách hàng có bị đánh giá không?
+Đáp: Có — tài xế cũng đánh giá khách sau mỗi chuyến. Rating khách ảnh hưởng đến khả năng được tài xế chấp nhận chuyến. Khách có rating thấp (hay hủy, thái độ không tốt) có thể bị tài xế từ chối dù chuyến gần. Đây là cách FoxGo duy trì chất lượng dịch vụ cho cả 2 phía.

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { createApp } from './app';
 import { config } from './config';
+import { reviewService } from './services/review.service';
 import { createHealthServiceRegistration, createHttpBridgeServiceRegistration, shutdownGrpcServer, startGrpcServer } from '../../../shared/dist';
 
 export async function start() {
@@ -28,8 +29,16 @@ export async function start() {
     console.log(`🚀 ${config.serviceName} gRPC running on port ${config.grpcPort}`);
   });
 
+  // Process pending auto-ratings every 30 minutes
+  const autoRatingCron = setInterval(() => {
+    reviewService.processAutoRatings().catch((err) =>
+      console.error('Auto-rating cron error:', err)
+    );
+  }, 30 * 60 * 1000);
+
   process.on('SIGTERM', async () => {
     console.log('SIGTERM received, closing connections...');
+    clearInterval(autoRatingCron);
     await shutdownGrpcServer(grpcServer);
     await mongoose.connection.close();
     server.close();

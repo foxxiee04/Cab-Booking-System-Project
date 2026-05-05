@@ -1,0 +1,27 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
+sequenceDiagram
+  autonumber
+  actor U as Customer
+  participant G as Gateway
+  participant B as Booking
+  participant P as Pricing
+  participant M as Matching
+  participant R as Ride
+  participant Y as Payment
+  participant W as Wallet
+
+  U->>G: Create booking HTTPS
+  G->>B: Forward JWT
+  B->>P: Quote fare HTTP
+  P-->>B: ETA surge price
+  B-->>G: Booking OK
+  G-->>U: Show price
+  B--)R: Booking event MQ
+  R->>M: Find driver
+  M-->>G: Offer via WS
+  G-->>U: Driver offer
+  U->>G: Accept
+  G->>R: Confirm ride
+  R--)Y: Ride completed MQ
+  Y->>W: Split commission HTTP
+  W-->>Y: Ledger OK

@@ -553,20 +553,20 @@ export class RideController {
       }
 
       // Wallet balance check for CASH rides
+      // Uses wallet-service (wallet_db, keyed by userId) — the authoritative source.
+      // payment-service (payment_db) never receives top-up credits so it always
+      // shows balance=0 for new drivers, causing a false "activation required" error.
       if (requestedRide.paymentMethod === 'CASH') {
         try {
-          const COMMISSION_RATE = 0.20;
-          const commission = Math.round((requestedRide.fare ?? 0) * COMMISSION_RATE);
           const walletResp = await axios.get(
-            `${config.services.payment}/api/wallet/driver/${driver.id}/can-accept-cash`,
+            `${config.services.wallet}/internal/driver/${req.user!.userId}/can-accept`,
             {
-              params: { commission },
               headers: { 'x-internal-token': config.internalServiceToken },
               timeout: 3000,
             },
           );
-          const { allowed, reason } = walletResp.data?.data ?? {};
-          if (!allowed) {
+          const { canAcceptRide, reason } = walletResp.data?.data ?? {};
+          if (canAcceptRide === false) {
             return res.status(400).json({
               success: false,
               error: {
@@ -576,8 +576,8 @@ export class RideController {
             });
           }
         } catch (walletErr) {
-          // Non-blocking: if payment service is unreachable, allow the ride to proceed
-          logger.warn('Wallet check skipped (payment service unavailable):', walletErr);
+          // Non-blocking: if wallet service is unreachable, allow the ride to proceed
+          logger.warn('Wallet check skipped (wallet service unavailable):', walletErr);
         }
       }
 

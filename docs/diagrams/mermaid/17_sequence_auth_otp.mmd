@@ -1,0 +1,19 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
+sequenceDiagram
+  autonumber
+  actor U as User
+  participant G as Gateway
+  participant A as Auth
+  participant R as Redis OTP
+  participant N as Notify gateway
+
+  U->>G: Request OTP phone
+  G->>A: Start OTP
+  A->>R: Store code TTL
+  A->>N: Send SMS
+  N-->>U: OTP SMS
+  U->>G: Submit code
+  G->>A: Verify
+  A->>R: Read delete
+  A-->>G: JWT refresh
+  G-->>U: Tokens cookie body

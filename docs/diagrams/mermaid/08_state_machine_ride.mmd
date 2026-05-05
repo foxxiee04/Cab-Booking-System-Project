@@ -1,0 +1,16 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
+stateDiagram-v2
+  [*] --> REQUESTED
+  REQUESTED --> MATCHING: dispatch
+  MATCHING --> DRIVER_ASSIGNED: accept
+  MATCHING --> REQUESTED: timeout retry
+  DRIVER_ASSIGNED --> EN_ROUTE_PICKUP: driver started
+  EN_ROUTE_PICKUP --> ARRIVED_PICKUP: at pickup
+  ARRIVED_PICKUP --> ON_TRIP: passenger onboard
+  ON_TRIP --> COMPLETED: drop off
+  COMPLETED --> [*]
+  REQUESTED --> CANCELLED: customer cancel
+  MATCHING --> CANCELLED: give up
+  DRIVER_ASSIGNED --> CANCELLED: either party
+  ON_TRIP --> CANCELLED: exception
+  CANCELLED --> [*]

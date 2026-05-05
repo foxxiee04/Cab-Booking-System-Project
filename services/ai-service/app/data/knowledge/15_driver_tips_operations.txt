@@ -1,0 +1,32 @@
+TIÊU ĐỀ: Mẹo vận hành và tối ưu thu nhập cho tài xế FoxGo
+DANH MỤC: mẹo tài xế, tối ưu thu nhập, giờ vàng, khu vực nhiều khách, dispatch thuật toán, nhận nhiều chuyến, tăng thu nhập, offline khi nào, bật online lúc nào, tips tài xế, hành trình hiệu quả, tài xế mới, bắt đầu lái
+
+Là tài xế mới của FoxGo, điều quan trọng là hiểu cách hệ thống ghép chuyến để tối ưu thu nhập. FoxGo không ghép chuyến ngẫu nhiên — thuật toán tính điểm dựa trên: khoảng cách đến điểm đón (40%), điểm rating (25%), thời gian chờ không có chuyến (15%), tỉ lệ chấp nhận (15%), và phạt nếu tỉ lệ hủy cao (-5%).
+
+---
+Hỏi: Giờ nào thì nhiều chuyến nhất?
+Đáp: Cao điểm nhất thường là: sáng 7–9h (giờ đi làm/đi học), chiều 17–20h (tan làm). Ngoài ra sau mưa to thường bùng chuyến vì mọi người không muốn đi bộ. Cuối tuần tối 21–23h cũng nhiều chuyến từ quán ăn, quán nhậu. Cân nhắc bật online đúng những khung giờ này để hiệu quả hơn.
+
+---
+Hỏi: Nên đứng ở đâu để nhận nhiều chuyến hơn?
+Đáp: Những khu vực hiệu quả: gần trung tâm thương mại, bệnh viện, trường đại học, ga tàu/bến xe, khu văn phòng đông người. Tránh đứng mãi một chỗ — di chuyển đến khu có nhu cầu cao là tốt nhất. FoxGo không có tính năng "heatmap" công khai nhưng sau vài tuần chạy bạn sẽ tự cảm nhận được khu vực tốt.
+
+---
+Hỏi: Tôi nên từ chối những chuyến nào?
+Đáp: Không có công thức chung, nhưng tỉ lệ từ chối cao ảnh hưởng đến điểm ưu tiên của bạn. Nên tránh từ chối nhiều liên tiếp. Nếu chuyến quá xa điểm đón hoặc vào khu vực bạn không quen, cân nhắc có chấp nhận không. Chuyến ngắn trong nội thành thường hiệu quả hơn chuyến xa ngoại ô (trừ khi surge cao).
+
+---
+Hỏi: Surge hoạt động như thế nào với tài xế?
+Đáp: Khi surge xảy ra (nhiều người đặt xe cùng lúc), giá tự động tăng theo hệ số surge — và phần tài xế nhận cũng tăng theo. Ví dụ surge 1.5x: cuốc bình thường 60.000đ → 90.000đ, bạn nhận 72.000đ (với xe máy 20% hoa hồng) thay vì 48.000đ. Bật online lúc surge rất có lợi.
+
+---
+Hỏi: Cần duy trì tỉ lệ chấp nhận bao nhiêu là ổn?
+Đáp: FoxGo khuyến nghị trên 70%. Dưới mức này ảnh hưởng đến điểm ưu tiên ghép chuyến. Tuy nhiên không cần ép đạt 100% — từ chối những chuyến thực sự không phù hợp là bình thường, miễn không thành thói quen từ chối liên tục.
+
+---
+Hỏi: Tôi mới bắt đầu lái, nên làm gì để có nhiều chuyến?
+Đáp: Tài xế mới thường được hệ thống ưu tiên một chút ở giai đoạn đầu để giúp xây dựng profile. Tập trung vào: (1) Đón đúng giờ — đây là yếu tố khách đánh giá nhiều nhất. (2) Thái độ thân thiện ngay từ đầu để rating cao. (3) Bật online vào giờ cao điểm và khu vực đông người. (4) Chấp nhận nhiều chuyến để xây tỉ lệ chấp nhận cao.
+
+---
+Hỏi: Tài xế có được biết điểm đến của khách trước khi chấp nhận không?
+Đáp: Có — popup nhận chuyến hiển thị điểm đón, điểm đến, quãng đường chuyến, thời gian ước tính, và số tiền bạn nhận được. Bạn có đủ thông tin để quyết định nhận hay từ chối trong 20 giây đếm ngược.

@@ -1,43 +1,34 @@
-TIÊU ĐỀ: Phương thức thanh toán FoxGo
-DANH MỤC: thanh toán, MoMo, VNPay, tiền mặt, ví điện tử, payment, trả tiền, hoàn tiền, refund
+TIÊU ĐỀ: Thanh toán và hoàn tiền FoxGo
+DANH MỤC: thanh toán, MoMo, VNPay, tiền mặt, ví điện tử, payment, trả tiền, hoàn tiền, refund, bị trừ tiền, thanh toán lỗi, đổi phương thức thanh toán
 
-Các phương thức thanh toán được hỗ trợ:
+FoxGo hỗ trợ 3 cách thanh toán: tiền mặt, ví MoMo, và VNPay. Bạn chọn ở bước xác nhận khi đặt xe. Với tiền mặt thì đơn giản — trả trực tiếp cho tài xế sau chuyến, tài xế thối lại tiền thừa. Với MoMo và VNPay thì thanh toán diễn ra qua cổng điện tử, chuyến chỉ được tạo sau khi thanh toán thành công.
 
-1. Tiền mặt (CASH):
-   • Thanh toán trực tiếp cho tài xế sau khi kết thúc chuyến.
-   • Tài xế sẽ thối lại tiền thừa.
-   • Không cần internet khi thanh toán.
+Điều quan trọng với thanh toán online: bạn phải hoàn tất trong 15 phút, quá thời gian thì chuyến tự hủy. Lịch sử giao dịch xem trong mục "Ví của tôi" trong app.
 
-2. Ví MoMo:
-   • Thanh toán nhanh qua ứng dụng MoMo.
-   • Cần tài khoản MoMo đã liên kết số điện thoại và có đủ số dư.
-   • Tiền trừ ngay khi xác nhận thanh toán.
-   • Nếu thanh toán thất bại, hệ thống hủy chuyến và hoàn tiền trong 3–5 ngày làm việc.
-
-3. VNPay:
-   • Thanh toán qua ví VNPay hoặc ngân hàng liên kết VNPay.
-   • Hỗ trợ hầu hết các ngân hàng tại Việt Nam.
-   • Quét QR hoặc chuyển qua mã giao dịch.
-
-Lưu ý quan trọng khi thanh toán online (MoMo/VNPay):
-• Chuyến xe chỉ kích hoạt tìm tài xế SAU KHI thanh toán thành công.
-• Nếu không hoàn thành thanh toán trong 15 phút, chuyến tự động hủy.
-• Lịch sử giao dịch xem tại mục "Ví của tôi" trong ứng dụng.
-
+---
 Hỏi: Tôi muốn đổi phương thức thanh toán sau khi đặt xe được không?
-Đáp: Sau khi xác nhận đặt xe, bạn không thể đổi phương thức thanh toán. Nếu muốn đổi, hãy hủy chuyến (miễn phí khi tài xế chưa nhận) và đặt lại với phương thức khác.
+Đáp: Sau khi xác nhận đặt xe rồi thì không đổi được nữa bạn ơi. Cách duy nhất là hủy chuyến (miễn phí nếu tài xế chưa nhận) rồi đặt lại với phương thức khác.
 
-Hỏi: Thanh toán MoMo/VNPay bị lỗi thì sao?
-Đáp: Nếu thanh toán thất bại, chuyến xe sẽ không được tạo. Tiền nếu đã bị trừ sẽ được hoàn về tài khoản MoMo/VNPay của bạn trong 3–5 ngày làm việc. Bạn có thể thử lại hoặc chọn phương thức khác.
+---
+Hỏi: Thanh toán MoMo hoặc VNPay bị lỗi thì sao?
+Đáp: Nếu thanh toán thất bại, chuyến xe không được tạo. Nếu tiền đã bị trừ khỏi ví/tài khoản thì sẽ tự hoàn về trong 3–5 ngày làm việc — đây là quy trình chuẩn của cổng thanh toán, không phải FoxGo giữ tiền. Bạn có thể thử lại hoặc chọn phương thức khác.
 
-Hỏi: Tôi bị trừ tiền nhưng không có chuyến?
-Đáp: Trường hợp này rất hiếm. Vui lòng chờ 24 giờ vì một số giao dịch cần thời gian xử lý. Nếu sau 24 giờ tiền chưa hoàn, liên hệ support@foxgo.vn kèm mã giao dịch và số điện thoại để được hỗ trợ.
+---
+Hỏi: Tôi bị trừ tiền nhưng không có chuyến nào được tạo?
+Đáp: Trường hợp này rất hiếm, thường do lỗi mạng giữa bước xác nhận. Bạn chờ khoảng 10–15 phút xem app có cập nhật không. Nếu vẫn không thấy chuyến, liên hệ support@foxgo.vn với mã giao dịch MoMo/VNPay và số điện thoại — đội kỹ thuật sẽ kiểm tra và hoàn tiền trong 3–5 ngày làm việc.
 
+---
 Hỏi: Hoàn tiền mất bao lâu?
-Đáp: Hoàn tiền tự động (lỗi thanh toán, không tìm được tài xế): 3–5 ngày làm việc. Hoàn tiền thủ công (do khiếu nại): 5–7 ngày làm việc sau khi xử lý xong. Tiền hoàn về đúng phương thức đã thanh toán ban đầu.
+Đáp: Tùy trường hợp bạn nhé. Hoàn tiền tự động (lỗi thanh toán, không tìm được tài xế): 3–5 ngày làm việc. Hoàn tiền do khiếu nại, hủy chuyến: 5–7 ngày làm việc sau khi FoxGo xử lý xong. Tiền về đúng phương thức đã thanh toán — MoMo về ví MoMo, VNPay về tài khoản ngân hàng.
 
-Hỏi: Tài xế yêu cầu trả thêm tiền thì sao?
-Đáp: FoxGo KHÔNG cho phép tài xế yêu cầu thanh toán thêm ngoài số tiền hiển thị trên app. Nếu gặp tình huống này, từ chối và báo cáo ngay qua mục "Lịch sử chuyến" → chọn chuyến → "Báo cáo vấn đề", hoặc gửi email support@foxgo.vn.
+---
+Hỏi: Tài xế yêu cầu trả thêm tiền ngoài app thì sao?
+Đáp: FoxGo tuyệt đối không cho phép điều này. Giá hiển thị trên app là giá cuối cùng, tài xế không được thu thêm bất kỳ khoản nào. Nếu gặp tình huống này, bạn từ chối và báo cáo ngay qua "Lịch sử chuyến" → chọn chuyến → "Báo cáo vấn đề". FoxGo sẽ xử lý nghiêm.
 
-Hỏi: Tôi quên chọn phương thức thanh toán là tiền mặt nhưng muốn đổi sang MoMo?
-Đáp: Sau khi đặt xe, không thể thay đổi phương thức thanh toán. Hủy chuyến và đặt lại (nếu tài xế chưa nhận sẽ không mất phí).
+---
+Hỏi: Thanh toán MoMo thì cần điều kiện gì?
+Đáp: Bạn cần có tài khoản MoMo đã xác minh số điện thoại và đủ số dư trong ví. Khi thanh toán, app chuyển sang MoMo để xác nhận rồi quay về FoxGo — tất cả tự động, bạn chỉ cần xác nhận trên MoMo là xong.
+
+---
+Hỏi: VNPay thanh toán như thế nào?
+Đáp: VNPay hỗ trợ hầu hết các ngân hàng tại Việt Nam. Bạn có thể quét QR bằng app ngân hàng hoặc dùng thẻ ATM/Visa/Mastercard liên kết VNPay. Sau khi thanh toán thành công, chuyến được tạo tự động.

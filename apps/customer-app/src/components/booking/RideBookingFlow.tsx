@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -35,6 +35,7 @@ import {
   ChevronRightRounded,
   LocalOfferRounded,
   MoneyOff,
+  StarRounded,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { formatCurrency } from '../../utils/format.utils';
@@ -259,6 +260,20 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
   const selectedEstimate = priceEstimates[selectedVehicle];
   const currentFare = selectedEstimate?.fare ?? 0;
 
+  const bestVoucherId = useMemo(() => {
+    if (currentFare <= 0 || myVouchers.length === 0) return null;
+    const eligible = myVouchers.filter((v) => v.minFare === 0 || currentFare >= v.minFare);
+    if (eligible.length === 0) return null;
+    const getDiscount = (v: MyVoucher) => {
+      if (v.discountType === 'PERCENT') {
+        const raw = currentFare * (v.discountValue / 100);
+        return v.maxDiscount ? Math.min(raw, v.maxDiscount) : raw;
+      }
+      return Number(v.discountValue);
+    };
+    return eligible.reduce((best, v) => (getDiscount(v) > getDiscount(best) ? v : best)).voucherId;
+  }, [currentFare, myVouchers]);
+
   const applyVoucherCode = useCallback(async (code: string, closePickerOnSuccess = true) => {
     const normalizedCode = code.trim().toUpperCase();
     if (!normalizedCode) return;
@@ -321,7 +336,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
 
   const handleCollectVoucher = async (voucher: PublicVoucher) => {
     const normalizedCode = voucher.code.trim().toUpperCase();
-    const eligible = currentFare <= 0 || voucher.minFare === 0 || currentFare >= voucher.minFare;
+    const eligible = currentFare > 0 && (voucher.minFare === 0 || currentFare >= voucher.minFare);
 
     setCollectingVoucherCode(normalizedCode);
     setVoucherError('');
@@ -333,7 +348,19 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
 
         setMyVouchers((prev) => {
           const others = prev.filter((item) => item.voucherId !== collectedVoucher.voucherId);
-          return [collectedVoucher, ...others];
+          // Merge with public voucher data so all display fields (discountValue etc.) are present
+          // Spread voucher fields as fallbacks first, then collectedVoucher overrides all
+          const displayFallback = {
+            discountType: voucher.discountType,
+            discountValue: Number(voucher.discountValue),
+            maxDiscount: voucher.maxDiscount,
+            minFare: voucher.minFare,
+            audienceType: voucher.audienceType,
+            description: voucher.description,
+            endTime: voucher.endTime,
+          };
+          const enriched: MyVoucher = { ...displayFallback, ...collectedVoucher };
+          return [enriched, ...others];
         });
         setPublicVouchers((prev) => prev.map((item) => (
           item.voucherId === voucher.voucherId ? { ...item, collected: true } : item
@@ -344,7 +371,11 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
         await applyVoucherCode(normalizedCode);
       } else {
         setVoucherCode(normalizedCode);
-        setVoucherError('Voucher đã được lưu, nhưng chuyến đi hiện tại chưa đủ điều kiện áp dụng.');
+        if (currentFare <= 0) {
+          setVoucherError('Voucher đã được lưu. Chọn xe để kiểm tra điều kiện áp dụng.');
+        } else {
+          setVoucherError('Voucher đã được lưu, nhưng chuyến đi hiện tại chưa đủ điều kiện áp dụng.');
+        }
       }
     } catch (err: any) {
       setVoucherError(err.response?.data?.error?.message || 'Không thể thu thập voucher lúc này');
@@ -932,7 +963,8 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                       ) : (
                         myVouchers.map((voucher) => {
                           const isSelected = voucherResult?.code === voucher.code;
-                          const eligible = currentFare <= 0 || voucher.minFare === 0 || currentFare >= voucher.minFare;
+                          const eligible = currentFare > 0 && (voucher.minFare === 0 || currentFare >= voucher.minFare);
+                          const isBest = voucher.voucherId === bestVoucherId;
 
                           return (
                             <Card
@@ -940,8 +972,8 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                               variant="outlined"
                               sx={{
                                 borderRadius: 3,
-                                borderColor: isSelected ? 'success.main' : eligible ? 'divider' : 'error.light',
-                                bgcolor: isSelected ? 'success.50' : undefined,
+                                borderColor: isSelected ? 'success.main' : isBest ? 'warning.main' : eligible ? 'divider' : 'error.light',
+                                bgcolor: isSelected ? 'success.50' : isBest ? 'warning.50' : undefined,
                               }}
                             >
                               <CardContent sx={{ py: 1.4, px: 2, '&:last-child': { pb: 1.4 } }}>
@@ -950,14 +982,23 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                                     <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
                                       <Typography variant="body1" fontWeight={800}>{voucher.code}</Typography>
                                       <Chip label={getVoucherDiscountText(voucher)} size="small" color={eligible ? 'primary' : 'default'} sx={{ height: 22, fontSize: '0.7rem', fontWeight: 700 }} />
+                                      {isBest && (
+                                        <Chip
+                                          icon={<StarRounded sx={{ fontSize: '0.85rem !important' }} />}
+                                          label="Tiết kiệm nhất"
+                                          size="small"
+                                          color="warning"
+                                          sx={{ height: 22, fontSize: '0.7rem', fontWeight: 700 }}
+                                        />
+                                      )}
                                       <Chip label={VOUCHER_AUDIENCE_LABELS[voucher.audienceType]} size="small" variant="outlined" sx={{ height: 22, fontSize: '0.7rem', fontWeight: 700 }} />
                                     </Stack>
                                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.8 }}>
                                       {voucher.description || 'Voucher áp dụng cho chuyến đi đủ điều kiện.'}
                                     </Typography>
-                                    <Typography variant="caption" color={eligible ? 'text.secondary' : 'error.main'} display="block" sx={{ mt: 0.4 }}>
+                                    <Typography variant="caption" color={eligible ? 'text.secondary' : currentFare <= 0 ? 'text.secondary' : 'error.main'} display="block" sx={{ mt: 0.4 }}>
                                       {voucher.minFare > 0 ? `Đơn tối thiểu ${formatCurrency(voucher.minFare)}` : 'Không yêu cầu giá tối thiểu'}
-                                      {!eligible && ' · Chuyến này chưa đủ điều kiện'}
+                                      {currentFare <= 0 ? ' · Chọn xe để kiểm tra điều kiện' : !eligible ? ' · Chuyến này chưa đủ điều kiện' : ''}
                                     </Typography>
                                   </Box>
                                   <Button
@@ -990,7 +1031,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                         </Box>
                       ) : (
                         publicVouchers.filter((voucher) => !voucher.collected).map((voucher) => {
-                          const eligible = currentFare <= 0 || voucher.minFare === 0 || currentFare >= voucher.minFare;
+                          const eligible = currentFare > 0 && (voucher.minFare === 0 || currentFare >= voucher.minFare);
                           const isCollecting = collectingVoucherCode === voucher.code;
 
                           return (
@@ -1008,7 +1049,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                                     </Typography>
                                     <Typography variant="caption" color={eligible ? 'text.secondary' : 'warning.main'} display="block" sx={{ mt: 0.4 }}>
                                       {voucher.minFare > 0 ? `Đơn tối thiểu ${formatCurrency(voucher.minFare)}` : 'Không yêu cầu giá tối thiểu'}
-                                      {eligible ? ' · Dùng được cho chuyến này' : ' · Hiện chưa dùng được cho chuyến này'}
+                                      {currentFare <= 0 ? ' · Chọn xe để kiểm tra điều kiện' : eligible ? ' · Dùng được cho chuyến này' : ' · Hiện chưa dùng được cho chuyến này'}
                                     </Typography>
                                   </Box>
                                   <Button
@@ -1019,7 +1060,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                                   >
                                     {isCollecting
                                       ? <CircularProgress size={18} color="inherit" />
-                                      : eligible ? 'Thu thập và dùng' : 'Thu thập'}
+                                      : (eligible && currentFare > 0) ? 'Thu thập và dùng' : 'Thu thập'}
                                   </Button>
                                 </Stack>
                               </CardContent>

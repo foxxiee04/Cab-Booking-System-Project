@@ -1,58 +1,47 @@
 TIÊU ĐỀ: Bảng giá và cách tính cước FoxGo
-DANH MỤC: giá cước, cách tính giá, cước phí, tiền, phí, bao nhiêu tiền, giá bao nhiêu, tính tiền, chi phí, fare
+DANH MỤC: giá cước, cách tính giá, cước phí, tiền, phí, bao nhiêu tiền, giá bao nhiêu, tính tiền, chi phí, fare, surge, tăng giá, giờ cao điểm, giá ước tính, phí ẩn
 
-Bảng giá theo loại xe:
+Giá cước FoxGo tính theo 3 thành phần chính: giá khởi điểm (cố định khi lên xe) + cước theo km + cước theo thời gian di chuyển. Thêm vào đó có phụ phí dịch vụ và phí chuyến ngắn với một số loại xe. Giá hiển thị trên app đã bao gồm tất cả, không có phí ẩn nào cả.
 
-Xe máy số (MOTORBIKE):
-• Giá khởi điểm: 10.000đ
-• Cước theo km: 6.200đ/km
-• Cước theo thời gian: 450đ/phút
-• Phụ phí dịch vụ: 0đ
-• Phí chuyến ngắn dưới 2,5 km: không áp dụng
+Bảng giá chi tiết:
 
-Xe tay ga (SCOOTER):
-• Giá khởi điểm: 14.000đ
-• Cước theo km: 8.400đ/km
-• Cước theo thời gian: 700đ/phút
-• Phụ phí dịch vụ: 1.500đ
-• Phí chuyến ngắn dưới 2,5 km: +1.500đ
+Xe máy số (MOTORBIKE) — nhanh nhất, rẻ nhất:
+Khởi điểm 10.000đ · 6.200đ/km · 450đ/phút · không có phụ phí hay phí chuyến ngắn
 
-Ô tô 4 chỗ (CAR_4):
-• Giá khởi điểm: 24.000đ
-• Cước theo km: 15.000đ/km
-• Cước theo thời gian: 1.900đ/phút
-• Phụ phí dịch vụ: 6.000đ
-• Phí chuyến ngắn dưới 2,5 km: +6.000đ
+Xe tay ga (SCOOTER) — êm hơn, thoải mái hơn:
+Khởi điểm 14.000đ · 8.400đ/km · 700đ/phút · phụ phí 1.500đ · phí chuyến ngắn (dưới 2,5km) thêm 1.500đ
 
-Ô tô 7 chỗ (CAR_7):
-• Giá khởi điểm: 32.000đ
-• Cước theo km: 18.500đ/km
-• Cước theo thời gian: 2.400đ/phút
-• Phụ phí dịch vụ: 10.000đ
-• Phí chuyến ngắn dưới 2,5 km: +9.000đ
+Ô tô 4 chỗ (CAR_4) — tiện nghi, phù hợp nhóm nhỏ:
+Khởi điểm 24.000đ · 15.000đ/km · 1.900đ/phút · phụ phí 6.000đ · phí chuyến ngắn thêm 6.000đ
 
-Công thức tính giá:
-Giá = (Giá khởi điểm + Phụ phí dịch vụ + Quãng đường × Cước/km + Thời gian × Cước/phút + Phí chuyến ngắn) × Hệ số surge
+Ô tô 7 chỗ (CAR_7) — rộng rãi cho nhóm đông:
+Khởi điểm 32.000đ · 18.500đ/km · 2.400đ/phút · phụ phí 10.000đ · phí chuyến ngắn thêm 9.000đ
 
-Ví dụ giá tham khảo (surge = 1.0, không giờ cao điểm):
-• Xe máy 5 km, 15 phút: ≈ 48.000đ
-• Xe tay ga 5 km, 15 phút: ≈ 68.000đ
-• Ô tô 4 chỗ 5 km, 15 phút: ≈ 133.000đ
-• Ô tô 7 chỗ 5 km, 15 phút: ≈ 175.000đ
+Giá tối thiểu mỗi chuyến: 15.000đ (dù chuyến chỉ 500m cũng tính tối thiểu này)
 
-Giá tối thiểu mỗi chuyến: 15.000đ
+Ví dụ thực tế (không surge, khoảng 5km, 15 phút):
+Xe máy ≈ 48.000đ · Xe ga ≈ 68.000đ · Ô tô 4 chỗ ≈ 133.000đ · Ô tô 7 chỗ ≈ 175.000đ
 
-Hỏi: Surge (tăng giá) là gì và khi nào áp dụng?
-Đáp: Hệ số surge áp dụng khi cầu vượt cung — thường vào giờ cao điểm sáng (7–9h) và chiều (17–20h), ngày lễ tết, hoặc khi trời mưa. Hệ số dao động từ 1.0 (bình thường) đến 2.0 (gấp đôi). Giá hiển thị trên app đã tính sẵn hệ số, không có phụ thu ẩn.
+---
+Hỏi: Surge là gì? Khi nào bị tính giá cao hơn?
+Đáp: Surge là hệ số tăng giá tự động khi có nhiều người đặt xe cùng lúc mà ít tài xế — giống Uber/Grab hay làm vậy. Hệ số từ 1.0 (bình thường) đến 2.0 (gấp đôi giá). Thường xảy ra vào 7–9h sáng, 17–20h chiều, ngày lễ Tết, mưa to. Giá app hiển thị đã nhân hệ số rồi, bạn thấy bao nhiêu thì đúng bấy nhiêu — không bị tính thêm sau.
 
-Hỏi: Tại sao giá thực tế khác giá ước tính?
-Đáp: Giá ước tính dựa trên tuyến đường ngắn nhất. Nếu tài xế đi đường khác (do tắc đường, đường cấm), quãng đường và thời gian thực tế sẽ khác, dẫn đến giá thay đổi nhẹ. Giá đã bao gồm VAT.
+---
+Hỏi: Tại sao giá thực tế khác giá ước tính khi đặt?
+Đáp: Giá ước tính dựa trên tuyến đường ngắn nhất lúc đặt xe. Nếu trên đường tài xế phải đi đường khác vì tắc hay cấm đường, quãng đường/thời gian thực tế thay đổi nên giá cuối cũng thay đổi nhẹ. Chênh lệch thường không nhiều, và giá đã bao gồm VAT rồi.
 
-Hỏi: Có phí ẩn hay phí đặt xe không?
-Đáp: Không. FoxGo không thu phí đặt xe hay bất kỳ phí ẩn nào. Giá hiển thị đã bao gồm tất cả (kể cả VAT). Nếu tài xế yêu cầu trả thêm tiền ngoài app, hãy báo cáo ngay cho chúng tôi.
-
+---
 Hỏi: Phí chuyến ngắn là gì?
-Đáp: Chuyến dưới 2,5 km với xe tay ga hoặc ô tô sẽ bị tính thêm phí chuyến ngắn để bù đắp chi phí đón khách. Xe máy số KHÔNG bị tính phí này.
+Đáp: Với xe ga và ô tô, nếu chuyến dưới 2,5 km thì bị tính thêm phí chuyến ngắn (1.500đ với xe ga, 6.000đ với ô tô 4 chỗ, 9.000đ với ô tô 7 chỗ). Lý do là chi phí đón khách (thời gian, xăng di chuyển đến điểm đón) không thay đổi dù chuyến ngắn hay dài. Xe máy số không có phí này.
 
-Hỏi: Xe máy hay xe tay ga khác nhau thế nào?
-Đáp: Xe máy số (MOTORBIKE) là xe số tay (Wave, Exciter...) giá rẻ hơn, phù hợp di chuyển nhanh. Xe tay ga (SCOOTER) là xe ga (Air Blade, Vision...) thoải mái hơn, giá cao hơn một chút, có thêm phụ phí dịch vụ.
+---
+Hỏi: FoxGo có thu phí ẩn hay phí đặt xe không?
+Đáp: Không, FoxGo không thu bất kỳ phí nào ngoài giá hiển thị. Giá trên app đã bao gồm tất cả (kể cả VAT). Nếu tài xế yêu cầu trả thêm tiền ngoài app, đó là vi phạm — bạn từ chối và báo cáo ngay cho FoxGo nhé.
+
+---
+Hỏi: Xe máy và xe tay ga khác nhau thế nào về giá và loại xe?
+Đáp: Xe máy số (MOTORBIKE) là xe số tay như Wave, Exciter — rẻ nhất, phù hợp đường nhỏ, kẹt xe. Xe tay ga (SCOOTER) là xe ga như Air Blade, Vision, SH Mode — êm hơn, ngồi thoải mái hơn, giá cao hơn khoảng 30–40%. Nếu chỉ đi ngắn và tiết kiệm thì xe máy ổn, đi xa hoặc muốn thoải mái thì xe ga xứng đáng hơn.
+
+---
+Hỏi: Giá ước tính trên app có chính xác không?
+Đáp: Khá chính xác trong điều kiện bình thường. Sai lệch thường chỉ ±10% do tắc đường thực tế khác dự báo. Bạn có thể tin vào giá ước tính để tham khảo — nếu chênh lớn hơn nhiều, liên hệ hỗ trợ FoxGo để kiểm tra.

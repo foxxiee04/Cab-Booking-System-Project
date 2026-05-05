@@ -1,0 +1,27 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
+flowchart TB
+  subgraph Q["Quote path"]
+    direction LR
+    IN[Request context] --> FEAT[Feature build]
+    FEAT --> RF[Surge model]
+    RF --> OUT1[Price ETA]
+  end
+
+  subgraph A["Driver accept model"]
+    direction LR
+    F2[Ride features] --> GBM[GBM score]
+    GBM --> PACC[p accept]
+  end
+
+  subgraph W["Wait time model"]
+    direction LR
+    SUP[Supply demand] --> GBR[GBR Huber]
+    GBR --> WM[Wait minutes]
+  end
+
+  subgraph RAG["Support chat RAG"]
+    direction LR
+    Q2[User question] --> EMB[Embed MiniLM]
+    EMB --> FAISS[FAISS top K]
+    FAISS --> LLM[LLM answer]
+  end

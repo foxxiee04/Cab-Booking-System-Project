@@ -7,7 +7,7 @@ import { normalizeAddressPayloadDeep } from '../location/address-normalizer';
 const router = Router();
 
 function normalizeForwardQuery(
-  service: keyof typeof import('../config').config.grpcServices,
+  service: keyof typeof import('../config').config.services,
   normalizedPath: string,
   originalQuery: Request['query'],
 ): Request['query'] {
@@ -33,7 +33,7 @@ function normalizeForwardQuery(
   return query;
 }
 
-function normalizeProxyPath(service: keyof typeof import('../config').config.grpcServices, originalUrl: string): string {
+function normalizeProxyPath(service: keyof typeof import('../config').config.services, originalUrl: string): string {
   const path = originalUrl.split('?')[0];
 
   if (service === 'review') {
@@ -60,7 +60,7 @@ const getForwardHeaders = (req: Request) => {
 };
 
 const shouldForwardOverHttp = (
-  service: keyof typeof import('../config').config.grpcServices,
+  service: keyof typeof import('../config').config.services,
   normalizedPath: string,
 ) => {
   // All auth routes use HTTP forwarding (gRPC bridge internal fetch is unreliable)
@@ -87,7 +87,7 @@ const shouldForwardOverHttp = (
 };
 
 async function forwardOverHttp(
-  service: keyof typeof import('../config').config.grpcServices,
+  service: keyof typeof import('../config').config.services,
   req: Request,
   res: Response,
   normalizedPath: string,
@@ -128,7 +128,7 @@ async function forwardOverHttp(
   }
 }
 
-async function forward(service: keyof typeof import('../config').config.grpcServices, req: Request, res: Response) {
+async function forward(service: keyof typeof import('../config').config.services, req: Request, res: Response) {
   try {
     const normalizedPath = normalizeProxyPath(service, req.originalUrl);
     const normalizedQuery = normalizeForwardQuery(service, normalizedPath, req.query);
@@ -146,7 +146,8 @@ async function forward(service: keyof typeof import('../config').config.grpcServ
       headers: req.headers,
     };
 
-    const response = await grpcBridgeClient.forward(service, forwardedRequest, normalizedPath);
+    // service is guaranteed not to be HTTP-only here (shouldForwardOverHttp returned false)
+    const response = await grpcBridgeClient.forward(service as keyof typeof import('../config').config.grpcServices, forwardedRequest, normalizedPath);
     res.status(response.statusCode).json(normalizeAddressPayloadDeep(response.body));
   } catch (error) {
     logger.error('gRPC proxy error', {

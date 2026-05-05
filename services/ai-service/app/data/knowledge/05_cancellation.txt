@@ -1,34 +1,34 @@
 TIÊU ĐỀ: Hủy chuyến và chính sách hủy FoxGo
-DANH MỤC: hủy chuyến, cancel, hoàn tiền, chính sách hủy, hủy xe, phí hủy
+DANH MỤC: hủy chuyến, cancel, hoàn tiền, chính sách hủy, hủy xe, phí hủy, tài xế hủy, hủy nhiều lần, bị hạn chế đặt xe, không hủy được, tài xế không đến
 
-Cách hủy chuyến:
-1. Trong màn hình theo dõi chuyến, nhấn nút "Hủy chuyến".
-2. Chọn lý do hủy (có thể bỏ qua).
-3. Xác nhận hủy. Chuyến sẽ được hủy ngay lập tức.
+Bạn có thể hủy chuyến bất cứ lúc nào trước khi tài xế hoàn thành chuyến. Vào màn hình theo dõi chuyến → nhấn "Hủy chuyến" → chọn lý do (không bắt buộc) → xác nhận. Chuyến hủy ngay lập tức.
 
-Chính sách phí hủy:
-• Hủy TRƯỚC khi tài xế nhận chuyến: Miễn phí, không mất bất kỳ khoản phí nào.
-• Hủy SAU khi tài xế đã nhận chuyến nhưng chưa đến đón: Có thể bị tính phí hủy nhỏ (thường 5.000–15.000đ tùy khoảng cách tài xế đã đi).
-• Hủy nhiều lần trong ngày (trên 3 lần): Tài khoản có thể bị hạn chế tạm thời — không thể đặt xe trong vài giờ.
+Về phí hủy: miễn phí 100% nếu bạn hủy trước khi tài xế nhận chuyến. Sau khi tài xế đã nhận và đang trên đường đến, có thể bị tính phí hủy nhỏ từ 5.000–15.000đ tùy quãng đường tài xế đã đi. Phí này hiển thị rõ trên màn hình xác nhận hủy trước khi bạn đồng ý, bạn có thể thấy trước khi quyết định.
 
-Trường hợp tài xế hủy chuyến:
-• Hệ thống tự động tìm tài xế mới cho bạn.
-• Không tính phí hủy với khách hàng.
-• Nếu không tìm được tài xế mới, chuyến bị hủy và tiền được hoàn (với thanh toán online).
-
-Hoàn tiền khi hủy:
-• Tiền mặt: Không phát sinh thanh toán trước, không cần hoàn.
-• Online (MoMo/VNPay): Hoàn về phương thức gốc trong 3–5 ngày làm việc.
-• Lỗi hệ thống: Liên hệ support@foxgo.vn để được hoàn tiền thủ công.
-
+---
 Hỏi: Tôi bị tính phí hủy bao nhiêu?
-Đáp: Phí hủy chỉ áp dụng khi bạn hủy SAU khi tài xế đã nhận chuyến và đang trên đường đến. Mức phí thường từ 5.000–15.000đ tùy quãng đường tài xế đã đi. Phí này sẽ hiển thị trên màn hình xác nhận hủy trước khi bạn đồng ý.
+Đáp: Chỉ bị tính phí khi hủy sau khi tài xế đã nhận và đang đến đón bạn. Mức phí từ 5.000–15.000đ tùy quãng đường tài xế đã đi — tài xế đi càng xa thì phí càng cao. Số tiền chính xác sẽ hiển thị trên màn hình xác nhận hủy để bạn quyết định. Hủy trước khi tài xế nhận: hoàn toàn miễn phí.
 
-Hỏi: Tôi hủy nhầm chuyến, lấy lại được không?
-Đáp: Không thể khôi phục chuyến đã hủy. Bạn cần đặt chuyến mới. Nếu đã thanh toán online, tiền sẽ được hoàn trong 3–5 ngày làm việc.
+---
+Hỏi: Tôi hủy nhầm, lấy lại chuyến được không?
+Đáp: Không khôi phục được bạn ơi. Chuyến đã hủy là hủy hẳn, phải đặt lại từ đầu. Nếu đã thanh toán online, tiền hoàn về tài khoản trong 3–5 ngày làm việc.
 
-Hỏi: Tài xế không đến đón, tôi phải làm gì?
-Đáp: Bạn có thể: (1) Gọi hoặc nhắn tin cho tài xế qua nút điện thoại/chat trong app. (2) Chờ thêm vài phút — tài xế có thể bị kẹt xe. (3) Nếu tài xế không liên lạc được hoặc quá trễ, nhấn "Hủy chuyến" — trong trường hợp này bạn thường không bị tính phí hủy. Báo cáo sự cố để hỗ trợ đội ngũ xử lý tài xế.
+---
+Hỏi: Tài xế hủy chuyến thì tôi phải làm gì?
+Đáp: Khi tài xế hủy, hệ thống tự động tìm tài xế mới cho bạn — bạn không cần làm gì cả. Nếu không tìm được tài xế mới, chuyến bị hủy hoàn toàn và tiền được hoàn (nếu đã thanh toán online). Bạn không bị tính phí gì trong trường hợp tài xế hủy.
 
+---
+Hỏi: Tài xế không đến đón, tôi chờ bao lâu thì được hủy miễn phí?
+Đáp: Nếu tài xế trễ quá mức hoặc không liên lạc được, bạn hoàn toàn được hủy miễn phí — FoxGo hiểu đây là lỗi từ phía tài xế. Cứ thử gọi/nhắn tin cho tài xế qua app trước. Nếu không liên lạc được sau 5–10 phút, hủy và báo cáo sự cố để FoxGo ghi nhận và xử lý tài xế.
+
+---
 Hỏi: Tôi bị hạn chế đặt xe do hủy nhiều lần phải làm sao?
-Đáp: Hạn chế thường tự gỡ sau 1–2 giờ. Nếu lâu hơn, liên hệ support@foxgo.vn để được hỗ trợ. FoxGo áp dụng giới hạn hủy để đảm bảo tài xế không bị ảnh hưởng thu nhập do đơn ảo.
+Đáp: Hạn chế thường tự gỡ sau 1–2 giờ bạn nhé. FoxGo áp dụng giới hạn này khi hủy trên 3 lần/ngày để bảo vệ thu nhập của tài xế — mỗi lần hủy sau khi nhận chuyến ảnh hưởng đến tài xế. Nếu hạn chế kéo dài hơn 2 giờ, liên hệ support@foxgo.vn để được hỗ trợ.
+
+---
+Hỏi: Không tìm được tài xế, tiền có bị giữ không?
+Đáp: Hoàn toàn không. Nếu sau 5 phút hệ thống không ghép được tài xế, chuyến tự hủy và tiền hoàn về đầy đủ trong 3–5 ngày làm việc với thanh toán online, còn tiền mặt thì không phát sinh giao dịch từ đầu nên không ảnh hưởng.
+
+---
+Hỏi: Hủy chuyến có ảnh hưởng đến tài khoản của tôi không?
+Đáp: Hủy thỉnh thoảng thì không sao. Nhưng nếu hủy quá nhiều lần trong ngày (trên 3 lần sau khi tài xế đã nhận), tài khoản có thể bị hạn chế tạm thời vài giờ. Không ai bị khóa tài khoản vĩnh viễn chỉ vì hủy xe, trừ khi có hành vi gian lận.

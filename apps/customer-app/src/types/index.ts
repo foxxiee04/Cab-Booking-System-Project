@@ -52,6 +52,7 @@ export type RideStatus =
 
 export interface Ride {
   id: string;
+  bookingId?: string;
   customerId: string;
   driverId: string | null;
   status: RideStatus;

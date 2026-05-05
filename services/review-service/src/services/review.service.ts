@@ -1,6 +1,9 @@
 import axios from 'axios';
 import { ReviewModel, IReview, ReviewType } from '../models/review.model';
+import { PendingAutoRatingModel } from '../models/pending-auto-rating.model';
 import { config } from '../config';
+
+const AUTO_RATING_DELAY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export interface CreateReviewDto {
   rideId: string;
@@ -143,6 +146,56 @@ class ReviewService {
 
   async deleteReview(reviewId: string): Promise<void> {
     await ReviewModel.findByIdAndDelete(reviewId);
+  }
+
+  async scheduleAutoRating(dto: {
+    rideId: string;
+    bookingId: string;
+    customerId: string;
+    driverId: string;
+  }): Promise<void> {
+    const scheduledAt = new Date(Date.now() + AUTO_RATING_DELAY_MS);
+    await PendingAutoRatingModel.updateOne(
+      { rideId: dto.rideId },
+      { $setOnInsert: { ...dto, scheduledAt, processed: false } },
+      { upsert: true }
+    );
+  }
+
+  async processAutoRatings(): Promise<void> {
+    const now = new Date();
+    const pending = await PendingAutoRatingModel.find({
+      scheduledAt: { $lte: now },
+      processed: false,
+    }).limit(50);
+
+    for (const item of pending) {
+      try {
+        const existing = await ReviewModel.findOne({
+          rideId: item.rideId,
+          reviewerId: item.customerId,
+          type: ReviewType.CUSTOMER_TO_DRIVER,
+        });
+
+        if (!existing) {
+          await this.createReview({
+            rideId: item.rideId,
+            bookingId: item.bookingId,
+            type: ReviewType.CUSTOMER_TO_DRIVER,
+            reviewerId: item.customerId,
+            reviewerName: 'Khách hàng',
+            revieweeId: item.driverId,
+            revieweeName: 'Tài xế',
+            rating: 5,
+            tags: ['auto_rated'],
+          });
+        }
+
+        await PendingAutoRatingModel.updateOne({ _id: item._id }, { processed: true });
+      } catch (err) {
+        console.error(`Auto-rate failed for ride ${item.rideId}:`, err);
+      }
+    }
   }
 
   async getTopRatedDrivers(limit = 10): Promise<any[]> {

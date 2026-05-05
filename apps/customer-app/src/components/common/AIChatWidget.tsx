@@ -32,21 +32,65 @@ import { aiApi, ChatMessage } from '../../api/ai.api';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { closeMessenger } from '../../store/ui.slice';
 import { useRideChat, ChatMessage as RideChatMessage } from '../../hooks/useRideChat';
+import { CallState, useWebRTCCall } from '../../hooks/useWebRTCCall';
+import RideCall from '../RideCall';
 
-// ─── Greeting detection ────────────────────────────────────────────────────
-const GREETING_RE = /^(hi+|hello+|hey+|xin chào|chào|alo|oi|ừ|ok|okay|cảm ơn|thanks|thank you|bạn ơi|ơi|yo)\s*[!.]*$/i;
+// ─── Pattern matching ──────────────────────────────────────────────────────
+const GREETING_RE = /^(hi+|hello+|hey+|xin chào|chào|alo|oi|ừ|ok|okay|bạn ơi|ơi|yo)\s*[!.]*$/i;
 const GREETING_RESPONSES = [
   'Xin chào! Mình là trợ lý FoxGo, sẵn sàng hỗ trợ bạn 24/7. Bạn cần giúp gì ạ?',
   'Chào bạn! Mình là bot hỗ trợ của FoxGo. Bạn có thắc mắc gì về đặt xe, thanh toán hay tài khoản không?',
   'Xin chào! Rất vui được gặp bạn. Hãy cho mình biết mình có thể giúp gì cho bạn nhé?',
 ];
-const THANKS_RE = /^(cảm ơn|thanks|thank you|ok cảm ơn|oke cảm ơn)\s*[!.]*$/i;
+const THANKS_RE = /^(cảm ơn+|thanks+|thank you|ok cảm ơn|oke cảm ơn|cảm ơn bạn)\s*[!.]*$/i;
 const THANKS_RESPONSES = [
-  'Không có gì bạn ơi! Nếu cần hỗ trợ thêm, mình luôn ở đây nhé. 😊',
+  'Không có gì bạn ơi! Nếu cần hỗ trợ thêm, mình luôn ở đây nhé.',
   'Vui lòng được giúp bạn! Chúc bạn có chuyến đi tuyệt vời.',
+  'Sẵn sàng hỗ trợ bất cứ lúc nào, bạn nhé!',
+];
+
+interface QuickPattern { re: RegExp; answer: string }
+const QUICK_PATTERNS: QuickPattern[] = [
+  {
+    re: /giá|cước|bảng giá|phí|bao nhiêu tiền/i,
+    answer: 'Giá cước FoxGo theo loại xe:\n• Xe máy: từ 10.000đ + 6.200đ/km\n• Xe ga: từ 16.000đ + 9.500đ/km\n• Ô tô 4 chỗ: từ 28.000đ + 18.000đ/km\n• Ô tô 7 chỗ: từ 40.000đ + 24.000đ/km\n\nGiá có thể cao hơn vào giờ cao điểm (surge). Giá chính xác hiển thị khi bạn đặt xe.',
+  },
+  {
+    re: /hủy|cancel|hủy chuyến|huỷ/i,
+    answer: 'Bạn có thể hủy chuyến trước khi tài xế đến đón.\n• Hủy trong 2 phút đầu: miễn phí\n• Hủy sau 2 phút hoặc tài xế đã đến: có thể mất phí hủy tùy trường hợp\n\nĐể hủy: vào màn hình chuyến đang chạy → nhấn "Hủy chuyến".',
+  },
+  {
+    re: /momo|vnpay|thanh toán|payment|trả tiền/i,
+    answer: 'FoxGo hỗ trợ các hình thức thanh toán:\n• Tiền mặt: trả trực tiếp cho tài xế\n• Ví MoMo: thanh toán online, tự động\n• VNPay: quét QR hoặc chuyển khoản ngân hàng\n\nChọn hình thức khi đặt xe. Thanh toán online được xử lý ngay sau khi hoàn thành chuyến.',
+  },
+  {
+    re: /voucher|mã giảm giá|khuyến mãi|promo|ưu đãi/i,
+    answer: 'Voucher giảm giá FoxGo:\n• Vào mục "Ưu đãi" để xem & thu thập voucher công khai\n• Khi đặt xe, bước xác nhận → nhập mã hoặc chọn voucher đã lưu\n• Mỗi voucher có điều kiện riêng (đơn tối thiểu, loại xe, thời hạn)\n\nVoucher tốt nhất sẽ được gợi ý tự động cho chuyến của bạn.',
+  },
+  {
+    re: /đặt xe|book|cách đặt|đặt như thế nào/i,
+    answer: 'Cách đặt xe FoxGo:\n1. Nhập điểm đón và điểm đến trên bản đồ\n2. Chọn loại xe phù hợp (xe máy, ô tô 4/7 chỗ)\n3. Chọn hình thức thanh toán\n4. Nhấn "Xác nhận và tìm tài xế"\n\nHệ thống sẽ ghép tài xế gần nhất cho bạn trong vài phút.',
+  },
+  {
+    re: /quên đồ|bỏ quên|để quên/i,
+    answer: 'Nếu bạn quên đồ trên xe:\n1. Vào mục "Lịch sử chuyến" → chọn chuyến đi đó\n2. Nhấn "Liên hệ tài xế" để nhắn tin/gọi điện\n3. Nếu không liên hệ được: email support@foxgo.vn hoặc hotline 1900-1234\n\nFoxGo không chịu trách nhiệm về đồ thất lạc, nhưng sẽ hỗ trợ kết nối bạn với tài xế.',
+  },
+  {
+    re: /đăng ký tài xế|lái xe|trở thành tài xế|partner/i,
+    answer: 'Đăng ký trở thành tài xế FoxGo:\n• Tải app FoxGo Driver và đăng ký tài khoản\n• Cần: CMND/CCCD, bằng lái xe, đăng ký xe, ảnh xe\n• Đặt cọc ký quỹ ban đầu (bảo đảm chất lượng dịch vụ)\n\nSau khi duyệt hồ sơ (~1–3 ngày), bạn có thể bắt đầu nhận cuốc.',
+  },
+  {
+    re: /liên hệ|hỗ trợ|hotline|support|contact/i,
+    answer: 'Liên hệ hỗ trợ FoxGo:\n• Hotline: 1900-1234 (8h–22h hàng ngày)\n• Email: support@foxgo.vn\n• Chat trong app (mục này)\n\nThời gian phản hồi email: trong vòng 24 giờ làm việc.',
+  },
 ];
 
 const pickRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+
+const findQuickAnswer = (text: string): string | null => {
+  const matched = QUICK_PATTERNS.find((p) => p.re.test(text));
+  return matched ? matched.answer : null;
+};
 
 type AIMessage = { role: 'user' | 'assistant'; content: string; sources?: string[]; isError?: boolean };
 
@@ -112,9 +156,18 @@ const DriverBubble: React.FC<{ msg: RideChatMessage }> = ({ msg }) => {
 };
 
 // ─── Main widget ────────────────────────────────────────────────────────────
+const formatCallDuration = (durationMs: number) => {
+  const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${totalSeconds} giây`;
+  if (seconds === 0) return `${minutes} phút`;
+  return `${minutes} phút ${seconds} giây`;
+};
+
 const AIChatWidget: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { accessToken } = useAppSelector((s) => s.auth);
+  const { accessToken, user } = useAppSelector((s) => s.auth);
   const { currentRide, driver } = useAppSelector((s) => s.ride);
   const { messengerOpenTo } = useAppSelector((s) => s.ui);
 
@@ -126,9 +179,12 @@ const AIChatWidget: React.FC = () => {
   const [driverInput, setDriverInput] = useState('');
   const [aiUnread, setAiUnread] = useState(0);
   const [driverUnread, setDriverUnread] = useState(0);
+  const [lastCallSummary, setLastCallSummary] = useState<{ text: string; timestamp: number } | null>(null);
   const aiEndRef = useRef<HTMLDivElement>(null);
   const driverEndRef = useRef<HTMLDivElement>(null);
   const prevDriverMsgCount = useRef(0);
+  const previousCallStateRef = useRef<CallState>('idle');
+  const activeCallStartedAtRef = useRef<number | null>(null);
 
   const hasActiveRide = Boolean(currentRide?.driverId && !['COMPLETED', 'CANCELLED'].includes(currentRide?.status || ''));
   const driverName = driver
@@ -139,7 +195,11 @@ const AIChatWidget: React.FC = () => {
   const { messages: driverMessages, sendMessage: sendDriverMessage, connected: driverConnected } = useRideChat(
     hasActiveRide ? accessToken : null,
     rideId,
-    undefined,
+    user?.id,
+  );
+  const { callState, callError, startCall, acceptCall, hangUp } = useWebRTCCall(
+    hasActiveRide ? accessToken : null,
+    rideId,
   );
 
   // Handle Redux openMessenger command
@@ -150,6 +210,37 @@ const AIChatWidget: React.FC = () => {
       dispatch(closeMessenger());
     }
   }, [dispatch, messengerOpenTo]);
+
+  // Auto-open driver panel on incoming call
+  useEffect(() => {
+    if (callState !== 'idle') {
+      setOpen(true);
+      setActiveTab('driver');
+    }
+  }, [callState]);
+
+  // Track call duration and summary
+  useEffect(() => {
+    const prev = previousCallStateRef.current;
+    if (callState === 'active' && prev !== 'active') {
+      activeCallStartedAtRef.current = Date.now();
+    }
+    if (callState === 'ended' && prev !== 'ended') {
+      const startedAt = activeCallStartedAtRef.current;
+      const durationMs = startedAt ? Date.now() - startedAt : 0;
+      setLastCallSummary({
+        text: durationMs > 0
+          ? `Cuộc gọi đã kết thúc · ${formatCallDuration(durationMs)}`
+          : 'Cuộc gọi đã kết thúc',
+        timestamp: Date.now(),
+      });
+      activeCallStartedAtRef.current = null;
+    }
+    if (callState === 'idle' && prev === 'incoming') {
+      activeCallStartedAtRef.current = null;
+    }
+    previousCallStateRef.current = callState;
+  }, [callState]);
 
   // Auto-scroll
   useEffect(() => {
@@ -175,6 +266,7 @@ const AIChatWidget: React.FC = () => {
     setActiveTab('list');
   };
   const handleClose = () => setOpen(false);
+  const showCallPanel = callState !== 'idle';
 
   const handleTabSelect = (tab: 'ai' | 'driver') => {
     setActiveTab(tab);
@@ -193,19 +285,27 @@ const AIChatWidget: React.FC = () => {
     setAiMessages((prev) => [...prev, userMsg]);
     setAiLoading(true);
 
-    // Client-side greeting shortcut (fast response, no API call)
+    // Client-side shortcuts — instant responses, no API call
     if (GREETING_RE.test(text)) {
       setTimeout(() => {
         setAiMessages((prev) => [...prev, { role: 'assistant', content: pickRandom(GREETING_RESPONSES) }]);
         setAiLoading(false);
-      }, 300);
+      }, 280);
       return;
     }
     if (THANKS_RE.test(text)) {
       setTimeout(() => {
         setAiMessages((prev) => [...prev, { role: 'assistant', content: pickRandom(THANKS_RESPONSES) }]);
         setAiLoading(false);
-      }, 300);
+      }, 280);
+      return;
+    }
+    const quickAnswer = findQuickAnswer(text);
+    if (quickAnswer) {
+      setTimeout(() => {
+        setAiMessages((prev) => [...prev, { role: 'assistant', content: quickAnswer }]);
+        setAiLoading(false);
+      }, 400);
       return;
     }
 
@@ -225,13 +325,22 @@ const AIChatWidget: React.FC = () => {
   }, [aiInput, aiLoading, aiMessages]);
 
   const handleQuickReply = useCallback((text: string) => {
-    setAiInput(text);
-    // Trigger send immediately
+    setAiInput('');
     const userMsg: AIMessage = { role: 'user', content: text };
     setAiMessages((prev) => [...prev, userMsg]);
     setAiLoading(true);
-    const currentMessages = aiMessages.filter((m) => !m.isError && m !== WELCOME);
-    const history: ChatMessage[] = currentMessages
+
+    const quickAnswer = findQuickAnswer(text);
+    if (quickAnswer) {
+      setTimeout(() => {
+        setAiMessages((prev) => [...prev, { role: 'assistant', content: quickAnswer }]);
+        setAiLoading(false);
+      }, 400);
+      return;
+    }
+
+    const history: ChatMessage[] = aiMessages
+      .filter((m) => !m.isError && m !== WELCOME)
       .slice(-10)
       .map((m) => ({ role: m.role, content: m.content }));
     aiApi.chat({ message: text, history, top_k: 5 })
@@ -242,7 +351,6 @@ const AIChatWidget: React.FC = () => {
         setAiMessages((prev) => [...prev, { role: 'assistant', content: 'Xin lỗi, mình đang gặp sự cố kỹ thuật. Vui lòng thử lại sau ít phút nhé!', isError: true }]);
       })
       .finally(() => setAiLoading(false));
-    setAiInput('');
   }, [aiMessages]);
 
   const handleDriverSend = () => {
@@ -251,7 +359,6 @@ const AIChatWidget: React.FC = () => {
     setDriverInput('');
   };
 
-  const driverPhone = (driver as any)?.phoneNumber as string | undefined;
   const headerGradient = 'linear-gradient(135deg, #1d4ed8 0%, #0ea5e9 100%)';
 
   // ── Conversation list ────────────────────────────────────────────────────
@@ -320,8 +427,8 @@ const AIChatWidget: React.FC = () => {
       </Box>
       <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, py: 1.25, bgcolor: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
         {aiMessages.map((msg, i) => <AIBubble key={i} msg={msg} />)}
-        {/* Quick reply chips — show only on first open (just welcome message) */}
-        {aiMessages.length === 1 && !aiLoading && (
+        {/* Quick reply chips — show after welcome and after each AI response */}
+        {aiMessages[aiMessages.length - 1]?.role === 'assistant' && !aiLoading && (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, pl: 0.25, pt: 0.5 }}>
             {QUICK_REPLIES.map((q) => (
               <Chip
@@ -385,12 +492,17 @@ const AIChatWidget: React.FC = () => {
             {driverConnected ? '● Đang trực tuyến' : 'Đang kết nối...'}
           </Typography>
         </Box>
-        {driverPhone && (
+        {hasActiveRide && (
           <IconButton
             size="small"
-            component="a"
-            href={`tel:${driverPhone}`}
-            sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.15)', '&:hover': { bgcolor: 'rgba(255,255,255,0.28)' } }}
+            disabled={showCallPanel}
+            onClick={() => { void startCall(); }}
+            sx={{
+              color: '#fff',
+              bgcolor: 'rgba(255,255,255,0.15)',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.28)' },
+              '&.Mui-disabled': { color: 'rgba(255,255,255,0.5)', bgcolor: 'rgba(255,255,255,0.08)' },
+            }}
             title={`Gọi cho ${driverName}`}
           >
             <PhoneIcon sx={{ fontSize: 16 }} />
@@ -398,36 +510,71 @@ const AIChatWidget: React.FC = () => {
         )}
         <IconButton size="small" onClick={handleClose} sx={{ color: '#fff' }}><CloseIcon fontSize="small" /></IconButton>
       </Box>
-      <Box sx={{ flex: 1, overflowY: 'auto', px: 1.25, py: 1.25, bgcolor: '#fff', display: 'flex', flexDirection: 'column' }}>
-        {driverMessages.length === 0 && (
-          <Box sx={{ m: 'auto', textAlign: 'center', color: 'text.secondary', py: 3 }}>
-            <ForumRounded sx={{ fontSize: 36, opacity: 0.15, mb: 0.75 }} />
-            <Typography variant="body2" sx={{ fontSize: '0.82rem' }}>Bắt đầu cuộc trò chuyện với tài xế</Typography>
-          </Box>
-        )}
-        {driverMessages.map((msg, i) => <DriverBubble key={i} msg={msg} />)}
-        <div ref={driverEndRef} />
-      </Box>
-      <Box sx={{ px: 1.5, py: 1, borderTop: '1px solid', borderColor: 'divider', bgcolor: '#fafbfc' }}>
-        <TextField
-          fullWidth size="small" multiline maxRows={3}
-          placeholder="Nhập tin nhắn..." value={driverInput}
-          onChange={(e) => setDriverInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleDriverSend(); } }}
-          disabled={!driverConnected}
-          sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3, bgcolor: '#f1f5f9', '& fieldset': { border: 'none' }, '&.Mui-focused fieldset': { border: '1.5px solid', borderColor: 'primary.main' } } }}
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton size="small" color="primary" onClick={handleDriverSend} disabled={!driverConnected || !driverInput.trim()}
-                  sx={{ bgcolor: 'primary.main', color: '#fff', width: 32, height: 32, '&:hover': { bgcolor: 'primary.dark' }, '&.Mui-disabled': { bgcolor: '#e2e8f0', color: '#94a3b8' } }}>
-                  <SendIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
+      {showCallPanel ? (
+        <RideCall
+          embedded
+          showIdleButton={false}
+          callState={callState}
+          callError={callError}
+          contactName={driverName}
+          onStart={() => void startCall()}
+          onAccept={() => void acceptCall()}
+          onHangUp={hangUp}
+          onClose={handleClose}
         />
-      </Box>
+      ) : (
+        <>
+          <Box sx={{ flex: 1, overflowY: 'auto', px: 1.25, py: 1.25, bgcolor: '#fff', display: 'flex', flexDirection: 'column' }}>
+            {driverMessages.length === 0 && (
+              <Box sx={{ m: 'auto', textAlign: 'center', color: 'text.secondary', py: 3 }}>
+                <ForumRounded sx={{ fontSize: 36, opacity: 0.15, mb: 0.75 }} />
+                <Typography variant="body2" sx={{ fontSize: '0.82rem' }}>Bắt đầu cuộc trò chuyện với tài xế</Typography>
+              </Box>
+            )}
+            {driverMessages.map((msg, i) => <DriverBubble key={i} msg={msg} />)}
+            {lastCallSummary && (
+              <Box
+                sx={{
+                  alignSelf: 'center',
+                  my: 0.75,
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: 999,
+                  bgcolor: '#eff6ff',
+                  color: '#1d4ed8',
+                  maxWidth: '90%',
+                  border: '1px solid #c7d7fb',
+                }}
+              >
+                <Typography variant="caption" sx={{ fontWeight: 600, textAlign: 'center', display: 'block', fontSize: '0.72rem' }}>
+                  📞 {lastCallSummary.text}
+                </Typography>
+              </Box>
+            )}
+            <div ref={driverEndRef} />
+          </Box>
+          <Box sx={{ px: 1.5, py: 1, borderTop: '1px solid', borderColor: 'divider', bgcolor: '#fafbfc' }}>
+            <TextField
+              fullWidth size="small" multiline maxRows={3}
+              placeholder="Nhập tin nhắn..." value={driverInput}
+              onChange={(e) => setDriverInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleDriverSend(); } }}
+              disabled={!driverConnected}
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3, bgcolor: '#f1f5f9', '& fieldset': { border: 'none' }, '&.Mui-focused fieldset': { border: '1.5px solid', borderColor: 'primary.main' } } }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton size="small" color="primary" onClick={handleDriverSend} disabled={!driverConnected || !driverInput.trim()}
+                      sx={{ bgcolor: 'primary.main', color: '#fff', width: 32, height: 32, '&:hover': { bgcolor: 'primary.dark' }, '&.Mui-disabled': { bgcolor: '#e2e8f0', color: '#94a3b8' } }}>
+                      <SendIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
+        </>
+      )}
     </>
   );
 

@@ -1,0 +1,21 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
+flowchart LR
+  IN[Client HTTPS]
+
+  GW[API Gateway :3000]
+
+  subgraph B["Route groups"]
+    direction TB
+    R1["/auth → Auth :3001"]
+    R2["/bookings → Booking :3008"]
+    R3["/rides → Ride :3002"]
+    R4["/drivers → Driver :3003"]
+    R5["/payments → Payment :3004"]
+    R6["/wallet → Wallet :3006"]
+    R7["/notify → Notify :3005"]
+    R8["/reviews → Review :3010"]
+    R9["/pricing → Pricing :3009"]
+    R0["/ai → AI :8000"]
+  end
+
+  IN --> GW --> B

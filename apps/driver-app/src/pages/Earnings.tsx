@@ -213,9 +213,10 @@ const Earnings: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} />
                 <YAxis tickFormatter={formatVND} tick={{ fontSize: 9 }} />
-                <Tooltip formatter={(value: any) => [formatCurrency(Number(value)), 'Thực nhận']} />
-                <Line type="monotone" dataKey="net" stroke="#16a34a" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                <Line type="monotone" dataKey="gross" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
+                <Tooltip formatter={(value: any, name: any) => [formatCurrency(Number(value)), name === 'net' ? 'Thực nhận' : 'Doanh thu gộp']} />
+                <Legend formatter={(value: string) => value === 'net' ? 'Thực nhận' : 'Doanh thu gộp'} />
+                <Line type="monotone" dataKey="net" name="net" stroke="#16a34a" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="gross" name="gross" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
