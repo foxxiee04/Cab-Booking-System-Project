@@ -714,6 +714,8 @@ flowchart LR
     end
 ```
 
+**Docker Hub 429:** các `Dockerfile` dùng mirror **AWS Public ECR** `public.ecr.aws/docker/library/*` (Node / Python official) để CI không bị giới hạn pull `docker.io` khi build matrix song song.
+
 ---
 
 ## 10. Triển khai trên AWS

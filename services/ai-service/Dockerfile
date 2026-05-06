@@ -1,5 +1,5 @@
-# Use Python 3.10 slim image
-FROM python:3.10-slim
+# Use Python 3.10 slim (AWS Public ECR mirror — avoids Docker Hub rate limits in CI)
+FROM public.ecr.aws/docker/library/python:3.10-slim
 
 # Set working directory
 WORKDIR /app

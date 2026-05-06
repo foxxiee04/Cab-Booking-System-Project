@@ -1,4 +1,5 @@
-FROM node:20-alpine
+# public.ecr.aws = Docker Hub official mirror — avoids GitHub Actions Docker Hub pull rate limits (429)
+FROM public.ecr.aws/docker/library/node:20-alpine
 
 WORKDIR /workspace/services/api-gateway
 
