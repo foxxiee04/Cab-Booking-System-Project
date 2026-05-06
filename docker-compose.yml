@@ -309,8 +309,8 @@ services:
 
   wallet-service:
     build:
-      context: .
-      dockerfile: ./services/wallet-service/Dockerfile
+      context: ./services/wallet-service
+      dockerfile: Dockerfile
     image: cab-wallet-service:latest
     container_name: cab-wallet-service
     ports:

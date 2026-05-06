@@ -1,17 +1,17 @@
 FROM node:20-slim
 
-WORKDIR /workspace/services/wallet-service
+WORKDIR /app
 
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends openssl ca-certificates \
 	&& rm -rf /var/lib/apt/lists/*
 
-COPY services/wallet-service/package*.json ./
+COPY package*.json ./
 RUN npm install
 
-COPY services/wallet-service/prisma ./prisma
-COPY services/wallet-service/src ./src
-COPY services/wallet-service/tsconfig.json ./
+COPY prisma ./prisma
+COPY src ./src
+COPY tsconfig.json ./
 
 RUN npm run build && cp -r src/generated dist/
 
