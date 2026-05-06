@@ -320,7 +320,7 @@ describe('RideService - Simple Test Suite', () => {
       });
 
       await expect(rideService.driverAcceptRide('ride-123', 'driver-123')).rejects.toThrow(
-        'Ride is not available for acceptance'
+        'Chuyến đi đã có tài xế.'
       );
     });
   });
