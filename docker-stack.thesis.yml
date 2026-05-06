@@ -58,6 +58,10 @@ services:
       POSTGRES_DB: cab_booking
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    configs:
+      - source: postgres_init_db
+        target: /docker-entrypoint-initdb.d/init.sql
+        mode: 0444
     networks:
       - backend
     secrets:
@@ -767,3 +771,10 @@ secrets:
     external: true
   mongo_password:
     external: true
+
+# ══════════════════════════════════════════════════════════════════════════
+# CONFIGS — distributed to containers via Swarm (immutable, content-addressed)
+# ══════════════════════════════════════════════════════════════════════════
+configs:
+  postgres_init_db:
+    file: ./scripts/init-db.sql

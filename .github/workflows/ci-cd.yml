@@ -390,25 +390,35 @@ jobs:
             [ -f .env ] && source .env
             set +o allexport
 
-            # Create PostgreSQL databases if a postgres container is running.
-            # In Swarm mode container names include a replica suffix (.1.xxxx).
-            PGID=$(docker ps --filter "name=cab-booking_postgres" --format "{{.ID}}" | head -1)
-            if [ -n "$PGID" ]; then
-              echo "▶ Ensuring databases exist..."
-              for db in auth_db booking_db driver_db payment_db ride_db user_db wallet_db; do
-                docker exec "$PGID" psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname='$db'" \
-                  | grep -q 1 || docker exec "$PGID" psql -U postgres -c "CREATE DATABASE $db;" || true
-              done
-            else
-              echo "⚠ postgres container not found on this node — skipping db init (run manually if first deploy)"
-            fi
-
             echo "▶ Deploying stack (tag=$IMAGE_TAG)..."
             docker stack deploy \
               -c docker-stack.thesis.yml \
               --with-registry-auth \
               --prune \
               cab-booking
+
+            echo "▶ Waiting for postgres to be ready..."
+            PGID=""
+            for i in $(seq 1 36); do
+              PGID=$(docker ps --filter "name=cab-booking_postgres" --format "{{.ID}}" | head -1)
+              if [ -n "$PGID" ] && docker exec "$PGID" pg_isready -U postgres -q 2>/dev/null; then
+                echo "  postgres ready (attempt $i)"
+                break
+              fi
+              echo "  waiting... ($i/36)"
+              sleep 5
+            done
+
+            if [ -n "$PGID" ]; then
+              echo "▶ Ensuring databases exist..."
+              for db in auth_db booking_db driver_db payment_db ride_db user_db wallet_db; do
+                docker exec "$PGID" psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname='$db'" \
+                  | grep -q 1 || docker exec "$PGID" psql -U postgres -c "CREATE DATABASE $db;"
+              done
+              echo "  databases OK"
+            else
+              echo "⚠ postgres not reachable after 180s — run manually: docker exec <postgres-id> psql -U postgres -f /docker-entrypoint-initdb.d/init.sql"
+            fi
 
             echo "▶ Removing dangling images..."
             docker image prune -f
