@@ -310,6 +310,7 @@ const Dashboard: React.FC = () => {
         setWatchId(null);
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, isOnline, t, watchId]);
 
   // Check for active ride on mount

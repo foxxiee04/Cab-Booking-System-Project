@@ -25,7 +25,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { ArrowBack, AutorenewRounded, Cancel, ChatBubbleRounded, CheckCircleRounded, HourglassTopRounded, PaymentRounded, StarRate, AccessTime, Route, Speed, FiberManualRecord } from '@mui/icons-material';
+import { ArrowBack, AutorenewRounded, Cancel, CheckCircleRounded, HourglassTopRounded, PaymentRounded, StarRate, AccessTime, Route, Speed, FiberManualRecord } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { BookingMap, useSocket } from '../features/booking';
 import ContactBox from '../components/ContactBox';
@@ -35,7 +35,6 @@ import { rideApi } from '../api/ride.api';
 import { driverApi } from '../api/driver.api';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { clearRide, setCurrentRide, setDriver, updateRideStatus } from '../store/ride.slice';
-import { openMessenger } from '../store/ui.slice';
 import { Payment } from '../types';
 import { formatCurrency, formatDate, getPaymentMethodLabel, getVehicleTypeLabel } from '../utils/format.utils';
 import { calculateDistance, formatDistance as formatMapDistance, formatDuration as formatMapDuration } from '../utils/map.utils';

@@ -49,7 +49,7 @@ Worker-N          (spot t3.medium)       ← scale tùy ý
 
 | Type | Protocol | Port | Source | Mô tả |
 |------|----------|------|--------|-------|
-| SSH | TCP | 22 | My IP | SSH access |
+| SSH | TCP | 22 | 0.0.0.0/0 | SSH — phải mở toàn bộ vì GitHub Actions runners có IP động |
 | Custom TCP | TCP | 2377 | `foxgo-swarm-sg` (chọn chính nó) | Swarm management |
 | Custom TCP | TCP | 7946 | `foxgo-swarm-sg` | Swarm node discovery |
 | Custom UDP | UDP | 7946 | `foxgo-swarm-sg` | Swarm node discovery |

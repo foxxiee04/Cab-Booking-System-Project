@@ -143,6 +143,7 @@ const ActiveRide: React.FC = () => {
       clearWatch(id);
       watchIdRef.current = null;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRide, dispatch, isOnline, t]);
 
   useEffect(() => {

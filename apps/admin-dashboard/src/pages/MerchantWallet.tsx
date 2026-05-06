@@ -199,6 +199,7 @@ const WALLET_STATUS_LABEL: Record<string, string> = {
   BLOCKED: 'Bị khóa',
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const BANK_ACCOUNT_TYPE_LABEL: Record<string, string> = {
   SETTLEMENT_ACCOUNT: 'Nhận thanh toán (MoMo/VNPay) — Techcombank 8000511204',
   PAYOUT_ACCOUNT:     'Chi trả rút ví tài xế — Techcombank 8000511204',
