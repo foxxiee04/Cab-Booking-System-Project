@@ -1,5 +1,5 @@
 TIÊU ĐỀ: Thu nhập, hoa hồng và ví tiền tài xế FoxGo
-DANH MỤC: thu nhập tài xế, hoa hồng, commission, tiền mặt cuốc, chuyến online, ví tài xế, nạp ký quỹ, rút tiền, pending balance, thu nhập chờ duyệt, debt limit, nợ nền tảng, lịch sử thu nhập, báo cáo thu nhập
+DANH MỤC: thu nhập tài xế, hoa hồng, commission, tiền mặt cuốc, chuyến online, ví tài xế, nạp ký quỹ, rút tiền, pending balance, thu nhập chờ duyệt, debt limit, nợ nền tảng, lịch sử thu nhập, báo cáo thu nhập, tài xế bị trừ tiền, không nhận được chuyến do ví, thu nhập trung bình, bonus, thưởng
 
 Cơ chế thu nhập tài xế FoxGo hoạt động khác nhau tùy loại thanh toán của khách. Quan trọng nhất cần hiểu là: FoxGo thu hoa hồng từ mỗi chuyến, phần còn lại là của tài xế.
 
@@ -37,3 +37,55 @@ Hỏi: Rút tiền từ ví về ngân hàng như thế nào?
 ---
 Hỏi: Xem lịch sử thu nhập ở đâu?
 Đáp: Trong app FoxGo Driver, mục "Thu nhập" hoặc "Ví" → "Lịch sử giao dịch". Bạn thấy được từng chuyến, khoản hoa hồng, nạp/rút tiền. Nếu cần báo cáo thu nhập để khai thuế, liên hệ support@foxgo.vn — đội hỗ trợ xuất file chi tiết cho bạn.
+
+---
+Hỏi: Hoa hồng FoxGo là bao nhiêu phần trăm?
+Đáp: Tùy loại xe bạn chạy nhé: xe máy và xe ga là 20%, ô tô 4 chỗ là 18%, ô tô 7 chỗ là 15%. Phần còn lại sau khi trừ hoa hồng là thu nhập của bạn.
+
+---
+Hỏi: Thu nhập trung bình của tài xế FoxGo khoảng bao nhiêu?
+Đáp: Thu nhập phụ thuộc vào số giờ chạy, khu vực, và loại xe. Tài xế chạy toàn thời gian có thể đạt 8–15 triệu/tháng tùy khu vực và hiệu suất. Tài xế bán thời gian thường 3–6 triệu/tháng. Con số thực tế của bạn phụ thuộc nhiều vào giờ online và tỷ lệ chấp nhận chuyến.
+
+---
+Hỏi: Tôi bị trừ tiền oan, phản ánh ở đâu?
+Đáp: Vào "Ví" → "Lịch sử giao dịch" → chọn giao dịch có vấn đề → nhấn "Báo cáo". Hoặc liên hệ support@foxgo.vn với ảnh chụp màn hình lịch sử giao dịch và mô tả vấn đề. Đội hỗ trợ sẽ kiểm tra và phản hồi trong 24–48 giờ.
+
+---
+Hỏi: Pending balance bao giờ thì release vào ví thật?
+Đáp: Đúng 24 giờ sau khi chuyến hoàn thành bạn nhé. Hệ thống tự động chuyển — bạn không cần làm gì. Nếu sau 24 giờ vẫn thấy "Đang chờ" và không chuyển, liên hệ support@foxgo.vn để kiểm tra.
+
+---
+Hỏi: Ví bị âm (nợ) thì xử lý như thế nào?
+Đáp: Số dư âm xảy ra khi bạn chạy nhiều cuốc tiền mặt mà không nạp ký quỹ đủ. Khi nạp tiền, hệ thống sẽ tự động bù trừ phần nợ trước rồi cộng phần còn lại vào số dư. Nạp đủ để dư ít nhất 50.000đ là bật online được lại.
+
+---
+Hỏi: Ví tài xế bị âm thì có nhận chuyến được không?
+Đáp: Không bạn ơi — khi số dư ví âm hoặc dưới 50.000đ, hệ thống tự khóa chế độ online và bạn không nhận được chuyến mới. Cần nạp tiền vào ví trước: vào "Ví" → "Nạp tiền" → chọn MoMo hoặc VNPay. Sau khi nạp đủ (số dư ≥ 50.000đ), bật online lại là nhận chuyến được ngay.
+
+---
+Hỏi: Nạp tiền vào ví FoxGo Driver như thế nào?
+Đáp: Vào mục "Ví" trong app FoxGo Driver → nhấn "Nạp tiền" → chọn MoMo hoặc VNPay → nhập số tiền muốn nạp → xác nhận thanh toán. Tiền vào ví ngay lập tức sau khi thanh toán thành công. Nạp tối thiểu 50.000đ để đủ điều kiện bật online nhận chuyến.
+
+---
+Hỏi: Tôi chạy cuốc 50km thì được bao nhiêu tiền?
+Đáp: Mình cần biết loại xe và giá cước cụ thể để tính chính xác. Nhưng ví dụ: giả sử cuốc đó tính 200.000đ — nếu chạy xe máy thì bạn nhận 160.000đ (trừ 20% hoa hồng), ô tô 4 chỗ thì nhận 164.000đ (trừ 18%). Giá cuốc chính xác phụ thuộc lộ trình, thời điểm, và hệ số surge.
+
+---
+Hỏi: FoxGo có chương trình thưởng hoặc bonus cho tài xế không?
+Đáp: Có bạn nhé! FoxGo có các chương trình thưởng theo số chuyến hoàn thành, thưởng giờ cao điểm, và thưởng khu vực thiếu tài xế. Thông tin chi tiết về chương trình thưởng hiện tại xem trong mục "Thưởng" hoặc "Khuyến mãi" trong app FoxGo Driver.
+
+---
+Hỏi: Khách đánh giá 1 sao có ảnh hưởng thu nhập không?
+Đáp: Đánh giá thấp không ảnh hưởng trực tiếp đến thu nhập từng chuyến. Tuy nhiên, nếu điểm đánh giá trung bình của bạn xuống quá thấp (dưới 3.5 sao), hệ thống có thể giảm ưu tiên ghép chuyến cho bạn, gián tiếp ảnh hưởng đến số chuyến nhận được.
+
+---
+Hỏi: Khách không trả tiền mặt thì tôi làm sao?
+Đáp: Trường hợp này hiếm gặp nhưng nếu xảy ra, bạn báo cáo ngay qua app sau chuyến hoặc liên hệ hotline 1900-1234. FoxGo sẽ xem xét từng trường hợp cụ thể. Để tránh rủi ro, với chuyến giá trị lớn bạn có thể nhắc khách chuẩn bị tiền mặt trước.
+
+---
+Hỏi: Tôi mới đăng ký, rút tiền được ngay không?
+Đáp: Được, nhưng trước tiên cần liên kết tài khoản ngân hàng trong mục "Ví" → "Ngân hàng liên kết". Sau khi liên kết xong và có số dư, rút tiền bình thường — tiền về trong 1–3 ngày làm việc.
+
+---
+Hỏi: Hoa hồng FoxGo có thay đổi không?
+Đáp: Tỷ lệ hoa hồng hiện tại là cố định: xe máy/ga 20%, ô tô 4 chỗ 18%, ô tô 7 chỗ 15%. Nếu có thay đổi, FoxGo sẽ thông báo trước trong app và qua email. Bạn yên tâm — mọi thay đổi đều được thông báo rõ ràng trước khi áp dụng.

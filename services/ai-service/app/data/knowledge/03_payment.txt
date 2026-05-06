@@ -1,5 +1,5 @@
 TIÊU ĐỀ: Thanh toán và hoàn tiền FoxGo
-DANH MỤC: thanh toán, MoMo, VNPay, tiền mặt, ví điện tử, payment, trả tiền, hoàn tiền, refund, bị trừ tiền, thanh toán lỗi, đổi phương thức thanh toán
+DANH MỤC: thanh toán, MoMo, VNPay, tiền mặt, ví điện tử, payment, trả tiền, hoàn tiền, refund, bị trừ tiền, thanh toán lỗi, đổi phương thức thanh toán, hóa đơn, biên lai, giá cước, phụ phí, ví FoxGo, thanh toán thất bại, tiền về bao giờ
 
 FoxGo hỗ trợ 3 cách thanh toán: tiền mặt, ví MoMo, và VNPay. Bạn chọn ở bước xác nhận khi đặt xe. Với tiền mặt thì đơn giản — trả trực tiếp cho tài xế sau chuyến, tài xế thối lại tiền thừa. Với MoMo và VNPay thì thanh toán diễn ra qua cổng điện tử, chuyến chỉ được tạo sau khi thanh toán thành công.
 
@@ -32,3 +32,51 @@ Hỏi: Thanh toán MoMo thì cần điều kiện gì?
 ---
 Hỏi: VNPay thanh toán như thế nào?
 Đáp: VNPay hỗ trợ hầu hết các ngân hàng tại Việt Nam. Bạn có thể quét QR bằng app ngân hàng hoặc dùng thẻ ATM/Visa/Mastercard liên kết VNPay. Sau khi thanh toán thành công, chuyến được tạo tự động.
+
+---
+Hỏi: Tiền mặt thì tài xế có thối tiền không?
+Đáp: Có bạn nhé. Khi thanh toán tiền mặt, tài xế sẽ thối lại tiền thừa cho bạn. Giá trên app là giá chính xác, bạn cứ đưa và tài xế thối lại — không có thu thêm gì.
+
+---
+Hỏi: Tôi quên trả tiền mặt cho tài xế thì sao?
+Đáp: Nếu bạn quên trả, tài xế có thể liên hệ FoxGo để xử lý. Bạn nên chủ động liên hệ tài xế qua lịch sử chuyến hoặc email support@foxgo.vn để giải quyết. Đây là trường hợp hiếm gặp nhưng cứ liên hệ hỗ trợ — đội mình sẽ giúp.
+
+---
+Hỏi: Xem hóa đơn, biên lai chuyến xe ở đâu?
+Đáp: Vào "Lịch sử chuyến" → chọn chuyến muốn xem → thấy đầy đủ thông tin: quãng đường, giá cước, phương thức thanh toán. Nếu cần file hóa đơn chính thức để thanh toán công tác phí, liên hệ support@foxgo.vn để yêu cầu.
+
+---
+Hỏi: Giá trên app có khớp với giá thực tế trả không?
+Đáp: Hoàn toàn khớp bạn ơi! Giá hiển thị khi xác nhận đặt xe là giá cuối cùng bạn trả. FoxGo không có phụ phí ẩn. Trường hợp duy nhất giá có thể thay đổi là nếu lộ trình thay đổi đáng kể trong chuyến.
+
+---
+Hỏi: MoMo báo lỗi không thể thanh toán thì xử lý sao?
+Đáp: Thử lần lượt: (1) Kiểm tra số dư MoMo có đủ không. (2) Kiểm tra kết nối mạng. (3) Đóng app MoMo rồi thử lại. (4) Nếu vẫn lỗi, chọn VNPay hoặc tiền mặt thay thế. Nếu tiền đã bị trừ mà chuyến không tạo, liên hệ support@foxgo.vn.
+
+---
+Hỏi: Tôi trả tiền rồi nhưng app vẫn báo chưa thanh toán?
+Đáp: Thử refresh lại app (kéo màn hình xuống để làm mới hoặc tắt và mở lại). Đôi khi hệ thống cần 30–60 giây để cập nhật. Nếu sau 5 phút vẫn hiện "chưa thanh toán" mà ví/ngân hàng đã bị trừ tiền, liên hệ support@foxgo.vn kèm mã giao dịch.
+
+---
+Hỏi: Tiền hoàn về ví MoMo hay về ngân hàng?
+Đáp: Tiền hoàn về đúng nguồn bạn đã thanh toán: thanh toán qua MoMo thì hoàn về ví MoMo, thanh toán qua VNPay thì hoàn về tài khoản ngân hàng liên kết. Không hoàn chéo sang phương thức khác được.
+
+---
+Hỏi: Tôi có thể thanh toán bằng thẻ tín dụng không?
+Đáp: Thẻ tín dụng Visa/Mastercard được hỗ trợ qua cổng VNPay bạn nhé. Khi chọn VNPay, bạn có thể chọn thanh toán bằng thẻ quốc tế thay vì QR code ngân hàng.
+
+---
+Hỏi: Tôi đã hủy chuyến, tiền hoàn về chưa?
+Đáp: Nếu bạn hủy chuyến và đã thanh toán online, tiền sẽ được hoàn trong 3–5 ngày làm việc. Kiểm tra trong "Lịch sử chuyến" → chọn chuyến đã hủy để xem trạng thái hoàn tiền. Nếu sau 7 ngày vẫn chưa thấy tiền, liên hệ support@foxgo.vn kèm mã giao dịch.
+
+---
+Hỏi: Giá FoxGo tính như thế nào?
+Đáp: Giá cước = phí mở cửa + phí theo km + phí theo thời gian chờ (nếu có). Giá ước tính hiển thị trước khi đặt đã bao gồm tất cả. Nếu đang giờ cao điểm, hệ số surge được áp dụng và hiển thị rõ trong app trước khi bạn xác nhận.
+
+---
+Hỏi: Đặt xe qua app có an toàn về thông tin thanh toán không?
+Đáp: Hoàn toàn an toàn! FoxGo không lưu trực tiếp thông tin thẻ hay tài khoản ngân hàng của bạn. Tất cả giao dịch đều qua cổng thanh toán bảo mật của MoMo và VNPay — hai đơn vị được cấp phép và kiểm soát bởi Ngân hàng Nhà nước Việt Nam.
+
+---
+Hỏi: Tôi muốn chia hóa đơn cho bạn bè cùng chuyến thì sao?
+Đáp: App hiện chưa có tính năng chia hóa đơn tự động bạn ơi. Bạn có thể tự tính và chia tay nhau ngoài app. Nếu cần bằng chứng để chia, vào "Lịch sử chuyến" chụp màn hình thông tin chuyến là được.

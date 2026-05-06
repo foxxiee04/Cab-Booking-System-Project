@@ -1001,6 +1001,8 @@ export class EventConsumer {
 
       const driver = await driverGrpcClient.getDriverById(driverId).catch(() => null);
       if (!driver?.userId) continue;
+      // Also exclude by userId — rejectedDriverIds may store userId instead of driverId
+      if (excluded.has(driver.userId)) continue;
       // Check in-memory first (fast), fall back to Redis presence for reconnecting sockets
       const online = this.socketServer.isUserOnline(driver.userId)
         || await this.socketServer.isUserOnlineRedis(driver.userId);

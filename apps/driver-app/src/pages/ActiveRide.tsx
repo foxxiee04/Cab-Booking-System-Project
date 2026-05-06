@@ -42,7 +42,7 @@ import { formatCurrency, getPaymentMethodLabel } from '../utils/format.utils';
 import { useTranslation } from 'react-i18next';
 import DriverTripMap from '../features/trip/components/DriverTripMap';
 import { driverSocketService } from '../socket/driver.socket';
-import { watchPosition, clearWatch } from '../utils/map.utils';
+import { watchPosition, clearWatch, getDemoFallbackLocation } from '../utils/map.utils';
 import ContactBox from '../components/ContactBox';
 
 const getOptimisticCompletedRidesKey = (userId?: string) => `driver:completedRidesCount:${userId || 'anonymous'}`;
@@ -120,6 +120,7 @@ const ActiveRide: React.FC = () => {
       return;
     }
 
+    const fallback = getDemoFallbackLocation(user?.phoneNumber) ?? undefined;
     const id = watchPosition(
       (location) => {
         dispatch(setCurrentLocation(location));
@@ -132,7 +133,8 @@ const ActiveRide: React.FC = () => {
           console.error('Location error:', geoError);
         }
         setError(t('dashboard.gpsError'));
-      }
+      },
+      fallback
     );
 
     watchIdRef.current = id;

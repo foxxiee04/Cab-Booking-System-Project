@@ -175,7 +175,7 @@ const DriverApprovals: React.FC = () => {
     try {
       if (pendingAction === 'approve') {
         await adminApi.approveDriver(selectedDriver.id);
-        setSuccessMsg(`✅ Đã duyệt hồ sơ tài xế ${driverName}. Tài xế đã được thông báo và có thể bắt đầu nhận cuốc.`);
+        setSuccessMsg(`Đã duyệt hồ sơ tài xế ${driverName}. Tài xế đã được thông báo và có thể bắt đầu nhận cuốc.`);
       } else {
         await adminApi.rejectDriver(selectedDriver.id, reason.trim() || undefined);
         setSuccessMsg(`Đã từ chối hồ sơ tài xế ${driverName}.`);

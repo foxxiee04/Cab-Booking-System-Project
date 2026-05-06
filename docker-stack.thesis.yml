@@ -1,19 +1,55 @@
-# Docker Swarm Stack - Thesis Demo (2-node: 1 Manager + 1 Worker)
+# Docker Swarm Stack — Thesis Production
 #
-# Node layout:
-#   Manager  (t3.large)  : infra (postgres, mongodb, redis, rabbitmq)
-#                           api-gateway, monitoring (prometheus, grafana, loki)
-#   Worker-1 (t3.medium) : auth, ride, driver, payment, wallet, ai-service
-#                           user, booking, pricing, notification, review
+# Topology:
+#   Manager     (on-demand, t3.medium) : infra stateful (postgres, mongodb,
+#                                         redis, rabbitmq), api-gateway,
+#                                         monitoring (prometheus, grafana, loki)
+#   Worker-1..N (spot,      t3.medium) : all 11 microservices — Swarm
+#                                         auto-spreads across available workers
 #
-# Trước khi deploy, gán label cho worker node:
-#   docker node update --label-add worker=1 <hostname-worker-1>
+#   Global services (every node): promtail, cadvisor, node-exporter
 #
-# Deploy:
-#   docker stack deploy -c docker-stack.thesis.yml --with-registry-auth cab-booking
+# HA note (báo cáo):
+#   Promote a second on-demand node as manager for Raft quorum:
+#     docker node promote <secondary-node-id>
+#   Secondary manager does NOT run app services (no constraints match).
+#
+# ── Setup commands ─────────────────────────────────────────────────────────
+#
+#  1. On Manager — init swarm:
+#       docker swarm init --advertise-addr <MANAGER_PRIVATE_IP>
+#
+#  2. On Manager — create secrets:
+#       echo "postgres" | docker secret create postgres_user -
+#       echo "pg_pass"  | docker secret create postgres_password -
+#       echo "mongo"    | docker secret create mongo_user -
+#       echo "mg_pass"  | docker secret create mongo_password -
+#
+#  3. On Manager — get worker join token:
+#       docker swarm join-token worker
+#
+#  4. On each Spot Worker — join swarm (run the command from step 3)
+#
+#  5. Deploy:
+#       export DOCKERHUB_USERNAME=foxxiee04
+#       export IMAGE_TAG=latest
+#       docker stack deploy -c docker-stack.thesis.yml --with-registry-auth cab-booking
+#
+# ── Scale workers ──────────────────────────────────────────────────────────
+#   Add a spot instance → install Docker → join swarm → services auto-spread.
+#
+# ── Spot instance handling ─────────────────────────────────────────────────
+#   stop_grace_period: 30s lets containers flush state before termination.
+#   With replicas: 1, if the worker running a service is terminated, Swarm
+#   reschedules the task on another available worker within ~10-30s.
+# ──────────────────────────────────────────────────────────────────────────
 
 services:
-  # ============ Infrastructure (pinned to Manager) ============
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # INFRASTRUCTURE — pinned to Manager (stateful, must never be on spot)
+  # ══════════════════════════════════════════════════════════════════════════
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -32,10 +68,16 @@ services:
       placement:
         constraints:
           - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
       resources:
         limits:
           cpus: '1'
           memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   mongodb:
     image: mongo:7
@@ -54,10 +96,16 @@ services:
       placement:
         constraints:
           - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
       resources:
         limits:
           cpus: '1'
           memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   redis:
     image: redis:7-alpine
@@ -75,6 +123,9 @@ services:
         limits:
           cpus: '0.5'
           memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
 
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
@@ -95,9 +146,14 @@ services:
         limits:
           cpus: '0.5'
           memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
 
-  # ============ Microservices ============
-  # api-gateway: pinned to Manager (public IP nằm ở đây)
+  # ══════════════════════════════════════════════════════════════════════════
+  # API GATEWAY — Manager (public Elastic IP is here)
+  # ══════════════════════════════════════════════════════════════════════════
+
   api-gateway:
     image: ${DOCKERHUB_USERNAME}/cab-api-gateway:${IMAGE_TAG:-latest}
     ports:
@@ -118,18 +174,27 @@ services:
       update_config:
         parallelism: 1
         delay: 10s
+        order: start-first
         failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
       resources:
         limits:
-          cpus: '0.5'
-          memory: 256M
+          cpus: '0.75'
+          memory: 384M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
 
-  # --- Worker-1: auth, ride, driver, payment, wallet, ai ---
+  # ══════════════════════════════════════════════════════════════════════════
+  # MICROSERVICES — Spot Workers
+  # Swarm auto-spreads across all available worker nodes.
+  # When a spot instance is terminated, Swarm reschedules on remaining workers.
+  # ══════════════════════════════════════════════════════════════════════════
+
   auth-service:
     image: ${DOCKERHUB_USERNAME}/cab-auth-service:${IMAGE_TAG:-latest}
-    ports:
-      - "3001:3001"
-      - "50051:50051"
     environment:
       - NODE_ENV=production
       - PORT=3001
@@ -142,20 +207,29 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.worker == 1
+          - node.role == worker
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
           memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
   ride-service:
     image: ${DOCKERHUB_USERNAME}/cab-ride-service:${IMAGE_TAG:-latest}
-    ports:
-      - "3002:3002"
-      - "50054:50054"
     environment:
       - NODE_ENV=production
       - PORT=3002
@@ -168,20 +242,29 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.worker == 1
+          - node.role == worker
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
           memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
   driver-service:
     image: ${DOCKERHUB_USERNAME}/cab-driver-service:${IMAGE_TAG:-latest}
-    ports:
-      - "3003:3003"
-      - "50055:50055"
     environment:
       - NODE_ENV=production
       - PORT=3003
@@ -194,20 +277,29 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.worker == 1
+          - node.role == worker
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
           memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
   payment-service:
     image: ${DOCKERHUB_USERNAME}/cab-payment-service:${IMAGE_TAG:-latest}
-    ports:
-      - "3004:3004"
-      - "50056:50056"
     environment:
       - NODE_ENV=production
       - PORT=3004
@@ -220,19 +312,29 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.worker == 1
+          - node.role == worker
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
           memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
   wallet-service:
     image: ${DOCKERHUB_USERNAME}/cab-wallet-service:${IMAGE_TAG:-latest}
-    ports:
-      - "3006:3006"
     environment:
       - NODE_ENV=production
       - PORT=3006
@@ -244,43 +346,29 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.worker == 1
+          - node.role == worker
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
           memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
-  ai-service:
-    image: ${DOCKERHUB_USERNAME}/cab-ai-service:${IMAGE_TAG:-latest}
-    environment:
-      - DEBUG=False
-      - HOST=0.0.0.0
-      - PORT=8000
-      - MODEL_PATH=app/models/eta_price_model.joblib
-    networks:
-      - backend
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.labels.worker == 1
-      update_config:
-        parallelism: 1
-        delay: 10s
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-
-  # --- Worker-1 (continued): user, booking, pricing, notification, review ---
   user-service:
     image: ${DOCKERHUB_USERNAME}/cab-user-service:${IMAGE_TAG:-latest}
-    ports:
-      - "3007:3007"
-      - "50052:50052"
     environment:
       - NODE_ENV=production
       - PORT=3007
@@ -293,20 +381,29 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.worker == 1
+          - node.role == worker
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
           memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
   booking-service:
     image: ${DOCKERHUB_USERNAME}/cab-booking-service:${IMAGE_TAG:-latest}
-    ports:
-      - "3008:3008"
-      - "50053:50053"
     environment:
       - NODE_ENV=production
       - PORT=3008
@@ -319,20 +416,29 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.worker == 1
+          - node.role == worker
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
           memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
   pricing-service:
     image: ${DOCKERHUB_USERNAME}/cab-pricing-service:${IMAGE_TAG:-latest}
-    ports:
-      - "3009:3009"
-      - "50057:50057"
     environment:
       - NODE_ENV=production
       - PORT=3009
@@ -346,19 +452,29 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.worker == 1
+          - node.role == worker
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
           memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
   notification-service:
     image: ${DOCKERHUB_USERNAME}/cab-notification-service:${IMAGE_TAG:-latest}
-    ports:
-      - "3005:3005"
     environment:
       - NODE_ENV=production
       - PORT=3005
@@ -370,19 +486,29 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.worker == 1
+          - node.role == worker
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
           memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
   review-service:
     image: ${DOCKERHUB_USERNAME}/cab-review-service:${IMAGE_TAG:-latest}
-    ports:
-      - "3010:3010"
     environment:
       - NODE_ENV=production
       - PORT=3010
@@ -394,26 +520,138 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.worker == 1
+          - node.role == worker
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
           memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
-  # ============ Monitoring (pinned to Manager) ============
+  ai-service:
+    image: ${DOCKERHUB_USERNAME}/cab-ai-service:${IMAGE_TAG:-latest}
+    environment:
+      - DEBUG=False
+      - HOST=0.0.0.0
+      - PORT=8000
+      - MODEL_PATH=app/models/eta_price_model.joblib
+      - RAG_LLM_PROVIDER=${RAG_LLM_PROVIDER:-auto}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+        preferences:
+          - spread: node.id
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      stop_grace_period: 30s
+      resources:
+        limits:
+          cpus: '1'
+          memory: 768M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # MONITORING — Collectors: mode global (chạy trên TẤT CẢ nodes tự động)
+  # ══════════════════════════════════════════════════════════════════════════
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - backend
+    deploy:
+      mode: global          # auto-deployed to every node (manager + all workers)
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    networks:
+      - backend
+    deploy:
+      mode: global          # container metrics from every node
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - backend
+    deploy:
+      mode: global          # host metrics from every node
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+
+  # ── Monitoring backends — pinned to Manager (stateful) ──────────────────
+
   prometheus:
     image: prom/prometheus:v2.54.1
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
     ports:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+      # Docker socket: lets Prometheus auto-discover all Swarm nodes
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - backend
     deploy:
@@ -421,18 +659,24 @@ services:
       placement:
         constraints:
           - node.role == manager
+      restart_policy:
+        condition: on-failure
       resources:
         limits:
           cpus: '0.5'
           memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
 
   grafana:
     image: grafana/grafana:11.1.4
     ports:
-      - "3030:3000"  # 3006 đã dùng bởi wallet-service
+      - "3030:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -445,10 +689,15 @@ services:
       placement:
         constraints:
           - node.role == manager
+      restart_policy:
+        condition: on-failure
       resources:
         limits:
           cpus: '0.5'
           memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
 
   loki:
     image: grafana/loki:3.1.1
@@ -465,62 +714,19 @@ services:
       placement:
         constraints:
           - node.role == manager
+      restart_policy:
+        condition: on-failure
       resources:
         limits:
           cpus: '0.5'
           memory: 512M
-
-  promtail:
-    image: grafana/promtail:3.1.1
-    command: ["-config.file=/etc/promtail/promtail-config.yml"]
-    volumes:
-      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - backend
-    deploy:
-      mode: global
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 256M
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
-    ports:
-      - "8081:8080"
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker:/var/lib/docker:ro
-    networks:
-      - backend
-    deploy:
-      mode: global
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 256M
-
-  node-exporter:
-    image: prom/node-exporter:v1.8.2
-    ports:
-      - "9100:9100"
-    command:
-      - --path.rootfs=/host
-    volumes:
-      - /:/host:ro,rslave
-    networks:
-      - backend
-    deploy:
-      mode: global
-      resources:
-        limits:
-          cpus: '0.25'
+        reservations:
+          cpus: '0.1'
           memory: 128M
 
+# ══════════════════════════════════════════════════════════════════════════
+# VOLUMES — all on Manager (local driver, not replicated)
+# ══════════════════════════════════════════════════════════════════════════
 volumes:
   postgres_data:
     name: cab-booking-postgres-data
@@ -544,13 +750,20 @@ volumes:
     name: cab-booking-loki-data
     driver: local
 
+# ══════════════════════════════════════════════════════════════════════════
+# NETWORKS
+# ══════════════════════════════════════════════════════════════════════════
 networks:
   frontend:
     driver: overlay
+    attachable: true
   backend:
     driver: overlay
     internal: true
 
+# ══════════════════════════════════════════════════════════════════════════
+# SECRETS (must be created manually before deploy — see setup commands above)
+# ══════════════════════════════════════════════════════════════════════════
 secrets:
   postgres_user:
     external: true

@@ -730,7 +730,7 @@ export class RideController {
         });
       }
 
-      const driverId = req.user!.userId;
+      const driverId = await this.resolveDriverActorId(req.user!.userId);
       const reason = req.body.reason as string | undefined;
       
       const ride = await this.rideService.driverRejectOffer(req.params.rideId, driverId, reason);

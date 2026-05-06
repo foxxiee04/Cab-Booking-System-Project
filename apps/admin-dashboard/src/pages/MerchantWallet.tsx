@@ -182,10 +182,10 @@ const CATEGORY_LABEL: Record<string, string> = {
   PAYMENT: 'Thanh toán',
   COMMISSION: 'Phí nền tảng',
   TOP_UP: 'Nạp tiền',
-  PAYOUT: 'Chi trả tài xế',
-  WITHDRAW: 'Rút tiền',
-  BONUS: 'Thưởng',
-  VOUCHER: 'Voucher / trợ giá',
+  PAYOUT: 'Thu nhập tài xế (T+24h)',
+  WITHDRAW: 'Rút / Đối soát',
+  BONUS: 'Thưởng incentive',
+  VOUCHER: 'Trợ giá voucher',
   REFUND: 'Hoàn tiền',
 };
 

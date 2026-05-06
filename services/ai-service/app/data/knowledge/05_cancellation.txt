@@ -1,5 +1,5 @@
 TIÊU ĐỀ: Hủy chuyến và chính sách hủy FoxGo
-DANH MỤC: hủy chuyến, cancel, hoàn tiền, chính sách hủy, hủy xe, phí hủy, tài xế hủy, hủy nhiều lần, bị hạn chế đặt xe, không hủy được, tài xế không đến
+DANH MỤC: hủy chuyến, cancel, hoàn tiền, chính sách hủy, hủy xe, phí hủy, tài xế hủy, hủy nhiều lần, bị hạn chế đặt xe, không hủy được, tài xế không đến, hủy nhầm, hủy miễn phí, bị tính phí hủy, lý do hủy
 
 Bạn có thể hủy chuyến bất cứ lúc nào trước khi tài xế hoàn thành chuyến. Vào màn hình theo dõi chuyến → nhấn "Hủy chuyến" → chọn lý do (không bắt buộc) → xác nhận. Chuyến hủy ngay lập tức.
 
@@ -32,3 +32,39 @@ Hỏi: Không tìm được tài xế, tiền có bị giữ không?
 ---
 Hỏi: Hủy chuyến có ảnh hưởng đến tài khoản của tôi không?
 Đáp: Hủy thỉnh thoảng thì không sao. Nhưng nếu hủy quá nhiều lần trong ngày (trên 3 lần sau khi tài xế đã nhận), tài khoản có thể bị hạn chế tạm thời vài giờ. Không ai bị khóa tài khoản vĩnh viễn chỉ vì hủy xe, trừ khi có hành vi gian lận.
+
+---
+Hỏi: Hủy chuyến ở đâu trong app?
+Đáp: Sau khi đặt xe, bạn vào màn hình theo dõi chuyến → nhìn phía dưới có nút "Hủy chuyến" → nhấn vào, chọn lý do rồi xác nhận là xong. Nếu không thấy nút, thử kéo màn hình lên — nút có thể bị ẩn ở phần dưới.
+
+---
+Hỏi: Hủy chuyến có cần nhập lý do không?
+Đáp: Không bắt buộc bạn ơi, nhập lý do là tùy chọn thôi. Nhưng nếu bạn điền lý do, FoxGo sẽ dùng thông tin đó để cải thiện dịch vụ và xử lý tài xế nếu lỗi thuộc về họ.
+
+---
+Hỏi: Tài xế đến sai điểm đón, tôi hủy có bị tính phí không?
+Đáp: Nếu lỗi rõ ràng thuộc về tài xế (đến sai điểm, không liên lạc được), bạn được hủy miễn phí. Báo cáo sự cố sau khi hủy để FoxGo ghi nhận và xử lý đúng nhé.
+
+---
+Hỏi: Tôi đặt xe xong muốn hủy ngay lập tức thì có phí không?
+Đáp: Nếu hủy ngay sau khi đặt mà tài xế chưa nhận chuyến thì hoàn toàn miễn phí, tiền hoàn về đầy đủ. Chỉ bị tính phí khi tài xế đã nhận và đang trên đường đến.
+
+---
+Hỏi: Tài xế đến muộn quá thì sao, tôi muốn hủy?
+Đáp: Bạn hoàn toàn có quyền hủy nếu tài xế trễ quá lâu. Thử liên hệ tài xế qua app trước — nếu không liên lạc được hoặc thời gian chờ quá dài so với ước tính ban đầu, hủy và chọn lý do "Tài xế trễ" hoặc "Không liên lạc được tài xế" để được miễn phí hủy.
+
+---
+Hỏi: Sau khi hủy chuyến thì đặt lại luôn được không?
+Đáp: Được ngay bạn ơi! Sau khi hủy, bạn quay về màn hình chính và đặt lại bình thường. Lưu ý nếu đã hủy nhiều lần trong ngày, tài khoản có thể tạm bị hạn chế 1–2 giờ.
+
+---
+Hỏi: Hủy chuyến do app bị lỗi thì tiền có về không?
+Đáp: Có bạn nhé. Dù lý do hủy là gì — kể cả do lỗi app — nếu chuyến chưa bắt đầu và bạn đã thanh toán online, tiền sẽ được hoàn về trong 3–5 ngày làm việc. Liên hệ support@foxgo.vn nếu bạn gặp tình huống đặc biệt.
+
+---
+Hỏi: Tài xế tự ý hủy nhiều lần ảnh hưởng gì không?
+Đáp: Tài xế hủy chuyến sẽ bị FoxGo ghi nhận và ảnh hưởng đến tỷ lệ chấp nhận chuyến của họ. Nếu bạn thường xuyên bị tài xế hủy, hãy báo cáo qua app — FoxGo sẽ theo dõi và xử lý tài xế có hành vi này.
+
+---
+Hỏi: Tôi không thấy nút hủy chuyến?
+Đáp: Ở một số giai đoạn chuyến, nút hủy có thể không xuất hiện (ví dụ khi chuyến đang trong trạng thái hoàn tất). Nếu không thấy nút và muốn hủy khẩn cấp, liên hệ ngay hotline 1900-1234 để được hỗ trợ xử lý.

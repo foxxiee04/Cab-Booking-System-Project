@@ -3,11 +3,11 @@ RAG (Retrieval-Augmented Generation) Service for FoxGo Customer Support.
 
 Pipeline:
   1. Knowledge base documents are chunked (Q&A-aware) and embedded at startup.
-  2. Embeddings stored in a FAISS in-memory index.
+  2. Embeddings stored in a FAISS in-memory index; BM25 index built in parallel.
   3. On each chat request:
      a. Enrich the query with recent conversation history.
-     b. Embed the enriched query.
-     c. Retrieve top-k similar chunks from FAISS.
+     b. Embed the enriched query + BM25 tokenize.
+     c. Hybrid search: FAISS (semantic) + BM25 (keyword) → Reciprocal Rank Fusion.
      d. Build a prompt with context + full history.
      e. Generate a natural, human-like answer via LLM (Claude → Groq → OpenAI → template).
 """
@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import time
+import unicodedata
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -28,10 +29,11 @@ _np = None
 _faiss = None
 _SentenceTransformer = None
 _httpx = None
+_BM25Okapi = None
 
 
 def _ensure_imports():
-    global _np, _faiss, _SentenceTransformer, _httpx
+    global _np, _faiss, _SentenceTransformer, _httpx, _BM25Okapi
     if _np is None:
         import numpy as np
         _np = np
@@ -47,6 +49,12 @@ def _ensure_imports():
     if _httpx is None:
         import httpx
         _httpx = httpx
+    if _BM25Okapi is None:
+        try:
+            from rank_bm25 import BM25Okapi
+            _BM25Okapi = BM25Okapi
+        except ImportError:
+            logger.warning("rank_bm25 not installed — BM25 search disabled, using semantic only")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -59,11 +67,12 @@ EMBEDDING_MODEL_NAME = os.getenv(
 KNOWLEDGE_DIR = Path(__file__).resolve().parents[1] / "data" / "knowledge"
 CHUNK_SIZE = 450
 CHUNK_OVERLAP = 80
-TOP_K = 6
-MIN_SCORE = 0.45
+TOP_K = 7
+MIN_SCORE = 0.35          # Lower than before — hybrid search compensates for false negatives
+MAX_CONTEXT_CHARS = 4000  # Wider context window for LLM
 
 # LLM provider priority: claude → groq → openai → template
-LLM_PROVIDER = os.getenv("RAG_LLM_PROVIDER", "auto")   # "claude" | "groq" | "openai" | "auto" | "none"
+LLM_PROVIDER = os.getenv("RAG_LLM_PROVIDER", "auto")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
@@ -71,28 +80,35 @@ LLM_MODEL_CLAUDE = os.getenv("RAG_LLM_MODEL_CLAUDE", "claude-haiku-4-5-20251001"
 LLM_MODEL_GROQ = os.getenv("RAG_LLM_MODEL", "llama3-8b-8192")
 LLM_MODEL_OPENAI = os.getenv("RAG_LLM_MODEL_OPENAI", "gpt-3.5-turbo")
 LLM_TIMEOUT_S = float(os.getenv("RAG_LLM_TIMEOUT_S", "10"))
-MAX_CONTEXT_CHARS = 3000
 MAX_HISTORY_TURNS = 8
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Human-like system prompt
+# System prompt — Mia persona
 # ─────────────────────────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """Bạn là Mia — trợ lý hỗ trợ của FoxGo, ứng dụng gọi xe công nghệ tại Việt Nam.
+SYSTEM_PROMPT = """Bạn là Mia — trợ lý hỗ trợ thông minh của FoxGo, ứng dụng gọi xe công nghệ tại Việt Nam.
 
 QUY TẮC BẮT BUỘC (không được vi phạm):
 1. CHỈ trả lời dựa trên thông tin trong phần [NGỮ CẢNH] bên dưới.
 2. KHÔNG được bịa thêm số liệu, chính sách, giá cước, hoặc bất kỳ thông tin nào không có trong [NGỮ CẢNH].
-3. Nếu [NGỮ CẢNH] KHÔNG có thông tin để trả lời câu hỏi → nói chính xác: "Mình chưa tìm thấy thông tin về vấn đề này. Bạn vui lòng liên hệ hotline 1900-1234 hoặc email support@foxgo.vn để được hỗ trợ nhé."
-4. KHÔNG suy luận, KHÔNG giả định, KHÔNG dùng kiến thức bên ngoài hệ thống FoxGo.
+3. Nếu [NGỮ CẢNH] KHÔNG có thông tin để trả lời → nói chính xác: "Mình chưa có thông tin chính xác về vấn đề này. Bạn liên hệ hotline 1900-1234 hoặc email support@foxgo.vn để được hỗ trợ trực tiếp nhé! 🙏"
+4. KHÔNG suy luận, KHÔNG giả định, KHÔNG dùng kiến thức bên ngoài FoxGo.
 
-Phong cách:
-- Thân thiện, ngắn gọn, xưng "mình" với người dùng là "bạn"
-- Câu trả lời ≤ 120 từ trừ khi cần giải thích phức tạp
-- Thỉnh thoảng dùng emoji nhẹ (không lạm dụng)
-- Đọc ngữ cảnh hội thoại trước — không giải thích lại từ đầu nếu là câu hỏi tiếp nối
+Phong cách giao tiếp:
+- Thân thiện, ấm áp, gần gũi — xưng "mình" với người dùng là "bạn"
+- Nếu người dùng đang bực bội hoặc gặp sự cố khó chịu → thể hiện đồng cảm trước ("Ôi, tình huống đó nghe khó chịu thiệt!"), rồi mới hướng dẫn
+- Câu trả lời ngắn gọn (≤ 120 từ) trừ khi cần hướng dẫn nhiều bước
+- Khi hướng dẫn nhiều bước → dùng số thứ tự (1, 2, 3...) cho dễ làm theo
+- Thỉnh thoảng dùng emoji nhẹ nhàng (1–2 cái) — không lạm dụng
+- Đọc ngữ cảnh hội thoại — không lặp lại những gì đã giải thích trước đó
+- Nếu câu hỏi mơ hồ → hỏi lại một câu ngắn để hiểu đúng ý ("Bạn đang dùng app khách hay app tài xế vậy?")
 
-Thông tin liên hệ escalate:
-- Hotline: 1900-1234 (8h–22h)
+Nhận biết ngữ cảnh người dùng:
+- Tài xế: hỏi về thu nhập, hoa hồng, chuyến, online/offline, ví driver, nạp/rút tiền, đăng ký tài xế
+- Khách hàng: hỏi về đặt xe, theo dõi, hủy chuyến, thanh toán, hoàn tiền, voucher
+- Điều chỉnh cách giải thích phù hợp với từng đối tượng
+
+Thông tin liên hệ hỗ trợ:
+- Hotline: 1900-1234 (8h–22h hàng ngày)
 - Email: support@foxgo.vn"""
 
 
@@ -139,21 +155,17 @@ def _split_qa_pairs(text: str) -> List[str]:
     Split a document into Q&A blocks first, then into size-limited chunks.
     Keeps each Hỏi/Đáp pair together so retrieval always returns complete answers.
     """
-    # Normalize
     text = re.sub(r"\n{3,}", "\n\n", text.strip())
 
-    # Split on Q&A boundaries
     qa_pattern = re.compile(r"(?=\nHỏi:|\nQ:)", re.MULTILINE)
     parts = qa_pattern.split(text)
 
     segments = []
     intro_text = parts[0].strip()
 
-    # The intro (before first Q&A) gets chunked by size
     if intro_text:
         segments.extend(_chunk_by_size(intro_text, CHUNK_SIZE, CHUNK_OVERLAP))
 
-    # Each Q&A pair is one segment (may be split if very long)
     for part in parts[1:]:
         part = part.strip()
         if not part:
@@ -189,7 +201,6 @@ def _build_chunks(docs: List[Tuple[str, str, str]]) -> List[Chunk]:
     chunks: List[Chunk] = []
     for filename, title, content in docs:
         for seg in _split_qa_pairs(content):
-            # Strip metadata header lines from chunk text
             lines = [
                 l for l in seg.split("\n")
                 if l.strip() and not l.startswith(("TIÊU ĐỀ:", "DANH MỤC:"))
@@ -203,7 +214,41 @@ def _build_chunks(docs: List[Tuple[str, str, str]]) -> List[Chunk]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Vector index
+# BM25 tokenizer (Vietnamese-aware)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Common Vietnamese stop words that hurt BM25 precision
+_VI_STOPWORDS = {
+    "và", "của", "là", "có", "không", "được", "trong", "để", "cho", "với",
+    "các", "những", "này", "đó", "khi", "thì", "từ", "về", "một", "hay",
+    "hoặc", "nếu", "thế", "vậy", "cũng", "đã", "sẽ", "đang", "bị", "rồi",
+    "mà", "như", "do", "vì", "nên", "ra", "lên", "xuống", "vào", "tôi",
+    "bạn", "mình", "ạ", "nhé", "thôi", "à", "ơi", "xin", "hỏi", "đáp",
+}
+
+
+def _strip_diacritics(text: str) -> str:
+    """'tiền hoàn' → 'tien hoan' — lets users type without diacritics and still match."""
+    return "".join(
+        c for c in unicodedata.normalize("NFKD", text)
+        if not unicodedata.combining(c)
+    )
+
+
+# Pre-compute stripped stopwords so membership check stays O(1)
+_VI_STOPWORDS_STRIPPED = {_strip_diacritics(w) for w in _VI_STOPWORDS}
+
+
+def _tokenize_vi(text: str) -> List[str]:
+    """Lowercase → strip diacritics → remove punctuation → split → filter stops."""
+    text = text.lower()
+    text = _strip_diacritics(text)
+    text = re.sub(r"[^\w\s]", " ", text)
+    return [t for t in text.split() if t and t not in _VI_STOPWORDS_STRIPPED]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Vector + BM25 hybrid index
 # ─────────────────────────────────────────────────────────────────────────────
 
 class VectorIndex:
@@ -211,11 +256,14 @@ class VectorIndex:
         _ensure_imports()
         np = _np
         self.chunks = chunks
+        self.n = len(chunks)
 
+        # Normalize embeddings for cosine similarity via inner product
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
         norms = np.where(norms == 0, 1.0, norms)
         self.embeddings = (embeddings / norms).astype("float32")
 
+        # FAISS index
         if _faiss is not None:
             dim = self.embeddings.shape[1]
             self.index = _faiss.IndexFlatIP(dim)
@@ -226,7 +274,79 @@ class VectorIndex:
             self.index = None
             self.use_faiss = False
 
+        # BM25 index
+        self.bm25 = None
+        if _BM25Okapi is not None:
+            tokenized = [_tokenize_vi(c.text) for c in chunks]
+            self.bm25 = _BM25Okapi(tokenized)
+            logger.info("BM25 index built alongside FAISS")
+
+    def _semantic_ranks(self, query_embedding, k: int) -> dict:
+        """Return {chunk_idx: rrf_contribution} from semantic search."""
+        _ensure_imports()
+        np = _np
+        q = query_embedding.astype("float32")
+        norm = np.linalg.norm(q)
+        if norm > 0:
+            q = q / norm
+        q = q.reshape(1, -1)
+
+        ranks = {}
+        if self.use_faiss:
+            scores, indices = self.index.search(q, k)
+            for rank, (score, idx) in enumerate(zip(scores[0], indices[0])):
+                if idx >= 0 and float(score) >= MIN_SCORE * 0.7:
+                    ranks[int(idx)] = 1.0 / (60 + rank)
+        else:
+            sims = (self.embeddings @ q.T).flatten()
+            top = np.argsort(sims)[::-1][:k]
+            for rank, idx in enumerate(top):
+                if float(sims[idx]) >= MIN_SCORE * 0.7:
+                    ranks[int(idx)] = 1.0 / (60 + rank)
+        return ranks
+
+    def _bm25_ranks(self, query_text: str, k: int) -> dict:
+        """Return {chunk_idx: rrf_contribution} from BM25 keyword search."""
+        if self.bm25 is None:
+            return {}
+        _ensure_imports()
+        np = _np
+        tokens = _tokenize_vi(query_text)
+        if not tokens:
+            return {}
+        scores = self.bm25.get_scores(tokens)
+        top = np.argsort(scores)[::-1][:k]
+        ranks = {}
+        for rank, idx in enumerate(top):
+            if float(scores[idx]) > 0:
+                ranks[int(idx)] = 1.0 / (60 + rank)
+        return ranks
+
+    def search_hybrid(
+        self,
+        query_embedding,
+        query_text: str,
+        top_k: int = TOP_K,
+    ) -> List[Tuple[float, Chunk]]:
+        """
+        Reciprocal Rank Fusion of semantic (FAISS) + keyword (BM25) results.
+        Falls back to semantic-only if BM25 is unavailable.
+        """
+        k_inner = min(top_k * 3, self.n)
+
+        semantic = self._semantic_ranks(query_embedding, k_inner)
+        bm25 = self._bm25_ranks(query_text, k_inner)
+
+        all_indices = set(semantic.keys()) | set(bm25.keys())
+        if not all_indices:
+            return []
+
+        rrf = {i: semantic.get(i, 0.0) + bm25.get(i, 0.0) for i in all_indices}
+        top_indices = sorted(rrf.keys(), key=lambda i: -rrf[i])[:top_k]
+        return [(rrf[i], self.chunks[i]) for i in top_indices]
+
     def search(self, query_embedding, top_k: int = TOP_K) -> List[Tuple[float, Chunk]]:
+        """Pure semantic search (kept for compatibility)."""
         _ensure_imports()
         np = _np
         q = query_embedding.astype("float32")
@@ -244,10 +364,10 @@ class VectorIndex:
             ]
         else:
             sims = (self.embeddings @ q.T).flatten()
-            top_indices = _np.argsort(sims)[::-1][:top_k]
+            top = _np.argsort(sims)[::-1][:top_k]
             return [
                 (float(sims[i]), self.chunks[i])
-                for i in top_indices
+                for i in top
                 if float(sims[i]) >= MIN_SCORE
             ]
 
@@ -256,20 +376,26 @@ class VectorIndex:
 # Query enrichment
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Patterns that indicate the user is referring back to a previous topic
+_FOLLOWUP_PATTERN = re.compile(
+    r"\b(nó|cái đó|vậy thì|thế thì|thế còn|còn nếu|vậy|đó|ấy|như vậy|khi đó"
+    r"|còn|thế|ý đó|trường hợp đó|vấn đề đó|phần đó|bước đó|cách đó"
+    r"|mấy cái|những cái|sao vậy|tại sao vậy|rồi sao)\b",
+    re.IGNORECASE,
+)
+
+
 def _enrich_query(query: str, history: Optional[List[dict]]) -> str:
     """
     Enrich short/ambiguous queries with context from recent conversation.
-    Also handles follow-up pronouns like 'nó', 'cái đó', 'vậy thì'.
+    Handles Vietnamese follow-up pronouns and short confirmations.
     """
     if not history:
         return query
 
     words = query.split()
     is_short = len(words) <= 8
-    has_followup = bool(re.search(
-        r"\b(nó|cái đó|vậy thì|thế thì|thế còn|còn nếu|vậy|đó|ấy|như vậy|khi đó)\b",
-        query, re.IGNORECASE
-    ))
+    has_followup = bool(_FOLLOWUP_PATTERN.search(query))
 
     if not (is_short or has_followup):
         return query
@@ -277,17 +403,13 @@ def _enrich_query(query: str, history: Optional[List[dict]]) -> str:
     recent_user = [h["content"] for h in history[-6:] if h.get("role") == "user"]
     recent_assistant = [h["content"] for h in history[-4:] if h.get("role") == "assistant"]
 
-    if recent_user:
-        # Build a richer context string for embedding
-        context_parts = []
-        if len(recent_user) >= 2:
-            context_parts.append(recent_user[-2])
-        if recent_assistant:
-            context_parts.append(recent_assistant[-1][:100])
-        context_parts.append(query)
-        return " ".join(context_parts)
-
-    return query
+    context_parts = []
+    if len(recent_user) >= 2:
+        context_parts.append(recent_user[-2])
+    if recent_assistant:
+        context_parts.append(recent_assistant[-1][:120])
+    context_parts.append(query)
+    return " ".join(context_parts)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -408,7 +530,6 @@ def _template_answer(query: str, retrieved: List[Tuple[float, Chunk]]) -> str:
     def trim(text: str, max_chars: int = 500) -> str:
         if len(text) <= max_chars:
             return text
-        # Cut at sentence boundary
         for delim in (".\n", ".\n\n", ". ", "\n"):
             pos = text.rfind(delim, 0, max_chars)
             if pos > max_chars // 2:
@@ -417,7 +538,6 @@ def _template_answer(query: str, retrieved: List[Tuple[float, Chunk]]) -> str:
 
     main = trim(clean(retrieved[0][1].text))
 
-    # Add one supplementary chunk if score is high enough and from different source
     extras = []
     seen = {retrieved[0][1].source}
     for score, chunk in retrieved[1:]:
@@ -443,7 +563,6 @@ async def _generate_answer(
 ) -> Tuple[str, str]:
     context = _format_context(retrieved)[:MAX_CONTEXT_CHARS] if retrieved else ""
 
-    # Build LLM message list: history + context-injected current query
     llm_messages: List[dict] = []
     if history:
         for msg in history[-(MAX_HISTORY_TURNS * 2):]:
@@ -451,7 +570,6 @@ async def _generate_answer(
             if role in ("user", "assistant"):
                 llm_messages.append({"role": role, "content": msg["content"]})
 
-    # Inject retrieved context into the user's question
     if context:
         user_content = (
             f"NGỮ CẢNH TÌM ĐƯỢC:\n{context}\n\n"
@@ -465,7 +583,6 @@ async def _generate_answer(
         )
     llm_messages.append({"role": "user", "content": user_content})
 
-    # Try providers in priority order
     provider = LLM_PROVIDER.lower()
 
     if provider in ("claude", "auto") and ANTHROPIC_API_KEY:
@@ -554,15 +671,11 @@ class RagService:
 
         retrieved: List[Tuple[float, Chunk]] = []
         if self._index is not None and message.strip():
-            search_query = _enrich_query(message.strip(), history)
-            query_emb = self._model.encode([search_query], normalize_embeddings=True)
-            retrieved = self._index.search(query_emb[0], top_k=top_k)
+            enriched_query = _enrich_query(message.strip(), history)
+            query_emb = self._model.encode([enriched_query], normalize_embeddings=True)
+            retrieved = self._index.search_hybrid(query_emb[0], enriched_query, top_k=top_k)
 
-        score_max = max((s for s, _ in retrieved), default=0.0)
-
-        # Nếu không tìm được context đủ tin cậy → trả lời "không biết" ngay,
-        # không để LLM hallucinate từ context không liên quan.
-        if score_max < MIN_SCORE or not retrieved:
+        if not retrieved:
             return {
                 "answer": (
                     "Mình chưa tìm thấy thông tin về vấn đề này trong hệ thống FoxGo. "
@@ -571,11 +684,12 @@ class RagService:
                 ),
                 "sources": [],
                 "retrieval_count": 0,
-                "score_max": round(float(score_max), 4),
+                "score_max": 0.0,
                 "mode": "no_context",
                 "latency_ms": int((time.time() - t0) * 1000),
             }
 
+        score_max = max((s for s, _ in retrieved), default=0.0)
         answer, mode = await _generate_answer(message, retrieved, history=history)
 
         return {

@@ -32,6 +32,7 @@ export class EventConsumer {
       await this.channel.bindQueue(this.queue, this.exchange, 'ride.completed');
       await this.channel.bindQueue(this.queue, this.exchange, 'ride.cancelled');
       await this.channel.bindQueue(this.queue, this.exchange, 'driver.wallet.withdrawn');
+      await this.channel.bindQueue(this.queue, this.exchange, 'driver.wallet.deactivated');
       
       await this.channel.prefetch(1);
       
@@ -66,6 +67,9 @@ export class EventConsumer {
           case 'driver.wallet.withdrawn':
             await this.handleDriverWalletWithdrawn(payload);
             break;
+          case 'driver.wallet.deactivated':
+            await this.handleDriverWalletDeactivated(payload);
+            break;
           default:
             logger.warn(`Unknown event type: ${eventType}`);
         }
@@ -98,6 +102,16 @@ export class EventConsumer {
       }
     } catch (error) {
       logger.error(`Error handling ride cancellation for ${payload.rideId}:`, error);
+    }
+  }
+
+  private async handleDriverWalletDeactivated(payload: { driverId: string }): Promise<void> {
+    const { driverId } = payload;
+    logger.info(`Processing driver.wallet.deactivated for driver ${driverId} — zeroing payment_db wallet mirror`);
+    try {
+      await this.paymentService.zeroDriverWallet(driverId);
+    } catch (err) {
+      logger.error(`Failed to zero payment_db wallet for driver ${driverId}:`, err);
     }
   }
 

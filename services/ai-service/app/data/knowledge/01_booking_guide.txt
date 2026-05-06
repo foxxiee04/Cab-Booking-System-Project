@@ -1,5 +1,5 @@
 TIÊU ĐỀ: Hướng dẫn đặt xe FoxGo
-DANH MỤC: đặt xe, hướng dẫn, cách đặt, book xe, gọi xe, đặt chuyến, tìm xe, mở app, đặt chuyến nhanh
+DANH MỤC: đặt xe, hướng dẫn, cách đặt, book xe, gọi xe, đặt chuyến, tìm xe, mở app, đặt chuyến nhanh, loại xe, xe máy, ô tô, theo dõi tài xế, bản đồ, điểm đón, điểm đến, surge, giờ cao điểm, đặt lịch, điểm dừng, chuyến cho người khác
 
 Đặt xe FoxGo cực kỳ đơn giản — chỉ cần khoảng 30 giây là xong. Bạn mở app lên, hệ thống tự xác định vị trí của bạn làm điểm đón. Nếu vị trí chưa đúng thì kéo ghim đỏ trên bản đồ là chỉnh được ngay. Sau đó nhập điểm đến vào ô tìm kiếm ở trên, chọn loại xe, phương thức thanh toán, rồi nhấn "Đặt xe" — xong! Hệ thống sẽ ghép tài xế gần nhất cho bạn.
 
@@ -40,3 +40,55 @@ Hỏi: Tôi có thể thêm điểm dừng giữa chuyến không?
 ---
 Hỏi: Nút đặt xe bị mờ/không nhấn được?
 Đáp: Mấy nguyên nhân thường gặp: chưa nhập đủ điểm đón và điểm đến, hoặc điểm đến nằm ngoài vùng phục vụ, hoặc tài khoản đang bị hạn chế tạm thời. Thử đổi sang thanh toán tiền mặt xem có đặt được không — nếu được thì vấn đề có thể ở phần thanh toán online.
+
+---
+Hỏi: Tại sao không tìm được tài xế trong khu vực của tôi?
+Đáp: Có thể do giờ đó khu vực bạn ít tài xế online, hoặc đang giờ cao điểm nên tài xế bận hết. Thử chờ thêm 2–3 phút rồi đặt lại, hoặc thử chọn loại xe khác (ví dụ từ ô tô sang xe máy) — xe máy thường có nhiều tài xế hơn.
+
+---
+Hỏi: App báo "không có tài xế trong khu vực" thì làm gì?
+Đáp: Bạn thử: (1) Đợi 3–5 phút rồi đặt lại. (2) Chọn loại xe khác, xe máy thường dễ tìm hơn ô tô. (3) Di chuyển ra chỗ đông hơn nếu tiện. Nếu vẫn không được, khu vực bạn có thể nằm ngoài vùng phủ sóng hiện tại của FoxGo.
+
+---
+Hỏi: Có thể đổi loại xe sau khi đã đặt không?
+Đáp: Không đổi được sau khi đặt rồi bạn ơi. Cách duy nhất là hủy chuyến (miễn phí nếu tài xế chưa nhận) rồi đặt lại với loại xe mới. Nếu tài xế đã nhận rồi thì sẽ bị tính phí hủy nhỏ.
+
+---
+Hỏi: Tài xế đang đến mà tôi muốn đổi điểm đón thì làm sao?
+Đáp: Nhắn tin cho tài xế qua chat trong app ngay đi bạn, giải thích điểm đón thực tế. Hầu hết tài xế sẽ cập nhật lộ trình nếu thay đổi không quá xa. Nếu thay đổi lớn, tài xế có thể từ chối và bạn cần hủy rồi đặt lại.
+
+---
+Hỏi: Tôi không thấy tài xế trên bản đồ dù app báo đã nhận chuyến?
+Đáp: Thử: (1) Kéo để làm mới màn hình bản đồ. (2) Tắt app rồi mở lại. (3) Kiểm tra kết nối mạng. Nếu vẫn không thấy sau 2–3 phút, gọi trực tiếp cho tài xế qua số điện thoại hiển thị trong app — tài xế sẽ xác nhận họ đang đến.
+
+---
+Hỏi: App bị đơ, treo khi đặt xe thì làm sao?
+Đáp: Tắt hoàn toàn app (vuốt lên để xóa khỏi bộ nhớ) rồi mở lại. Nếu vẫn đơ, thử tắt rồi bật wifi/dữ liệu di động lại. Nếu chuyến đã được tạo (nhận thông báo), tài xế vẫn đang đến — gọi cho họ để xác nhận.
+
+---
+Hỏi: Chọn xe máy hay ô tô thì tiện hơn?
+Đáp: Tùy hoàn cảnh bạn nhé! Xe máy: nhanh hơn vào giờ kẹt xe, rẻ hơn, dễ tìm tài xế hơn. Ô tô: thoải mái hơn, phù hợp khi trời mưa, đi xa, hoặc đi nhóm 2–4 người. Ô tô 7 chỗ lý tưởng khi nhóm đông hoặc có nhiều hành lý.
+
+---
+Hỏi: Giờ cao điểm có bị tính giá cao hơn không?
+Đáp: Có bạn ơi, giờ cao điểm (7–9h sáng, 17–20h chiều) giá có thể tăng theo hệ số surge. Nhưng đừng lo — giá hiển thị trên app trước khi đặt đã tính sẵn hệ số rồi, bạn thấy bao nhiêu là trả đúng bấy nhiêu, không có phụ phí ẩn.
+
+---
+Hỏi: Tôi đặt xe xong nhưng không nhận được thông báo xác nhận?
+Đáp: Thử kiểm tra: (1) Vào mục "Chuyến của tôi" trong app để xem chuyến có tồn tại không. (2) Kiểm tra thông báo app có bị tắt không (Cài đặt → Thông báo → FoxGo). Nếu chuyến có trong app thì đã đặt thành công — tài xế đang được ghép.
+
+---
+Hỏi: Vùng phục vụ của FoxGo ở đâu?
+Đáp: FoxGo hiện phủ sóng tại các thành phố lớn. Khi bạn mở app, nếu điểm đón hoặc điểm đến nằm ngoài vùng phục vụ, app sẽ báo và không cho đặt. Để biết chi tiết vùng phục vụ cụ thể, liên hệ support@foxgo.vn nhé.
+
+---
+Hỏi: Đặt xe hộ ba mẹ/người thân cao tuổi thì làm sao?
+Đáp: Hoàn toàn được! Bạn đặt bình thường trên app của mình, nhập đúng điểm đón của họ. Bạn có thể theo dõi chuyến từ xa và chia sẻ thông tin tài xế cho người thân. Thanh toán online qua tài khoản của bạn là tiện nhất.
+
+---
+Hỏi: Tôi nhấn đặt xe rồi nhưng app quay lại màn hình chính?
+Đáp: Thường do mất kết nối giữa chừng. Vào "Chuyến của tôi" xem chuyến đã tạo chưa — nếu chưa có nghĩa là chưa đặt được và bạn cần thử lại. Kiểm tra mạng rồi đặt lại bình thường.
+
+---
+Hỏi: Tôi muốn hủy trước khi tài xế nhận thì làm sao?
+Đáp: Trong màn hình theo dõi chuyến, nhấn nút "Hủy chuyến" → chọn lý do → xác nhận. Nếu hủy trước khi tài xế nhận thì miễn phí hoàn toàn và tiền hoàn về ngay (nếu đã thanh toán online, hoàn trong 3–5 ngày làm việc).

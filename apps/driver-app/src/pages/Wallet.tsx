@@ -1261,7 +1261,7 @@ export default function WalletPage() {
         onClose={() => !topUpLoading && (setTopUpOpen(false), setTopUpProvider(null), setTopUpAmount(''), setTopUpError(''))}
         PaperProps={{ sx: { borderRadius: 4, mx: 2, width: '100%', maxWidth: 440 } }}>
         <DialogTitle sx={{ fontWeight: 800 }}>
-          {walletStatus === 'INACTIVE' ? 'Nạp ký quỹ kích hoạt tài khoản' : 'Nạp tiền vào tài khoản doanh nghiệp'}
+          {walletStatus === 'INACTIVE' ? 'Nạp ký quỹ kích hoạt tài khoản' : 'Thanh toán công nợ'}
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} pt={0.5}>

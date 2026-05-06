@@ -33,7 +33,7 @@ import { clearPendingRide, setCurrentRide, clearCurrentRide } from '../store/rid
 import { driverApi } from '../api/driver.api';
 import { rideApi } from '../api/ride.api';
 import { driverSocketService } from '../socket/driver.socket';
-import { watchPosition, clearWatch, calculateDistance, formatDistance, formatDuration } from '../utils/map.utils';
+import { watchPosition, clearWatch, calculateDistance, formatDistance, formatDuration, getDemoFallbackLocation } from '../utils/map.utils';
 import { formatCurrency, getVehicleTypeLabel } from '../utils/format.utils';
 import DriverTripMap from '../features/trip/components/DriverTripMap';
 import { Ride } from '../types';
@@ -283,6 +283,7 @@ const Dashboard: React.FC = () => {
   // Watch location when online
   useEffect(() => {
     if (isOnline && !watchId) {
+      const fallback = getDemoFallbackLocation(user?.phoneNumber) ?? undefined;
       const id = watchPosition(
         (location) => {
           dispatch(setCurrentLocation(location));
@@ -297,7 +298,8 @@ const Dashboard: React.FC = () => {
             console.error('Location error:', error);
           }
           setError(t('dashboard.gpsError'));
-        }
+        },
+        fallback
       );
       setWatchId(id);
     }

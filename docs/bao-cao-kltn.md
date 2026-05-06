@@ -5,6 +5,32 @@
 
 ---
 
+## HƯỚNG DẪN DÙNG FILE NÀY ĐỂ DÀN TRANG WORD
+
+File này được viết theo hướng có thể sao chép sang Microsoft Word và định dạng lại theo mẫu khóa luận. Khi đưa sang Word, nên giữ cấu trúc chương/mục hiện có, sau đó chèn hình từ thư mục `img/` theo bảng gợi ý dưới đây. Các đoạn `![Hình ...](...)` trong file là vị trí gợi ý chèn ảnh; nếu Word không tự nhận Markdown image, dùng chức năng **Insert > Pictures** và chọn đúng file PNG tương ứng.
+
+| Vị trí trong báo cáo | Hình nên chèn | Mục đích sử dụng |
+|---|---|---|
+| Chương 3, sau mục 3.2 | `img/07_use_case_overview.png` | Tổng quan tác nhân và use case chính của khách hàng, tài xế, quản trị viên |
+| Chương 3, luồng đặt xe | `img/10_activity_booking_flow.png` | Mô tả activity flow khách đặt xe, hệ thống tính giá, tìm tài xế và hoàn thành chuyến |
+| Chương 3, luồng nghiệp vụ đa vai trò | `img/12_bpmn_booking_lanes.png` | Thể hiện swimlane khách hàng, tài xế và hệ thống trong một chuyến đi |
+| Chương 4, kiến trúc tổng thể | `img/01_system_architecture_overview.png` | Hình kiến trúc hệ thống tổng quan, phù hợp đặt ở đầu chương thiết kế |
+| Chương 4, kiến trúc dữ liệu | `img/05_data_architecture.png` | Thể hiện database-per-service, Redis, RabbitMQ, MongoDB |
+| Chương 4, context/event flow | `img/13_event_flow_rabbitmq.png` | Minh họa luồng domain event qua RabbitMQ |
+| Chương 4, state machine chuyến đi | `img/08_state_machine_ride.png` | Minh họa vòng đời Ride và các trạng thái hợp lệ |
+| Chương 4, state machine ví | `img/09_state_machine_wallet.png` | Minh họa trạng thái ví, pending balance, settlement |
+| Chương 4, ERD lõi | `img/18_erd_core_services.png` | Sơ đồ quan hệ dữ liệu lõi giữa user, driver, booking, ride, payment, wallet |
+| Chương 5, thuật toán matching | `img/15_driver_matching_flow.png` | Luồng tìm tài xế theo bán kính, scoring và offer |
+| Chương 5, thanh toán | `img/04_booking_payment_flow.png`, `img/11_activity_payment_branch.png` | Trình bày luồng booking-payment và nhánh CASH/MoMo/VNPay |
+| Chương 5, realtime | `img/03_realtime_communication_flow.png` | Chat, Socket.IO, WebRTC signaling và broadcast trạng thái |
+| Chương 5, AI/RAG | `img/06_ai_ml_pipeline.png`, `img/16_rag_chatbot_architecture.png` | Minh họa pipeline ML và chatbot RAG |
+| Chương 6, API Gateway | `img/14_api_gateway_routing_map.png`, `img/19_component_api_gateway.png` | Bảng định tuyến và component nội bộ Gateway |
+| Chương 6, xác thực OTP | `img/17_sequence_auth_otp.png` | Sequence đăng ký/đăng nhập OTP |
+| Chương 6, bảo mật | `img/20_security_trust_boundary.png` | Vùng tin cậy bảo mật giữa client, gateway, service và data layer |
+| Chương 6 hoặc Hướng phát triển | `img/02_aws_deployment_architecture.png` | Kiến trúc triển khai cloud đề xuất |
+
+---
+
 ## ABSTRACT
 
 **DESIGN AND DEVELOPMENT OF AN ONLINE CAB BOOKING SYSTEM**
@@ -288,6 +314,10 @@ Grab sử dụng Apache Kafka cho event streaming với throughput cao hơn Rabb
 
 ## 3.2. Biểu đồ Use Case tổng thể
 
+**Hình gợi ý chèn vào Word:** `img/07_use_case_overview.png`
+
+![Hình 3.1. Use case tổng thể hệ thống đặt xe](../img/07_use_case_overview.png)
+
 ```mermaid
 graph TD
     subgraph Hệ thống đặt xe
@@ -334,7 +364,7 @@ graph TD
 **Tên:** Đặt xe trực tuyến  
 **Tác nhân chính:** Khách hàng  
 **Tiền điều kiện:** Khách hàng đã đăng nhập, có kết nối internet  
-**Hậu điều kiện:** Chuyến đi được tạo với trạng thái PENDING, hệ thống bắt đầu tìm tài xế
+**Hậu điều kiện:** Chuyến đi được tạo với trạng thái `CREATED` và nhanh chóng chuyển sang `FINDING_DRIVER`, hệ thống bắt đầu tìm tài xế
 
 | # | Bước | Tác nhân | Hệ thống |
 |---|---|---|---|
@@ -343,11 +373,11 @@ graph TD
 | 3 | Xác nhận điểm đón, nhập điểm đến | Khách hàng | — |
 | 4 | — | — | Gọi Pricing Service tính giá ước tính |
 | 5 | Chọn loại xe, phương thức thanh toán, xác nhận | Khách hàng | — |
-| 6 | — | — | Tạo Ride (status=PENDING), publish `RideRequested` |
+| 6 | — | — | Tạo Ride (`CREATED`), chuyển sang `FINDING_DRIVER`, publish `ride.created` |
 | 7 | — | — | Dispatch algorithm tìm tài xế phù hợp (≤3 vòng) |
-| 8 | — | — | Gửi `NEW_RIDE_AVAILABLE` socket đến tài xế được chọn |
+| 8 | — | — | Chuyển Ride sang `OFFERED`, gửi offer socket đến tài xế được chọn |
 | 9 | Tài xế chấp nhận | Tài xế | — |
-| 10 | — | — | Cập nhật status=ACCEPTED, notify khách hàng |
+| 10 | — | — | Cập nhật status=`ASSIGNED`, notify khách hàng |
 | 11 | Nhận thông báo tài xế đang đến | Khách hàng | — |
 
 **Luồng thay thế A2:** Không có tài xế sau 3 vòng → thông báo thất bại, Ride hủy  
@@ -437,6 +467,245 @@ Tác nhân có thể:
 | **Khả dụng** | AI service fallback < 150ms; Graceful degradation |
 | **Kiểm toán** | Wallet ledger append-only; Merchant ledger bất biến |
 | **Tuân thủ** | Không lưu OTP plaintext; Hash SHA-256 |
+
+## 3.6. Phân tích nghiệp vụ chi tiết
+
+Mục này trình bày các nghiệp vụ quan trọng của hệ thống theo dạng có thể sử dụng trực tiếp trong báo cáo Word. Mỗi nghiệp vụ gồm mục tiêu, tác nhân, dữ liệu đầu vào, xử lý chính, kết quả và ngoại lệ cần kiểm soát.
+
+### 3.6.1. Nghiệp vụ đăng ký, đăng nhập và xác thực OTP
+
+**Mục tiêu:** bảo đảm mỗi người dùng trong hệ thống được định danh bằng số điện thoại, có thể đăng nhập an toàn và nhận quyền tương ứng với vai trò khách hàng, tài xế hoặc quản trị viên.
+
+**Tác nhân:** khách hàng, tài xế, quản trị viên, Auth Service, API Gateway.
+
+**Dữ liệu đầu vào:** số điện thoại, mật khẩu, mã OTP, vai trò tài khoản, thông tin thiết bị và địa chỉ IP.
+
+**Quy trình nghiệp vụ:**
+
+| Bước | Mô tả xử lý | Service chịu trách nhiệm |
+|---|---|---|
+| 1 | Người dùng nhập số điện thoại và yêu cầu gửi OTP | Customer App / Driver App / Admin Dashboard |
+| 2 | API Gateway chuyển request đến Auth Service | API Gateway |
+| 3 | Auth Service sinh OTP, hash OTP, lưu vào Redis với TTL, đồng thời ghi audit log | Auth Service |
+| 4 | Ở môi trường phát triển, OTP được log trong container; ở môi trường thật, OTP được gửi qua SMS provider | Auth Service, SMS Provider |
+| 5 | Người dùng nhập OTP để xác minh | Frontend |
+| 6 | Auth Service kiểm tra OTP, số lần thử và thời hạn hiệu lực | Auth Service |
+| 7 | Khi đăng ký/đăng nhập thành công, Auth Service phát access token và refresh token | Auth Service |
+| 8 | API Gateway dùng JWT để xác thực các request sau đó và inject `x-user-id`, `x-user-role`, `x-user-email` cho service phía sau | API Gateway |
+
+**Kết quả:** người dùng có phiên đăng nhập hợp lệ; downstream service nhận được thông tin định danh qua header nội bộ.
+
+**Ngoại lệ:** OTP sai quá số lần cho phép, OTP hết hạn, số điện thoại đã tồn tại, tài khoản bị khóa, refresh token bị thu hồi.
+
+**Hình gợi ý chèn vào Word:** `img/17_sequence_auth_otp.png`.
+
+![Hình 3.2. Sequence xác thực OTP](../img/17_sequence_auth_otp.png)
+
+### 3.6.2. Nghiệp vụ khách hàng đặt xe
+
+**Mục tiêu:** cho phép khách hàng nhập điểm đón, điểm đến, chọn loại xe, xem giá ước tính và xác nhận đặt xe.
+
+**Tác nhân:** khách hàng, API Gateway, Booking Service, Pricing Service, Ride Service, Driver Service.
+
+**Dữ liệu đầu vào:** tọa độ điểm đón/trả, địa chỉ dạng text, loại xe, phương thức thanh toán, voucher, ghi chú chuyến đi.
+
+**Quy trình nghiệp vụ chính:**
+
+| Bước | Mô tả xử lý | Service chịu trách nhiệm |
+|---|---|---|
+| 1 | Khách hàng chọn điểm đón và điểm đến trên bản đồ | Customer App |
+| 2 | Hệ thống chuẩn hóa địa chỉ và lấy tuyến đường dự kiến | API Gateway, Map Adapter |
+| 3 | Pricing Service tính khoảng cách, thời gian, surge multiplier và giá ước tính | Pricing Service |
+| 4 | Booking Service tạo bản ghi Booking trạng thái `PENDING` để lưu snapshot giá | Booking Service |
+| 5 | Khách hàng xác nhận đặt xe | Customer App |
+| 6 | Booking chuyển sang `CONFIRMED`, phát event `booking.confirmed` | Booking Service |
+| 7 | Ride Service tạo Ride trạng thái `CREATED` rồi chuyển sang `FINDING_DRIVER` | Ride Service |
+| 8 | Ride Service phát event `ride.created` để API Gateway kích hoạt matching | Ride Service, API Gateway |
+
+**Kết quả:** một chuyến đi được tạo và hệ thống bắt đầu tìm tài xế.
+
+**Ngoại lệ:** địa chỉ không hợp lệ, không tính được tuyến đường, voucher không hợp lệ, khách hàng có chuyến đang hoạt động, không có tài xế trong phạm vi phục vụ.
+
+**Hình gợi ý chèn vào Word:** `img/10_activity_booking_flow.png` và `img/12_bpmn_booking_lanes.png`.
+
+![Hình 3.3. Activity flow nghiệp vụ đặt xe](../img/10_activity_booking_flow.png)
+
+![Hình 3.4. BPMN-lite luồng đặt xe theo vai trò](../img/12_bpmn_booking_lanes.png)
+
+### 3.6.3. Nghiệp vụ điều phối tài xế
+
+**Mục tiêu:** tìm tài xế phù hợp trong thời gian ngắn, ưu tiên tài xế gần, có rating tốt, tỷ lệ nhận chuyến cao và ít hủy chuyến.
+
+**Tác nhân:** API Gateway, Ride Service, Driver Service, tài xế.
+
+**Dữ liệu đầu vào:** vị trí điểm đón, loại xe, danh sách tài xế online trong Redis GEO, thống kê tài xế, trạng thái ví tài xế.
+
+**Quy trình nghiệp vụ:**
+
+| Bước | Mô tả xử lý |
+|---|---|
+| 1 | API Gateway nhận event `ride.created` từ RabbitMQ |
+| 2 | Gateway truy vấn Redis GEO để lấy tài xế trong bán kính vòng 1 là 2km |
+| 3 | Hệ thống lọc tài xế theo loại xe, trạng thái online, không bận chuyến khác và đủ điều kiện ví |
+| 4 | Các tài xế hợp lệ được tính điểm theo khoảng cách, rating, thời gian rảnh, accept rate và cancel rate |
+| 5 | Nếu bật AI, Gateway gọi AI Service để dự đoán xác suất tài xế nhận chuyến; nếu AI lỗi, hệ thống dùng điểm gốc |
+| 6 | Gateway gửi offer qua Socket.IO cho tài xế có điểm cao nhất |
+| 7 | Nếu tài xế chấp nhận, Ride chuyển sang `ASSIGNED`; nếu từ chối hoặc timeout, hệ thống thử tài xế tiếp theo |
+| 8 | Nếu vòng 1 thất bại, Gateway mở rộng sang vòng 2 bán kính 3km và vòng 3 bán kính 5km |
+| 9 | Nếu tất cả vòng thất bại, Ride được hủy với lý do không tìm thấy tài xế |
+
+**Kết quả:** chuyến đi được gán tài xế hoặc được hủy có kiểm soát.
+
+**Ngoại lệ:** tài xế offline ngay sau khi nhận offer, tài xế hết điều kiện ví, Socket.IO mất kết nối, không có tài xế phù hợp.
+
+**Hình gợi ý chèn vào Word:** `img/15_driver_matching_flow.png`.
+
+![Hình 3.5. Luồng điều phối tài xế](../img/15_driver_matching_flow.png)
+
+### 3.6.4. Nghiệp vụ tài xế thực hiện chuyến đi
+
+**Mục tiêu:** quản lý toàn bộ quá trình sau khi tài xế nhận chuyến, từ lúc đến điểm đón đến khi hoàn thành.
+
+**Tác nhân:** tài xế, khách hàng, Ride Service, API Gateway.
+
+**Trạng thái chính:** `ASSIGNED`, `ACCEPTED`, `PICKING_UP`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`.
+
+| Bước | Hành động của tài xế | Xử lý của hệ thống |
+|---|---|---|
+| 1 | Tài xế chấp nhận offer | Ride chuyển sang `ASSIGNED`, khách hàng nhận thông báo |
+| 2 | Tài xế bắt đầu đi đến điểm đón | Ride chuyển sang `ACCEPTED` hoặc `PICKING_UP` tùy hành động |
+| 3 | Driver App cập nhật GPS định kỳ | Driver Service lưu vị trí; API Gateway broadcast đến khách hàng |
+| 4 | Tài xế xác nhận đã đón khách | Ride chuyển sang `IN_PROGRESS` |
+| 5 | Tài xế hoàn thành chuyến | Ride chuyển sang `COMPLETED`, phát event cho Payment Service |
+| 6 | Khách hàng và tài xế đánh giá nhau | Review Service lưu đánh giá, cập nhật rating tài xế |
+
+**Ràng buộc:** mọi chuyển trạng thái phải đi qua Ride State Machine; không service nào được cập nhật trực tiếp field `status` nếu transition không hợp lệ.
+
+**Hình gợi ý chèn vào Word:** `img/08_state_machine_ride.png`.
+
+![Hình 3.6. State machine vòng đời chuyến đi](../img/08_state_machine_ride.png)
+
+### 3.6.5. Nghiệp vụ thanh toán chuyến đi
+
+**Mục tiêu:** ghi nhận đầy đủ số tiền khách phải trả, khoản hoa hồng nền tảng, thu nhập tài xế và trạng thái thanh toán.
+
+**Tác nhân:** khách hàng, tài xế, Payment Service, Wallet Service, MoMo, VNPay.
+
+**Luồng thanh toán theo phương thức:**
+
+| Phương thức | Cách xử lý | Ảnh hưởng ví tài xế |
+|---|---|---|
+| Tiền mặt | Khách trả trực tiếp cho tài xế; hệ thống ghi nhận tài xế đã thu toàn bộ gross fare | Tài xế phát sinh `DebtRecord` bằng phần hoa hồng nền tảng |
+| MoMo | Khách thanh toán qua MoMo; MoMo gọi IPN về Payment Service | Nền tảng thu tiền, Wallet Service ghi nhận net earning vào pending balance |
+| VNPay | Khách thanh toán qua VNPay; VNPay gọi IPN về Payment Service | Tương tự MoMo |
+| Wallet | Khấu trừ từ ví nếu có triển khai số dư khách hàng | Ghi nhận ledger nội bộ |
+
+**Quy tắc quan trọng:**
+
+| Quy tắc | Diễn giải |
+|---|---|
+| Idempotency | IPN từ MoMo/VNPay có thể gửi nhiều lần; `idempotencyKey` bảo đảm không cộng tiền hai lần |
+| Outbox Pattern | Payment cập nhật DB và tạo event trong cùng transaction, sau đó worker publish sang RabbitMQ |
+| Commission | Nền tảng giữ 15-20% tùy loại xe |
+| Voucher | Khoản giảm giá do nền tảng chịu, không làm giảm gross earning của tài xế |
+| Refund | Nếu hủy chuyến sau khi đã thanh toán online, Payment Service phát event hoàn tiền |
+
+**Hình gợi ý chèn vào Word:** `img/04_booking_payment_flow.png` và `img/11_activity_payment_branch.png`.
+
+![Hình 3.7. Sequence booking và payment](../img/04_booking_payment_flow.png)
+
+![Hình 3.8. Nhánh xử lý thanh toán theo phương thức](../img/11_activity_payment_branch.png)
+
+### 3.6.6. Nghiệp vụ ví tài xế, ký quỹ và công nợ
+
+**Mục tiêu:** quản lý chính xác tài chính tài xế, bảo đảm thu nhập, ký quỹ, số dư khả dụng, số dư pending và công nợ được tách bạch.
+
+**Tác nhân:** tài xế, quản trị viên, Wallet Service, Payment Service.
+
+**Các thành phần số dư:**
+
+| Thành phần | Ý nghĩa |
+|---|---|
+| `balance` | Tổng số dư kế toán của ví |
+| `availableBalance` | Số tiền tài xế có thể rút |
+| `pendingBalance` | Thu nhập đang giữ T+24h |
+| `lockedBalance` | Ký quỹ 300.000 VND để kích hoạt ví |
+| `debt` | Tổng công nợ từ các chuyến tiền mặt chưa tất toán |
+
+**Quy trình kích hoạt ví:**
+
+| Bước | Mô tả |
+|---|---|
+| 1 | Admin duyệt hồ sơ tài xế |
+| 2 | Driver Service phát event `driver.approved` |
+| 3 | Wallet Service tạo ví trạng thái `INACTIVE` |
+| 4 | Tài xế nạp tối thiểu 300.000 VND |
+| 5 | Wallet Service chuyển 300.000 VND vào `lockedBalance` và kích hoạt ví |
+| 6 | Tài xế được phép bật online nếu không vi phạm ngưỡng nợ |
+
+**Quy trình settlement T+24h:**
+
+| Bước | Mô tả |
+|---|---|
+| 1 | Payment Service phát event `driver.earnings.settled` sau chuyến hoàn thành |
+| 2 | Wallet Service tạo `PendingEarning` với `settleAt = now + 24h` |
+| 3 | Khi đến hạn, hệ thống giải phóng pending earning |
+| 4 | Nếu tài xế còn nợ, hệ thống tất toán nợ theo FIFO trước |
+| 5 | Phần còn lại mới cộng vào `availableBalance` |
+
+**Hình gợi ý chèn vào Word:** `img/09_state_machine_wallet.png`.
+
+![Hình 3.9. State machine ví tài xế](../img/09_state_machine_wallet.png)
+
+### 3.6.7. Nghiệp vụ quản trị viên
+
+**Mục tiêu:** giúp quản trị viên vận hành nền tảng, kiểm duyệt hồ sơ tài xế, giám sát chuyến đi và đối soát tài chính.
+
+| Nhóm nghiệp vụ | Chức năng chính | Service |
+|---|---|---|
+| Quản lý tài xế | Xem hồ sơ, duyệt, từ chối, tạm ngưng tài xế | Driver Service |
+| Quản lý chuyến đi | Xem danh sách chuyến, trạng thái, chi tiết hành trình | Ride Service |
+| Quản lý khách hàng | Xem profile, trạng thái tài khoản | User Service, Auth Service |
+| Đối soát thanh toán | Xem payment, voucher, refund, trạng thái gateway | Payment Service |
+| Đối soát ví | Xem merchant balance, merchant ledger, ví từng tài xế | Wallet Service |
+| Duyệt rút tiền | Xem yêu cầu rút tiền, duyệt hoặc từ chối | Wallet Service |
+| Giám sát hệ thống | Health check, log, metrics, socket status | API Gateway, Monitoring stack |
+
+**Kết quả:** quản trị viên có đủ công cụ để vận hành hệ thống trong bối cảnh học thuật và demo nghiệp vụ.
+
+### 3.6.8. Nghiệp vụ thông báo, chat và gọi thoại
+
+**Mục tiêu:** bảo đảm người dùng nhận được cập nhật kịp thời trong suốt chuyến đi và có kênh liên hệ trực tiếp khi cần.
+
+| Kênh | Công nghệ | Mục đích |
+|---|---|---|
+| In-app realtime | Socket.IO | Offer cuốc, trạng thái chuyến, vị trí tài xế |
+| Chat | Socket.IO + lưu lịch sử trong Ride Service | Khách và tài xế trao đổi tin nhắn trong chuyến |
+| Gọi thoại | WebRTC P2P, Gateway làm signaling server | Gọi nhanh giữa khách và tài xế |
+| Email/SMS/Push | Notification Service | Thông báo đăng ký, duyệt tài xế, thanh toán, hủy chuyến |
+
+**Hình gợi ý chèn vào Word:** `img/03_realtime_communication_flow.png`.
+
+![Hình 3.10. Kiến trúc giao tiếp thời gian thực](../img/03_realtime_communication_flow.png)
+
+### 3.6.9. Nghiệp vụ AI hỗ trợ giá, matching và chăm sóc khách hàng
+
+**Mục tiêu:** bổ sung năng lực dự đoán để cải thiện trải nghiệm đặt xe, nhưng không làm hệ thống phụ thuộc hoàn toàn vào AI.
+
+| Chức năng AI | Đầu vào | Đầu ra | Service sử dụng |
+|---|---|---|---|
+| Dự đoán ETA và surge | Khoảng cách, khung giờ, loại ngày | ETA, price multiplier | Pricing Service |
+| Dự đoán xác suất nhận chuyến | Thông tin chuyến, thống kê tài xế, demand | `p_accept` | API Gateway |
+| Dự đoán thời gian chờ | Demand, số booking, số tài xế online | Wait time | Pricing Service |
+| RAG chatbot | Câu hỏi người dùng và knowledge base | Câu trả lời hỗ trợ | Customer App, Driver App |
+
+**Nguyên tắc thiết kế:** AI Service là thành phần tùy chọn. Mọi lời gọi AI có timeout ngắn và fallback về công thức/rule-based để hệ thống vẫn hoạt động khi AI lỗi.
+
+**Hình gợi ý chèn vào Word:** `img/06_ai_ml_pipeline.png` và `img/16_rag_chatbot_architecture.png`.
+
+![Hình 3.11. Pipeline AI/ML](../img/06_ai_ml_pipeline.png)
+
+![Hình 3.12. Kiến trúc RAG chatbot](../img/16_rag_chatbot_architecture.png)
 
 ---
 
@@ -584,7 +853,9 @@ classDiagram
 
     class RideStatus {
         <<Value Object>>
-        PENDING
+        CREATED
+        FINDING_DRIVER
+        OFFERED
         ASSIGNED
         ACCEPTED
         PICKING_UP
@@ -918,6 +1189,10 @@ classDiagram
 
 ## 4.5. Domain Events Catalog
 
+**Hình gợi ý chèn vào Word:** `img/13_event_flow_rabbitmq.png`
+
+![Hình 4.1. Luồng domain event qua RabbitMQ](../img/13_event_flow_rabbitmq.png)
+
 ```mermaid
 graph LR
     subgraph Ride Context
@@ -976,6 +1251,10 @@ graph LR
 
 ## 4.6. Kiến trúc tổng thể
 
+**Hình gợi ý chèn vào Word:** `img/01_system_architecture_overview.png`
+
+![Hình 4.2. Kiến trúc tổng thể hệ thống](../img/01_system_architecture_overview.png)
+
 ```mermaid
 graph TB
     subgraph Client Layer
@@ -1021,13 +1300,21 @@ graph TB
 
 ## 4.7. State Machine — Vòng đời Chuyến đi
 
+**Hình gợi ý chèn vào Word:** `img/08_state_machine_ride.png`
+
+![Hình 4.3. State machine vòng đời chuyến đi](../img/08_state_machine_ride.png)
+
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING : Khách đặt xe\nRideRequested
+    [*] --> CREATED : Khách xác nhận đặt xe\nride.created
 
-    PENDING --> ASSIGNED : Hệ thống tìm được tài xế\nDriverAssigned
+    CREATED --> FINDING_DRIVER : Bắt đầu matching
 
-    ASSIGNED --> ACCEPTED : Tài xế nhấn Nhận cuốc\n[trong 30 giây]
+    FINDING_DRIVER --> OFFERED : Gửi offer cho tài xế
+
+    OFFERED --> ASSIGNED : Tài xế nhấn Nhận cuốc\n[trong timeout]
+
+    ASSIGNED --> ACCEPTED : Tài xế xác nhận lên đường đón
 
     ACCEPTED --> PICKING_UP : Tài xế xác nhận đã đến điểm đón
 
@@ -1035,8 +1322,11 @@ stateDiagram-v2
 
     IN_PROGRESS --> COMPLETED : Tài xế hoàn thành chuyến\nRideCompleted → triggers Payment
 
-    PENDING --> CANCELLED : Không tìm được tài xế\nhoặc khách hủy
-    ASSIGNED --> CANCELLED : Tài xế không phản hồi 30s\nhoặc khách hủy
+    CREATED --> CANCELLED : Khách hủy sớm
+    FINDING_DRIVER --> CANCELLED : Không tìm được tài xế\nhoặc khách hủy
+    OFFERED --> FINDING_DRIVER : Tài xế từ chối\nhoặc hết timeout
+    OFFERED --> CANCELLED : Hết số vòng matching
+    ASSIGNED --> CANCELLED : Khách hoặc tài xế hủy
     ACCEPTED --> CANCELLED : Tài xế hủy / khách hủy
     PICKING_UP --> CANCELLED : Tài xế hủy
 
@@ -1051,6 +1341,10 @@ stateDiagram-v2
 ```
 
 ## 4.8. Luồng thanh toán — Sequence Diagram
+
+**Hình gợi ý chèn vào Word:** `img/04_booking_payment_flow.png`
+
+![Hình 4.4. Luồng đặt xe và thanh toán](../img/04_booking_payment_flow.png)
 
 ```mermaid
 sequenceDiagram
@@ -1095,6 +1389,10 @@ sequenceDiagram
 
 ## 4.9. Luồng Dispatch Tài xế — Sequence Diagram
 
+**Hình gợi ý chèn vào Word:** `img/15_driver_matching_flow.png`
+
+![Hình 4.5. Luồng dispatch tài xế](../img/15_driver_matching_flow.png)
+
 ```mermaid
 sequenceDiagram
     participant KH as Khách hàng
@@ -1105,7 +1403,7 @@ sequenceDiagram
     participant TX as Tài xế Socket
 
     KH->>GW: POST /api/rides {pickup, dropoff, vehicleType}
-    GW->>GW: Tạo Ride (PENDING)
+    GW->>GW: Tạo Ride (CREATED → FINDING_DRIVER)
 
     loop Vòng 1: radius=2km, timeout=20s
         GW->>REDIS: GEORADIUS drivers:geo:online 20 members ASC
@@ -1143,6 +1441,12 @@ sequenceDiagram
 
 ## 4.10. Thiết kế Database per Service
 
+**Hình gợi ý chèn vào Word:** `img/05_data_architecture.png` và `img/18_erd_core_services.png`
+
+![Hình 4.6. Kiến trúc dữ liệu database per service](../img/05_data_architecture.png)
+
+![Hình 4.7. ERD các service lõi](../img/18_erd_core_services.png)
+
 ### 4.10.1. ride_db — ERD
 
 ```mermaid
@@ -1151,7 +1455,7 @@ erDiagram
         UUID id PK
         UUID customerId
         UUID driverId "nullable"
-        ENUM status "PENDING|ASSIGNED|ACCEPTED|PICKING_UP|IN_PROGRESS|COMPLETED|CANCELLED"
+        ENUM status "CREATED|FINDING_DRIVER|OFFERED|ASSIGNED|ACCEPTED|PICKING_UP|IN_PROGRESS|COMPLETED|CANCELLED"
         ENUM vehicleType "MOTORBIKE|SCOOTER|CAR_4|CAR_7"
         ENUM paymentMethod "CASH|MOMO|VNPAY|CARD|WALLET"
         FLOAT pickupLat
@@ -1392,6 +1696,349 @@ erDiagram
     drivers ||--o{ driver_daily_stats : "has"
 ```
 
+## 4.11. Thiết kế chi tiết từng microservice
+
+Phần này mô tả rõ trách nhiệm và chức năng của từng service. Cách trình bày đi theo nguyên tắc: mỗi service sở hữu một phạm vi nghiệp vụ riêng, có dữ liệu riêng, API riêng và chỉ phối hợp với service khác thông qua HTTP/gRPC hoặc domain event.
+
+### 4.11.1. API Gateway
+
+**Vai trò:** điểm vào duy nhất của toàn hệ thống, chịu trách nhiệm tiếp nhận request từ ba ứng dụng frontend, xác thực JWT, định tuyến đến service tương ứng, điều phối realtime và chạy matching engine.
+
+**Thông tin kỹ thuật:**
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Cổng HTTP | `3000` |
+| Database/cache | Redis |
+| Công nghệ | Node.js, TypeScript, Express, Socket.IO, Redis Adapter |
+| Hình nên chèn | `img/14_api_gateway_routing_map.png`, `img/19_component_api_gateway.png` |
+
+![Hình 4.8. API Gateway routing map](../img/14_api_gateway_routing_map.png)
+
+![Hình 4.9. Component nội bộ API Gateway](../img/19_component_api_gateway.png)
+
+**Chức năng chính:**
+
+| Nhóm chức năng | Mô tả chi tiết |
+|---|---|
+| Xác thực request | Kiểm tra `Authorization: Bearer <token>`, giải mã JWT và gắn `x-user-id`, `x-user-role`, `x-user-email` vào request nội bộ |
+| Định tuyến HTTP | Forward `/api/auth`, `/api/users`, `/api/rides`, `/api/payment`, `/api/wallet`, `/api/reviews`, `/api/ai` đến service tương ứng |
+| gRPC bridge | Với các API cần độ trễ thấp như pricing estimate hoặc tra cứu driver, Gateway có thể chuyển HTTP request thành gRPC call |
+| Socket.IO hub | Quản lý kết nối realtime, room theo `userId` và `rideId`, phát event trạng thái chuyến, offer tài xế, chat và signaling WebRTC |
+| Driver matching | Nhận event `ride.created`, truy vấn Redis GEO, tính điểm tài xế và gửi offer theo nhiều vòng |
+| Chuẩn hóa địa chỉ | Chuẩn hóa payload địa chỉ Việt Nam trước khi chuyển đến service phía sau |
+| Giám sát | Cung cấp health check, readiness check, metrics Prometheus và Swagger docs |
+
+**Quy tắc thiết kế:** client không gọi trực tiếp vào service phía sau; mọi request đều đi qua Gateway để thống nhất xác thực, logging, rate limiting và realtime fan-out.
+
+### 4.11.2. Auth Service
+
+**Vai trò:** nguồn sự thật duy nhất về danh tính, tài khoản, mật khẩu, OTP, access token và refresh token.
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Cổng HTTP | `3001` |
+| Cổng gRPC | `50051` |
+| Database | PostgreSQL `auth_db`, Redis cho OTP |
+| Công nghệ | Express, Prisma, bcryptjs, jsonwebtoken, RabbitMQ |
+| Hình nên chèn | `img/17_sequence_auth_otp.png` |
+
+**Chức năng chính:**
+
+| Chức năng | Mô tả |
+|---|---|
+| Đăng ký tài khoản | Tạo user mới theo số điện thoại, mật khẩu và vai trò |
+| Gửi OTP | Sinh OTP, hash, lưu TTL trong Redis, gửi qua SMS hoặc log trong mock mode |
+| Xác thực OTP | So khớp OTP, kiểm soát số lần thử và thời gian hết hạn |
+| Đăng nhập | Kiểm tra mật khẩu bằng bcrypt, phát access token và refresh token |
+| Làm mới token | Kiểm tra refresh token trong DB, phát access token mới |
+| Đăng xuất | Thu hồi refresh token |
+| Audit log | Ghi nhận các hành động nhạy cảm như login, OTP sent, register |
+| gRPC validate user | Cho service nội bộ kiểm tra userId hoặc lấy thông tin user cơ bản |
+
+**Dữ liệu chính:** `User`, `RefreshToken`, `OtpRecord`, `AuditLog`.
+
+**Domain event:** khi đăng ký thành công, service phát `user.registered` để User Service tạo profile mặc định.
+
+### 4.11.3. User Service
+
+**Vai trò:** quản lý thông tin hồ sơ người dùng, tách biệt khỏi thông tin xác thực trong Auth Service.
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Cổng HTTP | `3007` |
+| Cổng gRPC | `50052` |
+| Database | PostgreSQL `user_db` |
+| Công nghệ | Express, Prisma, Joi, gRPC |
+
+**Chức năng chính:**
+
+| Chức năng | Mô tả |
+|---|---|
+| Tạo profile tự động | Lắng nghe `user.registered` và tạo `UserProfile` tương ứng |
+| Xem hồ sơ | Người dùng xem thông tin cá nhân của mình |
+| Cập nhật hồ sơ | Cập nhật họ tên, avatar, trạng thái profile |
+| Quản trị người dùng | Admin xem danh sách, xem chi tiết và đổi trạng thái tài khoản |
+| gRPC profile lookup | Service khác tra cứu tên hiển thị, số điện thoại hoặc avatar khi cần |
+
+**Ràng buộc:** `userId` tham chiếu logic đến `auth_db.User.id` nhưng không dùng foreign key cross-service; tính nhất quán được bảo đảm qua domain event và application logic.
+
+### 4.11.4. Driver Service
+
+**Vai trò:** quản lý vòng đời tài xế, hồ sơ phương tiện, bằng lái, trạng thái nhận cuốc và vị trí địa lý realtime.
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Cổng HTTP | `3003` |
+| Cổng gRPC | `50055` |
+| Database | PostgreSQL `driver_db`, Redis GEO |
+| Công nghệ | Express, Prisma, Redis, RabbitMQ, gRPC |
+
+**Chức năng chính:**
+
+| Nhóm chức năng | Mô tả |
+|---|---|
+| Đăng ký tài xế | Lưu thông tin xe, biển số, màu xe, loại xe, bằng lái và ảnh phương tiện |
+| Duyệt hồ sơ | Admin duyệt/từ chối/tạm ngưng tài xế; khi duyệt phát `driver.approved` |
+| Trạng thái nhận cuốc | Tài xế bật `ONLINE`, tắt `OFFLINE`, hoặc bị chuyển `BUSY` khi đang chạy chuyến |
+| Cập nhật vị trí | Lưu vị trí cuối cùng trong DB và cập nhật Redis GEO để Gateway tìm kiếm |
+| Kiểm tra khả năng nhận chuyến | gRPC `CheckCanAcceptRide` kiểm tra trạng thái tài xế và điều kiện ví |
+| Rating tài xế | Cập nhật `ratingAverage`, `ratingCount` khi nhận event từ Review Service |
+
+**Ràng buộc nghiệp vụ:**
+
+| Quy tắc | Diễn giải |
+|---|---|
+| Chỉ tài xế `APPROVED` mới được online | Hồ sơ phải được admin duyệt |
+| Tài xế `BUSY` không nhận offer mới | Tránh gán nhiều chuyến đồng thời |
+| Vị trí online phải có tọa độ hợp lệ | Redis GEO yêu cầu `lat/lng` hợp lệ |
+| Ví phải đạt điều kiện | Nếu tài xế có nợ quá hạn hoặc ví chưa kích hoạt, không được nhận chuyến |
+
+### 4.11.5. Booking Service
+
+**Vai trò:** xử lý giai đoạn tiền chuyến đi, khi khách hàng xem giá, tạo booking tạm và xác nhận đặt xe.
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Cổng HTTP | `3008` |
+| Cổng gRPC | `50053` |
+| Database | PostgreSQL `booking_db` |
+| Công nghệ | Express, Prisma, RabbitMQ, gRPC |
+
+**Chức năng chính:**
+
+| Chức năng | Mô tả |
+|---|---|
+| Tạo booking | Lưu điểm đón, điểm trả, loại xe, payment method và snapshot giá ước tính |
+| Xác nhận booking | Chuyển `PENDING` sang `CONFIRMED` và phát event `booking.confirmed` |
+| Hủy booking | Cho phép khách hủy khi chưa chuyển thành chuyến đang chạy |
+| Lịch sử booking | Truy vấn lịch sử đặt xe của khách hàng |
+| Expiry | Booking có thể hết hạn nếu khách không xác nhận trong thời gian cấu hình |
+
+**Lý do tách khỏi Ride Service:** khách hàng có thể xem giá nhiều lần mà chưa tạo chuyến; Booking Service giúp giảm nhiễu cho Ride Service và là nền tảng để mở rộng đặt xe theo lịch.
+
+### 4.11.6. Ride Service
+
+**Vai trò:** quản lý vòng đời chuyến đi, trạng thái Ride, audit trail và các event nghiệp vụ liên quan đến chuyến.
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Cổng HTTP | `3002` |
+| Cổng gRPC | `50054` |
+| Database | PostgreSQL `ride_db` |
+| Công nghệ | Express, Prisma, RabbitMQ, gRPC |
+| Hình nên chèn | `img/08_state_machine_ride.png` |
+
+**Chức năng chính:**
+
+| Nhóm chức năng | Mô tả |
+|---|---|
+| Tạo chuyến | Tạo Ride từ request trực tiếp hoặc từ `booking.confirmed` |
+| State machine | Kiểm soát transition từ `CREATED` đến `COMPLETED` hoặc `CANCELLED` |
+| Điều phối offer | Ghi nhận driver được offer, driver từ chối, timeout và số lần reassign |
+| API cho khách | Tạo chuyến, xem chi tiết, hủy chuyến, xem lịch sử, gửi chat |
+| API cho tài xế | Nhận cuốc, từ chối, đến điểm đón, bắt đầu, hoàn thành |
+| Audit trail | Ghi `RideStateTransition` cho mọi chuyển trạng thái |
+| Chat storage | Lưu tin nhắn giữa tài xế và khách trong `RideChatMessage` |
+
+**Domain events published:** `ride.created`, `ride.offered`, `ride.assigned`, `ride.picking_up`, `ride.started`, `ride.completed`, `ride.cancelled`, `ride.chat_message`.
+
+**Ràng buộc:** trạng thái kết thúc `COMPLETED` và `CANCELLED` là terminal state; không được quay lại trạng thái trước.
+
+### 4.11.7. Pricing Service
+
+**Vai trò:** tính giá cước ước tính và giá thực tế dựa trên loại xe, khoảng cách, thời gian, surge và gợi ý AI.
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Cổng HTTP | `3009` |
+| Cổng gRPC | `50057` |
+| Database | Không có database quan hệ, dùng Redis cache |
+| Công nghệ | Express, Redis, gRPC, OSRM, AI HTTP client |
+
+**Chức năng chính:**
+
+| Chức năng | Mô tả |
+|---|---|
+| Ước tính giá | Tính `baseFare`, phí dịch vụ, cước km, cước phút, short-trip fee và surge |
+| Tính khoảng cách | Ưu tiên OSRM để lấy khoảng cách theo đường đi, fallback Haversine |
+| Surge multiplier | Lấy surge từ Redis hoặc AI Service |
+| Tích hợp AI | Gọi AI Service để lấy ETA, price multiplier và recommended radius |
+| API admin | Cho phép admin xem hoặc cập nhật surge zone trong demo |
+
+**Công thức tổng quát:** `totalFare = max(round(subtotal * surgeMultiplier), minimumFare)`.
+
+**Nguyên tắc khả dụng:** nếu OSRM hoặc AI lỗi, service dùng fallback để vẫn trả được giá ước tính.
+
+### 4.11.8. Payment Service
+
+**Vai trò:** xử lý thanh toán, gateway callback, voucher, fare, hoa hồng, thu nhập tài xế và event tài chính.
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Cổng HTTP | `3004` |
+| Cổng gRPC | `50056` |
+| Database | PostgreSQL `payment_db` |
+| Công nghệ | Express, Prisma, MoMo, VNPay, RabbitMQ Outbox |
+| Hình nên chèn | `img/11_activity_payment_branch.png` |
+
+**Chức năng chính:**
+
+| Nhóm chức năng | Mô tả |
+|---|---|
+| Khởi tạo thanh toán | Tạo payment intent cho MoMo/VNPay hoặc hoàn tất ngay với CASH |
+| Xử lý IPN | Nhận callback từ MoMo/VNPay, kiểm tra chữ ký, cập nhật trạng thái |
+| Idempotency | Dùng `idempotencyKey` để chống xử lý trùng IPN |
+| Tính fare | Lưu `Fare` gồm base fare, distance fare, time fare, surge, total fare |
+| Voucher | Kiểm tra điều kiện mã giảm giá, số lần dùng, thời gian hiệu lực |
+| Commission | Tính platform fee theo loại xe |
+| Driver earnings | Tạo `DriverEarnings` gồm gross fare, platform fee, net earnings, cash debt |
+| Refund | Xử lý hoàn tiền khi chuyến bị hủy sau thanh toán |
+| Outbox | Ghi `OutboxEvent` trong cùng transaction với payment để không mất event |
+
+**Event quan trọng:** `payment.completed`, `payment.failed`, `driver.earnings.settled`, `refund.completed`.
+
+### 4.11.9. Wallet Service
+
+**Vai trò:** nguồn sự thật của ví tài xế, quản lý ký quỹ, pending earning, công nợ, rút tiền, merchant ledger và merchant balance.
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Cổng HTTP | `3006` |
+| Database | PostgreSQL `wallet_db` |
+| Công nghệ | Express, Prisma, RabbitMQ |
+| Hình nên chèn | `img/09_state_machine_wallet.png` |
+
+**Chức năng chính:**
+
+| Nhóm chức năng | Mô tả |
+|---|---|
+| Tạo ví tài xế | Lắng nghe `driver.approved`, tạo ví `INACTIVE` |
+| Ký quỹ | Khi top-up đủ 300.000 VND, chuyển tiền vào `lockedBalance` và kích hoạt ví |
+| Ghi nhận thu nhập | Lắng nghe `driver.earnings.settled`, tạo `PendingEarning` T+24h |
+| Công nợ CASH | Nếu tài xế thu tiền mặt, tạo `DebtRecord` bằng platform fee |
+| Settlement | Sau 24h, giải phóng pending; trả nợ FIFO trước, phần còn lại vào available |
+| Rút tiền | Tài xế tạo yêu cầu rút tiền, admin duyệt hoặc từ chối |
+| Merchant ledger | Ghi nhận dòng tiền vào/ra của nền tảng |
+| Merchant balance | Duy trì số dư tổng hợp của nền tảng |
+| Lịch sử giao dịch | `WalletTransaction` lưu snapshot `balanceAfter` và idempotency key |
+
+**Quy tắc tài chính:**
+
+| Quy tắc | Diễn giải |
+|---|---|
+| Ký quỹ bắt buộc | Tài xế cần locked balance 300.000 VND để kích hoạt |
+| Thu nhập không rút ngay | Net earning đi vào `pendingBalance` trong 24h |
+| Nợ được tất toán trước | Khi có tiền vào, DebtRecord cũ nhất được trả trước |
+| Giao dịch bất biến | Lịch sử ví không update tùy tiện; mỗi thay đổi tạo transaction mới |
+| Chống trùng | Mọi top-up, earning, refund dùng idempotency key |
+
+### 4.11.10. Notification Service
+
+**Vai trò:** gửi thông báo đến người dùng qua email, SMS, push và in-app notification dựa trên domain event.
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Cổng HTTP | `3005` |
+| Database | MongoDB `notification_db` |
+| Công nghệ | Express, Mongoose, RabbitMQ, Nodemailer, Twilio, FCM |
+
+**Chức năng chính:**
+
+| Chức năng | Mô tả |
+|---|---|
+| Consume event | Lắng nghe `user.registered`, `ride.assigned`, `ride.completed`, `payment.completed`, `driver.approved` |
+| Tạo notification | Lưu notification document với trạng thái `PENDING`, `SENT` hoặc `FAILED` |
+| Gửi đa kênh | Email, SMS, push notification hoặc in-app |
+| Retry | Thử lại khi gửi thất bại, tăng delay theo số lần retry |
+| Admin API | Cho phép admin xem lịch sử thông báo và thống kê gửi thành công/thất bại |
+
+**Lý do dùng MongoDB:** thông báo có schema linh hoạt, có thể thêm template data, channel-specific metadata mà không cần migration phức tạp.
+
+### 4.11.11. Review Service
+
+**Vai trò:** quản lý đánh giá hai chiều sau chuyến đi và cập nhật uy tín tài xế.
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Cổng HTTP | `3010` |
+| Database | MongoDB `review_db` |
+| Công nghệ | Express, Mongoose, RabbitMQ |
+
+**Chức năng chính:**
+
+| Chức năng | Mô tả |
+|---|---|
+| Tạo đánh giá | Khách đánh giá tài xế hoặc tài xế đánh giá khách sau chuyến |
+| Kiểm tra hợp lệ | Một người chỉ đánh giá một lần cho một chiều đánh giá của chuyến |
+| Lưu tag và nhận xét | Hỗ trợ rating 1-5, comment, tag nghiệp vụ |
+| Ẩn đánh giá | Admin có thể ẩn review vi phạm |
+| Cập nhật rating | Sau review, service phát `driver.rating_updated` để Driver Service cập nhật rating trung bình |
+
+**Ràng buộc:** chỉ cho phép review trong cửa sổ thời gian cấu hình sau khi chuyến hoàn thành.
+
+### 4.11.12. AI Service
+
+**Vai trò:** cung cấp năng lực dự đoán và chatbot hỗ trợ, tách biệt khỏi backend Node.js để tận dụng hệ sinh thái Python ML.
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Cổng HTTP | `8000` |
+| Database | Không dùng DB, model file `.joblib` và knowledge base text |
+| Công nghệ | FastAPI, scikit-learn, joblib, sentence-transformers, FAISS |
+| Hình nên chèn | `img/06_ai_ml_pipeline.png`, `img/16_rag_chatbot_architecture.png` |
+
+**Chức năng chính:**
+
+| Chức năng | Mô tả |
+|---|---|
+| ETA và surge | Dự đoán thời gian đến và hệ số giá theo khoảng cách, giờ, loại ngày |
+| Accept probability | Dự đoán xác suất tài xế nhận chuyến dựa trên đặc điểm tài xế và bối cảnh cuốc |
+| Wait time | Dự đoán thời gian khách phải chờ dựa trên demand và supply |
+| RAG chatbot | Trả lời câu hỏi hỗ trợ dựa trên knowledge base trong `app/data/knowledge` |
+| Fallback | Nếu thiếu model hoặc lỗi inference, trả response rule-based để hệ thống không gián đoạn |
+
+**Nguyên tắc tích hợp:** AI Service không phải dependency bắt buộc của nghiệp vụ chính; Pricing Service và API Gateway đều có timeout và fallback.
+
+### 4.11.13. Tổng hợp trách nhiệm service theo nghiệp vụ
+
+| Nghiệp vụ | Service chính | Service phối hợp |
+|---|---|---|
+| Đăng ký/đăng nhập | Auth Service | API Gateway, User Service, Notification Service |
+| Cập nhật hồ sơ khách | User Service | Auth Service |
+| Đăng ký tài xế | Driver Service | Auth Service, Wallet Service, Notification Service |
+| Duyệt tài xế | Driver Service | Admin Dashboard, Wallet Service |
+| Xem giá trước chuyến | Pricing Service | Booking Service, AI Service, API Gateway |
+| Đặt xe | Booking Service, Ride Service | Pricing Service, API Gateway |
+| Matching tài xế | API Gateway | Driver Service, Wallet Service, AI Service, Redis |
+| Thực hiện chuyến | Ride Service | Driver Service, API Gateway |
+| Thanh toán | Payment Service | Wallet Service, MoMo, VNPay |
+| Ví tài xế | Wallet Service | Payment Service, Driver Service |
+| Thông báo | Notification Service | RabbitMQ producers |
+| Đánh giá | Review Service | Ride Service, Driver Service |
+| Chat/gọi thoại | API Gateway | Ride Service, Customer App, Driver App |
+| Chatbot hỗ trợ | AI Service | Customer App, Driver App, API Gateway |
+
 ---
 
 # CHƯƠNG 5: GIẢI PHÁP CÔNG NGHỆ
@@ -1418,8 +2065,9 @@ score(driver, rideRequest) =
 
 ```mermaid
 flowchart TD
-    START([Khách đặt xe]) --> CREATE[Tạo Ride PENDING]
-    CREATE --> ROUND1{Vòng 1\nRadius=2km}
+    START([Khách đặt xe]) --> CREATE[Tạo Ride CREATED]
+    CREATE --> FINDING[Ride → FINDING_DRIVER]
+    FINDING --> ROUND1{Vòng 1\nRadius=2km}
 
     ROUND1 --> GEO1[Redis GEORADIUS 2km]
     GEO1 --> FILTER1[Lọc: ONLINE + loại xe + canAcceptRide]
@@ -1789,7 +2437,7 @@ Các class được unit test với Jest:
 | `driver-wallet.service.ts` | `settlePendingEarnings` trả debt FIFO trước khi credit available |
 | `driver-wallet.service.ts` | `applyDelta` EARN → pendingBalance (không vào available) |
 | `driver-wallet.service.ts` | `applyDelta` TOP_UP → pay debt trước, dư vào available |
-| `ride-state-machine.ts` | Chuyển đổi hợp lệ: PENDING→ASSIGNED→ACCEPTED→... |
+| `ride-state-machine.ts` | Chuyển đổi hợp lệ: CREATED→FINDING_DRIVER→OFFERED→ASSIGNED→ACCEPTED→... |
 | `ride-state-machine.ts` | Chuyển đổi không hợp lệ: COMPLETED→IN_PROGRESS throw error |
 | `payment.service.ts` | IPN handler idempotent với key trùng lặp |
 
@@ -1825,6 +2473,56 @@ Các class được unit test với Jest:
 2. Payment MoMo IPN lần 2 (same orderId) → idempotencyKey found, skip
 3. Verify: wallet balance unchanged after 2nd IPN
 ```
+
+## 6.7. Bảo mật, hạ tầng và triển khai
+
+### 6.7.1. Ranh giới tin cậy bảo mật
+
+Hệ thống chia thành bốn vùng tin cậy chính: client public, gateway edge, service nội bộ và data/secrets layer. Cách chia này giúp báo cáo rõ ràng hơn khi trình bày vì sao client không được gọi trực tiếp vào database hoặc microservice phía sau.
+
+**Hình gợi ý chèn vào Word:** `img/20_security_trust_boundary.png`
+
+![Hình 6.1. Security trust boundary](../img/20_security_trust_boundary.png)
+
+| Vùng | Thành phần | Biện pháp bảo vệ |
+|---|---|---|
+| Public client | Customer App, Driver App, Admin Dashboard | HTTPS, JWT, CORS, rate limit |
+| Edge/Gateway | API Gateway, Socket.IO server | Verify token, inject identity headers, request logging, address normalization |
+| Internal services | Auth, Ride, Driver, Payment, Wallet, Pricing, Notification, Review, AI | Internal token, service URL private, validation bằng Joi/Pydantic |
+| Data layer | PostgreSQL, MongoDB, Redis, RabbitMQ, secrets | Network isolation trong Docker, không expose credential ra frontend |
+
+**Các điểm bảo mật quan trọng:**
+
+| Rủi ro | Cách xử lý trong hệ thống |
+|---|---|
+| Lộ mật khẩu | Mật khẩu hash bằng bcrypt, không lưu plaintext |
+| Lộ OTP | OTP được hash/lưu TTL, không trả OTP qua API |
+| Gọi API trái quyền | API Gateway kiểm tra JWT và role trước khi proxy |
+| Callback thanh toán giả | Payment Service kiểm tra chữ ký MoMo/VNPay |
+| IPN gọi lặp | Idempotency key ngăn cộng tiền nhiều lần |
+| Dữ liệu tài chính sai lệch | Wallet transaction và merchant ledger ghi append-only |
+| Service nội bộ bị gọi trực tiếp | Dùng internal token và network private trong Docker |
+
+### 6.7.2. Hạ tầng local và hướng triển khai cloud
+
+Trong phạm vi khóa luận, hệ thống chạy bằng Docker Compose trên môi trường local hoặc máy chủ demo. Các container backend, frontend, database, broker và monitoring được cấu hình để có thể khởi động đồng bộ.
+
+**Thành phần local:**
+
+| Nhóm | Thành phần |
+|---|---|
+| Frontend | Customer App `:4000`, Driver App `:4001`, Admin Dashboard `:4002` |
+| Backend | API Gateway và 11 service nghiệp vụ |
+| AI | FastAPI AI Service `:8000` |
+| Data | PostgreSQL, MongoDB, Redis |
+| Messaging | RabbitMQ topic exchange |
+| Monitoring | Prometheus, Grafana, Loki, Promtail |
+
+**Hướng triển khai cloud đề xuất:** nếu triển khai production, có thể đưa frontend lên CloudFront/S3, API Gateway và service lên ECS, database sang RDS, Redis sang ElastiCache, RabbitMQ sang Amazon MQ và secrets sang AWS Secrets Manager.
+
+**Hình gợi ý chèn vào Word:** `img/02_aws_deployment_architecture.png`
+
+![Hình 6.2. Kiến trúc triển khai AWS đề xuất](../img/02_aws_deployment_architecture.png)
 
 ---
 

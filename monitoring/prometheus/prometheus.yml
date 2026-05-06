@@ -6,31 +6,68 @@ global:
     project: cab-booking
 
 scrape_configs:
-  # Prometheus self-monitoring
+
+  # ── Prometheus self-monitoring ──────────────────────────────────────────
   - job_name: prometheus
     static_configs:
       - targets: ['prometheus:9090']
 
-  # Container metrics (CPU, Memory, Network per container)
-  - job_name: cadvisor
-    static_configs:
-      - targets: ['cadvisor:8080']
-
-  # Host metrics (CPU, Memory, Disk, Network)
+  # ── Node metrics (CPU, Memory, Disk) — auto-discovers ALL Swarm nodes ──
+  # Prometheus reads Docker socket → gets every node IP → scrapes :9100
+  # Works for 1 manager + N spot workers without any config change.
   - job_name: node-exporter
-    static_configs:
-      - targets: ['node-exporter:9100']
+    dockerswarm_sd_configs:
+      - host: unix:///var/run/docker.sock
+        role: nodes
+    relabel_configs:
+      # Replace default address with node IP + node-exporter port
+      - source_labels: [__address__]
+        regex: '([^:]+)(?::\d+)?'
+        replacement: '$1:9100'
+        target_label: __address__
+      # Add node hostname as 'instance' label for Grafana dashboards
+      - source_labels: [__meta_dockerswarm_node_hostname]
+        target_label: instance
+      # Add node role label (manager / worker)
+      - source_labels: [__meta_dockerswarm_node_role]
+        target_label: node_role
+      # Drop nodes that are Down or Paused
+      - source_labels: [__meta_dockerswarm_node_availability]
+        regex: 'active'
+        action: keep
 
-  # RabbitMQ queue metrics
+  # ── Container metrics — auto-discovers ALL Swarm nodes via cAdvisor ────
+  - job_name: cadvisor
+    dockerswarm_sd_configs:
+      - host: unix:///var/run/docker.sock
+        role: nodes
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '([^:]+)(?::\d+)?'
+        replacement: '$1:8081'
+        target_label: __address__
+      - source_labels: [__meta_dockerswarm_node_hostname]
+        target_label: instance
+      - source_labels: [__meta_dockerswarm_node_role]
+        target_label: node_role
+      - source_labels: [__meta_dockerswarm_node_availability]
+        regex: 'active'
+        action: keep
+
+  # ── RabbitMQ queue metrics ──────────────────────────────────────────────
   - job_name: rabbitmq
     metrics_path: /metrics
     static_configs:
       - targets: ['rabbitmq:15692']
+        labels:
+          service: rabbitmq
+          node_role: manager
 
-  # API Gateway — HTTP requests, WebSocket, driver matching AI metrics
+  # ── API Gateway — HTTP requests, WebSocket, AI matching metrics ─────────
   - job_name: api-gateway
     metrics_path: /metrics
     static_configs:
       - targets: ['api-gateway:3000']
         labels:
           service: api-gateway
+          node_role: manager

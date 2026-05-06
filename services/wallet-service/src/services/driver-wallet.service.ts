@@ -516,14 +516,14 @@ export class DriverWalletService {
         },
       });
 
-      // Merchant OUT: net earnings paid out to driver (liability settled)
+      // Merchant OUT: net earnings committed to driver (actual fund release at T+24h)
       await tx.merchantLedger.create({
         data: {
           type:          MerchantLedgerType.OUT,
           category:      MerchantLedgerCategory.PAYOUT,
           amount:        netEarnings,
           referenceId:   rideId,
-          description:   `Chi trả thu nhập tài xế`,
+          description:   `Thu nhập tài xế đang giữ (giải ngân sau 24h kể từ hoàn thành chuyến)`,
           idempotencyKey: `ledger_payout_${rideId}`,
         },
       });
@@ -932,15 +932,26 @@ export class DriverWalletService {
   async deactivateDriver(driverId: string) {
     const wallet = await this.getOrCreateWallet(driverId);
     const settlement = this.toLedgerState(wallet);
+
+    // Include pendingBalance in settlement — platform owes driver these earnings
+    // even if T+24h has not elapsed yet. The deposit (lockedBalance) is also returned.
     const refundAmount = settlement.initialActivationCompleted
-      ? Math.max(0, settlement.lockedBalance + settlement.availableBalance - settlement.debt)
-      : Math.max(0, settlement.balance);
-    const depositRefunded = settlement.initialActivationCompleted ? settlement.lockedBalance : 0;
-    const availableRefunded = settlement.initialActivationCompleted ? settlement.availableBalance : settlement.balance;
-    const debtSettled = settlement.initialActivationCompleted ? settlement.debt : 0;
+      ? Math.max(0, settlement.lockedBalance + settlement.availableBalance + settlement.pendingBalance - settlement.debt)
+      : Math.max(0, Number((wallet as any).balance ?? 0));
+
+    const depositRefunded   = settlement.initialActivationCompleted ? settlement.lockedBalance    : 0;
+    const availableRefunded = settlement.initialActivationCompleted ? settlement.availableBalance  : Number((wallet as any).balance ?? 0);
+    const pendingRefunded   = settlement.initialActivationCompleted ? settlement.pendingBalance    : 0;
+    const debtSettled       = settlement.initialActivationCompleted ? settlement.debt              : 0;
     const settlementReference = `DEACT_${driverId}_${Date.now()}`;
 
     await this.prisma.$transaction(async (tx: PrismaAny) => {
+      // Mark all unsettled pending earnings as settled (being paid out via deactivation refund)
+      await tx.pendingEarning.updateMany({
+        where: { driverId, settledAt: null },
+        data:  { settledAt: new Date() },
+      });
+
       if (refundAmount > 0) {
         await tx.walletTransaction.create({
           data: {
@@ -949,13 +960,15 @@ export class DriverWalletService {
             direction:     TransactionDirection.DEBIT,
             amount:        refundAmount,
             balanceAfter:  0,
-            description:   'Đối soát số dư khi tài xế ngừng hoạt động',
+            description:   'Đối soát & hoàn trả số dư khi ngừng hoạt động tài xế',
             referenceId:   settlementReference,
             idempotencyKey: settlementReference,
             metadata: {
+              settlementType:   'DEACTIVATION',
               settlementReference,
               depositRefunded,
               availableRefunded,
+              pendingRefunded,
               debtSettled,
             } as any,
           },
@@ -967,7 +980,7 @@ export class DriverWalletService {
             category:      MerchantLedgerCategory.WITHDRAW,
             amount:        refundAmount,
             referenceId:   settlementReference,
-            description:   'Hoàn trả đối soát cho tài xế khi ngừng hoạt động',
+            description:   'Đối soát hoàn trả khi tài xế ngừng hoạt động (ký quỹ + số dư + tiền chờ xử lý - công nợ)',
             idempotencyKey: `ledger_${settlementReference}`,
           },
         });
@@ -997,12 +1010,16 @@ export class DriverWalletService {
       });
     }
 
-    logger.info(`Driver ${driverId} deactivated. Refunded=${refundAmount} debtSettled=${debtSettled}`);
+    // Publish event so payment-service can zero its local wallet mirror
+    await this.eventPublisher.publish('driver.wallet.deactivated', { driverId, refundAmount }).catch(() => {});
+
+    logger.info(`Driver ${driverId} deactivated. Refunded=${refundAmount} (deposit=${depositRefunded} available=${availableRefunded} pending=${pendingRefunded} debtSettled=${debtSettled})`);
 
     return {
-      refundedAmount: refundAmount,
+      refundedAmount:  refundAmount,
       depositRefunded,
       availableRefunded,
+      pendingRefunded,
       debtSettled,
       status: INACTIVE_WALLET_STATUS,
     };

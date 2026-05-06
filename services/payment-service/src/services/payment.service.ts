@@ -962,6 +962,19 @@ export class PaymentService {
     return this.serializePaymentRecord(payment, fare, driverEarnings);
   }
 
+  /**
+   * Zero the payment_db wallet mirror for a driver who has deactivated.
+   * Called when wallet-service publishes driver.wallet.deactivated event so that
+   * subsequent top-ups start fresh from 0 instead of stale accumulated balance.
+   */
+  async zeroDriverWallet(driverId: string): Promise<void> {
+    await this.prisma.driverWallet.updateMany({
+      where: { driverId },
+      data: { balance: 0 },
+    });
+    logger.info(`Payment DB wallet zeroed for deactivated driver ${driverId}`);
+  }
+
   async getCustomerPayments(customerId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
     const [payments, total] = await Promise.all([

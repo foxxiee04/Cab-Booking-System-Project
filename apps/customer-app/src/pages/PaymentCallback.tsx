@@ -121,223 +121,240 @@ const PaymentCallback: React.FC = () => {
 
   const providerLabel = provider === 'MOMO' ? 'MoMo' : provider === 'VNPAY' ? 'VNPay' : provider;
   const providerCfg = PROVIDER_CONFIG[provider];
-  const processingGradient = providerCfg?.accentGradient || 'linear-gradient(90deg, #1976d2, #42a5f5)';
-  const processingColor = providerCfg?.accentColor || '#1976d2';
+  const accentGradient = providerCfg?.accentGradient || 'linear-gradient(90deg, #1976d2, #42a5f5)';
+  const accentColor = providerCfg?.accentColor || '#1976d2';
+
+  const statusGradient =
+    state === 'success'
+      ? 'linear-gradient(90deg, #16a34a, #22c55e)'
+      : state === 'failed'
+      ? 'linear-gradient(90deg, #dc2626, #f87171)'
+      : accentGradient;
 
   return (
     <Box
       sx={{
         minHeight: '100vh',
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background:
-          state === 'success'
-            ? 'linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 50%, #e3f2fd 100%)'
-            : state === 'failed'
-            ? 'linear-gradient(135deg, #fce4ec 0%, #fff3e0 100%)'
-            : 'linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%)',
-        px: 2,
+        flexDirection: 'column',
+        bgcolor: '#f8fafc',
       }}
     >
-      <Fade in timeout={500}>
+      {/* ── App header ── */}
+      <Box
+        sx={{
+          background: 'linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%)',
+          px: 3,
+          py: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+        }}
+      >
         <Box
           sx={{
-            width: '100%',
-            maxWidth: 420,
-            bgcolor: 'background.paper',
-            borderRadius: 5,
-            boxShadow: '0 8px 40px rgba(0,0,0,0.12)',
-            overflow: 'hidden',
+            width: 36,
+            height: 36,
+            borderRadius: 2,
+            bgcolor: 'rgba(255,255,255,0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
-          {/* Top accent bar */}
+          <DirectionsCarRounded sx={{ color: '#fff', fontSize: 20 }} />
+        </Box>
+        <Box>
+          <Typography variant="subtitle1" fontWeight={800} color="#fff" lineHeight={1.2}>
+            FoxGo
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)' }}>
+            Xác thực thanh toán
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* ── Main content ── */}
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          px: 2,
+          py: 4,
+        }}
+      >
+        <Fade in timeout={500}>
           <Box
             sx={{
-              height: 6,
-              background:
-                state === 'success'
-                  ? 'linear-gradient(90deg, #43a047, #66bb6a)'
-                  : state === 'failed'
-                  ? 'linear-gradient(90deg, #e53935, #ef9a9a)'
-                  : processingGradient,
+              width: '100%',
+              maxWidth: 440,
+              bgcolor: 'background.paper',
+              borderRadius: 4,
+              boxShadow: '0 4px 32px rgba(0,0,0,0.10)',
+              overflow: 'hidden',
             }}
-          />
+          >
+            {/* Top accent */}
+            <Box sx={{ height: 5, background: statusGradient }} />
 
-          <Stack spacing={3} alignItems="center" textAlign="center" sx={{ p: 4 }}>
-            {/* Icon */}
-            <Box
-              sx={{
-                width: 88,
-                height: 88,
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                bgcolor:
-                  state === 'success'
-                    ? 'success.50'
-                    : state === 'failed'
-                    ? 'error.50'
-                    : 'primary.50',
-                background:
-                  state === 'success'
-                    ? 'radial-gradient(circle, #e8f5e9, #c8e6c9)'
-                    : state === 'failed'
-                    ? 'radial-gradient(circle, #ffebee, #ffcdd2)'
-                    : `radial-gradient(circle, ${processingColor}18, ${processingColor}30)`,
-                boxShadow:
-                  state === 'success'
-                    ? '0 4px 20px rgba(67,160,71,0.25)'
-                    : state === 'failed'
-                    ? '0 4px 20px rgba(229,57,53,0.25)'
-                    : `0 4px 20px ${processingColor}33`,
-                ...(state === 'processing' && {
-                  animation: 'callback-pulse 1.8s ease-in-out infinite',
-                  '@keyframes callback-pulse': {
-                    '0%, 100%': { boxShadow: `0 4px 20px ${processingColor}33` },
-                    '50%': { boxShadow: `0 4px 32px ${processingColor}55` },
-                  },
-                }),
-              }}
-            >
-              {state === 'processing' && <CircularProgress size={40} thickness={3} sx={{ color: processingColor }} />}
-              {state === 'success' && (
-                <CheckCircleRounded sx={{ fontSize: 52, color: 'success.main' }} />
-              )}
-              {state === 'failed' && (
-                <ErrorRounded sx={{ fontSize: 52, color: 'error.main' }} />
-              )}
-            </Box>
-
-            {/* Title */}
-            <Box>
-              <Typography variant="h5" fontWeight={800} gutterBottom>
-                {state === 'processing' && 'Đang xử lý...'}
-                {state === 'success' && 'Thanh toán thành công!'}
-                {state === 'failed' && 'Thanh toán thất bại'}
-              </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
+            <Stack spacing={3} alignItems="center" textAlign="center" sx={{ p: 4 }}>
+              {/* Status icon */}
+              <Box
                 sx={{
-                  lineHeight: 1.6,
-                  whiteSpace: state === 'success' ? 'nowrap' : 'normal',
-                  overflow: state === 'success' ? 'hidden' : 'visible',
-                  textOverflow: state === 'success' ? 'ellipsis' : 'clip',
+                  width: 88,
+                  height: 88,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background:
+                    state === 'success'
+                      ? 'radial-gradient(circle, #dcfce7, #bbf7d0)'
+                      : state === 'failed'
+                      ? 'radial-gradient(circle, #fee2e2, #fecaca)'
+                      : `radial-gradient(circle, ${accentColor}18, ${accentColor}30)`,
+                  boxShadow:
+                    state === 'success'
+                      ? '0 4px 24px rgba(22,163,74,0.22)'
+                      : state === 'failed'
+                      ? '0 4px 24px rgba(220,38,38,0.22)'
+                      : `0 4px 24px ${accentColor}33`,
+                  ...(state === 'processing' && {
+                    animation: 'pay-pulse 1.8s ease-in-out infinite',
+                    '@keyframes pay-pulse': {
+                      '0%, 100%': { boxShadow: `0 4px 20px ${accentColor}33` },
+                      '50%': { boxShadow: `0 4px 32px ${accentColor}55` },
+                    },
+                  }),
                 }}
               >
-                {message}
-              </Typography>
-            </Box>
+                {state === 'processing' && <CircularProgress size={40} thickness={3} sx={{ color: accentColor }} />}
+                {state === 'success' && <CheckCircleRounded sx={{ fontSize: 52, color: '#16a34a' }} />}
+                {state === 'failed' && <ErrorRounded sx={{ fontSize: 52, color: '#dc2626' }} />}
+              </Box>
 
-            {/* Provider chip */}
-            {providerLabel && (
-              <Chip
-                label={`Qua ${providerLabel}`}
-                size="small"
-                variant="outlined"
-                color={state === 'success' ? 'success' : state === 'failed' ? 'error' : 'default'}
-                sx={{ fontWeight: 600 }}
-              />
-            )}
+              {/* Title + message */}
+              <Box>
+                <Typography variant="h5" fontWeight={800} gutterBottom>
+                  {state === 'processing' && 'Đang xử lý...'}
+                  {state === 'success' && 'Thanh toán thành công!'}
+                  {state === 'failed' && 'Thanh toán thất bại'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.65 }}>
+                  {message}
+                </Typography>
+              </Box>
 
-            {/* Ride ID */}
-            {rideId && (
-              <>
-                <Divider sx={{ width: '100%' }} />
-                <Box sx={{ width: '100%', bgcolor: 'grey.50', borderRadius: 2, p: 1.5 }}>
-                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                    Mã chuyến đi
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    fontWeight={700}
+              {/* Provider */}
+              {providerLabel && (
+                <Chip
+                  label={`Qua ${providerLabel}`}
+                  size="small"
+                  variant="outlined"
+                  color={state === 'success' ? 'success' : state === 'failed' ? 'error' : 'default'}
+                  sx={{ fontWeight: 700 }}
+                />
+              )}
+
+              {/* Ride ID */}
+              {rideId && (
+                <>
+                  <Divider sx={{ width: '100%' }} />
+                  <Box sx={{ width: '100%', bgcolor: '#f8fafc', borderRadius: 2, p: 1.75 }}>
+                    <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                      Mã chuyến đi
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      fontWeight={700}
+                      sx={{ fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all' }}
+                    >
+                      {rideId.toUpperCase()}
+                    </Typography>
+                  </Box>
+                </>
+              )}
+
+              {/* Countdown */}
+              {state === 'success' && rideId && countdown > 0 && (
+                <Typography variant="caption" color="text.secondary">
+                  Tự động chuyển sang chuyến đi sau{' '}
+                  <Box component="span" fontWeight={800} color="success.main">{countdown}s</Box>
+                </Typography>
+              )}
+
+              {/* Actions */}
+              <Stack spacing={1.5} sx={{ width: '100%', pt: 0.5 }}>
+                {state === 'success' && rideId && (
+                  <Button
+                    variant="contained"
+                    size="large"
+                    startIcon={<DirectionsCarRounded />}
+                    onClick={() => navigate(`/ride/${rideId}`, { replace: true })}
                     sx={{
-                      fontFamily: 'monospace',
-                      fontSize: '0.8rem',
-                      color: 'text.primary',
-                      wordBreak: 'break-all',
+                      borderRadius: 3,
+                      fontWeight: 700,
+                      py: 1.25,
+                      background: 'linear-gradient(90deg, #16a34a, #22c55e)',
+                      '&:hover': { background: 'linear-gradient(90deg, #15803d, #16a34a)' },
                     }}
                   >
-                    {rideId}
-                  </Typography>
-                </Box>
-              </>
-            )}
+                    Theo dõi chuyến đi
+                  </Button>
+                )}
 
-            {/* Countdown on success */}
-            {state === 'success' && rideId && countdown > 0 && (
-              <Typography variant="caption" color="text.secondary">
-                Tự động chuyển sang trang chuyến đi sau{' '}
-                <Box component="span" fontWeight={700} color="success.main">
-                  {countdown}s
-                </Box>
-              </Typography>
-            )}
+                {state === 'failed' && rideId && (
+                  <Button
+                    variant="contained"
+                    size="large"
+                    startIcon={<ReplayRounded />}
+                    onClick={() =>
+                      navigate(
+                        `/ride/${rideId}?retryPayment=1&failedProvider=${provider || 'UNKNOWN'}`,
+                        { replace: true },
+                      )
+                    }
+                    sx={{ borderRadius: 3, fontWeight: 700, py: 1.25 }}
+                    color="warning"
+                  >
+                    Thử lại phương thức khác
+                  </Button>
+                )}
 
-            {/* Actions */}
-            <Stack spacing={1.5} sx={{ width: '100%', pt: 1 }}>
-              {state === 'success' && rideId && (
+                {state === 'failed' && rideId && (
+                  <Button
+                    variant="outlined"
+                    size="medium"
+                    onClick={() => navigate(`/ride/${rideId}`, { replace: true })}
+                    sx={{ borderRadius: 3, fontWeight: 600 }}
+                  >
+                    Về trang chuyến đi
+                  </Button>
+                )}
+
                 <Button
-                  variant="contained"
-                  size="large"
-                  startIcon={<DirectionsCarRounded />}
-                  onClick={() => navigate(`/ride/${rideId}`, { replace: true })}
-                  sx={{
-                    borderRadius: 3,
-                    fontWeight: 700,
-                    py: 1.25,
-                    background: 'linear-gradient(90deg, #43a047, #66bb6a)',
-                    '&:hover': { background: 'linear-gradient(90deg, #388e3c, #43a047)' },
-                  }}
-                >
-                  Xem chuyến đi ngay
-                </Button>
-              )}
-
-              {state === 'failed' && rideId && (
-                <Button
-                  variant="contained"
-                  size="large"
-                  startIcon={<ReplayRounded />}
-                  onClick={() =>
-                    navigate(
-                      `/ride/${rideId}?retryPayment=1&failedProvider=${provider || 'UNKNOWN'}`,
-                      { replace: true },
-                    )
-                  }
-                  sx={{ borderRadius: 3, fontWeight: 700, py: 1.25 }}
-                  color="warning"
-                >
-                  Thử phương thức khác
-                </Button>
-              )}
-
-              {state === 'failed' && rideId && (
-                <Button
-                  variant="outlined"
+                  variant="text"
                   size="medium"
-                  onClick={() => navigate(`/ride/${rideId}`, { replace: true })}
-                  sx={{ borderRadius: 3, fontWeight: 600 }}
+                  startIcon={<HomeRounded />}
+                  onClick={() => navigate('/home', { replace: true })}
+                  sx={{ borderRadius: 3, color: 'text.secondary', fontWeight: 600 }}
                 >
-                  Về trang chuyến đi
+                  Về trang chủ
                 </Button>
-              )}
-
-              <Button
-                variant="text"
-                size="medium"
-                startIcon={<HomeRounded />}
-                onClick={() => navigate('/home', { replace: true })}
-                sx={{ borderRadius: 3, color: 'text.secondary' }}
-              >
-                Về trang chủ
-              </Button>
+              </Stack>
             </Stack>
-          </Stack>
-        </Box>
-      </Fade>
+          </Box>
+        </Fade>
+      </Box>
+
+      {/* ── Footer branding ── */}
+      <Box sx={{ textAlign: 'center', py: 2 }}>
+        <Typography variant="caption" color="text.disabled">
+          FoxGo · Hệ thống đặt xe trực tuyến
+        </Typography>
+      </Box>
     </Box>
   );
 };

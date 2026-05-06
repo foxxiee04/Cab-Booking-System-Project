@@ -152,6 +152,25 @@ export const formatDuration = (seconds: number): string => {
   return `${hours} giờ ${remainingMinutes} phút`;
 };
 
+// Demo fallback locations keyed by driver phone number.
+// Used when the browser denies GPS permission (e.g. DevTools Sensors not set).
+// IUH (Đại học Công Nghiệp) = 10.8192, 106.6685
+// Drivers placed at distinct distances to demonstrate 3-round dispatch:
+//   Round 1 (2km radius)  → catches Driver A at ~1.5km
+//   Round 2 (3km radius)  → catches Driver B at ~2.7km
+//   Round 3 (5km radius)  → catches Driver C at ~4.2km
+const DEMO_DRIVER_FALLBACK_LOCATIONS: Record<string, Location> = {
+  '0911234583': { lat: 10.8327, lng: 106.6876 }, // Pham Van Bao  — ~1.2km N of IUH (Round 1, 2km)
+  '0911234585': { lat: 10.8463, lng: 106.6876 }, // Le Thi Mai    — ~2.7km N of IUH (Round 2, 3km)
+  '0911234573': { lat: 10.8551, lng: 106.6685 }, // Le Minh N     — ~4.2km N of IUH (Round 3, 5km)
+};
+
+export const getDemoFallbackLocation = (phoneNumber?: string | null): Location | null =>
+  (phoneNumber && DEMO_DRIVER_FALLBACK_LOCATIONS[phoneNumber]) || null;
+
+// Maps geo watchId → fallback interval id (activated when GPS is denied and fallback kicks in)
+const fallbackIntervalMap = new Map<number, number>();
+
 // Get current location from browser
 export const getCurrentLocation = (): Promise<Location> => {
   return new Promise((resolve, reject) => {
@@ -179,33 +198,70 @@ export const getCurrentLocation = (): Promise<Location> => {
   });
 };
 
-// Watch position for continuous updates
+// Watch position for continuous updates.
+// If `fallbackLocation` is provided and GPS permission is denied (code 1),
+// the fallback coordinates are emitted immediately and refreshed every 5 s.
 export const watchPosition = (
   callback: (location: Location) => void,
-  errorCallback?: (error: GeolocationPositionError) => void
+  errorCallback?: (error: GeolocationPositionError) => void,
+  fallbackLocation?: Location
 ): number => {
   if (!navigator.geolocation) {
+    if (fallbackLocation) {
+      // No geolocation API at all — use interval-based fallback
+      callback(fallbackLocation);
+      const intervalId = window.setInterval(() => callback(fallbackLocation), 5000);
+      return -intervalId; // negative sentinel: handled by clearWatch
+    }
     throw new Error('Geolocation not supported');
   }
 
-  return navigator.geolocation.watchPosition(
+  const geoWatchId = navigator.geolocation.watchPosition(
     (position) => {
       callback({
         lat: position.coords.latitude,
         lng: position.coords.longitude,
       });
     },
-    errorCallback,
+    (error) => {
+      if (error.code === 1 /* PERMISSION_DENIED */ && fallbackLocation) {
+        // Switch to fallback interval once (guard against repeated error events)
+        if (!fallbackIntervalMap.has(geoWatchId)) {
+          console.info('[Demo] GPS permission denied — using hardcoded demo location:', fallbackLocation);
+          callback(fallbackLocation);
+          const intervalId = window.setInterval(() => callback(fallbackLocation), 5000);
+          fallbackIntervalMap.set(geoWatchId, intervalId);
+        }
+        // Do not surface the error to the UI when fallback takes over
+      } else {
+        errorCallback?.(error);
+      }
+    },
     {
       enableHighAccuracy: true,
       timeout: 10000,
       maximumAge: 5000,
     }
   );
+
+  return geoWatchId;
 };
 
-// Clear position watch
+// Clear position watch (handles both geo watchIds and interval-based fallback sentinels)
 export const clearWatch = (watchId: number): void => {
+  if (watchId < 0) {
+    // Negative sentinel = interval-based fallback (no geolocation API)
+    window.clearInterval(-watchId);
+    return;
+  }
+
+  // Clear any active fallback interval for this geo watch
+  const intervalId = fallbackIntervalMap.get(watchId);
+  if (intervalId !== undefined) {
+    window.clearInterval(intervalId);
+    fallbackIntervalMap.delete(watchId);
+  }
+
   if (navigator.geolocation) {
     navigator.geolocation.clearWatch(watchId);
   }

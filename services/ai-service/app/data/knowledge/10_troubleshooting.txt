@@ -1,5 +1,5 @@
 TIÊU ĐỀ: Xử lý sự cố ứng dụng FoxGo
-DANH MỤC: lỗi app, sự cố, không mở được, crash, bản đồ lỗi, không đặt được xe, lỗi thanh toán, ứng dụng bị lỗi, GPS sai, app đơ, màn hình trắng, không tìm được tài xế, app chậm, cập nhật bắt buộc
+DANH MỤC: lỗi app, sự cố, không mở được, crash, bản đồ lỗi, không đặt được xe, lỗi thanh toán, ứng dụng bị lỗi, GPS sai, app đơ, màn hình trắng, không tìm được tài xế, app chậm, cập nhật bắt buộc, app bị lag, không kết nối được, thông báo không hiện, app tự tắt, điện thoại hết bộ nhớ
 
 Khi gặp sự cố với app FoxGo, thường thử theo thứ tự này sẽ giải quyết được phần lớn vấn đề: (1) Tắt app hoàn toàn và mở lại. (2) Khởi động lại điện thoại. (3) Kiểm tra bản cập nhật mới. (4) Xóa cache app. (5) Gỡ và cài lại app — dữ liệu tài khoản không bị mất.
 
@@ -34,3 +34,31 @@ Hỏi: Sau chuyến, app không cho đánh giá tài xế?
 ---
 Hỏi: Tôi đăng nhập được nhưng cứ bị thoát ra liên tục?
 Đáp: Thường do phiên đăng nhập hết hạn hoặc tài khoản bị đăng nhập từ thiết bị khác đẩy bạn ra. Thử: đăng xuất hoàn toàn → đăng nhập lại. Nếu nghi ngờ bị đăng nhập trái phép thì đổi mật khẩu ngay — thao tác này thu hồi tất cả phiên đăng nhập cũ. Cập nhật app lên bản mới nhất cũng thường giải quyết được.
+
+---
+Hỏi: App FoxGo bị chậm, lag, phản hồi chậm?
+Đáp: Thử: (1) Đóng các app khác đang chạy nền để giải phóng RAM. (2) Kiểm tra mạng — lag thường do internet yếu. (3) Xóa cache app (Cài đặt → Ứng dụng → FoxGo → Xóa cache). (4) Khởi động lại điện thoại. Nếu điện thoại bộ nhớ gần đầy thì cũng khiến app chạy chậm — xóa bớt file/ảnh để giải phóng dung lượng.
+
+---
+Hỏi: App không kết nối được, báo lỗi mạng liên tục?
+Đáp: Kiểm tra lần lượt: (1) WiFi hay 4G có hoạt động không (thử mở trình duyệt xem). (2) Tắt và bật lại kết nối mạng. (3) Nếu dùng VPN thì tắt VPN. (4) Khởi động lại điện thoại. Nếu mạng ổn nhưng chỉ app FoxGo lỗi, liên hệ support@foxgo.vn để kiểm tra hệ thống có sự cố không.
+
+---
+Hỏi: Không nhận được thông báo đẩy (push notification) từ FoxGo?
+Đáp: Vào Cài đặt điện thoại → Thông báo → FoxGo → bật tất cả loại thông báo. Đảm bảo điện thoại không đang ở chế độ Không làm phiền. Cập nhật app lên bản mới nhất. Nếu đang dùng Android, kiểm tra thêm phần "Quản lý pin" — một số máy tự tắt app nền và chặn thông báo.
+
+---
+Hỏi: App tự tắt giữa chừng khi đang dùng?
+Đáp: Thường do: điện thoại hết RAM (đóng app nền), pin sắp cạn và điện thoại tự tắt app nặng, hoặc lỗi app phiên bản cũ. Thử cập nhật app, giải phóng RAM và đảm bảo pin đủ. Nếu vẫn xảy ra thường xuyên, gỡ và cài lại app.
+
+---
+Hỏi: App FoxGo tải về từ đâu, link tải chính thức ở đâu?
+Đáp: Tải FoxGo tại App Store (iOS) hoặc Google Play (Android) — tìm "FoxGo" hoặc nhà phát triển "FoxGo Technology". Chỉ tải từ 2 nguồn chính thức này để đảm bảo an toàn, không tải từ link không rõ nguồn gốc.
+
+---
+Hỏi: Màn hình đặt xe hiện số giá rất cao bất thường, có phải lỗi không?
+Đáp: Có thể do điểm đón hoặc điểm đến được nhận dạng sai (nhầm sang địa điểm khác cách rất xa). Kiểm tra lại điểm đón và điểm đến trên bản đồ — kéo ghim đỏ để điều chỉnh. Nếu điểm đúng mà giá vẫn bất thường, liên hệ support@foxgo.vn.
+
+---
+Hỏi: Lịch sử chuyến bị trống hoặc không hiện đúng?
+Đáp: Thử kéo xuống để làm mới danh sách. Nếu vẫn trống, đăng xuất và đăng nhập lại — lịch sử được tải từ server nên không bao giờ mất. Nếu sau khi đăng nhập lại vẫn không thấy, liên hệ support@foxgo.vn với số điện thoại để đội kỹ thuật kiểm tra.

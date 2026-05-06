@@ -1,7 +1,15 @@
 TIÊU ĐỀ: Tài khoản, đăng ký, đăng nhập và bảo mật FoxGo
-DANH MỤC: tài khoản, ví, nạp tiền, rút tiền, đăng ký, đăng nhập, mật khẩu, OTP, quên mật khẩu, hồ sơ, tài khoản bị khóa, không nhận được OTP, đổi mật khẩu, thông tin cá nhân, bảo mật tài khoản, lừa đảo OTP
+DANH MỤC: tài khoản, ví, nạp tiền, rút tiền, đăng ký, đăng nhập, mật khẩu, OTP, quên mật khẩu, hồ sơ, tài khoản bị khóa, không nhận được OTP, đổi mật khẩu, thông tin cá nhân, bảo mật tài khoản, lừa đảo OTP, xóa tài khoản, đổi số điện thoại, đăng ký tài khoản mới, tài khoản bị hack
 
 Đăng ký FoxGo chỉ cần số điện thoại — nhận OTP xác minh, điền họ tên và email, đặt mật khẩu là xong. Mật khẩu cần ít nhất 8 ký tự với cả chữ hoa, chữ thường và số. Đăng nhập bằng số điện thoại + mật khẩu, hoặc dùng OTP nếu quên mật khẩu.
+
+---
+Hỏi: Đăng ký tài khoản FoxGo cần những gì?
+Đáp: Rất đơn giản! Bạn chỉ cần: (1) Số điện thoại Việt Nam đang dùng (để nhận OTP). (2) Họ tên. (3) Email (tùy chọn nhưng nên có để khôi phục tài khoản). (4) Mật khẩu ít nhất 8 ký tự gồm chữ hoa, thường và số. Toàn bộ quá trình chưa đến 2 phút!
+
+---
+Hỏi: Tạo tài khoản FoxGo như thế nào?
+Đáp: Mở app FoxGo → nhấn "Đăng ký" → nhập số điện thoại → nhận và nhập mã OTP → điền họ tên và email → đặt mật khẩu → xong! Tài khoản được tạo ngay và bạn có thể đặt xe luôn.
 
 Lưu ý bảo mật quan trọng: FoxGo KHÔNG BAO GIỜ yêu cầu mã OTP qua điện thoại hay tin nhắn. Nếu ai đó tự xưng là nhân viên FoxGo và hỏi xin OTP — đó là lừa đảo, hãy cúp máy ngay.
 
@@ -32,3 +40,39 @@ Hỏi: Tôi bị mất điện thoại, tài khoản có an toàn không?
 ---
 Hỏi: Tôi bị đăng xuất liên tục dù đã đăng nhập đúng?
 Đáp: Có thể do: phiên đăng nhập hết hạn, tài khoản bị đăng nhập ở thiết bị khác (đẩy bạn ra), hoặc phiên bản app cũ. Thử đăng xuất hoàn toàn rồi đăng nhập lại, cập nhật app lên bản mới nhất. Nếu vẫn lỗi, đổi mật khẩu để thu hồi tất cả phiên đăng nhập cũ.
+
+---
+Hỏi: Ai đó biết số điện thoại của tôi, có đăng nhập vào tài khoản được không?
+Đáp: Không được bạn ơi! Chỉ biết số điện thoại thôi thì chưa đủ — vẫn cần mật khẩu hoặc OTP gửi về SIM của bạn. Miễn bạn giữ SIM và không chia sẻ OTP/mật khẩu, tài khoản hoàn toàn an toàn.
+
+---
+Hỏi: Tôi nghi tài khoản bị hack, phải làm sao ngay bây giờ?
+Đáp: Làm ngay 3 bước: (1) Đổi mật khẩu ngay trong app (Hồ sơ → Bảo mật → Đổi mật khẩu). (2) Liên hệ hotline 1900-1234 để báo cáo và tạm khóa tài khoản. (3) Kiểm tra lịch sử chuyến có giao dịch lạ không. FoxGo sẽ điều tra và hỗ trợ khôi phục.
+
+---
+Hỏi: Xóa tài khoản FoxGo thì làm sao?
+Đáp: Vào "Hồ sơ của tôi" → "Cài đặt" → "Xóa tài khoản". Lưu ý: xóa tài khoản là vĩnh viễn — mọi lịch sử chuyến, điểm thưởng và thông tin sẽ bị xóa hết. Nếu còn tiền trong ví (khách hàng) hãy rút trước. Nếu không tìm thấy tùy chọn này, liên hệ support@foxgo.vn.
+
+---
+Hỏi: Tôi muốn đổi mật khẩu thì làm sao?
+Đáp: Vào "Hồ sơ của tôi" → "Bảo mật" → "Đổi mật khẩu". Nhập mật khẩu cũ, rồi nhập mật khẩu mới (ít nhất 8 ký tự, có chữ hoa, thường, số) và xác nhận. Đơn giản thế thôi!
+
+---
+Hỏi: App yêu cầu đăng nhập lại mỗi lần mở, làm sao giữ đăng nhập?
+Đáp: Khi đăng nhập, tick vào "Ghi nhớ đăng nhập" nếu có tùy chọn đó. Nếu app vẫn yêu cầu đăng nhập lại thường xuyên, thử cập nhật app lên bản mới nhất — một số phiên bản cũ có lỗi tự đăng xuất.
+
+---
+Hỏi: OTP hết hạn trong bao lâu?
+Đáp: OTP có hiệu lực trong 2 phút kể từ khi nhận được. Nếu quá thời gian, nhấn "Gửi lại OTP" để nhận mã mới. Mỗi lần chỉ có 1 mã OTP hợp lệ — mã cũ tự hết hạn khi mã mới được gửi.
+
+---
+Hỏi: Tôi đăng ký tài khoản mới nhưng số điện thoại báo đã tồn tại?
+Đáp: Số đó đã có tài khoản FoxGo rồi bạn ơi. Thử nhấn "Quên mật khẩu" để lấy lại quyền truy cập. Nếu không phải bạn tạo tài khoản đó, liên hệ support@foxgo.vn ngay để bảo vệ số điện thoại của mình.
+
+---
+Hỏi: Tôi có thể dùng 1 số điện thoại đăng ký nhiều tài khoản FoxGo không?
+Đáp: Không được bạn nhé. Mỗi số điện thoại chỉ liên kết được với 1 tài khoản FoxGo duy nhất (cả khách hàng lẫn tài xế). Đây là quy định để bảo vệ bảo mật và tránh gian lận.
+
+---
+Hỏi: Ảnh đại diện trong hồ sơ thay đổi được không?
+Đáp: Được bạn ơi! Vào "Hồ sơ của tôi" → chạm vào ảnh đại diện → chọn "Thay đổi ảnh" → chụp ảnh mới hoặc chọn từ thư viện. Ảnh nên rõ nét và thể hiện khuôn mặt để tài xế/khách hàng nhận diện dễ hơn.

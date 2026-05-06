@@ -16,6 +16,7 @@ import {
   ErrorRounded,
   HomeRounded,
   ReplayRounded,
+  DirectionsCarRounded,
 } from '@mui/icons-material';
 import { useAppDispatch } from '../store/hooks';
 import { showNotification } from '../store/ui.slice';
@@ -266,31 +267,69 @@ export default function WalletTopUpReturn() {
       sx={{
         minHeight: '100vh',
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background:
-          state === 'success'
-            ? 'linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 50%, #e3f2fd 100%)'
-            : state === 'failed'
-            ? 'linear-gradient(135deg, #fce4ec 0%, #fff3e0 100%)'
-            : 'linear-gradient(135deg, #e3f2fd 0%, #eff6ff 100%)',
-        px: 2,
+        flexDirection: 'column',
+        bgcolor: '#f8fafc',
       }}
     >
+      {/* ── App header ── */}
+      <Box
+        sx={{
+          background: 'linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%)',
+          px: 3,
+          py: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+        }}
+      >
+        <Box
+          sx={{
+            width: 36,
+            height: 36,
+            borderRadius: 2,
+            bgcolor: 'rgba(255,255,255,0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <DirectionsCarRounded sx={{ color: '#fff', fontSize: 20 }} />
+        </Box>
+        <Box>
+          <Typography variant="subtitle1" fontWeight={800} color="#fff" lineHeight={1.2}>
+            FoxGo Driver
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)' }}>
+            Xác thực nạp ví
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* ── Main content ── */}
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          px: 2,
+          py: 4,
+        }}
+      >
       <Fade in timeout={500}>
         <Box
           sx={{
             width: '100%',
-            maxWidth: 420,
+            maxWidth: 440,
             bgcolor: 'background.paper',
-            borderRadius: 5,
-            boxShadow: '0 8px 40px rgba(0,0,0,0.12)',
+            borderRadius: 4,
+            boxShadow: '0 4px 32px rgba(0,0,0,0.10)',
             overflow: 'hidden',
           }}
         >
           <Box
             sx={{
-              height: 6,
+              height: 5,
               background:
                 state === 'success'
                   ? 'linear-gradient(90deg, #43a047, #66bb6a)'
@@ -451,7 +490,7 @@ export default function WalletTopUpReturn() {
                   size="medium"
                   startIcon={<HomeRounded />}
                   onClick={() => navigate('/dashboard', { replace: true })}
-                  sx={{ borderRadius: 3, color: 'text.secondary' }}
+                  sx={{ borderRadius: 3, color: 'text.secondary', fontWeight: 600 }}
                 >
                   Về dashboard
                 </Button>
@@ -459,6 +498,14 @@ export default function WalletTopUpReturn() {
           </Stack>
         </Box>
       </Fade>
+      </Box>
+
+      {/* ── Footer branding ── */}
+      <Box sx={{ textAlign: 'center', py: 2 }}>
+        <Typography variant="caption" color="text.disabled">
+          FoxGo Driver · Ví tài xế
+        </Typography>
+      </Box>
     </Box>
   );
 }
