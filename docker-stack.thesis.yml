@@ -219,7 +219,6 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
-      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
@@ -254,7 +253,6 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
-      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
@@ -289,7 +287,6 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
-      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
@@ -324,7 +321,6 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
-      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
@@ -358,7 +354,6 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
-      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
@@ -393,7 +388,6 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
-      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
@@ -428,7 +422,6 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
-      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
@@ -464,7 +457,6 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
-      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
@@ -498,7 +490,6 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
-      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
@@ -532,7 +523,6 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
-      stop_grace_period: 30s
       resources:
         limits:
           cpus: '0.5'
@@ -569,7 +559,6 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
-      stop_grace_period: 30s
       resources:
         limits:
           cpus: '1'
