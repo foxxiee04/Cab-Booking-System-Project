@@ -1,0 +1,27 @@
+$kind: http-request
+url: "{{docker_gateway_url}}/api/drivers/register"
+method: POST
+headers:
+  Authorization: Bearer {{driverToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "vehicle": {
+        "type": "MOTORBIKE",
+        "brand": "Honda",
+        "model": "Wave Alpha",
+        "plate": "59BA-000.01",
+        "color": "Black",
+        "year": 2022
+      },
+      "license": {
+        "class": "A1",
+        "number": "123456789012",
+        "expiryDate": "2027-12-31T00:00:00.000Z"
+      }
+    }
+auth:
+  type: noauth
+order: 6000

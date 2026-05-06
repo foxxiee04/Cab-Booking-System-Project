@@ -1,0 +1,15 @@
+$kind: collection
+name: FoxGo API — Docker / Localhost only
+description: |-
+  Chỉ **Docker / localhost**: biến **`docker_gateway_url`** mặc định `http://localhost:3000`. **Import:** file này là collection **riêng** — Import lần 1 (Deploy) + lần 2 (Docker) hoặc chọn cả hai JSON cùng lúc. Không dùng chung biến với `FoxGo-API-Deploy.postman_collection.json` (`foxgo_gateway_url`).
+
+  Không thêm `/api` vào gateway URL. **Lấy OTP mock:** gửi OTP trước (`POST .../register-phone/start`), rồi `GET .../api/auth/dev/otp?phone=...` — không Bearer. Cần `OTP_SMS_MODE=mock` + `OTP_ENABLE_DEV_ENDPOINT=true` trên auth + gateway khi test mock.
+
+  **Flow đăng ký (cả Customer và Driver):** 1→ Gửi OTP | 2→ Lấy OTP (mock) | 3→ Xác nhận OTP | 4→ Hoàn tất đăng ký | 5→ Đăng nhập.
+variables:
+  docker_gateway_url: http://localhost:3000
+  customerPhone: "0901234501"
+  driverPhone: "0901234502"
+  otp: ""
+  customerToken: ""
+  driverToken: ""

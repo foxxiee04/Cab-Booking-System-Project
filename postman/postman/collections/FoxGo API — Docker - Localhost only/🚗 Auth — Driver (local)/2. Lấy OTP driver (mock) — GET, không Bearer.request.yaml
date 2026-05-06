@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{docker_gateway_url}}/api/auth/dev/otp?phone={{driverPhone}}&purpose=register"
+method: GET
+queryParams:
+  phone: "{{driverPhone}}"
+  purpose: register
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      const res = pm.response.json();
+      if (res.otp) {
+        pm.collectionVariables.set('otp', res.otp);
+        console.log('OTP saved:', res.otp);
+      }
+    language: text/javascript
+order: 2000

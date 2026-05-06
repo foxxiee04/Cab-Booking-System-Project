@@ -237,7 +237,19 @@
           }
         },
         {
-          "name": "3. Hoàn tất đăng ký driver",
+          "name": "3. Xác nhận OTP driver",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{driverPhone}}\",\n  \"otp\": \"{{otp}}\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/auth/register-phone/verify", "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","register-phone","verify"] }
+          }
+        },
+        {
+          "name": "4. Hoàn tất đăng ký driver",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -249,7 +261,7 @@
           }
         },
         {
-          "name": "4. Đăng nhập (Driver)",
+          "name": "5. Đăng nhập (Driver)",
           "event": [
             {
               "listen": "test",
@@ -277,7 +289,7 @@
           }
         },
         {
-          "name": "5. Đăng ký thông tin tài xế",
+          "name": "6. Đăng ký thông tin tài xế",
           "request": {
             "method": "POST",
             "header": [
@@ -286,7 +298,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"vehicleType\": \"MOTORBIKE\",\n  \"licensePlate\": \"51G-12345\",\n  \"vehicleModel\": \"Honda Wave\",\n  \"vehicleYear\": 2022,\n  \"licenseNumber\": \"123456789\",\n  \"licenseExpiry\": \"2027-12-31\"\n}"
+              "raw": "{\n  \"vehicle\": {\n    \"type\": \"MOTORBIKE\",\n    \"brand\": \"Honda\",\n    \"model\": \"Wave Alpha\",\n    \"plate\": \"59BA-000.01\",\n    \"color\": \"Black\",\n    \"year\": 2022\n  },\n  \"license\": {\n    \"class\": \"A1\",\n    \"number\": \"123456789012\",\n    \"expiryDate\": \"2027-12-31T00:00:00.000Z\"\n  }\n}"
             },
             "url": { "raw": "{{foxgo_gateway_url}}/api/drivers/register", "host": ["{{foxgo_gateway_url}}"], "path": ["api","drivers","register"] }
           }
