@@ -404,8 +404,8 @@ services:
     deploy:
       replicas: 1
       placement:
-        preferences:
-          - spread: node.id
+        constraints:
+          - node.role == manager
       update_config:
         parallelism: 1
         delay: 10s
@@ -535,8 +535,8 @@ services:
     deploy:
       replicas: 1
       placement:
-        preferences:
-          - spread: node.id
+        constraints:
+          - node.role == manager
       update_config:
         parallelism: 1
         delay: 10s
@@ -544,15 +544,15 @@ services:
         failure_action: rollback
       restart_policy:
         condition: on-failure
-        delay: 5s
+        delay: 10s
         max_attempts: 3
       resources:
         limits:
           cpus: '1'
-          memory: 768M
+          memory: 1536M
         reservations:
           cpus: '0.25'
-          memory: 256M
+          memory: 512M
 
   # ══════════════════════════════════════════════════════════════════════════
   # MONITORING — Collectors: mode global (chạy trên TẤT CẢ nodes tự động)

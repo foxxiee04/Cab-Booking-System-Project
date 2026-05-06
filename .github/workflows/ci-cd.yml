@@ -324,9 +324,7 @@ jobs:
             type=ref,event=branch
 
       - name: Build and push
-        id: build_push
         uses: docker/build-push-action@v5
-        continue-on-error: true
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
@@ -335,18 +333,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Build and push (fallback without GHA cache write)
-        if: steps.build_push.outcome == 'failure'
-        uses: docker/build-push-action@v5
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          push: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: ""
+          provenance: false
 
 # ──────────────────────────────────────────────────────────────────────────────
 # STAGE 3a — Deploy Backend (Docker Swarm on AWS EC2)
@@ -375,14 +362,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Copy stack and monitoring files to server
+      - name: Copy stack, env, and monitoring files to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
-          source: "docker-stack.thesis.yml,monitoring"
+          source: "docker-stack.thesis.yml,monitoring,env"
           target: "~/cab-booking/"
           strip_components: 0
 
@@ -404,11 +391,17 @@ jobs:
             [ -f .env ] && source .env
             set +o allexport
 
+            echo "▶ Cleaning up disk on all swarm nodes..."
+            for node_ip in $(docker node inspect $(docker node ls -q) --format '{{.Status.Addr}}' 2>/dev/null); do
+              ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$node_ip \
+                "docker image prune -af --filter 'until=2h' 2>/dev/null || true" 2>/dev/null || true
+            done
+
             echo "▶ Deploying stack (tag=$IMAGE_TAG)..."
             docker stack deploy \
               -c docker-stack.thesis.yml \
               --with-registry-auth \
-              --resolve-image changed \
+              --resolve-image always \
               --prune \
               cab-booking
 
@@ -435,8 +428,8 @@ jobs:
               echo "⚠ postgres not reachable after 180s — run manually: docker exec <postgres-id> psql -U postgres -f /docker-entrypoint-initdb.d/init.sql"
             fi
 
-            echo "▶ Removing dangling images (exclude images used by running services)..."
-            docker image prune -f --filter "until=24h"
+            echo "▶ Removing dangling images on manager..."
+            docker image prune -f --filter "until=48h"
 
             echo "✅ Swarm deployment complete"
 
