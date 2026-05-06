@@ -213,8 +213,6 @@ services:
     deploy:
       replicas: 1
       placement:
-        constraints:
-          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -247,8 +245,6 @@ services:
     deploy:
       replicas: 1
       placement:
-        constraints:
-          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -281,8 +277,6 @@ services:
     deploy:
       replicas: 1
       placement:
-        constraints:
-          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -315,8 +309,6 @@ services:
     deploy:
       replicas: 1
       placement:
-        constraints:
-          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -348,8 +340,6 @@ services:
     deploy:
       replicas: 1
       placement:
-        constraints:
-          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -382,8 +372,6 @@ services:
     deploy:
       replicas: 1
       placement:
-        constraints:
-          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -416,8 +404,6 @@ services:
     deploy:
       replicas: 1
       placement:
-        constraints:
-          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -451,8 +437,6 @@ services:
     deploy:
       replicas: 1
       placement:
-        constraints:
-          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -484,8 +468,6 @@ services:
     deploy:
       replicas: 1
       placement:
-        constraints:
-          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -517,8 +499,6 @@ services:
     deploy:
       replicas: 1
       placement:
-        constraints:
-          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -555,8 +535,6 @@ services:
     deploy:
       replicas: 1
       placement:
-        constraints:
-          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
