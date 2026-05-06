@@ -324,7 +324,9 @@ jobs:
             type=ref,event=branch
 
       - name: Build and push
+        id: build_push
         uses: docker/build-push-action@v5
+        continue-on-error: true
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
@@ -333,6 +335,18 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build and push (fallback without GHA cache write)
+        if: steps.build_push.outcome == 'failure'
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: ""
 
 # ──────────────────────────────────────────────────────────────────────────────
 # STAGE 3a — Deploy Backend (Docker Swarm on AWS EC2)
