@@ -14,8 +14,9 @@ scripts:
   - type: afterResponse
     code: |-
       const res = pm.response.json();
-      if (res.accessToken) {
-        pm.collectionVariables.set('customerToken', res.accessToken);
+      const token = res?.data?.tokens?.accessToken || res?.accessToken;
+      if (token) {
+        pm.collectionVariables.set('customerToken', token);
         console.log('✅ customerToken saved');
       }
     language: text/javascript

@@ -9,6 +9,7 @@ import { AuthService } from './services/auth.service';
 import { OtpService } from './services/otp.service';
 import { logger } from './utils/logger';
 import { requireInternalServiceAuth } from './middleware/internal-auth';
+import { toRegistrationPhoneDigits } from './utils/phone-normalize';
 
 interface AuthAppOptions {
   authService: AuthService;
@@ -99,15 +100,23 @@ export function createApp({ authService, otpService, getReadiness }: AuthAppOpti
         return res.status(400).json({ success: false, error: 'phone query param required' });
       }
 
+      const canonicalPhone = toRegistrationPhoneDigits(phone);
+      if (!canonicalPhone) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid phone format. Use 0xxxxxxxxx (10 digits) or +84xxxxxxxx (same key as SMS flow).',
+        });
+      }
+
       try {
-        const otp = await otpService.getPlainOtp(phone, purpose);
+        const otp = await otpService.getPlainOtp(canonicalPhone, purpose);
         if (!otp) {
           return res.status(404).json({
             success: false,
             error: 'No active OTP found for this phone/purpose (expired or not requested yet).',
           });
         }
-        logger.info('[DEV] OTP retrieved via debug endpoint', { phone: phone.slice(0, 4) + '***', purpose });
+        logger.info('[DEV] OTP retrieved via debug endpoint', { phone: `${canonicalPhone.slice(0, 4)}***`, purpose });
         return res.json({
           success: true,
           otp,

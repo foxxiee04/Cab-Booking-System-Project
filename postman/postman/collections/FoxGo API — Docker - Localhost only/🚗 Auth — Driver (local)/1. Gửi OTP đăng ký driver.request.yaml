@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{base_url}}/api/auth/register-phone/start"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "phone": "{{driverPhone}}"
+    }
+auth:
+  type: noauth
+order: 1000

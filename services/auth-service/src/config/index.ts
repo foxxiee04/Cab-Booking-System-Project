@@ -2,6 +2,11 @@ import dotenv from 'dotenv';
 import { getRequiredEnv } from '../../../../shared/dist';
 dotenv.config();
 
+function envFlagTrue(raw: string | undefined): boolean {
+  const v = (raw ?? '').trim().toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes' || v === 'on';
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
   grpcPort: parseInt(process.env.GRPC_PORT || '50051', 10),
@@ -35,7 +40,7 @@ export const config = {
     },
     resendDelays: [0, 30, 60], // seconds: 1st send immediately, 2nd after 30s, 3rd+ after 60s
     /** When true, `/api/auth/dev/otp` is registered even if NODE_ENV=production. Only for demo/staging + OTP_SMS_MODE=mock. */
-    enableDevEndpoint: process.env.OTP_ENABLE_DEV_ENDPOINT === 'true',
+    enableDevEndpoint: envFlagTrue(process.env.OTP_ENABLE_DEV_ENDPOINT),
   },
 
   sms: {

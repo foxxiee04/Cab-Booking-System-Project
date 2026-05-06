@@ -61,6 +61,22 @@ describe('authMiddleware', () => {
     delete process.env.OTP_ENABLE_DEV_ENDPOINT;
   });
 
+  it('skips auth for dev OTP when URL accidentally doubles /api (Postman base_url vs path)', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.OTP_ENABLE_DEV_ENDPOINT = 'true';
+    const { authMiddleware } = require('../../middleware/auth');
+
+    const req: any = { path: '/api/api/auth/dev/otp', headers: {} };
+    const res: any = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+
+    authMiddleware(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+    delete process.env.OTP_ENABLE_DEV_ENDPOINT;
+  });
+
   it('returns 401 when Authorization header missing', () => {
     const { authMiddleware } = require('../../middleware/auth');
 

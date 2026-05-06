@@ -1,9 +1,12 @@
 $kind: http-request
-url: "{{base_url}}/api/auth/dev/otp?phone={{customerPhone}}&purpose=reset"
+url: "{{base_url}}/api/auth/dev/otp?phone={{customerPhone}}&purpose=register"
 method: GET
 queryParams:
-  phone: "{{customerPhone}}"
-  purpose: reset
+  - key: phone
+    value: "{{customerPhone}}"
+    description: 0xxxxxxxxx hoặc +84…
+  - key: purpose
+    value: register
 auth:
   type: noauth
 scripts:
@@ -15,4 +18,4 @@ scripts:
         console.log('OTP saved:', res.otp);
       }
     language: text/javascript
-order: 8000
+order: 2000

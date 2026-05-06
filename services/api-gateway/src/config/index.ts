@@ -2,6 +2,11 @@ import dotenv from 'dotenv';
 import { getRequiredEnv, grpcAddressFromHttpUrl } from '../../../../shared/dist';
 dotenv.config();
 
+function envFlagTrue(raw: string | undefined): boolean {
+  const v = (raw ?? '').trim().toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes' || v === 'on';
+}
+
 function readNumberEnv(name: string, fallback: number): number {
   const raw = process.env[name];
   const parsed = Number(raw);
@@ -22,7 +27,7 @@ export const config = {
   port: parseInt(process.env.PORT || '3000'),
   nodeEnv: process.env.NODE_ENV || 'development',
   /** Must match auth-service: when true, expose GET /api/auth/dev/otp on gateway in production (demo only). */
-  enableDevOtpEndpoint: process.env.OTP_ENABLE_DEV_ENDPOINT === 'true',
+  enableDevOtpEndpoint: envFlagTrue(process.env.OTP_ENABLE_DEV_ENDPOINT),
   jwtSecret: getRequiredEnv('JWT_SECRET'),
   internalServiceToken: getRequiredEnv('INTERNAL_SERVICE_TOKEN'),
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',

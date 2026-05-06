@@ -2,6 +2,12 @@ $kind: collection
 description: |-
   FoxGo Cab Booking System — API Collection
 
+  Biến `base_url`: **gateway gốc, KHÔNG** thêm `/api` cuối (đúng: `http://localhost:3000`, `https://api.foxgo.io.vn`; sai — dễ 401 với OTP mock: `...io.vn/api`).
+
+  **Lấy OTP mock**: sau khi đã gửi OTP (web/Postman), gọi `GET /api/auth/dev/otp?phone=...&purpose=register` — số máy có thể `0xxxxxxxxxx` hoặc `+84…`/`84…`; cần `OTP_SMS_MODE=mock` + trên staging/prod có `OTP_ENABLE_DEV_ENDPOINT=true` (auth-service + gateway).
+
+  Để chỉ localhost/Docker có bộ rút gọn: `FoxGo-API-Docker-Local.postman_collection.json`.
+
   Default Base URL for Docker Compose: http://localhost:3000
   Production/staging: đổi biến {{base_url}} sang domain API tương ứng.
 

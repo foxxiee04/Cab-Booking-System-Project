@@ -7,17 +7,19 @@ body:
   type: text
   content: |-
     {
-      "phone": "{{driverPhone}}",
+      "phone": "{{customerPhone}}",
       "password": "Test@123456"
     }
+auth:
+  type: noauth
 scripts:
   - type: afterResponse
     code: |-
       const res = pm.response.json();
       const token = res?.data?.tokens?.accessToken || res?.accessToken;
       if (token) {
-        pm.collectionVariables.set('driverToken', token);
-        console.log('✅ driverToken saved');
+        pm.collectionVariables.set('customerToken', token);
+        console.log('customerToken saved');
       }
     language: text/javascript
-order: 4000
+order: 5000

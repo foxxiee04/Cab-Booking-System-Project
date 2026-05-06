@@ -3,6 +3,15 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
+/** Collapse `/api/api/...` when clients set base URL with a trailing `/api` and paths still include `/api`. */
+export function normalizePathForPublicAuthCheck(path: string): string {
+  let p = path.split('?')[0] || '';
+  while (p.startsWith('/api/api/')) {
+    p = `/api/${p.slice('/api/api/'.length)}`;
+  }
+  return p;
+}
+
 export interface JwtPayload {
   userId?: string;
   sub?: string;
@@ -66,8 +75,9 @@ export const authMiddleware = (
   res: Response,
   next: NextFunction
 ): void => {
+  const pathname = normalizePathForPublicAuthCheck(req.path);
   // Skip auth for public paths
-  if (isPublicPath(req.path)) {
+  if (isPublicPath(pathname)) {
     return next();
   }
 
@@ -102,7 +112,7 @@ export const authMiddleware = (
     
     next();
   } catch (error) {
-    logger.warn('Invalid token attempt', { path: req.path });
+    logger.warn('Invalid token attempt', { path: pathname });
     res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
 };

@@ -1,0 +1,216 @@
+{
+  "info": {
+    "name": "FoxGo API — Docker / Localhost only",
+    "_postman_id": "foxgo-api-docker-local-v1",
+    "description": "API Gateway mặc định **http://localhost:3000** (docker-compose). Không đổi base_url thành `.../api` — path request đã có `/api/...`.\n\n**Lấy OTP mock:** (1) Gửi OTP — `POST .../api/auth/register-phone/start` với `phone` dạng `0xxxxxxxxx`. (2) `GET .../api/auth/dev/otp?phone=...&purpose=register` — không cần Bearer; phone có thể `0xxxxxxxxx` hoặc `+84...`/`84...`.\n\nCần trong compose/env: `OTP_SMS_MODE=mock`, auth + gateway có `OTP_ENABLE_DEV_ENDPOINT=true` (dev/staging).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000", "type": "string" },
+    { "key": "customerPhone", "value": "0901234501", "type": "string" },
+    { "key": "driverPhone", "value": "0901234502", "type": "string" },
+    { "key": "otp", "value": "", "type": "string" },
+    { "key": "customerToken", "value": "", "type": "string" },
+    { "key": "driverToken", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "⚙️ System",
+      "item": [
+        {
+          "name": "Health (gateway)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+          }
+        },
+        {
+          "name": "Ready (gateway + deps)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/ready", "host": ["{{base_url}}"], "path": ["ready"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔑 Auth — Customer (local)",
+      "item": [
+        {
+          "name": "1. Gửi OTP đăng ký",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{customerPhone}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/register-phone/start",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register-phone", "start"]
+            }
+          }
+        },
+        {
+          "name": "2. Lấy OTP (mock) — GET, không Bearer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.otp) {",
+                  "  pm.collectionVariables.set('otp', res.otp);",
+                  "  console.log('OTP saved:', res.otp);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/dev/otp?phone={{customerPhone}}&purpose=register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "dev", "otp"],
+              "query": [
+                { "key": "phone", "value": "{{customerPhone}}", "description": "0xxxxxxxxx hoặc +84…" },
+                { "key": "purpose", "value": "register" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3. Xác nhận OTP",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"otp\": \"{{otp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/register-phone/verify",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register-phone", "verify"]
+            }
+          }
+        },
+        {
+          "name": "4. Hoàn tất đăng ký",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"password\": \"Test@123456\",\n  \"role\": \"CUSTOMER\",\n  \"firstName\": \"Khách\",\n  \"lastName\": \"Test\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/register-phone/complete",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register-phone", "complete"]
+            }
+          }
+        },
+        {
+          "name": "5. Đăng nhập Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "const token = res?.data?.tokens?.accessToken || res?.accessToken;",
+                  "if (token) {",
+                  "  pm.collectionVariables.set('customerToken', token);",
+                  "  console.log('customerToken saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"password\": \"Test@123456\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🚗 Auth — Driver (local)",
+      "item": [
+        {
+          "name": "1. Gửi OTP đăng ký driver",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{driverPhone}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/register-phone/start",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register-phone", "start"]
+            }
+          }
+        },
+        {
+          "name": "2. Lấy OTP driver (mock) — GET",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.otp) {",
+                  "  pm.collectionVariables.set('otp', res.otp);",
+                  "  console.log('OTP saved:', res.otp);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/dev/otp?phone={{driverPhone}}&purpose=register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "dev", "otp"],
+              "query": [
+                { "key": "phone", "value": "{{driverPhone}}" },
+                { "key": "purpose", "value": "register" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

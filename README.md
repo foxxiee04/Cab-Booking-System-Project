@@ -639,7 +639,7 @@ npm run db:seed
 
 ### 8.5 Lấy OTP bằng Postman (Docker & deploy)
 
-**Chung:** `OTP_SMS_MODE=mock` và **`OTP_ENABLE_DEV_ENDPOINT=true`** phải có trên **cả `auth-service` và `api-gateway`** (để `GET /api/auth/dev/otp` không bị chặn bởi gateway khi `NODE_ENV=production`).
+**Chung:** `OTP_SMS_MODE=mock` và **`OTP_ENABLE_DEV_ENDPOINT=true`** phải có trên **cả `auth-service` và `api-gateway`** (để `GET /api/auth/dev/otp` không bị chặn bởi gateway khi `NODE_ENV=production`). Giá trị được nhận: `true` / `1` / `yes` / `on` (không phân biệt hoa thường, đã trim).
 
 **Docker Compose (dev):** trong `docker-compose.yml` đã gắn sẵn `OTP_ENABLE_DEV_ENDPOINT=true` và `OTP_SMS_MODE=mock` cho auth; gateway cũng có cờ OTP. File mẫu: `env/auth.env.example` → copy thành `env/auth.env` nếu cần override. Hướng dẫn ngắn: `env/README.md`.
 
@@ -649,8 +649,13 @@ npm run db:seed
 
 Luồng Postman:
 
+- **`base_url` là gốc gateway, không thêm `/api` cuối** (đúng: `http://localhost:3000`, `https://api.foxgo.io.vn`; sai: `https://api.foxgo.io.vn/api` — dễ thành `/api/api/auth/...`; gateway mới đã gộp một lớp trùng nhưng vẫn nên cấu hình đúng).
+- GET lấy OTP **không** cần header `Authorization`; số trong query có thể `0xxxxxxxxxx` hoặc `+84…` / `84…` (server chuẩn hóa trùng Redis).
+
 1. `POST {base_url}/api/auth/register-phone/start` — body `{ "phone": "0901234501" }`
-2. `GET {base_url}/api/auth/dev/otp?phone=0901234501&purpose=register`
+2. `GET {base_url}/api/auth/dev/otp?phone=0901234501&purpose=register` — hoặc `phone=%2B84901234501`
+
+**Collection:** `postman/FoxGo API.postman_collection.json` (đổi biến `base_url`). Chỉ Docker/localhost: `postman/FoxGo-API-Docker-Local.postman_collection.json`.
 
 Đổi mật khẩu (quên mật khẩu) dùng `purpose=reset`:
 

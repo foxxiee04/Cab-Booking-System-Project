@@ -2,7 +2,7 @@
   "info": {
     "name": "FoxGo API",
     "_postman_id": "foxgo-api-collection-v1",
-    "description": "FoxGo Cab Booking System — API Collection\n\nDefault Base URL for Docker Compose: http://localhost:3000\nProduction/staging: đổi biến {{base_url}} sang domain API tương ứng.\n\nFlow:\n1. Đăng ký tài khoản → lấy OTP bằng GET /api/auth/dev/otp trong mock mode → xác nhận → đăng nhập\n2. Request lấy OTP tự lưu mã vào biến {{otp}}\n3. customerToken tự động được lưu sau khi login\n4. Các request tiếp theo dùng {{customerToken}} hoặc {{driverToken}}",
+    "description": "FoxGo Cab Booking System — API Collection\n\nBiến `base_url`: **gateway gốc, KHÔNG** thêm `/api` cuối (đúng: `http://localhost:3000`, `https://api.foxgo.io.vn`; sai — dễ 401 với OTP mock: `...io.vn/api`).\n\n**Lấy OTP mock**: sau khi đã gửi OTP (web/Postman), gọi `GET /api/auth/dev/otp?phone=...&purpose=register` — số máy có thể `0xxxxxxxxxx` hoặc `+84…`/`84…`; cần `OTP_SMS_MODE=mock` + trên staging/prod có `OTP_ENABLE_DEV_ENDPOINT=true` (auth-service + gateway).\n\nĐể chỉ localhost/Docker có bộ rút gọn: `FoxGo-API-Docker-Local.postman_collection.json`.\n\nDefault Base URL for Docker Compose: http://localhost:3000\nProduction/staging: đổi biến {{base_url}} sang domain API tương ứng.\n\nFlow:\n1. Đăng ký tài khoản → lấy OTP bằng GET /api/auth/dev/otp trong mock mode → xác nhận → đăng nhập\n2. Request lấy OTP tự lưu mã vào biến {{otp}}\n3. customerToken tự động được lưu sau khi login\n4. Các request tiếp theo dùng {{customerToken}} hoặc {{driverToken}}",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -50,6 +50,7 @@
             }
           ],
           "request": {
+            "auth": { "type": "noauth" },
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/api/auth/dev/otp?phone={{customerPhone}}&purpose=register",
@@ -151,6 +152,7 @@
             }
           ],
           "request": {
+            "auth": { "type": "noauth" },
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/api/auth/dev/otp?phone={{customerPhone}}&purpose=reset",
@@ -222,6 +224,7 @@
             }
           ],
           "request": {
+            "auth": { "type": "noauth" },
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/api/auth/dev/otp?phone={{driverPhone}}&purpose=register",
@@ -696,6 +699,7 @@
             }
           ],
           "request": {
+            "auth": { "type": "noauth" },
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/api/auth/dev/otp?phone=0901234501&purpose=register",

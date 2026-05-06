@@ -1,0 +1,15 @@
+$kind: collection
+name: FoxGo API — Docker / Localhost only
+description: |-
+  API Gateway mặc định **http://localhost:3000** (docker-compose). Không đổi base_url thành `.../api` — path request đã có `/api/...`.
+
+  **Lấy OTP mock:** (1) Gửi OTP — `POST .../api/auth/register-phone/start` với `phone` dạng `0xxxxxxxxx`. (2) `GET .../api/auth/dev/otp?phone=...&purpose=register` — không cần Bearer; phone có thể `0xxxxxxxxx` hoặc `+84...`/`84...`.
+
+  Cần trong compose/env: `OTP_SMS_MODE=mock`, auth + gateway có `OTP_ENABLE_DEV_ENDPOINT=true` (dev/staging).
+variables:
+  base_url: http://localhost:3000
+  customerPhone: "0901234501"
+  driverPhone: "0901234502"
+  otp: ""
+  customerToken: ""
+  driverToken: ""
