@@ -238,6 +238,7 @@ sudo usermod -aG docker ubuntu
 # Áp dụng ngay không cần logout
 newgrp docker
 
+
 # Kiểm tra
 docker --version
 # Output: Docker version 29.4.2, build ...
