@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{foxgo_gateway_url}}/api/wallet/top-up/init"
+method: POST
+headers:
+  Authorization: Bearer {{driverToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "amount": 100000,
+      "method": "MOMO"
+    }
+order: 3000

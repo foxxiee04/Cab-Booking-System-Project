@@ -1,0 +1,21 @@
+$kind: collection
+name: FoxGo API — Deploy / staging
+description: |-
+  FoxGo — API **deploy / staging / production**.
+
+  Biến collection: **`foxgo_gateway_url`** (gateway gốc, **không** thêm `/api` cuối). Mặc định trong file: **`https://api.foxgo.io.vn`** — sửa cho đúng môi trường.
+
+  **Import Postman:** dùng **Import** hai lần (hoặc chọn nhiều file trong cùng hộp thoại Import) — mỗi file `.json` là **một collection riêng**. Không trùng với Docker: file `FoxGo-API-Docker-Local.postman_collection.json`, biến **`docker_gateway_url`**. Hai collection có ID khác nhau.
+
+  **Lấy OTP mock**: `GET /api/auth/dev/otp?phone=...&purpose=register` sau khi đã gửi OTP — cần `OTP_SMS_MODE=mock` + `OTP_ENABLE_DEV_ENDPOINT=true` (auth-service + gateway).
+
+  Flow: đăng ký → GET dev OTP (mock) → xác nhận → đăng nhập; các request có `{{otp}}`, `{{customerToken}}`, `{{driverToken}}`.
+variables:
+  foxgo_gateway_url: https://api.foxgo.io.vn
+  customerToken: ""
+  driverToken: ""
+  otp: ""
+  customerPhone: "0901234501"
+  driverPhone: "0901234502"
+  rideId: ""
+  bookingId: ""

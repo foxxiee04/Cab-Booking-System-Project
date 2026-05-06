@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{foxgo_gateway_url}}/api/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "phone": "{{driverPhone}}",
+      "password": "Test@123456"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      const res = pm.response.json();
+      const token = res?.data?.tokens?.accessToken || res?.accessToken;
+      if (token) {
+        pm.collectionVariables.set('driverToken', token);
+        console.log('✅ driverToken saved');
+      }
+    language: text/javascript
+order: 4000

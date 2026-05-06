@@ -161,6 +161,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - OTP_ENABLE_DEV_ENDPOINT=true
     env_file:
       - ./env/gateway.env
     networks:
@@ -199,6 +200,8 @@ services:
       - NODE_ENV=production
       - PORT=3001
       - GRPC_PORT=50051
+      - OTP_SMS_MODE=mock
+      - OTP_ENABLE_DEV_ENDPOINT=true
     env_file:
       - ./env/auth.env
     networks:

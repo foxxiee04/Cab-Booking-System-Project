@@ -649,22 +649,27 @@ npm run db:seed
 
 Luồng Postman:
 
-- **`base_url` là gốc gateway, không thêm `/api` cuối** (đúng: `http://localhost:3000`, `https://api.foxgo.io.vn`; sai: `https://api.foxgo.io.vn/api` — dễ thành `/api/api/auth/...`; gateway mới đã gộp một lớp trùng nhưng vẫn nên cấu hình đúng).
-- GET lấy OTP **không** cần header `Authorization`; số trong query có thể `0xxxxxxxxxx` hoặc `+84…` / `84…` (server chuẩn hóa trùng Redis).
+- **`foxgo_gateway_url`** (deploy) hoặc **`docker_gateway_url`** (Docker/local): là **gốc gateway**, không thêm `/api` cuối (đúng: `http://localhost:3000`, `https://api.foxgo.io.vn`; sai: `.../api` — dễ thành `/api/api/...`).
 
-1. `POST {base_url}/api/auth/register-phone/start` — body `{ "phone": "0901234501" }`
-2. `GET {base_url}/api/auth/dev/otp?phone=0901234501&purpose=register` — hoặc `phone=%2B84901234501`
+1. `POST {foxgo_gateway_url}/api/auth/register-phone/start` — body `{ "phone": "0901234501" }` (hoặc `docker_gateway_url` khi chạy local)
 
-**Collection:** `postman/FoxGo API.postman_collection.json` (đổi biến `base_url`). Chỉ Docker/localhost: `postman/FoxGo-API-Docker-Local.postman_collection.json`.
+2. `GET {foxgo_gateway_url}/api/auth/dev/otp?phone=0901234501&purpose=register` — hoặc `phone=%2B84901234501`. **Không** cần `Authorization`; số trong query có thể `0xxxxxxxxxx` hoặc `+84…` / `84…`.
+
+**Collection Postman (hai file, hai tên biến — không dùng chung):**
+
+- Deploy/staging: `postman/FoxGo-API-Deploy.postman_collection.json` — biến **`foxgo_gateway_url`**, mặc định `https://api.foxgo.io.vn`.
+- Chỉ Docker/localhost: `postman/FoxGo-API-Docker-Local.postman_collection.json` — biến **`docker_gateway_url`**, mặc định `http://localhost:3000`.
+
+**Import vào Postman:** mở **Import** (`Ctrl+O`), chọn **`FoxGo-API-Deploy.postman_collection.json`** (Import), sau đó **Import** lại file **`FoxGo-API-Docker-Local.postman_collection.json`**; hoặc trong một lần Import chọn **cả hai file** — sẽ thành **hai collection** cạnh nhau trong sidebar (`FoxGo API — Deploy / staging` và `FoxGo API — Docker / Localhost only`). Nếu trước đó chỉ có một: kiểm tra đã không trùng bản `.json` cũ và collection đã được gán **`_postman_id`** khác nhau trong repo hiện tại.
 
 Đổi mật khẩu (quên mật khẩu) dùng `purpose=reset`:
 
 ```http
-GET {base_url}/api/auth/dev/otp?phone=0901234501&purpose=reset
+GET {foxgo_gateway_url}/api/auth/dev/otp?phone=0901234501&purpose=reset
 ```
 
-- Local Docker: `base_url=http://localhost:3000`
-- Deploy: `base_url=https://api.<domain>` (ví dụ `https://api.foxgo.online`)
+- Local Docker: `docker_gateway_url=http://localhost:3000` (collection Docker)
+- Deploy: `foxgo_gateway_url=https://api.<domain>` (collection deploy, ví dụ `https://api.foxgo.io.vn`)
 
 **Cảnh báo:** `OTP_ENABLE_DEV_ENDPOINT` chỉ nên bật trên môi trường demo / thử nghiệm. Production thật: tắt cờ này và dùng SMS thật, ví dụ:
 

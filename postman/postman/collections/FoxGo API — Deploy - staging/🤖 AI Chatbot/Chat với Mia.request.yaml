@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{foxgo_gateway_url}}/api/ai/chat"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "message": "Đặt xe FoxGo như thế nào?",
+      "history": []
+    }
+order: 1000

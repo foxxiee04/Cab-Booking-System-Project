@@ -215,8 +215,7 @@ foxgo-worker-2   Public: 13.212.196.192
 **SSH từ máy local (Windows):**
 ```powershell
 # Primary Manager
-
-
+ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@18.136.250.236
 
 # Secondary Manager
 ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@52.77.233.34

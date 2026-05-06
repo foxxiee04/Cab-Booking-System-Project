@@ -1,12 +1,12 @@
 {
   "info": {
     "name": "FoxGo API — Docker / Localhost only",
-    "_postman_id": "foxgo-api-docker-local-v1",
-    "description": "API Gateway mặc định **http://localhost:3000** (docker-compose). Không đổi base_url thành `.../api` — path request đã có `/api/...`.\n\n**Lấy OTP mock:** (1) Gửi OTP — `POST .../api/auth/register-phone/start` với `phone` dạng `0xxxxxxxxx`. (2) `GET .../api/auth/dev/otp?phone=...&purpose=register` — không cần Bearer; phone có thể `0xxxxxxxxx` hoặc `+84...`/`84...`.\n\nCần trong compose/env: `OTP_SMS_MODE=mock`, auth + gateway có `OTP_ENABLE_DEV_ENDPOINT=true` (dev/staging).",
+    "_postman_id": "9e2b1d40-8c3f-4a1e-9b7d-3f5a2c8e1d22",
+    "description": "Chỉ **Docker / localhost**: biến **`docker_gateway_url`** mặc định `http://localhost:3000`. **Import:** file này là collection **riêng** — Import lần 1 (Deploy) + lần 2 (Docker) hoặc chọn cả hai JSON cùng lúc. Không dùng chung biến với `FoxGo-API-Deploy.postman_collection.json` (`foxgo_gateway_url`).\n\nKhông thêm `/api` vào gateway URL. **Lấy OTP mock:** gửi OTP trước (`POST .../register-phone/start`), rồi `GET .../api/auth/dev/otp?phone=...` — không Bearer. Cần `OTP_SMS_MODE=mock` + `OTP_ENABLE_DEV_ENDPOINT=true` trên auth + gateway khi test mock.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url", "value": "http://localhost:3000", "type": "string" },
+    { "key": "docker_gateway_url", "value": "http://localhost:3000", "type": "string" },
     { "key": "customerPhone", "value": "0901234501", "type": "string" },
     { "key": "driverPhone", "value": "0901234502", "type": "string" },
     { "key": "otp", "value": "", "type": "string" },
@@ -23,7 +23,7 @@
             "auth": { "type": "noauth" },
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+            "url": { "raw": "{{docker_gateway_url}}/health", "host": ["{{docker_gateway_url}}"], "path": ["health"] }
           }
         },
         {
@@ -32,7 +32,7 @@
             "auth": { "type": "noauth" },
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{base_url}}/ready", "host": ["{{base_url}}"], "path": ["ready"] }
+            "url": { "raw": "{{docker_gateway_url}}/ready", "host": ["{{docker_gateway_url}}"], "path": ["ready"] }
           }
         }
       ]
@@ -51,8 +51,8 @@
               "raw": "{\n  \"phone\": \"{{customerPhone}}\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/auth/register-phone/start",
-              "host": ["{{base_url}}"],
+              "raw": "{{docker_gateway_url}}/api/auth/register-phone/start",
+              "host": ["{{docker_gateway_url}}"],
               "path": ["api", "auth", "register-phone", "start"]
             }
           }
@@ -79,8 +79,8 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/auth/dev/otp?phone={{customerPhone}}&purpose=register",
-              "host": ["{{base_url}}"],
+              "raw": "{{docker_gateway_url}}/api/auth/dev/otp?phone={{customerPhone}}&purpose=register",
+              "host": ["{{docker_gateway_url}}"],
               "path": ["api", "auth", "dev", "otp"],
               "query": [
                 { "key": "phone", "value": "{{customerPhone}}", "description": "0xxxxxxxxx hoặc +84…" },
@@ -100,8 +100,8 @@
               "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"otp\": \"{{otp}}\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/auth/register-phone/verify",
-              "host": ["{{base_url}}"],
+              "raw": "{{docker_gateway_url}}/api/auth/register-phone/verify",
+              "host": ["{{docker_gateway_url}}"],
               "path": ["api", "auth", "register-phone", "verify"]
             }
           }
@@ -117,8 +117,8 @@
               "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"password\": \"Test@123456\",\n  \"role\": \"CUSTOMER\",\n  \"firstName\": \"Khách\",\n  \"lastName\": \"Test\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/auth/register-phone/complete",
-              "host": ["{{base_url}}"],
+              "raw": "{{docker_gateway_url}}/api/auth/register-phone/complete",
+              "host": ["{{docker_gateway_url}}"],
               "path": ["api", "auth", "register-phone", "complete"]
             }
           }
@@ -150,8 +150,8 @@
               "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"password\": \"Test@123456\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/auth/login",
-              "host": ["{{base_url}}"],
+              "raw": "{{docker_gateway_url}}/api/auth/login",
+              "host": ["{{docker_gateway_url}}"],
               "path": ["api", "auth", "login"]
             }
           }
@@ -172,8 +172,8 @@
               "raw": "{\n  \"phone\": \"{{driverPhone}}\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/auth/register-phone/start",
-              "host": ["{{base_url}}"],
+              "raw": "{{docker_gateway_url}}/api/auth/register-phone/start",
+              "host": ["{{docker_gateway_url}}"],
               "path": ["api", "auth", "register-phone", "start"]
             }
           }
@@ -200,8 +200,8 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/auth/dev/otp?phone={{driverPhone}}&purpose=register",
-              "host": ["{{base_url}}"],
+              "raw": "{{docker_gateway_url}}/api/auth/dev/otp?phone={{driverPhone}}&purpose=register",
+              "host": ["{{docker_gateway_url}}"],
               "path": ["api", "auth", "dev", "otp"],
               "query": [
                 { "key": "phone", "value": "{{driverPhone}}" },

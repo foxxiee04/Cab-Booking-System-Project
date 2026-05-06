@@ -1,6 +1,0 @@
-$kind: http-request
-url: "{{base_url}}/api/drivers/me"
-method: GET
-headers:
-  Authorization: Bearer {{driverToken}}
-order: 1000

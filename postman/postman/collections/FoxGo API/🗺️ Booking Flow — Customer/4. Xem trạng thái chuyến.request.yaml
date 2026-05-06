@@ -1,6 +1,0 @@
-$kind: http-request
-url: "{{base_url}}/api/rides/{{rideId}}"
-method: GET
-headers:
-  Authorization: Bearer {{customerToken}}
-order: 5000

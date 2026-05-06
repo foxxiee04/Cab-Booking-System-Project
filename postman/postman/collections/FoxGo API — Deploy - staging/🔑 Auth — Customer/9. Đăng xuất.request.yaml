@@ -1,0 +1,10 @@
+$kind: http-request
+url: "{{foxgo_gateway_url}}/api/auth/logout"
+method: POST
+headers:
+  Authorization: Bearer {{customerToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: "{}"
+order: 10000

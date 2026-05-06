@@ -1,0 +1,717 @@
+{
+  "info": {
+    "name": "FoxGo API — Deploy / staging",
+    "_postman_id": "7f3c2a10-4b9e-4d2c-8f1a-2e6c8d0b4a21",
+    "description": "FoxGo — API **deploy / staging / production**.\n\nBiến collection: **`foxgo_gateway_url`** (gateway gốc, **không** thêm `/api` cuối). Mặc định trong file: **`https://api.foxgo.io.vn`** — sửa cho đúng môi trường.\n\n**Import Postman:** dùng **Import** hai lần (hoặc chọn nhiều file trong cùng hộp thoại Import) — mỗi file `.json` là **một collection riêng**. Không trùng với Docker: file `FoxGo-API-Docker-Local.postman_collection.json`, biến **`docker_gateway_url`**. Hai collection có ID khác nhau.\n\n**Lấy OTP mock**: `GET /api/auth/dev/otp?phone=...&purpose=register` sau khi đã gửi OTP — cần `OTP_SMS_MODE=mock` + `OTP_ENABLE_DEV_ENDPOINT=true` (auth-service + gateway).\n\nFlow: đăng ký → GET dev OTP (mock) → xác nhận → đăng nhập; các request có `{{otp}}`, `{{customerToken}}`, `{{driverToken}}`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "foxgo_gateway_url", "value": "https://api.foxgo.io.vn", "type": "string" },
+    { "key": "customerToken", "value": "", "type": "string" },
+    { "key": "driverToken", "value": "", "type": "string" },
+    { "key": "otp", "value": "", "type": "string" },
+    { "key": "customerPhone", "value": "0901234501", "type": "string" },
+    { "key": "driverPhone", "value": "0901234502", "type": "string" },
+    { "key": "rideId", "value": "", "type": "string" },
+    { "key": "bookingId", "value": "", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "🔑 Auth — Customer",
+      "item": [
+        {
+          "name": "1. Gửi OTP đăng ký",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{customerPhone}}\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/auth/register-phone/start", "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","register-phone","start"] }
+          }
+        },
+        {
+          "name": "2. Lấy OTP (mock mode)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.otp) {",
+                  "  pm.collectionVariables.set('otp', res.otp);",
+                  "  console.log('OTP saved:', res.otp);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{foxgo_gateway_url}}/api/auth/dev/otp?phone={{customerPhone}}&purpose=register",
+              "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","dev","otp"],
+              "query": [
+                { "key": "phone", "value": "{{customerPhone}}" },
+                { "key": "purpose", "value": "register" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3. Xác nhận OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"otp\": \"{{otp}}\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/auth/register-phone/verify", "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","register-phone","verify"] }
+          }
+        },
+        {
+          "name": "4. Hoàn tất đăng ký",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"password\": \"Test@123456\",\n  \"role\": \"CUSTOMER\",\n  \"firstName\": \"Khách Hàng\",\n  \"lastName\": \"Test\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/auth/register-phone/complete", "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","register-phone","complete"] }
+          }
+        },
+        {
+          "name": "5. Đăng nhập (Customer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "const token = res?.data?.tokens?.accessToken || res?.accessToken;",
+                  "if (token) {",
+                  "  pm.collectionVariables.set('customerToken', token);",
+                  "  console.log('✅ customerToken saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"password\": \"Test@123456\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/auth/login", "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","login"] }
+          }
+        },
+        {
+          "name": "6. Thông tin tôi",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+            "url": { "raw": "{{foxgo_gateway_url}}/api/auth/me", "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","me"] }
+          }
+        },
+        {
+          "name": "7. Quên mật khẩu — Gửi OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{customerPhone}}\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/auth/forgot-password", "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","forgot-password"] }
+          }
+        },
+        {
+          "name": "7b. Lấy OTP reset password (mock)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.otp) {",
+                  "  pm.collectionVariables.set('otp', res.otp);",
+                  "  console.log('OTP saved:', res.otp);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{foxgo_gateway_url}}/api/auth/dev/otp?phone={{customerPhone}}&purpose=reset",
+              "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","dev","otp"],
+              "query": [
+                { "key": "phone", "value": "{{customerPhone}}" },
+                { "key": "purpose", "value": "reset" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "8. Đặt lại mật khẩu",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"otp\": \"{{otp}}\",\n  \"newPassword\": \"NewPass@123\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/auth/reset-password", "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","reset-password"] }
+          }
+        },
+        {
+          "name": "9. Đăng xuất",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/auth/logout", "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","logout"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🚗 Auth — Driver",
+      "item": [
+        {
+          "name": "1. Gửi OTP đăng ký driver",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{driverPhone}}\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/auth/register-phone/start", "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","register-phone","start"] }
+          }
+        },
+        {
+          "name": "2. Lấy OTP driver (mock)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.otp) {",
+                  "  pm.collectionVariables.set('otp', res.otp);",
+                  "  console.log('OTP saved:', res.otp);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{foxgo_gateway_url}}/api/auth/dev/otp?phone={{driverPhone}}&purpose=register",
+              "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","dev","otp"],
+              "query": [
+                { "key": "phone", "value": "{{driverPhone}}" },
+                { "key": "purpose", "value": "register" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3. Hoàn tất đăng ký driver",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{driverPhone}}\",\n  \"password\": \"Test@123456\",\n  \"role\": \"DRIVER\",\n  \"firstName\": \"Tài Xế\",\n  \"lastName\": \"Test\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/auth/register-phone/complete", "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","register-phone","complete"] }
+          }
+        },
+        {
+          "name": "4. Đăng nhập (Driver)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "const token = res?.data?.tokens?.accessToken || res?.accessToken;",
+                  "if (token) {",
+                  "  pm.collectionVariables.set('driverToken', token);",
+                  "  console.log('✅ driverToken saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{driverPhone}}\",\n  \"password\": \"Test@123456\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/auth/login", "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","login"] }
+          }
+        },
+        {
+          "name": "5. Đăng ký thông tin tài xế",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicleType\": \"MOTORBIKE\",\n  \"licensePlate\": \"51G-12345\",\n  \"vehicleModel\": \"Honda Wave\",\n  \"vehicleYear\": 2022,\n  \"licenseNumber\": \"123456789\",\n  \"licenseExpiry\": \"2027-12-31\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/drivers/register", "host": ["{{foxgo_gateway_url}}"], "path": ["api","drivers","register"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🗺️ Booking Flow — Customer",
+      "item": [
+        {
+          "name": "1. Ước tính giá (Pricing)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup\": {\n    \"lat\": 10.7769,\n    \"lng\": 106.7009,\n    \"address\": \"Quận 1, TP.HCM\"\n  },\n  \"dropoff\": {\n    \"lat\": 10.8231,\n    \"lng\": 106.6297,\n    \"address\": \"Tân Bình, TP.HCM\"\n  },\n  \"vehicleType\": \"MOTORBIKE\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/pricing/estimate", "host": ["{{foxgo_gateway_url}}"], "path": ["api","pricing","estimate"] }
+          }
+        },
+        {
+          "name": "2. Tìm tài xế gần đây",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+            "url": {
+              "raw": "{{foxgo_gateway_url}}/api/drivers/nearby?lat=10.7769&lng=106.7009&radius=3&vehicleType=MOTORBIKE",
+              "host": ["{{foxgo_gateway_url}}"], "path": ["api","drivers","nearby"],
+              "query": [
+                { "key": "lat", "value": "10.7769" },
+                { "key": "lng", "value": "106.7009" },
+                { "key": "radius", "value": "3" },
+                { "key": "vehicleType", "value": "MOTORBIKE" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3. Đặt xe (Cash)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.rideId || (res.data && res.data.id)) {",
+                  "  const id = res.rideId || res.data.id;",
+                  "  pm.collectionVariables.set('rideId', id);",
+                  "  console.log('rideId saved:', id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup\": {\n    \"lat\": 10.7769,\n    \"lng\": 106.7009,\n    \"address\": \"Quận 1, TP.HCM\"\n  },\n  \"dropoff\": {\n    \"lat\": 10.8231,\n    \"lng\": 106.6297,\n    \"address\": \"Tân Bình, TP.HCM\"\n  },\n  \"vehicleType\": \"MOTORBIKE\",\n  \"paymentMethod\": \"CASH\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/bookings", "host": ["{{foxgo_gateway_url}}"], "path": ["api","bookings"] }
+          }
+        },
+        {
+          "name": "3b. Đặt xe (MoMo)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup\": {\n    \"lat\": 10.7769,\n    \"lng\": 106.7009,\n    \"address\": \"Quận 1, TP.HCM\"\n  },\n  \"dropoff\": {\n    \"lat\": 10.8231,\n    \"lng\": 106.6297,\n    \"address\": \"Tân Bình, TP.HCM\"\n  },\n  \"vehicleType\": \"MOTORBIKE\",\n  \"paymentMethod\": \"MOMO\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/bookings", "host": ["{{foxgo_gateway_url}}"], "path": ["api","bookings"] }
+          }
+        },
+        {
+          "name": "4. Xem trạng thái chuyến",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+            "url": { "raw": "{{foxgo_gateway_url}}/api/rides/{{rideId}}", "host": ["{{foxgo_gateway_url}}"], "path": ["api","rides","{{rideId}}"] }
+          }
+        },
+        {
+          "name": "5. Hủy chuyến",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Thay đổi kế hoạch\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/rides/{{rideId}}/cancel", "host": ["{{foxgo_gateway_url}}"], "path": ["api","rides","{{rideId}}","cancel"] }
+          }
+        },
+        {
+          "name": "6. Lịch sử chuyến xe",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+            "url": { "raw": "{{foxgo_gateway_url}}/api/rides/customer/history?page=1&limit=10", "host": ["{{foxgo_gateway_url}}"], "path": ["api","rides","customer","history"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }] }
+          }
+        },
+        {
+          "name": "7. Đánh giá tài xế",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rideId\": \"{{rideId}}\",\n  \"rating\": 5,\n  \"comment\": \"Tài xế rất tốt, lái xe an toàn!\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/reviews", "host": ["{{foxgo_gateway_url}}"], "path": ["api","reviews"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🏍️ Driver Flow",
+      "item": [
+        {
+          "name": "1. Thông tin tài xế",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": { "raw": "{{foxgo_gateway_url}}/api/drivers/me", "host": ["{{foxgo_gateway_url}}"], "path": ["api","drivers","me"] }
+          }
+        },
+        {
+          "name": "2. Bật Online (nhận chuyến)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 10.7769,\n  \"lng\": 106.7009\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/drivers/me/online", "host": ["{{foxgo_gateway_url}}"], "path": ["api","drivers","me","online"] }
+          }
+        },
+        {
+          "name": "3. Tắt Offline",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/drivers/me/offline", "host": ["{{foxgo_gateway_url}}"], "path": ["api","drivers","me","offline"] }
+          }
+        },
+        {
+          "name": "4. Cập nhật vị trí",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 10.7769,\n  \"lng\": 106.7009\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/drivers/me/location", "host": ["{{foxgo_gateway_url}}"], "path": ["api","drivers","me","location"] }
+          }
+        },
+        {
+          "name": "5. Chấp nhận chuyến",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/drivers/me/rides/{{rideId}}/accept", "host": ["{{foxgo_gateway_url}}"], "path": ["api","drivers","me","rides","{{rideId}}","accept"] }
+          }
+        },
+        {
+          "name": "6. Chuyến hiện tại",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": { "raw": "{{foxgo_gateway_url}}/api/rides/driver/active", "host": ["{{foxgo_gateway_url}}"], "path": ["api","rides","driver","active"] }
+          }
+        },
+        {
+          "name": "7. Đến điểm đón",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/rides/{{rideId}}/pickup", "host": ["{{foxgo_gateway_url}}"], "path": ["api","rides","{{rideId}}","pickup"] }
+          }
+        },
+        {
+          "name": "8. Bắt đầu chuyến",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/rides/{{rideId}}/start", "host": ["{{foxgo_gateway_url}}"], "path": ["api","rides","{{rideId}}","start"] }
+          }
+        },
+        {
+          "name": "9. Hoàn thành chuyến",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/rides/{{rideId}}/complete", "host": ["{{foxgo_gateway_url}}"], "path": ["api","rides","{{rideId}}","complete"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "💰 Wallet — Driver",
+      "item": [
+        {
+          "name": "Xem ví",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": { "raw": "{{foxgo_gateway_url}}/api/wallet/balance", "host": ["{{foxgo_gateway_url}}"], "path": ["api","wallet","balance"] }
+          }
+        },
+        {
+          "name": "Lịch sử giao dịch",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": { "raw": "{{foxgo_gateway_url}}/api/wallet/transactions?page=1&limit=10", "host": ["{{foxgo_gateway_url}}"], "path": ["api","wallet","transactions"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }] }
+          }
+        },
+        {
+          "name": "Nạp tiền (MoMo)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 100000,\n  \"method\": \"MOMO\"\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/wallet/top-up/init", "host": ["{{foxgo_gateway_url}}"], "path": ["api","wallet","top-up","init"] }
+          }
+        },
+        {
+          "name": "Rút tiền",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 50000\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/wallet/withdraw", "host": ["{{foxgo_gateway_url}}"], "path": ["api","wallet","withdraw"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "💳 Payments",
+      "item": [
+        {
+          "name": "Lịch sử thanh toán",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+            "url": { "raw": "{{foxgo_gateway_url}}/api/payments/customer/history", "host": ["{{foxgo_gateway_url}}"], "path": ["api","payments","customer","history"] }
+          }
+        },
+        {
+          "name": "Trạng thái thanh toán",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+            "url": { "raw": "{{foxgo_gateway_url}}/api/payments/ride/{{rideId}}", "host": ["{{foxgo_gateway_url}}"], "path": ["api","payments","ride","{{rideId}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🤖 AI Chatbot",
+      "item": [
+        {
+          "name": "Chat với Mia",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Đặt xe FoxGo như thế nào?\",\n  \"history\": []\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/ai/chat", "host": ["{{foxgo_gateway_url}}"], "path": ["api","ai","chat"] }
+          }
+        },
+        {
+          "name": "Chat có lịch sử hội thoại",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"hủy thì mất tiền không?\",\n  \"history\": [\n    { \"role\": \"user\", \"content\": \"Đặt xe FoxGo như thế nào?\" },\n    { \"role\": \"assistant\", \"content\": \"Mở app lên, nhập điểm đón và điểm đến...\" }\n  ]\n}"
+            },
+            "url": { "raw": "{{foxgo_gateway_url}}/api/ai/chat", "host": ["{{foxgo_gateway_url}}"], "path": ["api","ai","chat"] }
+          }
+        },
+        {
+          "name": "Trạng thái AI (chunks indexed)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{foxgo_gateway_url}}/api/ai/chat/status", "host": ["{{foxgo_gateway_url}}"], "path": ["api","ai","chat","status"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🔔 Notifications",
+      "item": [
+        {
+          "name": "Danh sách thông báo",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+            "url": { "raw": "{{foxgo_gateway_url}}/api/notifications?page=1&limit=20", "host": ["{{foxgo_gateway_url}}"], "path": ["api","notifications"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }] }
+          }
+        },
+        {
+          "name": "Thống kê thông báo",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": { "raw": "{{foxgo_gateway_url}}/api/notifications/statistics", "host": ["{{foxgo_gateway_url}}"], "path": ["api","notifications","statistics"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "⚙️ System",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{foxgo_gateway_url}}/health", "host": ["{{foxgo_gateway_url}}"], "path": ["health"] }
+          }
+        },
+        {
+          "name": "Lấy OTP (mock — bất kỳ phone)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.otp) {",
+                  "  pm.collectionVariables.set('otp', res.otp);",
+                  "  console.log('OTP saved:', res.otp);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{foxgo_gateway_url}}/api/auth/dev/otp?phone=0901234501&purpose=register",
+              "host": ["{{foxgo_gateway_url}}"], "path": ["api","auth","dev","otp"],
+              "query": [
+                { "key": "phone", "value": "0901234501" },
+                { "key": "purpose", "value": "register", "description": "register | reset" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

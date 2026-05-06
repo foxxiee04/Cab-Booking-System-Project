@@ -1,6 +1,0 @@
-$kind: http-request
-url: "{{base_url}}/api/rides/driver/active"
-method: GET
-headers:
-  Authorization: Bearer {{driverToken}}
-order: 6000

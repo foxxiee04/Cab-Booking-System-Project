@@ -1,9 +1,0 @@
-$kind: http-request
-url: "{{base_url}}/api/wallet/transactions?page=1&limit=10"
-method: GET
-headers:
-  Authorization: Bearer {{driverToken}}
-queryParams:
-  page: "1"
-  limit: "10"
-order: 2000

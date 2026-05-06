@@ -1,0 +1,4 @@
+$kind: http-request
+url: "{{foxgo_gateway_url}}/api/ai/chat/status"
+method: GET
+order: 3000
