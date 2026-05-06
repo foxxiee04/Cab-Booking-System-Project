@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{base_url}}/api/ai/chat"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "message": "hủy thì mất tiền không?",
+      "history": [
+        { "role": "user", "content": "Đặt xe FoxGo như thế nào?" },
+        { "role": "assistant", "content": "Mở app lên, nhập điểm đón và điểm đến..." }
+      ]
+    }
+order: 2000

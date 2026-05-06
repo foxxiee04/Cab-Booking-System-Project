@@ -2,13 +2,14 @@
   "info": {
     "name": "FoxGo API",
     "_postman_id": "foxgo-api-collection-v1",
-    "description": "FoxGo Cab Booking System — API Collection\n\nBase URL: https://api.foxgo.io.vn\n\nFlow:\n1. Đăng ký tài khoản → lấy OTP → xác nhận → đăng nhập\n2. customerToken tự động được lưu sau khi login\n3. Các request tiếp theo dùng {{customerToken}} hoặc {{driverToken}}",
+    "description": "FoxGo Cab Booking System — API Collection\n\nDefault Base URL for Docker Compose: http://localhost:3000\nProduction/staging: đổi biến {{base_url}} sang domain API tương ứng.\n\nFlow:\n1. Đăng ký tài khoản → lấy OTP bằng GET /api/auth/dev/otp trong mock mode → xác nhận → đăng nhập\n2. Request lấy OTP tự lưu mã vào biến {{otp}}\n3. customerToken tự động được lưu sau khi login\n4. Các request tiếp theo dùng {{customerToken}} hoặc {{driverToken}}",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url", "value": "https://api.foxgo.io.vn", "type": "string" },
+    { "key": "base_url", "value": "http://localhost:3000", "type": "string" },
     { "key": "customerToken", "value": "", "type": "string" },
     { "key": "driverToken", "value": "", "type": "string" },
+    { "key": "otp", "value": "", "type": "string" },
     { "key": "customerPhone", "value": "0901234501", "type": "string" },
     { "key": "driverPhone", "value": "0901234502", "type": "string" },
     { "key": "rideId", "value": "", "type": "string" },
@@ -33,6 +34,21 @@
         },
         {
           "name": "2. Lấy OTP (mock mode)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.otp) {",
+                  "  pm.collectionVariables.set('otp', res.otp);",
+                  "  console.log('OTP saved:', res.otp);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "url": {
@@ -52,7 +68,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"otp\": \"123456\"\n}"
+              "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"otp\": \"{{otp}}\"\n}"
             },
             "url": { "raw": "{{base_url}}/api/auth/register-phone/verify", "host": ["{{base_url}}"], "path": ["api","auth","register-phone","verify"] }
           }
@@ -64,7 +80,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"otp\": \"123456\",\n  \"name\": \"Khách Hàng Test\",\n  \"email\": \"customer@test.com\",\n  \"password\": \"Test@123456\"\n}"
+              "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"password\": \"Test@123456\",\n  \"role\": \"CUSTOMER\",\n  \"firstName\": \"Khách Hàng\",\n  \"lastName\": \"Test\"\n}"
             },
             "url": { "raw": "{{base_url}}/api/auth/register-phone/complete", "host": ["{{base_url}}"], "path": ["api","auth","register-phone","complete"] }
           }
@@ -77,8 +93,9 @@
               "script": {
                 "exec": [
                   "const res = pm.response.json();",
-                  "if (res.accessToken) {",
-                  "  pm.collectionVariables.set('customerToken', res.accessToken);",
+                  "const token = res?.data?.tokens?.accessToken || res?.accessToken;",
+                  "if (token) {",
+                  "  pm.collectionVariables.set('customerToken', token);",
                   "  console.log('✅ customerToken saved');",
                   "}"
                 ],
@@ -118,6 +135,21 @@
         },
         {
           "name": "7b. Lấy OTP reset password (mock)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.otp) {",
+                  "  pm.collectionVariables.set('otp', res.otp);",
+                  "  console.log('OTP saved:', res.otp);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "url": {
@@ -137,7 +169,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"otp\": \"123456\",\n  \"newPassword\": \"NewPass@123\"\n}"
+              "raw": "{\n  \"phone\": \"{{customerPhone}}\",\n  \"otp\": \"{{otp}}\",\n  \"newPassword\": \"NewPass@123\"\n}"
             },
             "url": { "raw": "{{base_url}}/api/auth/reset-password", "host": ["{{base_url}}"], "path": ["api","auth","reset-password"] }
           }
@@ -174,6 +206,21 @@
         },
         {
           "name": "2. Lấy OTP driver (mock)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.otp) {",
+                  "  pm.collectionVariables.set('otp', res.otp);",
+                  "  console.log('OTP saved:', res.otp);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "url": {
@@ -193,7 +240,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"{{driverPhone}}\",\n  \"otp\": \"123456\",\n  \"name\": \"Tài Xế Test\",\n  \"email\": \"driver@test.com\",\n  \"password\": \"Test@123456\"\n}"
+              "raw": "{\n  \"phone\": \"{{driverPhone}}\",\n  \"password\": \"Test@123456\",\n  \"role\": \"DRIVER\",\n  \"firstName\": \"Tài Xế\",\n  \"lastName\": \"Test\"\n}"
             },
             "url": { "raw": "{{base_url}}/api/auth/register-phone/complete", "host": ["{{base_url}}"], "path": ["api","auth","register-phone","complete"] }
           }
@@ -206,8 +253,9 @@
               "script": {
                 "exec": [
                   "const res = pm.response.json();",
-                  "if (res.accessToken) {",
-                  "  pm.collectionVariables.set('driverToken', res.accessToken);",
+                  "const token = res?.data?.tokens?.accessToken || res?.accessToken;",
+                  "if (token) {",
+                  "  pm.collectionVariables.set('driverToken', token);",
                   "  console.log('✅ driverToken saved');",
                   "}"
                 ],
@@ -352,7 +400,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
-            "url": { "raw": "{{base_url}}/api/rides/history?page=1&limit=10", "host": ["{{base_url}}"], "path": ["api","rides","history"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }] }
+            "url": { "raw": "{{base_url}}/api/rides/customer/history?page=1&limit=10", "host": ["{{base_url}}"], "path": ["api","rides","customer","history"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }] }
           }
         },
         {
@@ -443,7 +491,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
-            "url": { "raw": "{{base_url}}/api/rides/current", "host": ["{{base_url}}"], "path": ["api","rides","current"] }
+            "url": { "raw": "{{base_url}}/api/rides/driver/active", "host": ["{{base_url}}"], "path": ["api","rides","driver","active"] }
           }
         },
         {
@@ -455,7 +503,7 @@
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": { "mode": "raw", "raw": "{}" },
-            "url": { "raw": "{{base_url}}/api/rides/{{rideId}}/arrived", "host": ["{{base_url}}"], "path": ["api","rides","{{rideId}}","arrived"] }
+            "url": { "raw": "{{base_url}}/api/rides/{{rideId}}/pickup", "host": ["{{base_url}}"], "path": ["api","rides","{{rideId}}","pickup"] }
           }
         },
         {
@@ -493,7 +541,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
-            "url": { "raw": "{{base_url}}/api/wallet/me", "host": ["{{base_url}}"], "path": ["api","wallet","me"] }
+            "url": { "raw": "{{base_url}}/api/wallet/balance", "host": ["{{base_url}}"], "path": ["api","wallet","balance"] }
           }
         },
         {
@@ -516,7 +564,7 @@
               "mode": "raw",
               "raw": "{\n  \"amount\": 100000,\n  \"method\": \"MOMO\"\n}"
             },
-            "url": { "raw": "{{base_url}}/api/wallet/top-up/initiate", "host": ["{{base_url}}"], "path": ["api","wallet","top-up","initiate"] }
+            "url": { "raw": "{{base_url}}/api/wallet/top-up/init", "host": ["{{base_url}}"], "path": ["api","wallet","top-up","init"] }
           }
         },
         {
@@ -545,7 +593,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
-            "url": { "raw": "{{base_url}}/api/payments/history", "host": ["{{base_url}}"], "path": ["api","payments","history"] }
+            "url": { "raw": "{{base_url}}/api/payments/customer/history", "host": ["{{base_url}}"], "path": ["api","payments","customer","history"] }
           }
         },
         {
@@ -553,7 +601,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
-            "url": { "raw": "{{base_url}}/api/payments/{{rideId}}", "host": ["{{base_url}}"], "path": ["api","payments","{{rideId}}"] }
+            "url": { "raw": "{{base_url}}/api/payments/ride/{{rideId}}", "host": ["{{base_url}}"], "path": ["api","payments","ride","{{rideId}}"] }
           }
         }
       ]
@@ -608,15 +656,13 @@
           }
         },
         {
-          "name": "Đánh dấu đã đọc",
+          "name": "Thống kê thông báo",
           "request": {
-            "method": "PATCH",
+            "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{customerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
             ],
-            "body": { "mode": "raw", "raw": "{}" },
-            "url": { "raw": "{{base_url}}/api/notifications/read-all", "host": ["{{base_url}}"], "path": ["api","notifications","read-all"] }
+            "url": { "raw": "{{base_url}}/api/notifications/statistics", "host": ["{{base_url}}"], "path": ["api","notifications","statistics"] }
           }
         }
       ]
@@ -634,6 +680,21 @@
         },
         {
           "name": "Lấy OTP (mock — bất kỳ phone)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.otp) {",
+                  "  pm.collectionVariables.set('otp', res.otp);",
+                  "  console.log('OTP saved:', res.otp);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "url": {

@@ -51,6 +51,13 @@ const PUBLIC_PATHS = [
 
 // Check if path is public
 const isPublicPath = (path: string): boolean => {
+  if (
+    path.startsWith('/api/auth/dev/otp') &&
+    (config.nodeEnv !== 'production' || config.enableDevOtpEndpoint)
+  ) {
+    return true;
+  }
+
   return PUBLIC_PATHS.some(publicPath => path.startsWith(publicPath));
 };
 

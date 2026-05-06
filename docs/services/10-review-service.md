@@ -63,11 +63,14 @@ Sau khi review được lưu, service tính toán và cập nhật `ratingAverag
 | Method | Path | Mô tả | Auth |
 |--------|------|-------|------|
 | POST | `/api/reviews` | Gửi đánh giá sau chuyến | ✅ |
-| GET | `/api/reviews/driver/:driverId` | Đánh giá của một tài xế | ✅ |
+| GET | `/api/reviews/received/:userId` | Đánh giá mà user nhận được | ✅ |
+| GET | `/api/reviews/given/:userId` | Đánh giá do user đã gửi | ✅ |
 | GET | `/api/reviews/ride/:rideId` | Đánh giá của một chuyến | ✅ |
-| GET | `/api/reviews/me` | Đánh giá của tôi | ✅ |
-| GET | `/api/admin/reviews` | Tất cả đánh giá (admin) | ✅ ADMIN |
-| PATCH | `/api/admin/reviews/:id/hide` | Ẩn đánh giá vi phạm | ✅ ADMIN |
+| GET | `/api/reviews/stats/:userId` | Thống kê rating của user | ✅ |
+| GET | `/api/reviews/driver/:driverId/stats` | Thống kê rating của tài xế | ✅ |
+| PUT | `/api/reviews/:reviewId` | Cập nhật đánh giá | ✅ |
+| DELETE | `/api/reviews/:reviewId` | Xóa đánh giá | ✅ |
+| GET | `/api/reviews/top-drivers` | Danh sách tài xế rating cao | ✅ |
 
 ---
 

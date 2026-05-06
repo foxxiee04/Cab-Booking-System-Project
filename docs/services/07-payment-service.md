@@ -170,20 +170,27 @@ OutboxEvent {
 
 | Method | Path | Mô tả |
 |--------|------|-------|
-| POST | `/api/payment/initiate` | Khởi tạo thanh toán cho chuyến |
-| GET | `/api/payment/:id` | Trạng thái thanh toán |
-| POST | `/api/payment/momo/ipn` | Callback IPN từ MoMo |
-| POST | `/api/payment/vnpay/ipn` | Callback IPN từ VNPay |
-| GET | `/api/payment/vouchers` | Danh sách voucher khả dụng |
-| POST | `/api/payment/vouchers/validate` | Kiểm tra voucher hợp lệ |
+| POST | `/api/payments` | Tạo payment ngoài/generic |
+| POST | `/api/payments/intents` | Tạo payment intent |
+| GET | `/api/payments/methods` | Danh sách phương thức thanh toán |
+| POST | `/api/payments/momo/create` | Tạo thanh toán MoMo |
+| POST | `/api/payments/vnpay/create` | Tạo thanh toán VNPay |
+| GET | `/api/payments/:id` | Trạng thái thanh toán theo paymentId |
+| GET | `/api/payments/ride/:rideId` | Thanh toán theo rideId |
+| GET | `/api/payments/customer/history` | Lịch sử thanh toán của khách |
+| POST | `/api/payments/ipn/momo` | Callback IPN MoMo thống nhất |
+| POST | `/api/payments/ipn/vnpay` | Callback IPN VNPay thống nhất |
+| GET | `/api/voucher/public` | Danh sách voucher công khai |
+| POST | `/api/voucher/apply` | Áp voucher |
 
 ### Driver Wallet (trong payment-service)
 
 | Method | Path | Mô tả |
 |--------|------|-------|
-| GET | `/api/wallet/balance` | Số dư ví (payment_db) |
-| POST | `/api/wallet/top-up/momo` | Nạp tiền qua MoMo |
-| POST | `/api/wallet/top-up/vnpay` | Nạp tiền qua VNPay |
+| GET | `/api/wallet` | Ví payment-side của tài xế |
+| POST | `/api/wallet/top-up/init` | Khởi tạo nạp ví qua MoMo/VNPay |
+| POST | `/api/wallet/top-up/sandbox-confirm` | Xác nhận nạp ví trong sandbox/dev |
+| GET | `/api/wallet/top-up/status/:topUpId` | Kiểm tra trạng thái lệnh nạp |
 | POST | `/api/wallet/withdraw` | Yêu cầu rút tiền |
 
 ---

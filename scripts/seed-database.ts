@@ -14,7 +14,7 @@
  *   3. Tạo 5 voucher qua /api/voucher/admin
  *   4. Tạo 4 incentive rule qua /api/admin/wallet/incentive-rules
  *   5. Đăng ký 10 customer qua register-phone/start → verify → complete
- *      (OTP lấy từ auth-service /internal/dev/otp với INTERNAL_SERVICE_TOKEN)
+ *      (OTP lấy từ auth-service /api/auth/dev/otp trong mock mode)
  *   6. Đăng ký 15 driver tương tự
  *   7. Mỗi driver: POST /api/drivers/register (vehicle + license)
  *   8. Admin approve 12 driver đầu (3 cuối để PENDING demo flow)
@@ -50,7 +50,6 @@ import bcrypt from 'bcryptjs';
 
 const GATEWAY_BASE = process.env.GATEWAY_BASE_URL || 'http://localhost:3000';
 const AUTH_INTERNAL_BASE = process.env.AUTH_INTERNAL_URL || 'http://localhost:3001';
-const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || 'test-internal-token';
 
 const POSTGRES_HOST = process.env.POSTGRES_HOST || 'localhost';
 const POSTGRES_PORT = process.env.POSTGRES_PORT || '5433';
@@ -228,14 +227,13 @@ function clearOtpRateLimits(silent = false) {
   }
 }
 
-// ─── OTP fetch via auth-service internal ─────────────────────────────────────
+// ─── OTP fetch via auth-service dev endpoint ─────────────────────────────────
 
 async function fetchOtp(phone: string, purpose = 'register'): Promise<string> {
   const data = await http<{ success: boolean; otp: string }>(
-    `/internal/dev/otp?phone=${encodeURIComponent(phone)}&purpose=${purpose}`,
+    `/api/auth/dev/otp?phone=${encodeURIComponent(phone)}&purpose=${purpose}`,
     {
       baseUrl: AUTH_INTERNAL_BASE,
-      headers: { 'x-internal-token': INTERNAL_TOKEN },
     },
   );
   if (!data?.otp) {

@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{base_url}}/api/payments/customer/history"
+method: GET
+headers:
+  Authorization: Bearer {{customerToken}}
+order: 1000

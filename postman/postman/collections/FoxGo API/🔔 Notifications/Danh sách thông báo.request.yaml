@@ -1,0 +1,9 @@
+$kind: http-request
+url: "{{base_url}}/api/notifications?page=1&limit=20"
+method: GET
+headers:
+  Authorization: Bearer {{customerToken}}
+queryParams:
+  page: "1"
+  limit: "20"
+order: 1000

@@ -6,7 +6,7 @@ Requires Node: npx @mermaid-js/mermaid-cli
 
   python scripts/generate_diagrams.py
 
-Output: img/01_system_architecture_overview.png … img/20_*.png
+Output: img/01_system_architecture_overview.png … img/23_*.png
 """
 
 from __future__ import annotations
@@ -41,6 +41,9 @@ RENDER_MAP = [
     ("18_erd_core_services", "18_erd_core_services.png"),
     ("19_component_api_gateway", "19_component_api_gateway.png"),
     ("20_security_trust_boundary", "20_security_trust_boundary.png"),
+    ("21_aws_swarm_deployment_actual", "21_aws_swarm_deployment_actual.png"),
+    ("22_aws_target_reference_topology", "22_aws_target_reference_topology.png"),
+    ("23_cicd_pipeline_github_actions", "23_cicd_pipeline_github_actions.png"),
 ]
 
 MERMAID_CLI = "@mermaid-js/mermaid-cli@11.4.2"
@@ -49,6 +52,11 @@ MERMAID_CLI = "@mermaid-js/mermaid-cli@11.4.2"
 # (chiều rộng px, chiều cao px, scale tùy chọn cho puppeteer)
 SIZE_OVERRIDES: dict[str, tuple[str, str, str | None]] = {
     "01_system_architecture_overview": ("3200", "2800", "1.05"),
+    "14_api_gateway_routing_map": ("2600", "3200", "1.0"),
+    "05_data_architecture": ("3400", "1500", "1.0"),
+    "21_aws_swarm_deployment_actual": ("4200", "1100", None),
+    "22_aws_target_reference_topology": ("2400", "2200", None),
+    "23_cicd_pipeline_github_actions": ("3000", "1100", None),
 }
 
 

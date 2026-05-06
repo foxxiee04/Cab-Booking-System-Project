@@ -34,6 +34,8 @@ export const config = {
       ipWindowSeconds: parseInt(process.env.OTP_RATE_IP_WINDOW || '60', 10),
     },
     resendDelays: [0, 30, 60], // seconds: 1st send immediately, 2nd after 30s, 3rd+ after 60s
+    /** When true, `/api/auth/dev/otp` is registered even if NODE_ENV=production. Only for demo/staging + OTP_SMS_MODE=mock. */
+    enableDevEndpoint: process.env.OTP_ENABLE_DEV_ENDPOINT === 'true',
   },
 
   sms: {

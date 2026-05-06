@@ -1,0 +1,10 @@
+$kind: http-request
+url: "{{base_url}}/api/rides/{{rideId}}/start"
+method: POST
+headers:
+  Authorization: Bearer {{driverToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: "{}"
+order: 8000

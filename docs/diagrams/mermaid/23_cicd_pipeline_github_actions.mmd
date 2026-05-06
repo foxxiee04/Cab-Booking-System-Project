@@ -1,0 +1,15 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '18px', 'primaryColor': '#ecfdf5', 'primaryTextColor': '#0f172a', 'primaryBorderColor': '#059669'}}}%%
+flowchart TB
+  P[Đẩy code · GitHub]
+
+  T[Bước 1 · test song song · unit + contract + integration + AI]
+
+  B[Bước 2 · build matrix · push Docker Hub]
+
+  D[Bước 3 · deploy · scp stack · docker stack deploy · build SPA + rsync + nginx reload]
+
+  P --> T
+
+  T --> B
+
+  B --> D

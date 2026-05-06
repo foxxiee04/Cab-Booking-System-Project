@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{base_url}}/api/wallet/withdraw"
+method: POST
+headers:
+  Authorization: Bearer {{driverToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "amount": 50000
+    }
+order: 4000

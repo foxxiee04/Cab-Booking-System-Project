@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{base_url}}/api/drivers/me/online"
+method: POST
+headers:
+  Authorization: Bearer {{driverToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "lat": 10.7769,
+      "lng": 106.7009
+    }
+order: 2000

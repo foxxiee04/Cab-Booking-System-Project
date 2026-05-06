@@ -1,0 +1,24 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '17px', 'primaryColor': '#eff6ff', 'primaryTextColor': '#0f172a', 'primaryBorderColor': '#2563eb'}}}%%
+flowchart LR
+  U[Người dùng]
+
+  DNS[DNS · foxgo.online]
+
+  GH[GitHub Actions]
+
+  subgraph SW[Docker Swarm · AWS ap-southeast-1]
+    direction LR
+    PM[Manager chính · on-demand · EIP + Nginx + Postgres/Mongo trên manager]
+    SM[Manager phụ · on-demand · Raft + HA]
+    WK[Worker · Spot · scale replicas]
+  end
+
+  U --> DNS
+
+  DNS --> PM
+
+  PM --- SM
+
+  PM --- WK
+
+  GH -.->|SSH| PM

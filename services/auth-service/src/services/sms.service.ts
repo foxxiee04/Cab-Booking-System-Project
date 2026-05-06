@@ -40,7 +40,7 @@ export class SmsService {
       phone: this.maskPhone(phone),
       ttlSeconds: config.otp.ttlSeconds,
       maxAttempts: config.otp.maxAttempts,
-      hint: 'Lay OTP trong log auth-service (docker logs / pm2 logs), khong truy xuat qua API.',
+      hint: 'Lay OTP mock qua GET /api/auth/dev/otp?phone=<phone>&purpose=<register|reset> trong moi truong dev.',
     });
   }
 

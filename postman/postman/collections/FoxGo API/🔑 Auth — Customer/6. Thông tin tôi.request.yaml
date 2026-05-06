@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{base_url}}/api/auth/me"
+method: GET
+headers:
+  Authorization: Bearer {{customerToken}}
+order: 6000

@@ -1,0 +1,22 @@
+$kind: http-request
+url: "{{base_url}}/api/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "phone": "{{customerPhone}}",
+      "password": "Test@123456"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      const res = pm.response.json();
+      if (res.accessToken) {
+        pm.collectionVariables.set('customerToken', res.accessToken);
+        console.log('✅ customerToken saved');
+      }
+    language: text/javascript
+order: 5000

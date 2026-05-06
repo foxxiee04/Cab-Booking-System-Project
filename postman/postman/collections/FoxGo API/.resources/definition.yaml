@@ -1,0 +1,21 @@
+$kind: collection
+description: |-
+  FoxGo Cab Booking System — API Collection
+
+  Default Base URL for Docker Compose: http://localhost:3000
+  Production/staging: đổi biến {{base_url}} sang domain API tương ứng.
+
+  Flow:
+  1. Đăng ký tài khoản → lấy OTP bằng GET /api/auth/dev/otp trong mock mode → xác nhận → đăng nhập
+  2. Request lấy OTP tự lưu mã vào biến {{otp}}
+  3. customerToken tự động được lưu sau khi login
+  4. Các request tiếp theo dùng {{customerToken}} hoặc {{driverToken}}
+variables:
+  base_url: http://localhost:3000
+  customerToken: ""
+  driverToken: ""
+  otp: ""
+  customerPhone: "0901234501"
+  driverPhone: "0901234502"
+  rideId: ""
+  bookingId: ""

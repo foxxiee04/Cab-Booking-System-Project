@@ -192,10 +192,11 @@ Rút tiền:
 |--------|------|-------|
 | GET | `/api/wallet/balance` | Số dư chi tiết (balance, available, pending, debt) |
 | GET | `/api/wallet/transactions` | Lịch sử giao dịch (phân trang) |
-| GET | `/api/wallet/pending-earnings` | Thu nhập đang giữ T+24h |
-| GET | `/api/wallet/debts` | Danh sách công nợ |
+| GET | `/api/wallet/debt-records` | Danh sách công nợ |
 | POST | `/api/wallet/withdraw` | Yêu cầu rút tiền |
 | GET | `/api/wallet/withdrawals` | Lịch sử rút tiền |
+| GET | `/api/wallet/can-accept-cash` | Kiểm tra điều kiện nhận chuyến tiền mặt |
+| GET | `/api/wallet/daily-stats` | Thống kê ví trong ngày |
 
 ### Admin
 
@@ -203,9 +204,12 @@ Rút tiền:
 |--------|------|-------|
 | GET | `/api/admin/wallet/merchant-balance` | Số dư nền tảng |
 | GET | `/api/admin/wallet/merchant-ledger` | Sổ cái nền tảng |
-| GET | `/api/admin/wallet/:driverId` | Ví của tài xế cụ thể |
-| PATCH | `/api/admin/wallet/withdrawals/:id/approve` | Duyệt rút tiền |
-| PATCH | `/api/admin/wallet/withdrawals/:id/reject` | Từ chối rút tiền |
+| GET | `/api/admin/wallet/merchant-ledger/stats` | Thống kê sổ cái |
+| GET | `/api/admin/wallet/drivers` | Danh sách ví tài xế |
+| GET | `/api/admin/wallet/drivers/:driverId/transactions` | Giao dịch của tài xế |
+| POST | `/api/admin/wallet/withdrawals/:id/approve` | Duyệt rút tiền |
+| POST | `/api/admin/wallet/withdrawals/:id/reject` | Từ chối rút tiền |
+| GET | `/api/admin/wallet/incentive-rules` | Danh sách luật thưởng |
 
 ---
 

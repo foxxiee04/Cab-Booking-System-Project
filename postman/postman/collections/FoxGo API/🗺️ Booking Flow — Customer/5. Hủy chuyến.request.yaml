@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{base_url}}/api/rides/{{rideId}}/cancel"
+method: POST
+headers:
+  Authorization: Bearer {{customerToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "reason": "Thay đổi kế hoạch"
+    }
+order: 6000

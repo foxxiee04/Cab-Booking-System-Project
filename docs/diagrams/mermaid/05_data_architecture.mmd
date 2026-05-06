@@ -1,27 +1,28 @@
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
-flowchart LR
-  subgraph A["Per-service stores"]
-    direction TB
-    Auth --> ADB[(auth_db)]
-    Ride --> RDB[(ride_db)]
-    Driver --> DDR[(driver_db)]
-    Payment --> PDB[(payment_db)]
-    Wallet --> WDB[(wallet_db)]
-    User --> UDB[(user_db)]
-    Booking --> BDB[(booking_db)]
-  end
-
-  subgraph B["Document"]
-    direction TB
-    Notify --> NDB[(notifications)]
-    Review --> MDB[(reviews)]
-  end
-
-  subgraph C["Shared runtime"]
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '15px', 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
+flowchart TB
+  subgraph L1["PostgreSQL — mỗi service một schema / logical DB riêng (không bảng chung giữa domain)"]
     direction LR
-    RED[(Redis)]
-    MQ[RabbitMQ]
+    P1["auth-service<br/>auth_db"]
+    P2["ride-service<br/>ride_db"]
+    P3["driver-service<br/>driver_db"]
+    P4["payment-service<br/>payment_db"]
+    P5["wallet-service<br/>wallet_db"]
+    P6["user-service<br/>user_db"]
+    P7["booking-service<br/>booking_db"]
   end
 
-  Auth & Ride & Driver & Payment & Wallet & User & Booking -.->|cache · events| RED
-  Auth & Ride & Driver & Payment & Wallet & User & Booking -.->|async| MQ
+  subgraph L2["MongoDB — document store"]
+    direction LR
+    M1["notification-service<br/>notifications"]
+    M2["review-service<br/>reviews"]
+  end
+
+  subgraph L3["Shared runtime — Redis & RabbitMQ"]
+    direction LR
+    RED[(Redis<br/>cache · GEO)]
+    MQ[RabbitMQ<br/>domain events]
+  end
+
+  L1 -.->|cache / GEO / adapter| L3
+  L1 -.->|publish · consume| L3
+  L2 -.->|cache / events| L3

@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{base_url}}/api/auth/reset-password"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "phone": "{{customerPhone}}",
+      "otp": "{{otp}}",
+      "newPassword": "NewPass@123"
+    }
+order: 9000

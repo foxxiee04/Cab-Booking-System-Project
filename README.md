@@ -64,7 +64,7 @@ Hệ thống được xây dựng nhằm cung cấp một ứng dụng đặt xe
 ### 1.3 Chức năng chính
 
 #### Khách hàng
-- Đăng ký/đăng nhập qua số điện thoại + OTP
+- Đăng ký bằng số điện thoại + OTP; đăng nhập bằng số điện thoại + mật khẩu
 - Xem giá ước tính (surge, AI-assisted ETA) trước khi đặt
 - Theo dõi tài xế trên bản đồ real-time trong suốt chuyến
 - Thanh toán tiền mặt, MoMo, VNPay
@@ -90,7 +90,7 @@ Hệ thống được xây dựng nhằm cung cấp một ứng dụng đặt xe
 | Service | Bounded Context | Trách nhiệm |
 |---------|----------------|-------------|
 | API Gateway | Infrastructure | Entry point, JWT auth, proxy, Socket.IO hub, driver matching |
-| Auth Service | Identity | Đăng ký, đăng nhập, OTP (SMS/SNS/Twilio), JWT |
+| Auth Service | Identity | Đăng ký OTP, đăng nhập mật khẩu, JWT/Refresh Token |
 | User Service | User Profile | Hồ sơ người dùng mở rộng |
 | Driver Service | Driver Domain | Hồ sơ tài xế, trạng thái, vị trí địa lý |
 | Ride Service | Ride Domain | Vòng đời chuyến đi, state machine, chat |
@@ -637,28 +637,39 @@ npm run db:seed
 # 1 admin, 20 khách hàng, 40 tài xế, 28 chuyến, vouchers
 ```
 
-### 8.5 Lấy OTP trong môi trường dev
+### 8.5 Lấy OTP bằng Postman (Docker & deploy)
 
-**Local:**
-```bash
-docker logs cab-auth-service 2>&1 | grep OTP
+**Chung:** `OTP_SMS_MODE=mock` và **`OTP_ENABLE_DEV_ENDPOINT=true`** phải có trên **cả `auth-service` và `api-gateway`** (để `GET /api/auth/dev/otp` không bị chặn bởi gateway khi `NODE_ENV=production`).
+
+**Docker Compose (dev):** trong `docker-compose.yml` đã gắn sẵn `OTP_ENABLE_DEV_ENDPOINT=true` và `OTP_SMS_MODE=mock` cho auth; gateway cũng có cờ OTP. File mẫu: `env/auth.env.example` → copy thành `env/auth.env` nếu cần override. Hướng dẫn ngắn: `env/README.md`.
+
+**Docker Compose prod (image từ registry):** `docker-compose.prod.yml` mặc định `OTP_ENABLE_DEV_ENDPOINT=true` và có thể đổi `OTP_SMS_MODE` qua biến môi trường root `.env`.
+
+**Swarm / server:** tạo `~/cab-booking/env/auth.env` và `gateway.env` từ `env/auth.env.example` và `env/gateway.env.example`, điền secret và URL thật, rồi redeploy stack.
+
+Luồng Postman:
+
+1. `POST {base_url}/api/auth/register-phone/start` — body `{ "phone": "0901234501" }`
+2. `GET {base_url}/api/auth/dev/otp?phone=0901234501&purpose=register`
+
+Đổi mật khẩu (quên mật khẩu) dùng `purpose=reset`:
+
+```http
+GET {base_url}/api/auth/dev/otp?phone=0901234501&purpose=reset
 ```
 
-**Trên AWS (mock mode):**
-```bash
-curl -H "x-internal-token: <TOKEN>" \
-  "https://api.foxgo.online/internal/dev/otp?phone=0971234567"
-# Chỉ hoạt động khi OTP_SMS_MODE=mock và NODE_ENV!=production
-```
+- Local Docker: `base_url=http://localhost:3000`
+- Deploy: `base_url=https://api.<domain>` (ví dụ `https://api.foxgo.online`)
 
-**Production:**
+**Cảnh báo:** `OTP_ENABLE_DEV_ENDPOINT` chỉ nên bật trên môi trường demo / thử nghiệm. Production thật: tắt cờ này và dùng SMS thật, ví dụ:
+
 ```env
-OTP_SMS_MODE=sns        # AWS SNS (IAM role, không cần key)
-OTP_SMS_MODE=speedsms   # SpeedSMS — nhà mạng VN
-OTP_SMS_MODE=twilio     # Twilio
+OTP_SMS_MODE=sns        # AWS SNS (EC2 IAM role), auth-service đã có @aws-sdk/client-sns
+OTP_SMS_MODE=speedsms   # SpeedSMS VN
+OTP_SMS_MODE=twilio
 ```
 
----
+Nếu `OTP_SMS_MODE=sns` mà vẫn lỗi gửi OTP: kiểm tra IAM `sns:Publish`, Sandbox SNS, hoặc cấu hình provider.
 
 ## 9. Kiểm thử và CI/CD
 

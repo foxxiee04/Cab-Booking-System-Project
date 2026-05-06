@@ -225,7 +225,7 @@ export class OtpService {
   /**
    * Retrieve the most recently sent plaintext OTP.
    * Returns null if expired, already verified, or not in mock mode.
-   * Used by the /internal/dev/otp debug endpoint.
+   * Used by the /api/auth/dev/otp debug endpoint.
    */
   async getPlainOtp(phone: string, purpose: string = 'register'): Promise<string | null> {
     return this.redis.get(this.otpPlainKey(phone, purpose));

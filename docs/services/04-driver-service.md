@@ -92,21 +92,26 @@ LicenseClass       = A1 | A | B | C1 | C | D1 | D2 | D | BE | C1E | CE | D1E | D
 
 | Method | Path | Mô tả |
 |--------|------|-------|
-| GET | `/api/driver/me` | Xem hồ sơ tài xế của mình |
-| PUT | `/api/driver/me` | Cập nhật thông tin |
-| POST | `/api/driver/me/go-online` | Chuyển sang ONLINE |
-| POST | `/api/driver/me/go-offline` | Chuyển sang OFFLINE |
-| PUT | `/api/driver/me/location` | Cập nhật vị trí (GPS) |
+| POST | `/api/drivers/register` | Tạo hồ sơ tài xế |
+| GET | `/api/drivers/me` | Xem hồ sơ tài xế của mình |
+| PUT | `/api/drivers/me` | Cập nhật thông tin |
+| POST | `/api/drivers/me/online` | Chuyển sang ONLINE |
+| POST | `/api/drivers/me/offline` | Chuyển sang OFFLINE |
+| POST | `/api/drivers/me/location` | Cập nhật vị trí (GPS) |
+| GET | `/api/drivers/me/available-rides` | Xem chuyến có thể nhận |
+| POST | `/api/drivers/me/rides/:rideId/accept` | Nhận chuyến từ danh sách/offer |
+| GET | `/api/drivers/me/rides/assigned` | Chuyến đang được gán |
 
 ### Admin
 
 | Method | Path | Mô tả |
 |--------|------|-------|
 | GET | `/api/admin/drivers` | Danh sách tài xế (phân trang, filter) |
-| GET | `/api/admin/drivers/:id` | Chi tiết tài xế |
-| PATCH | `/api/admin/drivers/:id/approve` | Duyệt hồ sơ |
-| PATCH | `/api/admin/drivers/:id/reject` | Từ chối hồ sơ |
-| PATCH | `/api/admin/drivers/:id/suspend` | Tạm ngưng tài xế |
+| POST | `/api/admin/drivers/:driverId/approve` | Duyệt hồ sơ |
+| POST | `/api/admin/drivers/:driverId/reject` | Từ chối hồ sơ |
+| PATCH | `/api/drivers/:driverId/verify` | Xác minh bằng lái/hồ sơ |
+
+> Route public qua Gateway dùng tiền tố `/api/drivers`, không phải `/api/driver`.
 
 ---
 
@@ -173,7 +178,7 @@ Admin từ chối → status = REJECTED
 
 ```
 Driver App
-    │── PUT /api/driver/me/location {lat, lng}
+    │── POST /api/drivers/me/location {lat, lng}
     ▼
 Driver Service
     │── UPDATE Driver.lastLocationLat/Lng/Time

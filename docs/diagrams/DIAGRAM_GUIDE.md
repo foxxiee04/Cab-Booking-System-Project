@@ -1,7 +1,9 @@
 # Technical diagrams (Mermaid → PNG)
 
-**Source files:** `docs/diagrams/mermaid/*.mmd`  
-**Rendered images:** `img/01_*.png` … `img/20_*.png`  
+**Labelling:** Use **Vietnamese** for explanations and role text; keep **IT product / protocol names in English** (PostgreSQL, Redis, RabbitMQ, Nginx, Docker Swarm, ECS, …).
+
+**Source files:** `docs/diagrams/mermaid/*.mmd`    
+**Rendered images:** `img/01_*.png` … `img/23_*.png`  
 **Command:** `python scripts/generate_diagrams.py` (requires Node.js and `npx`)
 
 Design goals: layered left/right or top/down flow, short labels (Grab/Uber-style system-design clarity), minimal line crossings, split complexity across multiple diagrams when needed.
@@ -14,9 +16,9 @@ Aligned with **README §3.2** (`graph TB`): Frontend :4000–:4002 → API Gatew
 
 ---
 
-## 02 — AWS deployment (infrastructure)
+## 02 — AWS deployment (reference target, not current Swarm)
 
-User → Route 53 → CloudFront → ALB (ACM) → private ECS → RDS / ElastiCache / Amazon MQ / Mongo-compatible DB; S3 · Secrets Manager · CloudWatch attached to compute.
+User → Route 53 → CloudFront → ALB (ACM) → private ECS → RDS / ElastiCache / Amazon MQ / Mongo-compatible DB; S3 · Secrets Manager · CloudWatch attached to compute. **As-built ops / Swarm:** see `img/21_aws_swarm_deployment_actual.png` (Docker Swarm on EC2).
 
 ---
 
@@ -40,11 +42,9 @@ Main path (numbered): create booking → internal quote → async matching → d
 
 ## 05 — Data architecture
 
-| Part | Role |
-|------|------|
-| **Per-service SQL** | Each service owns its PostgreSQL schema (no shared tables). |
-| **Document DB** | Notifications and reviews in Mongo-style stores. |
-| **Redis & RabbitMQ** | Cross-cutting cache, GEO, and messaging—not business source of truth. |
+Bilingual labels: **Vietnamese** phrasing for roles, **English** for stack names (PostgreSQL, MongoDB, Redis, RabbitMQ, schema names).
+
+Three bands: **PostgreSQL** (7 logical DBs in one row — balanced layout), **MongoDB** document stores, **shared runtime** (Redis · GEO/cache, RabbitMQ events). Dashed lines = cross-cutting use, not primary OLTP source of truth.
 
 ---
 
@@ -98,7 +98,7 @@ Producers (booking/ride/payment/wallet) → broker → dedicated consumers (noti
 
 ## 14 — API gateway routing
 
-Path prefix to upstream service ports; single place to document the “front door” API map.
+Path prefix → upstream service and port; order matches **`services/api-gateway/src/routes/proxy.ts`** (e.g. `/api/wallet/top-up` before `/api/wallet`). `/api/ai/*` is direct HTTP to FastAPI (not gRPC bridge).
 
 ---
 
@@ -135,3 +135,23 @@ Internal building blocks: HTTP stack, Socket.IO, middleware chain, proxy router,
 ## 20 — Security trust boundaries
 
 Public clients vs edge termination vs application vs data/secrets zones; enforces mental model for threat discussion.
+
+---
+
+## 21 — AWS Swarm deployment (as-built)
+
+Single-row **LR** layout: users → DNS → **Docker Swarm** (primary + secondary managers on-demand, Spot workers). GitHub Actions **SSH** to **primary manager**. Short labels to avoid line-wrap noise.
+
+---
+
+## 22 — AWS target reference topology
+
+Vertical chain: Route 53 → edge (CloudFront→S3 static, ALB+ACM) → **ECS Fargate** → data plane (RDS, ElastiCache, Amazon MQ, DocumentDB) **fan-out** + ops (S3/Secrets Manager/CloudWatch) + **SNS** (OTP). **Reference only** — same story as diagram **02**, flatter rendering.
+
+---
+
+## 23 — CI/CD pipeline (GitHub Actions)
+
+Four stacked nodes: push → parallel tests → Docker build/push → deploy (scp stack, `docker stack deploy`, SPA rsync, nginx reload).
+
+---

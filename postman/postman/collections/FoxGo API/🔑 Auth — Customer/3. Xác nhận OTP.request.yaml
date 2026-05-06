@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{base_url}}/api/auth/register-phone/verify"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "phone": "{{customerPhone}}",
+      "otp": "{{otp}}"
+    }
+order: 3000

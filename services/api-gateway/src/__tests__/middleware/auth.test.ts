@@ -15,6 +15,7 @@ describe('authMiddleware', () => {
   beforeEach(() => {
     jest.resetModules();
     process.env.JWT_SECRET = 'test-secret';
+    process.env.INTERNAL_SERVICE_TOKEN = 'test-internal-token';
   });
 
   it('skips auth for public paths', () => {
@@ -28,6 +29,36 @@ describe('authMiddleware', () => {
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('skips auth for dev OTP retrieval outside production', () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.OTP_ENABLE_DEV_ENDPOINT;
+    const { authMiddleware } = require('../../middleware/auth');
+
+    const req: any = { path: '/api/auth/dev/otp', headers: {} };
+    const res: any = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+
+    authMiddleware(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('skips auth for dev OTP in production when OTP_ENABLE_DEV_ENDPOINT=true', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.OTP_ENABLE_DEV_ENDPOINT = 'true';
+    const { authMiddleware } = require('../../middleware/auth');
+
+    const req: any = { path: '/api/auth/dev/otp', headers: {} };
+    const res: any = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+
+    authMiddleware(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    delete process.env.OTP_ENABLE_DEV_ENDPOINT;
   });
 
   it('returns 401 when Authorization header missing', () => {

@@ -87,7 +87,7 @@ Response (timeout 150ms, fallback về surge từ Redis):
 | POST | `/api/pricing/estimate` | Ước tính giá trước chuyến |
 | GET | `/api/pricing/surge` | Surge multiplier hiện tại |
 | POST | `/api/pricing/surge` | Cập nhật surge (admin) |
-| GET | `/api/pricing/surge-zones` | Khu vực surge (theo địa lý) |
+| POST | `/api/pricing/surge/calculate` | Tính surge động theo supply/demand/weather |
 
 ### Request `/estimate`
 

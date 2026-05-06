@@ -300,7 +300,7 @@ export class AuthService {
     const otp = this.otpService.generateOtp();
     await this.otpService.storeOtp(input.phone, otp, purpose);
     await this.smsService.sendOtp(input.phone, otp, purpose);
-    // In mock mode store plaintext so the /internal/dev/otp endpoint can return it
+    // In mock mode store plaintext so the /api/auth/dev/otp endpoint can return it.
     if (config.sms?.mode === 'mock') {
       await this.otpService.storePlainOtp(input.phone, otp, purpose);
     }

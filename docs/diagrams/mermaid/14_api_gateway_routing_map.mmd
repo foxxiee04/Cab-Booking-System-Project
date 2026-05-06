@@ -1,21 +1,25 @@
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
-flowchart LR
+flowchart TB
   IN[Client HTTPS]
 
   GW[API Gateway :3000]
 
-  subgraph B["Route groups"]
+  subgraph R["HTTP proxy — registration order (see api-gateway proxy router)"]
     direction TB
-    R1["/auth → Auth :3001"]
-    R2["/bookings → Booking :3008"]
-    R3["/rides → Ride :3002"]
-    R4["/drivers → Driver :3003"]
-    R5["/payments → Payment :3004"]
-    R6["/wallet → Wallet :3006"]
-    R7["/notify → Notify :3005"]
-    R8["/reviews → Review :3010"]
-    R9["/pricing → Pricing :3009"]
-    R0["/ai → AI :8000"]
+    A1["/api/auth → auth-service :3001"]
+    A2["/api/rides → ride-service :3002"]
+    A3["/api/drivers → driver-service :3003"]
+    A4["/api/payments → payment-service :3004"]
+    A5["/api/wallet/top-up → payment-service :3004 (before /api/wallet)"]
+    A6["/api/admin/wallet → wallet-service :3006"]
+    A7["/api/wallet → wallet-service :3006"]
+    A8["/api/voucher → payment-service :3004"]
+    A9["/api/bookings → booking-service :3008"]
+    A10["/api/pricing → pricing-service :3009"]
+    A11["/api/users → user-service :3007"]
+    A12["/api/reviews → review-service :3010"]
+    A13["/api/notifications → notification-service :3005"]
+    A14["/api/ai/* → ai-service :8000 (direct HTTP)"]
   end
 
-  IN --> GW --> B
+  IN --> GW --> R

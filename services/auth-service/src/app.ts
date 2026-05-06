@@ -77,9 +77,20 @@ export function createApp({ authService, otpService, getReadiness }: AuthAppOpti
   });
 
   // ── Dev OTP retrieval (mock mode only) ────────────────────────────────────
-  // Active only when OTP_SMS_MODE=mock (regardless of NODE_ENV).
+  // Default: only when NODE_ENV !== production.
+  // Demo/staging on server: set OTP_SMS_MODE=mock and OTP_ENABLE_DEV_ENDPOINT=true
   // Usage: GET /api/auth/dev/otp?phone=0971234567&purpose=register
-  if (otpService && config.sms.mode === 'mock') {
+  const allowDevOtpEndpoint =
+    otpService &&
+    config.sms.mode === 'mock' &&
+    (config.nodeEnv !== 'production' || config.otp.enableDevEndpoint);
+
+  if (allowDevOtpEndpoint) {
+    if (config.nodeEnv === 'production' && config.otp.enableDevEndpoint) {
+      logger.warn(
+        '[SECURITY] Dev OTP endpoint enabled in production (OTP_ENABLE_DEV_ENDPOINT). Use only on demo/staging; disable for real prod.',
+      );
+    }
     app.get('/api/auth/dev/otp', async (req, res) => {
       const phone = req.query.phone as string | undefined;
       const purpose = (req.query.purpose as string | undefined) || 'register';
@@ -97,7 +108,12 @@ export function createApp({ authService, otpService, getReadiness }: AuthAppOpti
           });
         }
         logger.info('[DEV] OTP retrieved via debug endpoint', { phone: phone.slice(0, 4) + '***', purpose });
-        return res.json({ success: true, otp, purpose, note: 'mock mode only — never exposed in production' });
+        return res.json({
+          success: true,
+          otp,
+          purpose,
+          note: 'mock mode — set OTP_ENABLE_DEV_ENDPOINT only on demo/staging',
+        });
       } catch (err) {
         logger.error('Dev OTP endpoint error:', err);
         return res.status(500).json({ success: false, error: 'Internal error' });

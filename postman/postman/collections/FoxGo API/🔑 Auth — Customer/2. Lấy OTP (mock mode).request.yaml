@@ -1,0 +1,7 @@
+$kind: http-request
+url: "{{base_url}}/api/auth/dev/otp?phone={{customerPhone}}&purpose=register"
+method: GET
+queryParams:
+  phone: "{{customerPhone}}"
+  purpose: register
+order: 2000

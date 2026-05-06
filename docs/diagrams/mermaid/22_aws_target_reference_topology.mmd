@@ -1,0 +1,41 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '17px', 'primaryColor': '#f8fafc', 'primaryTextColor': '#0f172a', 'primaryBorderColor': '#64748b'}}}%%
+flowchart TB
+  U[Người dùng]
+
+  R53[Route 53]
+
+  CF[CloudFront]
+
+  SO[S3 static]
+
+  ALB[ALB + ACM]
+
+  ECS[ECS Fargate]
+
+  RDS[(RDS PostgreSQL)]
+
+  EC[(ElastiCache Redis)]
+
+  MQ[Amazon MQ]
+
+  DOC[(DocumentDB)]
+
+  PL[S3 + Secrets Manager + CloudWatch]
+
+  SNS[SNS · OTP SMS]
+
+  U --> R53
+
+  R53 --> CF
+
+  R53 --> ALB
+
+  CF --> SO
+
+  ALB --> ECS
+
+  ECS --> RDS & EC & MQ & DOC
+
+  ECS --> PL
+
+  ECS -.-> SNS

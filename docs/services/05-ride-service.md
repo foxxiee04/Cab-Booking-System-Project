@@ -158,23 +158,27 @@ Mọi cập nhật trạng thái đều đi qua hàm `transition(rideId, newStat
 | Method | Path | Mô tả |
 |--------|------|-------|
 | POST | `/api/rides` | Tạo chuyến đi mới |
-| GET | `/api/rides/:id` | Chi tiết chuyến đi |
-| GET | `/api/rides/history` | Lịch sử chuyến (phân trang) |
-| POST | `/api/rides/:id/cancel` | Hủy chuyến |
-| POST | `/api/rides/:id/rate` | Đánh giá sau chuyến |
-| GET | `/api/rides/:id/chat` | Lịch sử chat |
-| POST | `/api/rides/:id/chat` | Gửi tin nhắn |
+| GET | `/api/rides/:rideId` | Chi tiết chuyến đi |
+| GET | `/api/rides/customer/history` | Lịch sử chuyến của khách |
+| GET | `/api/rides/customer/active` | Chuyến active của khách |
+| POST | `/api/rides/:rideId/cancel` | Hủy chuyến |
+| GET | `/api/rides/:rideId/messages` | Lịch sử chat |
+| POST | `/api/rides/:rideId/messages` | Gửi tin nhắn |
 
 ### Driver
 
 | Method | Path | Mô tả |
 |--------|------|-------|
-| POST | `/api/rides/:id/accept` | Chấp nhận offer |
-| POST | `/api/rides/:id/reject` | Từ chối offer |
-| POST | `/api/rides/:id/arrived` | Báo đến điểm đón (→ PICKING_UP) |
-| POST | `/api/rides/:id/start` | Bắt đầu chuyến (→ IN_PROGRESS) |
-| POST | `/api/rides/:id/complete` | Hoàn thành chuyến |
-| GET | `/api/rides/current` | Chuyến đang chạy |
+| GET | `/api/rides/available` | Danh sách chuyến có thể nhận |
+| GET | `/api/rides/driver/active` | Chuyến active của tài xế |
+| GET | `/api/rides/driver/history` | Lịch sử chuyến của tài xế |
+| POST | `/api/rides/:rideId/accept` | Chấp nhận chuyến |
+| POST | `/api/rides/:rideId/reject` | Từ chối chuyến |
+| POST | `/api/rides/:rideId/pickup` | Xác nhận đã đón khách |
+| POST | `/api/rides/:rideId/start` | Bắt đầu chuyến (→ IN_PROGRESS) |
+| POST | `/api/rides/:rideId/complete` | Hoàn thành chuyến |
+| POST | `/api/rides/:rideId/accept-offer` | Chấp nhận offer từ matching |
+| POST | `/api/rides/:rideId/reject-offer` | Từ chối offer từ matching |
 
 ---
 

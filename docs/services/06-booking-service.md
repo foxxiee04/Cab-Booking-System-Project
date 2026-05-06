@@ -89,7 +89,7 @@ CONFIRMED → CANCELLED
 | GET | `/api/bookings/:id` | Xem chi tiết booking | ✅ |
 | POST | `/api/bookings/:id/confirm` | Xác nhận → tạo chuyến đi | ✅ CUSTOMER |
 | POST | `/api/bookings/:id/cancel` | Hủy booking | ✅ CUSTOMER |
-| GET | `/api/bookings/history` | Lịch sử bookings | ✅ CUSTOMER |
+| GET | `/api/bookings/customer/:customerId` | Lịch sử bookings của một khách hàng | ✅ CUSTOMER/Admin |
 
 ---
 

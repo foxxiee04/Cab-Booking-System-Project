@@ -103,14 +103,14 @@ retryCount++
 
 ---
 
-## 6. API Endpoints (Admin)
+## 6. API Endpoints
 
 | Method | Path | Mô tả | Auth |
 |--------|------|-------|------|
-| GET | `/api/notifications` | Lịch sử thông báo (phân trang) | ✅ ADMIN |
-| GET | `/api/notifications/:id` | Chi tiết thông báo | ✅ ADMIN |
-| POST | `/api/notifications/test` | Gửi thông báo test | ✅ ADMIN |
-| GET | `/api/notifications/stats` | Thống kê gửi thành công/thất bại | ✅ ADMIN |
+| GET | `/api/notifications` | Lịch sử thông báo của user hiện tại | ✅ |
+| POST | `/api/notifications/send` | Gửi thông báo tùy chỉnh | ✅ ADMIN/SYSTEM |
+| POST | `/api/notifications/retry` | Retry thông báo lỗi | ✅ ADMIN/SYSTEM |
+| GET | `/api/notifications/statistics` | Thống kê gửi thành công/thất bại | ✅ ADMIN/SYSTEM |
 
 ---
 

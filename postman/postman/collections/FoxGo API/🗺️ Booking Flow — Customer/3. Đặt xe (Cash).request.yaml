@@ -1,0 +1,34 @@
+$kind: http-request
+url: "{{base_url}}/api/bookings"
+method: POST
+headers:
+  Authorization: Bearer {{customerToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "pickup": {
+        "lat": 10.7769,
+        "lng": 106.7009,
+        "address": "Quận 1, TP.HCM"
+      },
+      "dropoff": {
+        "lat": 10.8231,
+        "lng": 106.6297,
+        "address": "Tân Bình, TP.HCM"
+      },
+      "vehicleType": "MOTORBIKE",
+      "paymentMethod": "CASH"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      const res = pm.response.json();
+      if (res.rideId || (res.data && res.data.id)) {
+        const id = res.rideId || res.data.id;
+        pm.collectionVariables.set('rideId', id);
+        console.log('rideId saved:', id);
+      }
+    language: text/javascript
+order: 3000

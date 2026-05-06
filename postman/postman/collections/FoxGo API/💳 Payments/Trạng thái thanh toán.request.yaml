@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{base_url}}/api/payments/ride/{{rideId}}"
+method: GET
+headers:
+  Authorization: Bearer {{customerToken}}
+order: 2000

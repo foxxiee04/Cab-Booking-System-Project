@@ -105,6 +105,7 @@ services:
       - NOTIFICATION_SERVICE_URL=http://notification-service:3005
       - NOTIFICATION_GRPC_ADDRESS=notification-service:50058
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
+      - OTP_ENABLE_DEV_ENDPOINT=true
       - LOCATION_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/location_db
       - MATCHING_MAX_ATTEMPTS=${MATCHING_MAX_ATTEMPTS:-3}
       - MATCHING_RETRY_DELAY_MS=${MATCHING_RETRY_DELAY_MS:-2500}
@@ -178,6 +179,7 @@ services:
       - OTP_RATE_MAX_PER_IP=10
       - OTP_RATE_IP_WINDOW=60
       - OTP_SMS_MODE=mock
+      - OTP_ENABLE_DEV_ENDPOINT=true
     depends_on:
       postgres:
         condition: service_healthy

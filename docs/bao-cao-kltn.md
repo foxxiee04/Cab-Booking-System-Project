@@ -25,7 +25,7 @@ File này được viết theo hướng có thể sao chép sang Microsoft Word 
 | Chương 5, realtime | `img/03_realtime_communication_flow.png` | Chat, Socket.IO, WebRTC signaling và broadcast trạng thái |
 | Chương 5, AI/RAG | `img/06_ai_ml_pipeline.png`, `img/16_rag_chatbot_architecture.png` | Minh họa pipeline ML và chatbot RAG |
 | Chương 6, API Gateway | `img/14_api_gateway_routing_map.png`, `img/19_component_api_gateway.png` | Bảng định tuyến và component nội bộ Gateway |
-| Chương 6, xác thực OTP | `img/17_sequence_auth_otp.png` | Sequence đăng ký/đăng nhập OTP |
+| Chương 6, xác thực OTP | `img/17_sequence_auth_otp.png` | Sequence đăng ký và reset mật khẩu bằng OTP |
 | Chương 6, bảo mật | `img/20_security_trust_boundary.png` | Vùng tin cậy bảo mật giữa client, gateway, service và data layer |
 | Chương 6 hoặc Hướng phát triển | `img/02_aws_deployment_architecture.png` | Kiến trúc triển khai cloud đề xuất |
 
@@ -141,7 +141,7 @@ Domain-Driven Design (DDD) là phương pháp thiết kế phần mềm tập tr
 ## 1.3. Phạm vi đề tài
 
 **Trong phạm vi:**
-- Đăng ký/đăng nhập tài khoản qua OTP
+- Đăng ký/reset mật khẩu qua OTP; đăng nhập bằng số điện thoại và mật khẩu
 - Luồng đặt xe đầy đủ từ đặt → ghép cặp → theo dõi → hoàn thành
 - Thanh toán: tiền mặt, MoMo, VNPay; hoàn tiền khi hủy
 - Ví tài xế: ký quỹ, thu nhập, rút tiền, quản lý công nợ
@@ -461,18 +461,18 @@ Tác nhân có thể:
 | Loại | Yêu cầu cụ thể |
 |---|---|
 | **Hiệu năng** | Dispatch tài xế < 5s; API P95 < 300ms |
-| **Bảo mật** | JWT 15 phút; OTP chỉ log container; Không expose internal IP |
+| **Bảo mật** | JWT 15 phút; OTP hash trong Redis; endpoint lấy OTP mock chỉ bật ở dev; Không expose internal IP |
 | **Độ tin cậy** | IPN idempotent; Outbox pattern cho critical events |
 | **Khả năng mở rộng** | Stateless services; Redis adapter Socket.IO; Database per service |
 | **Khả dụng** | AI service fallback < 150ms; Graceful degradation |
 | **Kiểm toán** | Wallet ledger append-only; Merchant ledger bất biến |
-| **Tuân thủ** | Không lưu OTP plaintext; Hash SHA-256 |
+| **Tuân thủ** | OTP production không lưu plaintext; mock dev lưu plaintext TTL ngắn để test; Hash SHA-256 |
 
 ## 3.6. Phân tích nghiệp vụ chi tiết
 
 Mục này trình bày các nghiệp vụ quan trọng của hệ thống theo dạng có thể sử dụng trực tiếp trong báo cáo Word. Mỗi nghiệp vụ gồm mục tiêu, tác nhân, dữ liệu đầu vào, xử lý chính, kết quả và ngoại lệ cần kiểm soát.
 
-### 3.6.1. Nghiệp vụ đăng ký, đăng nhập và xác thực OTP
+### 3.6.1. Nghiệp vụ đăng ký, đăng nhập mật khẩu và xác thực OTP
 
 **Mục tiêu:** bảo đảm mỗi người dùng trong hệ thống được định danh bằng số điện thoại, có thể đăng nhập an toàn và nhận quyền tương ứng với vai trò khách hàng, tài xế hoặc quản trị viên.
 
@@ -487,7 +487,7 @@ Mục này trình bày các nghiệp vụ quan trọng của hệ thống theo d
 | 1 | Người dùng nhập số điện thoại và yêu cầu gửi OTP | Customer App / Driver App / Admin Dashboard |
 | 2 | API Gateway chuyển request đến Auth Service | API Gateway |
 | 3 | Auth Service sinh OTP, hash OTP, lưu vào Redis với TTL, đồng thời ghi audit log | Auth Service |
-| 4 | Ở môi trường phát triển, OTP được log trong container; ở môi trường thật, OTP được gửi qua SMS provider | Auth Service, SMS Provider |
+| 4 | Ở môi trường phát triển/mock, OTP có thể lấy qua endpoint debug TTL ngắn để test Postman; ở môi trường thật, OTP được gửi qua SMS provider | Auth Service, SMS Provider |
 | 5 | Người dùng nhập OTP để xác minh | Frontend |
 | 6 | Auth Service kiểm tra OTP, số lần thử và thời hạn hiệu lực | Auth Service |
 | 7 | Khi đăng ký/đăng nhập thành công, Auth Service phát access token và refresh token | Auth Service |
@@ -1370,7 +1370,7 @@ sequenceDiagram
     PAY-->>KH: Redirect sang MoMo
 
     KH->>MoMo: Thực hiện thanh toán
-    MoMo->>PAY: POST /api/payment/momo/ipn {orderId, resultCode=0}
+    MoMo->>PAY: POST /api/payments/ipn/momo {orderId, resultCode=0}
     PAY->>PAY: verifySignature()
     PAY->>PAY: checkIdempotencyKey() → not exists
     PAY->>PAY: status = COMPLETED
@@ -2347,15 +2347,21 @@ sequenceDiagram
     participant ADM as Admin Dashboard
 
     SV->>DA: Nhập số điện thoại
-    DA->>GW: POST /api/auth/register {phone}
+    DA->>GW: POST /api/auth/register-phone/start {phone}
     GW->>AUTH: Forward
     AUTH->>AUTH: Generate OTP, SHA-256 hash, store Redis TTL=120s
     AUTH-->>DA: {maskedPhone, resendDelay}
-    AUTH->>SV: SMS/Log OTP (dev: docker logs)
+    DA->>GW: GET /api/auth/dev/otp?phone=...&purpose=register (dev/mock)
+    GW->>AUTH: Forward
+    AUTH-->>DA: {otp} (mock only)
 
     SV->>DA: Nhập OTP
-    DA->>GW: POST /api/auth/verify-otp {phone, otp}
+    DA->>GW: POST /api/auth/register-phone/verify {phone, otp}
     GW->>AUTH: Verify hash
+    AUTH-->>DA: Phone verified
+
+    SV->>DA: Nhập mật khẩu và thông tin cơ bản
+    DA->>GW: POST /api/auth/register-phone/complete {phone, password, role=DRIVER}
     AUTH-->>DA: JWT tokens
 
     SV->>DA: Điền form hồ sơ (xe, GPLX, ảnh)
@@ -2496,7 +2502,7 @@ Hệ thống chia thành bốn vùng tin cậy chính: client public, gateway ed
 | Rủi ro | Cách xử lý trong hệ thống |
 |---|---|
 | Lộ mật khẩu | Mật khẩu hash bằng bcrypt, không lưu plaintext |
-| Lộ OTP | OTP được hash/lưu TTL, không trả OTP qua API |
+| Lộ OTP | OTP được hash/lưu TTL; API lấy OTP chỉ bật ở dev/mock và bị tắt trong production |
 | Gọi API trái quyền | API Gateway kiểm tra JWT và role trước khi proxy |
 | Callback thanh toán giả | Payment Service kiểm tra chữ ký MoMo/VNPay |
 | IPN gọi lặp | Idempotency key ngăn cộng tiền nhiều lần |
@@ -2741,8 +2747,8 @@ npm run dev:customer      # http://localhost:4000
 npm run dev:driver-app    # http://localhost:4001
 npm run dev:admin         # http://localhost:4002
 
-# Lấy OTP trong dev mode
-docker logs cab-auth-service 2>&1 | grep "OTP\]\["
+# Lấy OTP trong dev/mock mode bằng Postman hoặc curl
+curl "http://localhost:3000/api/auth/dev/otp?phone=0901234501&purpose=register"
 
 # Reset toàn bộ
 bash scripts/reset-database.sh
@@ -2752,8 +2758,10 @@ bash scripts/reset-database.sh
 
 | Method | Endpoint | Auth | Chức năng |
 |---|---|---|---|
-| POST | /api/auth/register | — | Đăng ký (gửi OTP) |
-| POST | /api/auth/verify-otp | — | Xác thực OTP |
+| POST | /api/auth/register-phone/start | — | Gửi OTP đăng ký |
+| GET | /api/auth/dev/otp | — dev/mock | Lấy OTP khi test Docker Compose/Postman |
+| POST | /api/auth/register-phone/verify | — | Xác thực OTP đăng ký |
+| POST | /api/auth/register-phone/complete | — | Hoàn tất đăng ký |
 | POST | /api/auth/login | — | Đăng nhập |
 | POST | /api/auth/refresh | — | Refresh access token |
 | GET | /api/drivers/me | DRIVER | Hồ sơ tài xế |

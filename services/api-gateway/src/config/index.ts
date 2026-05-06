@@ -21,6 +21,8 @@ function readBoundedFloatEnv(name: string, fallback: number, min: number, max: n
 export const config = {
   port: parseInt(process.env.PORT || '3000'),
   nodeEnv: process.env.NODE_ENV || 'development',
+  /** Must match auth-service: when true, expose GET /api/auth/dev/otp on gateway in production (demo only). */
+  enableDevOtpEndpoint: process.env.OTP_ENABLE_DEV_ENDPOINT === 'true',
   jwtSecret: getRequiredEnv('JWT_SECRET'),
   internalServiceToken: getRequiredEnv('INTERNAL_SERVICE_TOKEN'),
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',

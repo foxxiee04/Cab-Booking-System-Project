@@ -52,12 +52,10 @@ UserProfile {
 
 | Method | Path | Mô tả | Auth |
 |--------|------|-------|------|
-| GET | `/api/users/profile` | Xem hồ sơ của chính mình | ✅ |
-| PUT | `/api/users/profile` | Cập nhật hồ sơ | ✅ |
-| POST | `/api/users/avatar` | Upload ảnh đại diện | ✅ |
-| GET | `/api/users/:userId` | Xem hồ sơ người khác (admin) | ✅ ADMIN |
-| GET | `/api/users` | Danh sách users (admin, phân trang) | ✅ ADMIN |
-| PATCH | `/api/users/:userId/status` | Cập nhật trạng thái (ban/unban) | ✅ ADMIN |
+| POST | `/api/users` | Tạo hồ sơ user (thường do event/seed gọi) | Nội bộ |
+| GET | `/api/users/:userId` | Lấy hồ sơ theo Auth `userId` | ✅ qua Gateway |
+
+> Các thao tác đăng nhập, đổi mật khẩu, cập nhật profile cơ bản hiện nằm ở Auth Service (`/api/auth/me`). User Service chỉ giữ profile projection tối giản.
 
 ---
 

@@ -21,7 +21,7 @@ Ngoài việc proxy request, gateway còn chứa hai thành phần nghiệp vụ
 | Runtime | Node.js 20, TypeScript |
 | HTTP Framework | Express.js |
 | Real-time | Socket.IO 4 (Redis Adapter cho horizontal scale) |
-| Proxy | `http-proxy-middleware` |
+| Proxy | Custom HTTP forward + gRPC bridge |
 | Cache / Geo | ioredis (Redis geospatial `GEOADD`/`GEORADIUS`) |
 | Auth | `jsonwebtoken` (RS256/HS256) |
 | Metrics | `prom-client` (Prometheus) |
@@ -54,7 +54,7 @@ src/
 │   ├── auth.ts             # JWT verify, inject x-user-id/role/email headers
 │   ├── rate-limit.ts       # Rate limiter cấu hình theo route
 │   └── request-context.ts  # Request tracing (correlation ID)
-└── swagger-docs.ts         # OpenAPI definition
+└── swagger.ts              # OpenAPI definition
 ```
 
 ---
@@ -65,17 +65,19 @@ src/
 |------------|-------------------|---------|
 | `/api/auth/*` | auth-service:3001 | Forced HTTP (không qua gRPC bridge) |
 | `/api/users/*` | user-service:3007 | |
-| `/api/driver/*` | driver-service:3003 | Một số route `me/*` forced HTTP |
+| `/api/drivers/*` | driver-service:3003 | Một số route `me/*` forced HTTP |
 | `/api/rides/*` | ride-service:3002 | |
 | `/api/bookings/*` | booking-service:3008 | |
 | `/api/pricing/*` | pricing-service:3009 | gRPC bridge cho `/estimate` |
-| `/api/payment/*` | payment-service:3004 | |
+| `/api/payments/*` | payment-service:3004 | |
 | `/api/wallet/*` | wallet-service:3006 | |
 | `/api/wallet/top-up/*` | payment-service:3004 | Overrides wallet route |
 | `/api/admin/wallet/*` | wallet-service:3006 | |
 | `/api/notifications/*` | notification-service:3005 | |
 | `/api/reviews/*` | review-service:3010 | |
 | `/api/ai/*` | ai-service:8000 | |
+
+`/api/auth/dev/otp` là route debug public chỉ trong `NODE_ENV!=production`; dùng cho Postman/docker-compose khi auth-service chạy `OTP_SMS_MODE=mock`.
 
 > **Address normalization**: Tất cả payload địa chỉ đi qua `normalizeAddressPayloadDeep()` trước khi forward — chuẩn hóa format địa chỉ Việt Nam không nhất quán.
 
@@ -213,7 +215,7 @@ GET http://localhost:3000/ready
 GET http://localhost:3000/metrics
 
 # Swagger docs
-GET http://localhost:3000/swagger-docs
+GET http://localhost:3000/api-docs
 ```
 
 > **Build context**: Gateway cần build từ **root** vì phụ thuộc vào `shared/` package.
