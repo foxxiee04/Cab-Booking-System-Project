@@ -394,6 +394,7 @@ jobs:
             docker stack deploy \
               -c docker-stack.thesis.yml \
               --with-registry-auth \
+              --resolve-image changed \
               --prune \
               cab-booking
 
@@ -420,8 +421,8 @@ jobs:
               echo "⚠ postgres not reachable after 180s — run manually: docker exec <postgres-id> psql -U postgres -f /docker-entrypoint-initdb.d/init.sql"
             fi
 
-            echo "▶ Removing dangling images..."
-            docker image prune -f
+            echo "▶ Removing dangling images (exclude images used by running services)..."
+            docker image prune -f --filter "until=24h"
 
             echo "✅ Swarm deployment complete"
 
