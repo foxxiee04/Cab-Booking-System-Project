@@ -76,12 +76,11 @@ export function createApp({ authService, otpService, getReadiness }: AuthAppOpti
     }
   });
 
-  // ── Dev-only OTP retrieval ─────────────────────────────────────────────────
-  // Only active when OTP_SMS_MODE=mock AND NODE_ENV !== production.
-  // Usage: GET /internal/dev/otp?phone=0971234567&purpose=register
-  //        Header: x-internal-token: <INTERNAL_SERVICE_TOKEN>
-  if (otpService && config.sms.mode === 'mock' && config.nodeEnv !== 'production') {
-    app.get('/internal/dev/otp', async (req, res) => {
+  // ── Dev OTP retrieval (mock mode only) ────────────────────────────────────
+  // Active only when OTP_SMS_MODE=mock (regardless of NODE_ENV).
+  // Usage: GET /api/auth/dev/otp?phone=0971234567&purpose=register
+  if (otpService && config.sms.mode === 'mock') {
+    app.get('/api/auth/dev/otp', async (req, res) => {
       const phone = req.query.phone as string | undefined;
       const purpose = (req.query.purpose as string | undefined) || 'register';
 
