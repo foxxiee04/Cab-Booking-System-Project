@@ -52,6 +52,7 @@ import {
 import axios from 'axios';
 import { useAppSelector } from '../store/hooks';
 import { copyToClipboard } from '../utils/clipboard.utils';
+import { normalizeGatewayApiBaseUrl } from '../utils/gateway-base-url';
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ function useAuthHeaders() {
   return accessToken;
 }
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
+const API_BASE = normalizeGatewayApiBaseUrl(process.env.REACT_APP_API_URL);
 
 async function get<T>(path: string, headers: Record<string, string>, params?: Record<string, unknown>): Promise<T> {
   const url = new URL(API_BASE + path);

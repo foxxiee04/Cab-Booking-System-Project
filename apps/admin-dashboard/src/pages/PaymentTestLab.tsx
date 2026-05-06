@@ -40,6 +40,7 @@ import {
   AdminPanelSettings,
 } from '@mui/icons-material';
 import axiosInstance from '../api/axios.config';
+import { normalizeGatewayOriginUrl } from '../utils/gateway-base-url';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ interface WalletInfo {
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const GW = (process.env.REACT_APP_API_URL || 'http://localhost:3000/api').replace('/api', '');
+const GW = normalizeGatewayOriginUrl(process.env.REACT_APP_API_URL);
 const PAY = 'http://localhost:3004';
 const WAL = 'http://localhost:3006';
 

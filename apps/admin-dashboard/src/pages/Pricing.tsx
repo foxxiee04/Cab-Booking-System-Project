@@ -33,9 +33,10 @@ import {
 import { TrendingUp, Save, DirectionsBike, DirectionsCar, AirportShuttle, Add, Edit, Delete, EmojiEvents } from '@mui/icons-material';
 import { pricingApi } from '../api/pricing.api';
 import { formatCurrency } from '../utils/format.utils';
+import { normalizeGatewayApiBaseUrl } from '../utils/gateway-base-url';
 import axios from 'axios';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
+const API_BASE = normalizeGatewayApiBaseUrl(process.env.REACT_APP_API_URL);
 
 interface IncentiveRule {
   id: string;

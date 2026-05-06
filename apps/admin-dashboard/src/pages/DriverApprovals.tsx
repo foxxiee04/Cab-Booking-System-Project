@@ -29,6 +29,7 @@ import {
 import { adminApi } from '../api/admin.api';
 import { Driver } from '../types';
 import { useTranslation } from 'react-i18next';
+import { normalizeGatewayOriginUrl } from '../utils/gateway-base-url';
 
 type ApprovalAction = 'approve' | 'reject';
 
@@ -40,7 +41,7 @@ const formatDateValue = (value?: string) => {
   return new Date(value).toLocaleString('vi-VN');
 };
 
-const API_ROOT = (process.env.REACT_APP_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+const API_ROOT = normalizeGatewayOriginUrl(process.env.REACT_APP_API_URL);
 
 const resolveVehicleImageUrl = (rawUrl?: string) => {
   if (!rawUrl) {

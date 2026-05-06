@@ -3,7 +3,11 @@ import { store } from '../store';
 import { logout, updateTokens } from '../store/auth.slice';
 import { AuthTokens } from '../types';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
+import { normalizeGatewayApiBaseUrl } from '../utils/gateway-base-url';
+
+const API_URL = normalizeGatewayApiBaseUrl(process.env.REACT_APP_API_URL);
+
+export const API_BASE_URL = API_URL;
 
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: API_URL,

@@ -1,8 +1,6 @@
 import axios from 'axios';
-import axiosInstance from './axios.config';
+import axiosInstance, { API_BASE_URL } from './axios.config';
 import { Payment } from '../types';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 export interface PaymentResponse {
   success: boolean;

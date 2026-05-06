@@ -24,6 +24,7 @@ import { setProfile } from '../store/driver.slice';
 import { getVehicleTypeLabel } from '../utils/format.utils';
 import type { LicenseClass, VehicleType } from '../types';
 import { useTranslation } from 'react-i18next';
+import { normalizeGatewayOriginUrl } from '../utils/gateway-base-url';
 
 const LICENSE_CLASS_OPTIONS = ['A1', 'A', 'B', 'C1', 'C', 'D1', 'D2', 'D', 'BE', 'C1E', 'CE', 'D1E', 'D2E', 'DE'] as const;
 const LICENSE_CLASS_OPTIONS_BY_VEHICLE: Record<VehicleType, LicenseClass[]> = {
@@ -33,7 +34,7 @@ const LICENSE_CLASS_OPTIONS_BY_VEHICLE: Record<VehicleType, LicenseClass[]> = {
   CAR_7: ['B', 'C1', 'C', 'D1', 'D2', 'D', 'BE', 'C1E', 'CE', 'D1E', 'D2E', 'DE'],
 };
 
-const API_ROOT = (process.env.REACT_APP_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+const API_ROOT = normalizeGatewayOriginUrl(process.env.REACT_APP_API_URL);
 
 const resolveVehicleImageUrl = (rawUrl?: string) => {
   if (!rawUrl) {

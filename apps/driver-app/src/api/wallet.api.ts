@@ -1,7 +1,5 @@
 import axios from 'axios';
-import axiosInstance from './axios.config';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
+import axiosInstance, { API_BASE_URL } from './axios.config';
 
 export interface WalletBalance {
   driverId: string;
