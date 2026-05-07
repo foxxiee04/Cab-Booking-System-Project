@@ -222,8 +222,8 @@ services:
         failure_action: rollback
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
+        delay: 10s
+        window: 120s
       resources:
         limits:
           cpus: '0.5'
@@ -254,8 +254,8 @@ services:
         failure_action: rollback
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
+        delay: 10s
+        window: 120s
       resources:
         limits:
           cpus: '0.5'
@@ -286,8 +286,8 @@ services:
         failure_action: rollback
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
+        delay: 10s
+        window: 120s
       resources:
         limits:
           cpus: '0.5'
@@ -318,8 +318,8 @@ services:
         failure_action: rollback
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
+        delay: 10s
+        window: 120s
       resources:
         limits:
           cpus: '0.5'
@@ -349,8 +349,8 @@ services:
         failure_action: rollback
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
+        delay: 10s
+        window: 120s
       resources:
         limits:
           cpus: '0.5'
@@ -381,8 +381,8 @@ services:
         failure_action: rollback
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
+        delay: 10s
+        window: 120s
       resources:
         limits:
           cpus: '0.5'
@@ -413,8 +413,8 @@ services:
         failure_action: rollback
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
+        delay: 10s
+        window: 120s
       resources:
         limits:
           cpus: '0.5'
@@ -446,8 +446,8 @@ services:
         failure_action: rollback
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
+        delay: 10s
+        window: 120s
       resources:
         limits:
           cpus: '0.5'
@@ -477,8 +477,8 @@ services:
         failure_action: rollback
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
+        delay: 10s
+        window: 120s
       resources:
         limits:
           cpus: '0.5'
@@ -508,8 +508,8 @@ services:
         failure_action: rollback
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
+        delay: 10s
+        window: 120s
       resources:
         limits:
           cpus: '0.5'

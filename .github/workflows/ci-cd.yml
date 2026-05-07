@@ -391,6 +391,32 @@ jobs:
             [ -f .env ] && source .env
             set +o allexport
 
+            # Authenticate to Docker Hub (prevents anonymous pull rate-limits).
+            # Requires DOCKERHUB_TOKEN in ~/cab-booking/.env on the server.
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin 2>/dev/null || true
+
+            echo "▶ Pre-pulling service images on manager..."
+            for svc in api-gateway auth-service ride-service driver-service payment-service \
+                       wallet-service user-service booking-service pricing-service \
+                       notification-service review-service ai-service; do
+              docker pull "${DOCKERHUB_USERNAME}/cab-${svc}:${IMAGE_TAG}" &
+            done
+            wait
+
+            echo "▶ Pre-pulling service images on worker nodes..."
+            for node_ip in $(docker node inspect \
+                $(docker node ls -q --filter role=worker) \
+                --format '{{.Status.Addr}}' 2>/dev/null); do
+              ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$node_ip "
+                for svc in api-gateway auth-service ride-service driver-service payment-service \
+                           wallet-service user-service booking-service pricing-service \
+                           notification-service review-service ai-service; do
+                  docker pull ${DOCKERHUB_USERNAME}/cab-\${svc}:${IMAGE_TAG} &
+                done
+                wait
+              " 2>/dev/null || true
+            done
+
             echo "▶ Cleaning up disk on all swarm nodes..."
             for node_ip in $(docker node inspect $(docker node ls -q) --format '{{.Status.Addr}}' 2>/dev/null); do
               ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$node_ip \
@@ -401,7 +427,7 @@ jobs:
             docker stack deploy \
               -c docker-stack.thesis.yml \
               --with-registry-auth \
-              --resolve-image changed \
+              --resolve-image always \
               --prune \
               cab-booking
 
