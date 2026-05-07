@@ -401,7 +401,7 @@ jobs:
             docker stack deploy \
               -c docker-stack.thesis.yml \
               --with-registry-auth \
-              --resolve-image always \
+              --resolve-image changed \
               --prune \
               cab-booking
 
