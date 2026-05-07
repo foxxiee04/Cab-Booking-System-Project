@@ -1,13 +1,26 @@
-# Cab Booking System — Hệ thống đặt xe công nghệ
+﻿# Cab Booking System — Hệ thống đặt xe công nghệ
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20.x-green)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-18-blue)](https://react.dev/)
 [![Docker](https://img.shields.io/badge/Docker-Swarm-blue)](https://www.docker.com/)
 [![AWS](https://img.shields.io/badge/AWS-EC2-orange)](https://aws.amazon.com/)
-[![Domain](https://img.shields.io/badge/Domain-foxgo.online-brightgreen)](https://foxgo.online)
+[![Domain](https://img.shields.io/badge/Domain-foxgo.io.vn-brightgreen)](https://foxgo.io.vn)
 
-Hệ thống đặt xe công nghệ xây dựng theo kiến trúc **microservices**, phục vụ ba nhóm người dùng: khách hàng, tài xế và quản trị viên. Hệ thống gồm ba ứng dụng React SPA, mười một microservice Node.js/TypeScript, một AI service FastAPI/Python, hạ tầng dữ liệu đa mô hình (PostgreSQL, MongoDB, Redis, RabbitMQ) và pipeline CI/CD trên GitHub Actions triển khai lên AWS EC2.
+Hệ thống đặt xe công nghệ xây dựng theo kiến trúc **microservices**, phục vụ ba nhóm người dùng: khách hàng, tài xế và quản trị viên. Hệ thống gồm ba ứng dụng React SPA, mười một service Node.js/TypeScript (một **API Gateway** + mười dịch vụ nghiệp vụ), một **AI service** FastAPI/Python, hạ tầng dữ liệu đa mô hình (PostgreSQL, MongoDB, Redis, RabbitMQ) và pipeline CI/CD trên GitHub Actions triển khai lên AWS EC2.
+
+**Domain công khai (mẫu trong repo, HTTP server block — chỉnh theo môi trường thật):**
+
+| Thành phần | Host mẫu (`deploy/nginx/nginx-apps.conf`) |
+|------------|---------------------------------------------|
+| Website khách | `https://foxgo.io.vn` |
+| App tài xế | `https://driver.foxgo.io.vn` |
+| Admin | `https://admin.foxgo.io.vn` |
+| API + WebSocket | `https://api.foxgo.io.vn` |
+
+Frontend build và Secret GitHub cần **`REACT_APP_API_URL` / `REACT_APP_SOCKET_URL` trùng origin API công khai** (ví dụ `https://api.foxgo.io.vn`). Collection Postman deploy mặc định **`foxgo_gateway_url=https://api.foxgo.io.vn`** — đổi nếu bạn dùng miền khác.
+
+> **Mục lục tài liệu Markdown:** [docs/README.md](docs/README.md) — **Báo cáo KLTN:** [docs/bao-cao-kltn.md](docs/bao-cao-kltn.md)
 
 ---
 
@@ -25,7 +38,7 @@ Hệ thống đặt xe công nghệ xây dựng theo kiến trúc **microservice
 - [10. Triển khai trên AWS](#10-triển-khai-trên-aws)
 - [11. Monitoring và Observability](#11-monitoring-và-observability)
 - [12. Hướng phát triển tiếp theo](#12-hướng-phát-triển-tiếp-theo)
-- [13. Bộ sơ đồ hệ thống xuất sẵn](#13-bộ-sơ-đồ-hệ-thống-xuất-sẵn)
+- [13. Bộ sơ đồ và tài liệu hình (PNG / Mermaid)](#13-bộ-sơ-đồ-và-tài-liệu-hình-png--mermaid)
 
 ---
 
@@ -56,7 +69,7 @@ Hệ thống được xây dựng nhằm cung cấp một ứng dụng đặt xe
 | CSDL quan hệ | PostgreSQL (port 5433) | ACID cho tài chính, ride state machine |
 | CSDL document | MongoDB | Notification, review — schema linh hoạt |
 | Cache & Geo | Redis | `GEOADD`/`GEORADIUS` O(log M) tìm tài xế |
-| ORM | Prisma | Migration, type-safe queries cho 7 PostgreSQL DB |
+| ORM | Prisma | Migration, type-safe queries cho **8** PostgreSQL DB (shared instance) |
 | Xác thực | JWT (HS256) + Refresh Token | Stateless auth, revoke qua DB |
 | Triển khai | Docker Swarm | Production scaling trên AWS |
 | CI/CD | GitHub Actions | Quality gate → Docker Hub → SSH deploy |
@@ -90,7 +103,7 @@ Hệ thống được xây dựng nhằm cung cấp một ứng dụng đặt xe
 | Service | Bounded Context | Trách nhiệm |
 |---------|----------------|-------------|
 | API Gateway | Infrastructure | Entry point, JWT auth, proxy, Socket.IO hub, driver matching |
-| Auth Service | Identity | Đăng ký OTP, đăng nhập mật khẩu, JWT/Refresh Token |
+| Auth Service | Identity | Đăng ký OTP, đăng nhập mật khẩu, JWT / Refresh Token (OTP qua SMS/SNS/Twilio tùy cấu hình) |
 | User Service | User Profile | Hồ sơ người dùng mở rộng |
 | Driver Service | Driver Domain | Hồ sơ tài xế, trạng thái, vị trí địa lý |
 | Ride Service | Ride Domain | Vòng đời chuyến đi, state machine, chat |
@@ -251,8 +264,8 @@ graph TB
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Nginx (host) + Let's Encrypt SSL                  │
-│   api.foxgo.online → :3000 (proxy)                                  │
-│   foxgo.online     → /home/ubuntu/customer-build  (static)          │
+│   api.foxgo.io.vn → :3000 (proxy)                                   │
+│   foxgo.io.vn     → /home/ubuntu/customer-build  (static)           │
 └────────────────────────────────┬────────────────────────────────────┘
                                  │
 ┌────────────────────────────────▼────────────────────────────────────┐
@@ -314,7 +327,7 @@ graph TB
     end
 
     subgraph DataLayer ["Data & Infra"]
-        PG[("PostgreSQL :5433\n7 databases")]
+        PG[("PostgreSQL :5433\n8 databases")]
         Mongo[("MongoDB :27017\n2 databases")]
         Redis[("Redis :6379\nGeo · Cache · Pub/Sub")]
         Rabbit["RabbitMQ :5672\ndomain-events exchange"]
@@ -329,6 +342,7 @@ graph TB
 
     Auth & User & Ride & DriverSvc --> PG
     Booking & Payment & Wallet --> PG
+    APIGW --> PG
     Notification --> Mongo
     Review --> Mongo
     DriverSvc & Pricing --> Redis
@@ -453,6 +467,7 @@ CASH ride flow:
 
 | DBMS | Database | Service | Schema cốt lõi |
 |------|---------|---------|---------------|
+| PostgreSQL | `location_db` | API Gateway | Bảng địa giới hành chính (location admin) |
 | PostgreSQL | `auth_db` | Auth | User, RefreshToken, AuditLog |
 | PostgreSQL | `user_db` | User | UserProfile |
 | PostgreSQL | `driver_db` | Driver | Driver, DriverLicense, DriverLocation |
@@ -463,7 +478,7 @@ CASH ride flow:
 | MongoDB | `notification_db` | Notification | notifications, push_tokens |
 | MongoDB | `review_db` | Review | reviews |
 
-> 7 PostgreSQL database chia sẻ 1 instance (port **5433**). Mỗi service có Prisma client riêng.
+> **8** PostgreSQL database trên **một** instance (cổng host **5433** trong `docker-compose`). Mỗi service có Prisma client (hoặc SQL) riêng khi áp dụng.
 
 ### 5.2 ERD (các aggregate chính)
 
@@ -554,15 +569,27 @@ Cab-Booking-System-Project/
 │       ├── provisioning/      # Auto-config datasource + dashboard
 │       └── dashboards/        # 4 JSON dashboards
 │
+├── img/                       # PNG sơ đồ / báo cáo (taxonomy `{loại}_{chức_năng}_…`)
+│
+├── docs/                      # Báo cáo, mục lục, mô tả từng service
+│   ├── README.md
+│   ├── bao-cao-kltn.md
+│   ├── diagrams/              # DIAGRAM_GUIDE, mermaid/, …
+│   └── services/              # 01-api-gateway.md … 12-ai-service.md
+│
 ├── deploy/
-│   ├── DEPLOY.md              # Hướng dẫn deploy AWS đầy đủ
-│   ├── CLUSTER-AWS.md         # Kiến trúc multi-node (tham khảo)
-│   └── nginx/nginx-apps.conf  # Nginx config tham khảo
+│   ├── SWARM-SETUP.md         # Docker Swarm + AWS (hướng dẫn đầy đủ trong repo)
+│   └── nginx/nginx-apps.conf  # Ví dụ server_name foxgo.io.vn / API proxy :3000
 │
 ├── scripts/
 │   ├── reset-database.sh/.bat # Reset + migrate + seed
 │   ├── seed-database.ts        # Seed dữ liệu mẫu
-│   └── run-integration-backend.ts  # CI integration health check
+│   ├── publish-bao-cao-docs-bundle.mjs
+│   ├── export-bao-cao-mermaid.mjs
+│   ├── verify-bao-cao-img-refs.mjs
+│   ├── generate_diagrams.py    # Mermaid gốc docs/diagrams/mermaid/*.mmd → img/*.png
+│   ├── run-integration-backend.ts  # Kiểm tra tích hợp (CI / local)
+│   └── …                       # các script khác (xem thư mục)
 │
 ├── .github/workflows/ci-cd.yml  # Pipeline CI/CD
 ├── docker-compose.yml           # Local dev stack
@@ -576,7 +603,7 @@ Cab-Booking-System-Project/
 
 | Service | HTTP | gRPC | Database |
 |---------|------|------|----------|
-| API Gateway | **3000** | — | Redis |
+| API Gateway | **3000** | — | Redis, PostgreSQL `location_db` |
 | Auth | 3001 | **50051** | auth_db |
 | Ride | 3002 | **50054** | ride_db |
 | Driver | 3003 | **50055** | driver_db + Redis |
@@ -588,7 +615,7 @@ Cab-Booking-System-Project/
 | Pricing | 3009 | **50057** | Redis (stateless) |
 | Review | 3010 | — | review_db (Mongo) |
 | AI | **8000** | — | File models |
-| PostgreSQL | **5433** | — | 7 databases |
+| PostgreSQL | **5433** | — | 8 databases |
 | MongoDB | 27017 | — | 2 databases |
 | Redis | 6379 | — | |
 | RabbitMQ | 5672 | — | |
@@ -647,11 +674,11 @@ npm run db:seed
 
 **Swarm / server:** tạo `~/cab-booking/env/auth.env` và `gateway.env` từ `env/auth.env.example` và `env/gateway.env.example`, điền secret và URL thật, rồi redeploy stack.
 
-Luồng Postman:
+**Luồng Postman**
 
-- **`foxgo_gateway_url`** (deploy) hoặc **`docker_gateway_url`** (Docker/local): là **gốc gateway**, không thêm `/api` cuối (đúng: `http://localhost:3000`, `https://api.foxgo.io.vn`; sai: `.../api` — dễ thành `/api/api/...`).
+- **`foxgo_gateway_url`** (deploy) hoặc **`docker_gateway_url`** (Docker/local): là **gốc gateway**, không thêm `/api` cuối (ví dụ đúng: `http://localhost:3000`, `https://api.foxgo.io.vn`; sai: `.../api` — dễ thành `/api/api/...`).
 
-1. `POST {foxgo_gateway_url}/api/auth/register-phone/start` — body `{ "phone": "0901234501" }` (hoặc `docker_gateway_url` khi chạy local)
+1. `POST {foxgo_gateway_url}/api/auth/register-phone/start` — body `{ "phone": "0901234501" }` (hoặc `docker_gateway_url` khi chạy local).
 
 2. `GET {foxgo_gateway_url}/api/auth/dev/otp?phone=0901234501&purpose=register` — hoặc `phone=%2B84901234501`. **Không** cần `Authorization`; số trong query có thể `0xxxxxxxxxx` hoặc `+84…` / `84…`.
 
@@ -660,7 +687,7 @@ Luồng Postman:
 - Deploy/staging: `postman/FoxGo-API-Deploy.postman_collection.json` — biến **`foxgo_gateway_url`**, mặc định `https://api.foxgo.io.vn`.
 - Chỉ Docker/localhost: `postman/FoxGo-API-Docker-Local.postman_collection.json` — biến **`docker_gateway_url`**, mặc định `http://localhost:3000`.
 
-**Import vào Postman:** mở **Import** (`Ctrl+O`), chọn **`FoxGo-API-Deploy.postman_collection.json`** (Import), sau đó **Import** lại file **`FoxGo-API-Docker-Local.postman_collection.json`**; hoặc trong một lần Import chọn **cả hai file** — sẽ thành **hai collection** cạnh nhau trong sidebar (`FoxGo API — Deploy / staging` và `FoxGo API — Docker / Localhost only`). Nếu trước đó chỉ có một: kiểm tra đã không trùng bản `.json` cũ và collection đã được gán **`_postman_id`** khác nhau trong repo hiện tại.
+**Import vào Postman:** mở **Import** (`Ctrl+O`), chọn **`FoxGo-API-Deploy.postman_collection.json`**, sau đó **Import** lại **`FoxGo-API-Docker-Local.postman_collection.json`**; hoặc trong một lần Import chọn **cả hai file** — thành **hai collection** cạnh nhau trong sidebar.
 
 Đổi mật khẩu (quên mật khẩu) dùng `purpose=reset`:
 
@@ -668,8 +695,8 @@ Luồng Postman:
 GET {foxgo_gateway_url}/api/auth/dev/otp?phone=0901234501&purpose=reset
 ```
 
-- Local Docker: `docker_gateway_url=http://localhost:3000` (collection Docker)
-- Deploy: `foxgo_gateway_url=https://api.<domain>` (collection deploy, ví dụ `https://api.foxgo.io.vn`)
+- Local Docker: `docker_gateway_url=http://localhost:3000`
+- Deploy: `foxgo_gateway_url=https://api.<domain>` (ví dụ `https://api.foxgo.io.vn`)
 
 **Cảnh báo:** `OTP_ENABLE_DEV_ENDPOINT` chỉ nên bật trên môi trường demo / thử nghiệm. Production thật: tắt cờ này và dùng SMS thật, ví dụ:
 
@@ -680,6 +707,10 @@ OTP_SMS_MODE=twilio
 ```
 
 Nếu `OTP_SMS_MODE=sns` mà vẫn lỗi gửi OTP: kiểm tra IAM `sns:Publish`, Sandbox SNS, hoặc cấu hình provider.
+
+**Gỡ lỗi nhanh (local):** `docker logs cab-auth-service 2>&1 | grep OTP`
+
+---
 
 ## 9. Kiểm thử và CI/CD
 
@@ -709,7 +740,7 @@ flowchart LR
     S1 --> S2
 
     subgraph S2["Stage 2 — Docker Build matrix"]
-        D["Build + Push 12 images\nfoxxiee04/cab-service:latest"]
+        D["Build + Push 12 images\nnamespace/cab-service:tag"]
     end
 
     S2 --> S3a
@@ -724,61 +755,65 @@ flowchart LR
     end
 ```
 
-**Docker Hub 429:** các `Dockerfile` dùng mirror **AWS Public ECR** `public.ecr.aws/docker/library/*` (Node / Python official) để CI không bị giới hạn pull `docker.io` khi build matrix song song.
+**Docker Hub pull rate:** các `Dockerfile` dùng mirror **AWS Public ECR** `public.ecr.aws/docker/library/*` (Node / Python official) để CI hạn chế lỗi giới hạn pull `docker.io` khi build song song.
 
 ---
 
 ## 10. Triển khai trên AWS
 
-### 10.1 Kiến trúc hiện tại
+**Domain / HTTPS:** bảng host mẫu **`foxgo.io.vn`** nằm ở **đầu README**; cấu hình `server_name` và proxy API `:3000` tham chiếu [`deploy/nginx/nginx-apps.conf`](deploy/nginx/nginx-apps.conf). **Postman deploy** mặc định `https://api.foxgo.io.vn` ([`postman/FoxGo-API-Deploy.postman_collection.json`](postman/FoxGo-API-Deploy.postman_collection.json)) — phải khớp URL bạn cấu hình thật (`REACT_APP_API_URL`, `REACT_APP_SOCKET_URL` trong GitHub Secrets).
+
+### 10.1 Kiến trúc minh họa (Nginx trên host + Docker Swarm)
 
 ```
 Internet
-    ├── https://foxgo.online         → Customer App
-    ├── https://driver.foxgo.online  → Driver App
-    ├── https://admin.foxgo.online   → Admin Dashboard
-    └── https://api.foxgo.online     → API Gateway
+    ├── https://foxgo.io.vn          → Customer App (static)
+    ├── https://driver.foxgo.io.vn   → Driver App (static)
+    ├── https://admin.foxgo.io.vn    → Admin Dashboard (static)
+    └── https://api.foxgo.io.vn      → API Gateway
               │
     ┌─────────┴──────────────────────────────────────┐
-    │  EC2 t3.large — 18.136.250.236                  │
-    │  Ubuntu 22.04 · ap-southeast-1 (Singapore)      │
-    │  Elastic IP · Let's Encrypt SSL                 │
+    │  AWS EC2 — Elastic IP tham chiếu: 18.136.250.236│
+    │  Region ap-southeast-1 · Ubuntu 22.04           │
+    │  (Kiểu instance / multi-node — xem SWARM-SETUP) │
     │                                                  │
     │  ┌─────── Nginx (host) ──────────────────────┐  │
-    │  │  :80/:443 → React builds (static files)   │  │
-    │  │  api.foxgo.online → proxy :3000            │  │
+    │  │  :80/:443 → SPA build (customer/driver/admin)│  │
+    │  │  api.* → reverse proxy localhost:3000       │  │
     │  └───────────────────────────────────────────┘  │
     │                                                  │
-    │  ┌─────── Docker Swarm (single-node) ─────────┐  │
-    │  │  Infrastructure: PG, Mongo, Redis, RabbitMQ │  │
-    │  │  Services: 11 Node.js + 1 Python AI         │  │
-    │  │  Monitoring: Prometheus + Grafana + Loki    │  │
+    │  ┌─────── Docker Swarm ─────────────────────────┐  │
+    │  │  Infra: PostgreSQL, MongoDB, Redis, RabbitMQ │  │
+    │  │  11 service Node + 1 AI (FastAPI)            │  │
+    │  │  Quan sát: Prometheus, Grafana, Loki (tuỳ bật)│  │
     │  └─────────────────────────────────────────────┘  │
     └────────────────────────────────────────────────────┘
 ```
 
-### 10.2 GitHub Secrets
+### 10.2 GitHub Secrets (CI/CD — xem `.github/workflows/ci-cd.yml`)
 
-| Secret | Giá trị |
+| Secret | Ghi chú |
 |--------|---------|
-| `DOCKERHUB_USERNAME` | `foxxiee04` |
-| `DOCKERHUB_TOKEN` | Docker Hub access token |
-| `DEPLOY_HOST` | `18.136.250.236` |
-| `DEPLOY_USER` | `ubuntu` |
-| `DEPLOY_SSH_KEY` | Nội dung `cab-key.pem` |
-| `REACT_APP_API_URL` | `https://api.foxgo.online` |
-| `REACT_APP_SOCKET_URL` | `https://api.foxgo.online` |
+| `DOCKERHUB_USERNAME` | Namespace Docker Hub (image `…/cab-<service>`) |
+| `DOCKERHUB_TOKEN` | Access token push image |
+| `DEPLOY_HOST` | IP public hoặc hostname SSH (ví dụ Elastic IP) |
+| `DEPLOY_USER` | User SSH (thường `ubuntu`) |
+| `DEPLOY_SSH_KEY` | Private key PEM |
+| `DEPLOY_PORT` | *(tuỳ chọn)* cổng SSH, mặc định 22 |
+| `REACT_APP_API_URL` | Origin API công khai, ví dụ `https://api.foxgo.io.vn` |
+| `REACT_APP_SOCKET_URL` | Trùng origin WebSocket (thường cùng API) |
+| `REACT_APP_GOOGLE_MAPS_API_KEY` | *(tuỳ chọn)* |
 
-### 10.3 Deploy thủ công (không cần thay đổi code)
+### 10.3 Deploy thủ công (kích hoạt lại pipeline)
 
 ```bash
 git commit --allow-empty -m "ci: manual redeploy"
 git push origin main
 ```
 
-### 10.4 Hướng dẫn đầy đủ
+### 10.4 Hướng dẫn đầy đủ trên AWS (Swarm, SG, TLS, env)
 
-Xem [`deploy/DEPLOY.md`](deploy/DEPLOY.md) cho toàn bộ quy trình từ đầu.
+Xem **[`deploy/SWARM-SETUP.md`](deploy/SWARM-SETUP.md)** (Elastic IP `18.136.250.236`, security group, multi-node có thể mở rộng).
 
 ---
 
@@ -788,11 +823,11 @@ Xem [`deploy/DEPLOY.md`](deploy/DEPLOY.md) cho toàn bộ quy trình từ đầu
 
 | Component | Tác dụng | URL |
 |-----------|---------|-----|
-| **Prometheus** | Thu thập metrics mỗi 15s | http://18.136.250.236:9090 |
-| **Grafana** | Dashboard visualization | http://18.136.250.236:3030 |
+| **Prometheus** | Thu thập metrics mỗi 15s | `http://18.136.250.236:9090` *(tuỳ SG — có thể chỉ My IP)* |
+| **Grafana** | Dashboard visualization | `http://18.136.250.236:3030` |
 | **Loki** | Log aggregation | (qua Grafana) |
 | **Promtail** | Log collector từ Docker | — |
-| **cAdvisor** | Container metrics | http://18.136.250.236:8081 |
+| **cAdvisor** | Container metrics | *(thường nội bộ cluster / SG)* |
 | **Node Exporter** | Host metrics | — |
 
 ### 11.2 Dashboards tự động load
@@ -810,7 +845,7 @@ Xem [`deploy/DEPLOY.md`](deploy/DEPLOY.md) cho toàn bộ quy trình từ đầu
 - **Containers**: CPU/memory/network per service
 - **RabbitMQ**: Queue depth, consumers, message rates
 - **API Gateway**: HTTP requests, WebSocket connections, AI matching decisions
-- **Logs**: Tất cả stdout/stderr từ 12 services qua Docker
+- **Logs**: Tất cả stdout/stderr từ **stack ứng dụng** (gateway + dịch vụ Node + AI) qua Docker
 
 Xem chi tiết: [`monitoring/README.md`](monitoring/README.md)
 
@@ -839,26 +874,26 @@ Xem chi tiết: [`monitoring/README.md`](monitoring/README.md)
 
 ---
 
-## 13. Bộ sơ đồ hệ thống xuất sẵn
+## 13. Bộ sơ đồ và tài liệu hình (PNG / Mermaid)
 
-- Toàn bộ sơ đồ Mermaid trong `README.md` và `docs/**/*.md` đã được xuất vào thư mục `img_hethong/`.
-- Mỗi sơ đồ có 2 định dạng:
-  - File nguồn Mermaid: `*.mmd`
-  - Ảnh vector: `*.svg`
-- Danh sách ánh xạ source ↔ sơ đồ nằm trong:
-  - `img_hethong/README.md`
-  - `img_hethong/manifest.json`
+**Trong repo không có** thư mục `img_hethong/` hay script `export-system-diagrams.cjs` — sơ đồ xuất ra PNG tập trung ở **`img/`** (đặt tên `{loại}_{chức_năng}_….png`, xem **Danh mục hình** trong [`docs/bao-cao-kltn.md`](docs/bao-cao-kltn.md)).
 
-Lệnh xuất lại khi tài liệu thay đổi:
+| Nguồn | Lệnh / file | Đích |
+|-------|----------------|------|
+| Mermaid “gốc” phục vụ slides / README | `python scripts/generate_diagrams.py` | `img/*.png` (stem `.mmd` trong `docs/diagrams/mermaid/`) |
+| Khối Mermaid **nhúng trong** `docs/bao-cao-kltn.md` | `node scripts/export-bao-cao-mermaid.mjs` | `img/*.png` + mapping [`docs/diagrams/mermaid/report-mermaid-png-mapping.json`](docs/diagrams/mermaid/report-mermaid-png-mapping.json) |
+| AI (train / RAG) | `docs/diagrams/mermaid/source/ai_*.mmd` → `npx @mermaid-js/mermaid-cli …` | `img/ai_ml_sklearn_train_infer_pipeline.png`, `img/ai_agent_rag_retrieval.png` |
+| Đổi tên taxonomy hàng loạt | `node scripts/apply-img-taxonomy.mjs` | Đồng bộ `img/` + tham chiếu trong docs |
 
-```bash
-node scripts/export-system-diagrams.cjs
-npx -y @mermaid-js/mermaid-cli -i img_hethong/<file>.mmd -o img_hethong/<file>.svg -b transparent
-```
+- Đối chiếu mọi `../img/…` trong báo cáo với file thật: `npm run docs:verify-bao-cao-img`
+- Gói nộp Markdown + ảnh: `npm run docs:bao-cao-bundle` → `docs/bao-cao-bundle/`
+- Quy ước vẽ / đặt tên: [`docs/diagrams/DIAGRAM_GUIDE.md`](docs/diagrams/DIAGRAM_GUIDE.md)
 
 ---
 
 **Tài liệu chi tiết:**
-- Deploy: [`deploy/DEPLOY.md`](deploy/DEPLOY.md)
+- Triển khai Swarm / AWS: [`deploy/SWARM-SETUP.md`](deploy/SWARM-SETUP.md)
+- Báo cáo KLTN + danh mục hình: [`docs/bao-cao-kltn.md`](docs/bao-cao-kltn.md)
+- Mục lục `docs/`: [`docs/README.md`](docs/README.md)
 - Monitoring: [`monitoring/README.md`](monitoring/README.md)
-- Service docs: [`docs/services/`](docs/services/)
+- Từng microservice: [`docs/services/`](docs/services/)

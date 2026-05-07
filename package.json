@@ -57,7 +57,9 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:install": "playwright install chromium",
-    "test:e2e:report": "playwright show-report playwright-report"
+    "test:e2e:report": "playwright show-report playwright-report",
+    "docs:bao-cao-bundle": "node scripts/publish-bao-cao-docs-bundle.mjs",
+    "docs:verify-bao-cao-img": "node scripts/verify-bao-cao-img-refs.mjs"
   },
   "keywords": [
     "microservices",

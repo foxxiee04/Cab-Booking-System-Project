@@ -1,8 +1,8 @@
-# 📦 Shared Library - Cab Booking System
+# Shared library — Cab Booking System
 
-Thư viện dùng chung cho tất cả **frontend applications** và một số **backend services** trong hệ thống Cab Booking.
+Thư viện dùng chung cho **frontend** và một số **backend services** trong monorepo.
 
-## 🎯 Mục đích
+## Mục đích
 
 Folder `shared/` chứa:
 - **API Client**: HTTP client đã được cấu hình sẵn với authentication
@@ -10,7 +10,7 @@ Folder `shared/` chứa:
 - **Utility Functions**: Các hàm tiện ích tái sử dụng (geo, format, validation, async)
 - **Shared Logic**: Business logic dùng chung giữa frontend và backend
 
-## 📁 Cấu trúc
+## Cấu trúc
 
 ```
 shared/
@@ -30,19 +30,20 @@ shared/
 └── README.md
 ```
 
-## 🔧 Components
+## Thành phần
 
-### 1️⃣ API Client (`api-client/`)
+### API Client (`api-client/`)
 
 HTTP client đã config sẵn cho frontend applications với các tính năng:
 
 **Tính năng:**
-- ✅ Auto-attach JWT token vào headers
-- ✅ Auto-refresh token khi 401 Unauthorized
-- ✅ Redirect to login khi refresh token hết hạn
-- ✅ Timeout default: 10s
-- ✅ Error handling chuẩn hóa
-- ✅ Request/Response interceptors
+
+- Auto-attach JWT token vào headers
+- Auto-refresh token khi 401 Unauthorized
+- Redirect to login khi refresh token hết hạn
+- Timeout mặc định: 10s
+- Error handling thống nhất
+- Request/Response interceptors
 
 **Sử dụng:**
 ```typescript
@@ -84,7 +85,7 @@ const user = response.data.data;
 - `reviews.*` - Submit/get reviews
 - `notifications.*` - Get notifications
 
-### 2️⃣ Types (`types/`)
+### Types (`types/`)
 
 **Common Types:**
 ```typescript
@@ -150,7 +151,7 @@ DriverLocationUpdatedEvent
 DriverStatusChangedEvent
 ```
 
-### 3️⃣ Utils (`utils/`)
+### Utils (`utils/`)
 
 #### **Geo Utils** (`geo.utils.ts`)
 ```typescript
@@ -223,7 +224,7 @@ isStrongPassword(password: string): boolean
 validateCoordinates(lat: number, lng: number): boolean
 ```
 
-## 📦 Cài đặt và Sử dụng
+## Cài đặt và sử dụng
 
 ### Build shared library
 
@@ -281,7 +282,7 @@ npm run test:watch
 npm test -- --coverage
 ```
 
-## 🔄 Cập nhật Library
+## Cập nhật thư viện
 
 Khi thay đổi code trong `shared/`:
 
@@ -298,7 +299,7 @@ cd ../apps/driver-app
 npm install
 ```
 
-## 📝 Best Practices
+## Best practices
 
 1. **Chỉ chứa code DRY (Don't Repeat Yourself)**
    - Nếu code xuất hiện ở 2+ nơi → đưa vào shared
@@ -319,7 +320,7 @@ npm install
    - JSDoc cho tất cả public functions
    - Examples trong comments
 
-## 🚀 Tính năng sắp tới
+## Định hướng mở rộng
 
 - [ ] WebSocket client wrapper
 - [ ] Form validation schemas (Zod/Yup)
@@ -328,6 +329,6 @@ npm install
 - [ ] Error tracking utilities
 - [ ] Analytics helpers
 
-## 📄 License
+## License
 
 Part of the Cab Booking System project.

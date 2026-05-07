@@ -1,10 +1,10 @@
-# Tài liệu Kiến trúc Microservice — Cab Booking System
+# Tài liệu theo từng Microservice
 
-> Tài liệu kỹ thuật mô tả chi tiết từng microservice trong hệ thống đặt xe trực tuyến.
+Chỉ mục kỹ thuật: **mỗi file tương ứng một service** trong repo. Kiến trúc tổng thể, **DDD**, bảng cổng, pattern và luồng nghiệp vụ không lặp lại ở đây — xem [README gốc](../../README.md) (mục 1–5, 7).
 
 ---
 
-## Danh sách Service
+## Danh sách
 
 | # | Service | Cổng HTTP | Cổng gRPC | Database | Tài liệu |
 |---|---------|-----------|-----------|----------|----------|
@@ -23,44 +23,7 @@
 
 ---
 
-## Kiến trúc tổng quan
+## Liên quan
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         CLIENTS                                  │
-│        Customer App (:4000)  Driver App (:4001)  Admin (:4002)  │
-└───────────────────────────────┬─────────────────────────────────┘
-                                │ HTTP / WebSocket
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      API GATEWAY (:3000)                         │
-│   JWT verify  │  HTTP Proxy  │  Socket.IO Hub  │  Rate Limit    │
-│               │  Driver Matching Algorithm       │               │
-└──────┬────────┴──────┬───────┴────────┬──────────┴──────────────┘
-       │ HTTP           │ gRPC           │ HTTP
-       ▼                ▼                ▼
-┌──────────┐  ┌──────────────┐  ┌──────────────────────────────┐
-│  Auth    │  │   Pricing    │  │   Ride / Booking / Payment   │
-│  :3001   │  │   :3009      │  │   Driver / User / Wallet     │
-│  PG      │  │   gRPC:50057 │  │   Notification / Review      │
-└──────────┘  └──────────────┘  └──────────────────────────────┘
-                    │ HTTP                    │ Events
-                    ▼                         ▼
-              ┌──────────┐          ┌──────────────────┐
-              │    AI    │          │    RabbitMQ       │
-              │  :8000   │          │  domain-events    │
-              └──────────┘          └──────────────────┘
-```
-
-## Các Pattern chính
-
-| Pattern | Service áp dụng | Mục đích |
-|---------|-----------------|---------|
-| **Outbox Pattern** | Payment, Wallet | Đảm bảo at-least-once delivery cho events |
-| **State Machine** | Ride Service | Kiểm soát vòng đời chuyến đi |
-| **Idempotency Key** | Payment, Wallet | Tránh xử lý trùng callback |
-| **FIFO Debt Settlement** | Wallet Service | Tất toán công nợ theo thứ tự |
-| **T+24h Hold** | Wallet Service | Giữ thu nhập trước khi rút |
-| **Geospatial Index** | Driver + API Gateway | Tìm tài xế gần nhất O(log M) |
-| **WebRTC P2P** | Gateway + Client | Cuộc gọi trực tiếp tài xế↔khách |
-| **gRPC Bridge** | API Gateway | HTTP→gRPC cho Pricing, Driver |
+- [Mục lục thư mục docs/](../README.md)
+- Thư viện chung frontend/backend: [shared/README.md](../../shared/README.md)

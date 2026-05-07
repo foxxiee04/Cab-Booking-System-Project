@@ -1,9 +1,0 @@
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f8fafc', 'primaryTextColor': '#111827', 'primaryBorderColor': '#64748b', 'lineColor': '#334155'}}}%%
-erDiagram
-  USER ||--o{ RIDE : books
-  DRIVER ||--o{ RIDE : serves
-  RIDE ||--|| PAYMENT : settles
-  PAYMENT ||--o{ WALLET_TX : posts
-  USER ||--o{ WALLET_ACCOUNT : owns
-  DRIVER ||--o{ WALLET_ACCOUNT : earns
-  BOOKING ||--o{ RIDE : spawns

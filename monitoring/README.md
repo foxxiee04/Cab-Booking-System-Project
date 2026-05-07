@@ -1,5 +1,7 @@
 # Monitoring Stack — Cab Booking System
 
+Tóm tắt vai trò từng thành phần: [README gốc](../README.md) mục **11. Monitoring và Observability**. Tài liệu dưới đây đi sâu cấu hình, query mẫu và dashboard.
+
 Hệ thống monitoring bao gồm 6 thành phần chạy trong Docker Swarm stack, thu thập metrics và logs từ toàn bộ microservices.
 
 ```
