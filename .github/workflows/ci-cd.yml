@@ -373,6 +373,21 @@ jobs:
           target: "~/cab-booking/"
           strip_components: 0
 
+      - name: Write inter-node SSH key on manager
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          SWARM_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          envs: SWARM_SSH_KEY
+          script: |
+            mkdir -p ~/.ssh
+            printf '%s\n' "$SWARM_SSH_KEY" > ~/.ssh/swarm_key
+            chmod 600 ~/.ssh/swarm_key
+
       - name: Deploy Swarm stack
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -407,7 +422,7 @@ jobs:
             for node_ip in $(docker node inspect \
                 $(docker node ls -q --filter role=worker) \
                 --format '{{.Status.Addr}}' 2>/dev/null); do
-              ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$node_ip "
+              ssh -i ~/.ssh/swarm_key -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$node_ip "
                 for svc in api-gateway auth-service ride-service driver-service payment-service \
                            wallet-service user-service booking-service pricing-service \
                            notification-service review-service ai-service; do
@@ -417,10 +432,10 @@ jobs:
               " 2>/dev/null || true
             done
 
-            echo "▶ Cleaning up disk on all swarm nodes..."
+            echo "▶ Cleaning up disk on all swarm nodes (remove all unused images)..."
             for node_ip in $(docker node inspect $(docker node ls -q) --format '{{.Status.Addr}}' 2>/dev/null); do
-              ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$node_ip \
-                "docker image prune -af --filter 'until=2h' 2>/dev/null || true" 2>/dev/null || true
+              ssh -i ~/.ssh/swarm_key -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$node_ip \
+                "docker image prune -af 2>/dev/null || true; docker builder prune -af 2>/dev/null || true" 2>/dev/null || true
             done
 
             echo "▶ Deploying stack (tag=$IMAGE_TAG)..."
