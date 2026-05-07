@@ -213,6 +213,8 @@ services:
     deploy:
       replicas: 1
       placement:
+        constraints:
+          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -227,10 +229,10 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 384M
         reservations:
           cpus: '0.1'
-          memory: 64M
+          memory: 128M
 
   ride-service:
     image: ${DOCKERHUB_USERNAME}/cab-ride-service:${IMAGE_TAG:-latest}
@@ -245,6 +247,8 @@ services:
     deploy:
       replicas: 1
       placement:
+        constraints:
+          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -259,10 +263,10 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 384M
         reservations:
           cpus: '0.1'
-          memory: 64M
+          memory: 128M
 
   driver-service:
     image: ${DOCKERHUB_USERNAME}/cab-driver-service:${IMAGE_TAG:-latest}
@@ -277,6 +281,8 @@ services:
     deploy:
       replicas: 1
       placement:
+        constraints:
+          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -291,10 +297,10 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 384M
         reservations:
           cpus: '0.1'
-          memory: 64M
+          memory: 128M
 
   payment-service:
     image: ${DOCKERHUB_USERNAME}/cab-payment-service:${IMAGE_TAG:-latest}
@@ -309,6 +315,8 @@ services:
     deploy:
       replicas: 1
       placement:
+        constraints:
+          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -323,10 +331,10 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 384M
         reservations:
           cpus: '0.1'
-          memory: 64M
+          memory: 128M
 
   wallet-service:
     image: ${DOCKERHUB_USERNAME}/cab-wallet-service:${IMAGE_TAG:-latest}
@@ -340,6 +348,8 @@ services:
     deploy:
       replicas: 1
       placement:
+        constraints:
+          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -354,10 +364,10 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 384M
         reservations:
           cpus: '0.1'
-          memory: 64M
+          memory: 128M
 
   user-service:
     image: ${DOCKERHUB_USERNAME}/cab-user-service:${IMAGE_TAG:-latest}
@@ -372,6 +382,8 @@ services:
     deploy:
       replicas: 1
       placement:
+        constraints:
+          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -386,10 +398,10 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 384M
         reservations:
           cpus: '0.1'
-          memory: 64M
+          memory: 128M
 
   booking-service:
     image: ${DOCKERHUB_USERNAME}/cab-booking-service:${IMAGE_TAG:-latest}
@@ -404,6 +416,8 @@ services:
     deploy:
       replicas: 1
       placement:
+        constraints:
+          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -418,10 +432,10 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 384M
         reservations:
           cpus: '0.1'
-          memory: 64M
+          memory: 128M
 
   pricing-service:
     image: ${DOCKERHUB_USERNAME}/cab-pricing-service:${IMAGE_TAG:-latest}
@@ -437,6 +451,8 @@ services:
     deploy:
       replicas: 1
       placement:
+        constraints:
+          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -451,10 +467,10 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 384M
         reservations:
           cpus: '0.1'
-          memory: 64M
+          memory: 128M
 
   notification-service:
     image: ${DOCKERHUB_USERNAME}/cab-notification-service:${IMAGE_TAG:-latest}
@@ -468,6 +484,8 @@ services:
     deploy:
       replicas: 1
       placement:
+        constraints:
+          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -482,10 +500,10 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 384M
         reservations:
           cpus: '0.1'
-          memory: 64M
+          memory: 128M
 
   review-service:
     image: ${DOCKERHUB_USERNAME}/cab-review-service:${IMAGE_TAG:-latest}
@@ -499,6 +517,8 @@ services:
     deploy:
       replicas: 1
       placement:
+        constraints:
+          - node.role == worker
         preferences:
           - spread: node.id
       update_config:
@@ -513,10 +533,10 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 384M
         reservations:
           cpus: '0.1'
-          memory: 64M
+          memory: 128M
 
   ai-service:
     image: ${DOCKERHUB_USERNAME}/cab-ai-service:${IMAGE_TAG:-latest}
