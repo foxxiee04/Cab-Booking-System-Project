@@ -35,10 +35,10 @@
  *   npx tsx scripts/seed-database.ts
  *
  * Yêu cầu:
- *   - Toàn bộ docker stack đang chạy (api-gateway, auth-service, ... )
- *   - reset-database.bat đã chạy (DB rỗng, schema mới push)
- *   - Sau reset cần `docker compose restart wallet-service` để wallet-service
- *     re-seed SystemBankAccount (tự chạy ở startup)
+ *   - Toàn bộ backend đang chạy (Docker Compose hoặc Swarm: api-gateway + auth + …)
+ *   - DB đã reset + schema (Compose: reset-database.*; Swarm: PHASE 15–15b trong deploy/SWARM-SETUP.md)
+ *   - Sau reset cần restart wallet-service (Compose: docker compose restart wallet-service;
+ *     Swarm: script reset-database-swarm.sh đã có bước service update --force)
  */
 
 import path from 'node:path';
@@ -49,7 +49,8 @@ import bcrypt from 'bcryptjs';
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const GATEWAY_BASE = process.env.GATEWAY_BASE_URL || 'http://localhost:3000';
-const AUTH_INTERNAL_BASE = process.env.AUTH_INTERNAL_URL || 'http://localhost:3001';
+/** Dev OTP is proxied at /api/auth/* on the gateway when OTP_ENABLE_DEV_ENDPOINT is true — same base works for Compose and Swarm. */
+const AUTH_INTERNAL_BASE = process.env.AUTH_INTERNAL_URL || GATEWAY_BASE;
 
 const POSTGRES_HOST = process.env.POSTGRES_HOST || 'localhost';
 const POSTGRES_PORT = process.env.POSTGRES_PORT || '5433';
@@ -208,17 +209,46 @@ function sleep(ms: number): Promise<void> {
 // Since we register 25 users from one machine sequentially, we proactively
 // clear these keys via docker exec to keep the seed deterministic.
 
+/** Resolve a running Redis task (Compose vs Swarm naming). */
+function resolveRedisContainerId(): string {
+  const custom = process.env.REDIS_DOCKER_PS_FILTERS?.trim();
+  const filters = (custom ? custom.split(',') : ['cab-redis', 'cab-booking_redis'])
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const name of filters) {
+    const r = spawnSync('docker', ['ps', '-q', '-f', `name=${name}`], {
+      encoding: 'utf8',
+    });
+    if (r.status !== 0 || !r.stdout) continue;
+    const id = r.stdout
+      .split(/\r?\n/)
+      .map((k) => k.trim())
+      .filter(Boolean)[0];
+    if (id) return id;
+  }
+  return '';
+}
+
 function clearOtpRateLimits(silent = false) {
   try {
-    const scan = spawnSync(
-      'docker',
-      ['exec', 'cab-redis', 'redis-cli', '--scan', '--pattern', 'otp:rate:*'],
-      { encoding: 'utf8' },
-    );
+    const containerId = resolveRedisContainerId();
+    if (!containerId) return;
+    const redisPw = (
+      process.env.REDIS_CLI_PASSWORD ||
+      process.env.REDIS_PASSWORD ||
+      ''
+    ).trim();
+    const execArgsBase = ['exec', containerId, 'redis-cli'];
+    if (redisPw) {
+      execArgsBase.push('-a', redisPw);
+    }
+    const scan = spawnSync('docker', [...execArgsBase, '--scan', '--pattern', 'otp:rate:*'], {
+      encoding: 'utf8',
+    });
     if (scan.status !== 0) return;
     const keys = (scan.stdout || '').split(/\r?\n/).map((k) => k.trim()).filter(Boolean);
     if (keys.length === 0) return;
-    spawnSync('docker', ['exec', 'cab-redis', 'redis-cli', 'DEL', ...keys], { stdio: 'pipe' });
+    spawnSync('docker', [...execArgsBase, 'DEL', ...keys], { stdio: 'pipe' });
     if (!silent) {
       console.log(`    [redis] cleared ${keys.length} OTP rate-limit key(s)`);
     }

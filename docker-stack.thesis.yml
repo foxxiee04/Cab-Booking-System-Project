@@ -64,6 +64,10 @@ services:
         mode: 0444
     networks:
       - backend
+    ports:
+      # Host seed (npm run db:seed on Primary Manager): Prisma INSERT bootstrap admin connects here.
+      # Restrict port 5433 in the security group to your IP in production unless you tunnel.
+      - "5433:5432"
     secrets:
       - postgres_user
       - postgres_password
