@@ -8,7 +8,8 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    SENTENCE_TRANSFORMERS_HOME=/app/.sentence_transformers
+    SENTENCE_TRANSFORMERS_HOME=/app/.sentence_transformers \
+    HF_HUB_DISABLE_XET=1
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
