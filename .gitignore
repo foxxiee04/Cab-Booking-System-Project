@@ -222,6 +222,8 @@ docs/bao-cao-bundle
 # =====================================================
 # Temporary Files
 # =====================================================
+# Microsoft Office lock files while a document is open (~$Thesis.pptx, etc.)
+~$*
 *.tmp
 *.tmp[0-9]*
 *.temp

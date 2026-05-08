@@ -12,8 +12,8 @@ export const GREETING_RE =
   /^(hi+|hello+|hey+|xin chào|chào|alo|oi|ừ|ok|okay|bạn ơi|ơi|yo)\s*[!.]*$/i;
 
 export const GREETING_RESPONSES = [
-  'Xin chào! Mình là Mia — trợ lý FoxGo. Bạn đang dùng app khách hay app tài xế? Cứ hỏi mình về đặt xe, ví, ký quỹ, hoa hồng… mình hỗ trợ nhé!',
-  'Chào bạn! Mình là Mia. Bạn cần tư vấn gì — khách hàng hay tài xế đều được ạ.',
+  'Chào bạn 👋 Mình là Mia, trợ lý FoxGo. Bạn cần gì — đặt xe, thanh toán, ví, hay chuyện tài xế? Cứ hỏi trực tiếp nhé!',
+  'Hi bạn! Mình Mia đây. Bạn nói ngắn gọn vấn đề, mình hỗ trợ ngay.',
 ];
 
 export const THANKS_RE =
@@ -29,13 +29,13 @@ export const FOXGO_QUICK_PATTERNS: FoxgoQuickPattern[] = [
   {
     re: /^(bạn\s+là\s+ai|ban\s+la\s+ai|mia\s+là\s+ai|who\s+are\s+you|what\s+are\s+you|you\s+are\s+\?)\s*[?!.]*$/i,
     answer:
-      'Mình là **Mia** — trợ lý chat của FoxGo trong app (không phải người thật). Mình trả lời theo kho tri thức FoxGo; câu hỏi mơ hồ mình có thể hỏi lại để hiểu đúng ý bạn.',
+      'Mình là Mia, trợ lý chat FoxGo trong app (bot, không phải người thật). Mình bám thông tin chính thức của FoxGo; nếu bạn hỏi chung chung, mình có thể hỏi lại cho rõ nhé.',
   },
   {
     re: /tài xế.*(không đúng|xấu|quấy|sàm sở|rủi ro|lừa đảo|gian lận|cố ý)/i,
     answer:
-      'Nếu bạn **không an toàn**: tìm chỗ dừng đông người, gọi **113** khi cần.\n'
-      + 'Nếu hành vi chưa đến mức nguy hiểm: giữ bình tĩnh, lưu bằng chứng, kết thúc chuyến khi an toàn và báo FoxGo **1900-1234** / **support@foxgo.vn** kèm mã chuyến — bạn có thể khiếu nại/đánh giá trong app.',
+      'Nếu bạn không an toàn: tìm chỗ dừng đông người, gọi 113 khi cần.\n'
+      + 'Nếu chưa nguy hiểm: giữ bình tĩnh, lưu bằng chứng, kết thúc chuyến khi an toàn và báo FoxGo 1900-1234 / support@foxgo.vn kèm mã chuyến — khiếu nại hoặc đánh giá trong app nhé.',
   },
   {
     re: /hoa hồng|commission|phí nền tảng|chiết khấu tài xế|phần trăm.*tài xế/i,
@@ -128,7 +128,7 @@ export const FOXGO_QUICK_REPLIES: string[] = [
 ];
 
 export const FOXGO_AI_WELCOME_ASSISTANT =
-  'Xin chào! Mình là Mia — trợ lý FoxGo (chung cho khách & tài xế).\nMình **ưu tiên** trả lời qua máy chủ (RAG + LLM) để bám kho tri thức đầy đủ. Khi mạng hoặc máy chủ trục trặc, app vẫn có thể đưa **gợi ý nhanh cục bộ** tạm thời.\nBạn cần gì ạ? Chọn gợi ý bên dưới hoặc hỏi trực tiếp:';
+  'Chào bạn, mình là Mia — trợ lý FoxGo trong app này.\nKhi online, mình trả lời theo kho thông tin chính thức; lúc chậm mạng bạn vẫn có gợi ý nhanh bên dưới.\nBạn cần hỏi gì? Chọn một dòng gợi ý hoặc gõ câu hỏi nhé.';
 
 export const pickRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
 

@@ -14,6 +14,7 @@ Pipeline:
 
 import logging
 import os
+import random
 import re
 import threading
 import time
@@ -95,29 +96,151 @@ MAX_HISTORY_TURNS = 8
 # ─────────────────────────────────────────────────────────────────────────────
 # System prompt — Mia persona (accuracy-first)
 # ─────────────────────────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """Bạn là Mia — trợ lý CSKH FoxGo (ứng dụng gọi xe). Nhiệm vụ: trả lời ĐÚNG, RÕ, ĐỦ Ý — văn phong tự nhiên, tránh trả lời chung chung hoặc lặp câu chào máy móc.
+SYSTEM_PROMPT = """Bạn là Mia — trợ lý FoxGo trong app gọi xe. Nói ngắn gọn, tự nhiên như nhắn tin: rõ ràng, có nhịp, không khô như tài liệu nội bộ.
+
+ĐỊNH DẠNG (bắt buộc):
+- Chỉ văn bản thuần cho người xem trên điện thoại: không Markdown, không dùng **, không # hay ##, không backtick.
+- Gạch đầu dòng • hoặc - được phép khi liệt kê bước; không dán nguyên khối “Hỏi: … Đáp: …” từ tài liệu.
+
+BÁM SÁT CÂU HỎI (bắt buộc):
+- Câu đầu phải trả lời thẳng vào đúng “CÂU HỎI HIỆN TẠI”. Không lạc sang chủ đề chỉ liên quan lỏng lẻo.
+- Ngữ cảnh có nhiều mục: chỉ dùng phần khớp nhất, bỏ phần còn lại. Không liệt kê nhiều chủ đề chỉ vì cùng xuất hiện trong tài liệu.
 
 VAI TRÒ NGƯỜI DÙNG:
-- Nếu người dùng nói rõ (hoặc ngữ cảnh cho thấy) họ là **khách** vs **tài xế**, trả lời đúng góc: khách thì ưu tiên luồng đặt xe/thanh toán/CSKH **support@foxgo.vn**; tài xế thì ưu tiên nhận cuốc/GPS/ví/hoa hồng/CS **driver-support@foxgo.vn**.
-- Câu hỏi tổng quát thì trả lời trung tính — không ép khuôn “chỉ khách” hoặc “chỉ tài xế”.
+- Rõ khách vs tài xế: khách → đặt xe, thanh toán, support@foxgo.vn; tài xế → nhận cuốc, ví, hoa hồng, driver-support@foxgo.vn.
+- Câu chung thì trả lời trung tính, không ép một phía.
 
-NGUỒN DUY NHẤT:
-- Chỉ dùng nội dung trong phần "NGỮ CẢNH TÌM ĐƯỢC" do hệ thống cung cấp kèm câu hỏi.
-- Không dùng kiến thức thế giới mở. Không đoán mò số liệu, giá, chính sách, tên dịch vụ, hoặc luồng kỹ thuật nếu không ghi trong ngữ cảnh.
+NGUỒN:
+- Chỉ “NGỮ CẢNH TÌM ĐƯỢC”. Không bịa; không tra ngoài. Số liệu, giá, chính sách chỉ khi có trong ngữ cảnh.
 
-KHI ĐỦ THÔNG TIN:
-- Trả lời trực tiếp câu hỏi; ưu tiên gạch đầu dòng hoặc bước 1,2,3 nếu là hướng dẫn.
-- Có thể dài tới ~250 từ nếu cần nhiều bước; tránh lặp ý.
-- Nếu ngữ cảnh có **Đáp:** hoặc Q&A, giữ đúng ý chính — diễn đạt lại mượt hơn được, không được thêm ý mới.
+KHI ĐỦ Ý: diễn đạt lại mượt, 1–4 ý; có thể ~220 từ nếu nhiều bước; tránh lặp.
+KHI THIẾU: nói thẳng phần nào chưa có; gợi hotline 1900-1234 (8h–22h) hoặc email phù hợp nếu có trong ngữ cảnh.
 
-KHI THIẾU HOẶC CHỈ LIÊN QUAN MỘT PHẦN:
-- Nói rõ phần nào có/không có trong kho tri thức. Ví dụ: "Trong tài liệu FoxGo mình có [X]; phần [Y] mình chưa có chi tiết."
-- Kết thúc bằng một câu: hotline **1900-1234** (8h–22h) và/hoặc email **support@foxgo.vn** / **driver-support@foxgo.vn** tùy ngữ cảnh (chỉ nêu email có trong ngữ cảnh hoặc đã là chuẩn FoxGo trong đoạn trích).
+TUYỆT ĐỐI KHÔNG: giả tra mạng; hứa thay người dùng thao tác app; cào bê nguyên nhiều Q&A.
 
-KHÔNG ĐƯỢC:
-- Giả làm đã tra cứu bên ngoài. Không nói "theo internet". Không hứa thao tác trong app thay người dùng.
+Giọng: xưng “mình”, gọi “bạn”; tối đa 1 emoji, chỉ khi hợp."""
 
-Giọng điệu: thân thiện, xưng "mình", gọi người dùng là "bạn"; emoji tối đa 1–2, chỉ khi hợp ngữ cảnh."""
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Smalltalk + in-app quick-reply labels (aligned with apps/*/config/foxgoAiUnified.ts)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_GREETING_RE = re.compile(
+    r"^(hi+|hello+|hey+|xin chào|chào|alo|oi|ừ|ok|okay|bạn ơi|ơi|yo)\s*[!.]*$",
+    re.IGNORECASE,
+)
+_THANKS_RE = re.compile(
+    r"^(cảm ơn+|thanks+|thank you|ok cảm ơn|oke cảm ơn|cảm ơn bạn)\s*[!.]*$",
+    re.IGNORECASE,
+)
+_WHO_ARE_YOU_RE = re.compile(
+    r"^(bạn\s+là\s+ai|ban\s+la\s+ai|mia\s+là\s+ai|who\s+are\s+you|what\s+are\s+you|you\s+are\s+\?)\s*[?!.]*$",
+    re.IGNORECASE,
+)
+
+_GREETING_ANSWERS = (
+    "Chào bạn 👋 Mình là Mia, trợ lý FoxGo. Bạn đang cần giúp chuyện gì — đặt xe, thanh toán, ví, hay chuyện tài xế? Cứ hỏi trực tiếp nhé!",
+    "Hi bạn! Mình Mia đây. Một câu là mình hiểu ý bạn hơn đấy — bạn cứ nói ngắn gọn vấn đề nhé!",
+)
+_THANKS_ANSWERS = (
+    "Không có chi bạn ơi, lúc nào cần cứ gọi Mia.",
+    "Có gì cứ nhắn mình nhé — chúc bạn thuận đường!",
+)
+_WHO_ARE_YOU_ANSWER = (
+    "Mình là Mia, trợ lý chat của FoxGo trong app (bot thôi, không phải người thật). "
+    "Mình trả lời theo kho thông tin chính thức của FoxGo; nếu bạn hơi chung chung, mình có thể hỏi lại cho khớp ý nhé."
+)
+
+# Keys: strip().lower() of FOXGO_QUICK_REPLIES chips — richer text for embedding + BM25
+_QUICK_MENU_EXPAND: dict[str, str] = {
+    "bảng giá & cước": (
+        "Khách FoxGo hỏi về bảng giá cước phí surge cách tính giá ước tính Pricing Service ví dụ tham khảo"
+    ),
+    "cách đặt xe (khách)": (
+        "Khách hướng dẫn từng bước đặt xe app FoxGo điểm đón điểm đến loại xe thanh toán xác nhận"
+    ),
+    "thanh toán momo/vnpay": (
+        "Khách hỏi thanh toán online MoMo VNPay Payment Service API Gateway luồng giao dịch ví điện tử"
+    ),
+    "voucher & ưu đãi": (
+        "Khách FoxGo voucher mã giảm giá ưu đãi điều kiện áp dụng thu thập voucher trong app"
+    ),
+    "hủy chuyến / phí": (
+        "Hủy chuyến phí hủy chính sách khách hoặc tài xế FoxGo"
+    ),
+    "đăng ký tài xế": (
+        "Đăng ký tài xế FoxGo Driver GPLX giấy tờ xe hồ sơ duyệt"
+    ),
+    "hoa hồng & ví tài xế": (
+        "Tài xế hoa hồng phần trăm chiết khấu ví tài xế thu nhập Wallet"
+    ),
+    "rút tiền / ký quỹ": (
+        "Tài xế rút tiền ví ký quỹ nạp ví đối soát"
+    ),
+    "quên đồ trên xe": (
+        "Khách quên đồ trên xe liên hệ tài xế lịch sử chuyến hỗ trợ"
+    ),
+    "liên hệ hỗ trợ": (
+        "Liên hệ FoxGo hotline 1900-1234 email support driver-support"
+    ),
+}
+
+
+def _expand_quick_menu_label(message: str) -> str:
+    """Map quick-reply labels to longer retrieval queries (avoids weak matches on 2–4 word chips)."""
+    key = message.strip().lower()
+    return _QUICK_MENU_EXPAND.get(key, message)
+
+
+def _try_smalltalk(message: str) -> Optional[dict]:
+    """Short-circuit RAG for greetings / thanks / identity — avoids noisy FAQ retrieval on vague input."""
+    t = message.strip()
+    if not t:
+        return None
+    if _WHO_ARE_YOU_RE.match(t):
+        mode = "smalltalk_identity"
+        answer = _WHO_ARE_YOU_ANSWER
+    elif _GREETING_RE.match(t):
+        mode = "smalltalk_greeting"
+        answer = random.choice(_GREETING_ANSWERS)
+    elif _THANKS_RE.match(t):
+        mode = "smalltalk_thanks"
+        answer = random.choice(_THANKS_ANSWERS)
+    else:
+        return None
+    return {
+        "answer": answer,
+        "sources": [],
+        "retrieval_count": 0,
+        "score_max": 1.0,
+        "mode": mode,
+        "latency_ms": 0,
+    }
+
+
+def _format_user_facing_answer(text: str) -> str:
+    """Strip Markdown-ish markers — mobile chat renders plain text only."""
+    if not text:
+        return text
+    s = text
+    for _ in range(24):
+        n = re.sub(r"\*\*([^*]+)\*\*", r"\1", s, count=1)
+        if n == s:
+            break
+        s = n
+    s = re.sub(r"__([^_]+)__", r"\1", s)
+    s = re.sub(r"`([^`]+)`", r"\1", s)
+    s = re.sub(r"(?m)^#{1,6}\s+", "", s)
+    s = s.replace("**", "")
+    s = re.sub(r"\n{3,}", "\n\n", s)
+    return s.strip()
+
+
+def _apply_answer_polish(payload: dict) -> dict:
+    ans = payload.get("answer")
+    if isinstance(ans, str):
+        payload["answer"] = _format_user_facing_answer(ans)
+    return payload
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -768,9 +891,12 @@ async def _generate_answer(
 
     if context:
         user_content = (
-            f"NGỮ CẢNH TÌM ĐƯỢC (ưu tiên đọc từ trên xuống — đoạn đầu khớp nhất):\n{context}\n\n"
+            f"NGỮ CẢNH TÌM ĐƯỢC (ưu tiên từ trên xuống — đoạn đầu khớp nhất):\n{context}\n\n"
             f"CÂU HỎI HIỆN TẠI: {query}\n\n"
-            "Trả lời ngay vào ý chính; không mở bài dài. Nếu nhiều mục trong ngữ cảnh mâu thuẫn, ưu tiên đoạn khớp câu hỏi nhất."
+            "Viết câu đầu tiên trả lời thẳng vào CÂU HỎI HIỆN TẠI. "
+            "Bỏ qua mục trong ngữ cảnh không liên quan trực tiếp. "
+            "Không Markdown (không **, không #). Không nhét dàn Hỏi/Đáp. "
+            "Nếu các đoạn mâu thuẫn, tin đoạn khớp câu hỏi nhất."
         )
     else:
         user_content = (
@@ -926,57 +1052,61 @@ class RagService:
         top_k: int = TOP_K,
     ) -> dict:
         t0 = time.time()
+        stripped = message.strip()
+
+        small = _try_smalltalk(stripped)
+        if small:
+            small["latency_ms"] = int((time.time() - t0) * 1000)
+            return _apply_answer_polish(small)
 
         if not self._ready:
             if not self.initialize():
-                return {
+                return _apply_answer_polish({
                     "answer": "Hệ thống đang khởi động, bạn thử lại sau vài giây nhé! Hoặc liên hệ support@foxgo.vn.",
                     "sources": [], "retrieval_count": 0, "score_max": 0.0,
                     "mode": "error", "latency_ms": int((time.time() - t0) * 1000),
                     "error": self._init_error,
-                }
+                })
 
         with self._rag_lock:
             model = self._model
             index = self._index
 
         raw_hits: List[Tuple[float, float, Chunk]] = []
-        if index is not None and message.strip() and model is not None:
-            enriched_query = _enrich_query(message.strip(), history)
+        if index is not None and stripped and model is not None:
+            retrieval_query = _expand_quick_menu_label(stripped)
+            enriched_query = _enrich_query(retrieval_query, history)
             embed_text = _query_embedding_text(enriched_query)
             query_emb = model.encode([embed_text], normalize_embeddings=True)
             raw_hits = index.search_hybrid(query_emb[0], enriched_query, top_k=top_k)
 
         if not raw_hits:
-            return {
+            return _apply_answer_polish({
                 "answer": (
-                    "Mình chưa tìm thấy thông tin về vấn đề này trong hệ thống FoxGo. "
-                    "Bạn vui lòng liên hệ hotline **1900-1234** (8h–22h) hoặc email "
-                    "**support@foxgo.vn** để được hỗ trợ trực tiếp nhé! 🙏"
+                    "Mình chưa thấy nội dung nào trong hệ thống FoxGo khớp câu hỏi này.\n"
+                    "Bạn gọi hotline 1900-1234 (8h–22h) hoặc mail support@foxgo.vn nhé — họ xử lý trực tiếp cho bạn."
                 ),
                 "sources": [],
                 "retrieval_count": 0,
                 "score_max": 0.0,
                 "mode": "no_context",
                 "latency_ms": int((time.time() - t0) * 1000),
-            }
+            })
 
         score_max = max(h[1] for h in raw_hits)
         if score_max < RAG_COSINE_ABSENT:
-            return {
+            return _apply_answer_polish({
                 "answer": (
-                    "Mình chưa tìm thấy đoạn tài liệu FoxGo nào khớp đủ với câu hỏi của bạn, "
-                    "nên không thể trả lời tự tin — tránh nói sai.\n\n"
-                    "Bạn hãy diễn đạt thêm từ khóa (ví dụ: đặt xe, thanh toán, ví tài xế, hủy chuyến), "
-                    "hoặc liên hệ **1900-1234** / **support@foxgo.vn** hoặc **driver-support@foxgo.vn** "
-                    "để được hỗ trợ trực tiếp nhé."
+                    "Mình chưa tìm được đoạn tài liệu FoxGo khớp đủ với câu hỏi, nên không muốn đoán bừa.\n\n"
+                    "Bạn thử thêm vài từ khóa (ví dụ: đặt xe, MoMo, hủy chuyến, ví tài xế), "
+                    "hoặc liên hệ 1900-1234 / support@foxgo.vn / driver-support@foxgo.vn nhé."
                 ),
                 "sources": [],
                 "retrieval_count": len(raw_hits),
                 "score_max": round(float(score_max), 4),
                 "mode": "no_context",
                 "latency_ms": int((time.time() - t0) * 1000),
-            }
+            })
 
         # Highest-cosine chunks first → better LLM grounding
         retrieved: List[Tuple[float, Chunk]] = sorted(
@@ -985,26 +1115,26 @@ class RagService:
         )
 
         if score_max < RAG_COSINE_LLM:
-            answer = _template_answer(message, retrieved)
-            return {
+            answer = _template_answer(stripped, retrieved)
+            return _apply_answer_polish({
                 "answer": answer,
                 "sources": list({chunk.title for _, chunk in retrieved}),
                 "retrieval_count": len(retrieved),
                 "score_max": round(float(score_max), 4),
                 "mode": "retrieval_low_confidence",
                 "latency_ms": int((time.time() - t0) * 1000),
-            }
+            })
 
-        answer, mode = await _generate_answer(message, retrieved, history=history)
+        answer, mode = await _generate_answer(stripped, retrieved, history=history)
 
-        return {
+        return _apply_answer_polish({
             "answer": answer,
             "sources": list({chunk.title for _, chunk in retrieved}),
             "retrieval_count": len(retrieved),
             "score_max": round(float(score_max), 4),
             "mode": mode,
             "latency_ms": int((time.time() - t0) * 1000),
-        }
+        })
 
 
 rag_service = RagService()

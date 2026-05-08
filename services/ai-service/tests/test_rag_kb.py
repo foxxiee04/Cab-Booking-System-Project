@@ -3,8 +3,11 @@
 from app.services.rag_service import (
     KNOWLEDGE_DIR,
     _build_chunks,
+    _expand_quick_menu_label,
+    _format_user_facing_answer,
     _load_documents,
     _query_embedding_text,
+    _try_smalltalk,
 )
 
 
@@ -34,3 +37,27 @@ def test_query_embedding_boosts_customer_keywords():
 def test_query_embedding_boosts_thesis_architecture():
     s = _query_embedding_text("luận văn mô tả kiến trúc microservice FAISS RRF")
     assert "FoxGo API Gateway" in s
+
+
+def test_smalltalk_greeting_skips_retrieval():
+    r = _try_smalltalk("hi")
+    assert r is not None
+    assert r["mode"] == "smalltalk_greeting"
+    assert "Mia" in r["answer"]
+
+
+def test_smalltalk_identity():
+    r = _try_smalltalk("bạn là ai")
+    assert r is not None
+    assert r["mode"] == "smalltalk_identity"
+
+
+def test_expand_quick_menu_voucher_label():
+    expanded = _expand_quick_menu_label("Voucher & ưu đãi")
+    assert "voucher" in expanded.lower()
+    assert expanded != "Voucher & ưu đãi"
+
+
+def test_format_user_facing_strips_markdown_bold():
+    assert _format_user_facing_answer("Gọi **1900-1234** nhé.") == "Gọi 1900-1234 nhé."
+    assert "**" not in _format_user_facing_answer("A **B** C **D**")
