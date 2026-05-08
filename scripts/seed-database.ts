@@ -39,12 +39,14 @@
  *   - DB đã reset + schema (Compose: reset-database.*; Swarm: PHASE 15–15b trong deploy/SWARM-SETUP.md)
  *   - Sau reset cần restart wallet-service (Compose: docker compose restart wallet-service;
  *     Swarm: script reset-database-swarm.sh đã có bước service update --force)
+ *   - Admin-only (chỉ đăng nhập): `npx tsx scripts/bootstrap-admin.ts` (không thay thế full seed)
  */
 
 import path from 'node:path';
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import bcrypt from 'bcryptjs';
+
+import { ADMIN, SEED_PASSWORD, bootstrapAdmin } from './bootstrap-admin';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -57,76 +59,12 @@ const POSTGRES_PORT = process.env.POSTGRES_PORT || '5433';
 const POSTGRES_USER = process.env.POSTGRES_USER || 'postgres';
 const POSTGRES_PASSWORD = process.env.POSTGRES_PASSWORD || 'postgres';
 
-const SEED_PASSWORD = 'Password@1';
 const ACTIVATION_BALANCE = 300_000;
 const SEED_REFERENCE_OUTPUT = path.resolve(process.cwd(), 'docs', 'seed-accounts-reference.md');
 
 const DELAY_AFTER_RIDE_CREATE_MS = 4_000;
 const DRIVER_ACCEPT_RETRY_MAX = 8;
 const DRIVER_ACCEPT_RETRY_DELAY_MS = 2_000;
-
-// ─── Bootstrap admin (DB-direct) ─────────────────────────────────────────────
-// EXCEPTION: Chỉ duy nhất chỗ này ghi DB trực tiếp vì auth-service KHÔNG có
-// public endpoint /api/auth/register-admin. Mọi thứ khác đi qua API thật.
-
-const ADMIN = {
-  phone: '0900000001',
-  email: 'admin@cabbooking.com',
-  firstName: 'System',
-  lastName: 'Admin',
-};
-
-function pgUrl(db: string) {
-  return `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${db}`;
-}
-
-function loadAuthPrismaClient() {
-  const clientModulePath = path.resolve(
-    process.cwd(),
-    'services',
-    'auth-service',
-    'src',
-    'generated',
-    'prisma-client',
-  );
-  const { PrismaClient } = require(clientModulePath);
-  return new PrismaClient({ datasources: { db: { url: pgUrl('auth_db') } } });
-}
-
-async function bootstrapAdmin(): Promise<string> {
-  const prisma = loadAuthPrismaClient();
-  try {
-    const passwordHash = bcrypt.hashSync(SEED_PASSWORD, 10);
-
-    const admin = await prisma.user.upsert({
-      where: { phone: ADMIN.phone },
-      update: {
-        email: ADMIN.email,
-        role: 'ADMIN',
-        status: 'ACTIVE',
-        firstName: ADMIN.firstName,
-        lastName: ADMIN.lastName,
-        passwordHash,
-      },
-      create: {
-        phone: ADMIN.phone,
-        email: ADMIN.email,
-        role: 'ADMIN',
-        status: 'ACTIVE',
-        firstName: ADMIN.firstName,
-        lastName: ADMIN.lastName,
-        passwordHash,
-      },
-    });
-
-    console.log(`  [bootstrap] admin user ready: ${admin.id}`);
-    return admin.id;
-  } finally {
-    await prisma.$disconnect();
-  }
-}
-
-// ─── HTTP helpers ────────────────────────────────────────────────────────────
 
 type RequestOptions = {
   method?: string;
@@ -362,42 +300,16 @@ async function seedVouchers(adminToken: string) {
 
   for (const v of VOUCHER_SEEDS) {
     try {
-      // Swarm: payment-service deploy start-first có thể gửi request tới replica cũ (trước db push) → 5xx ngắn
-      const maxAttempts = 15;
-      let lastErr: any;
-      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        try {
-          await http('/api/voucher/admin', {
-            method: 'POST',
-            token: adminToken,
-            body: {
-              ...v,
-              startTime: past30.toISOString(),
-              endTime: future30.toISOString(),
-            },
-          });
-          console.log(`    + voucher ${v.code}`);
-          lastErr = undefined;
-          break;
-        } catch (err: any) {
-          lastErr = err;
-          const transient =
-            err?.status === 502
-            || err?.status === 503
-            || err?.status === 504
-            || err?.status === 500;
-          if (transient && attempt < maxAttempts) {
-            const waitMs = Math.min(8000, 2000 + attempt * 500);
-            console.log(
-              `    ! voucher ${v.code} HTTP ${err?.status} (lần ${attempt}/${maxAttempts}); chờ rollout payment ${waitMs}ms...`,
-            );
-            await sleep(waitMs);
-            continue;
-          }
-          throw err;
-        }
-      }
-      if (lastErr) throw lastErr;
+      await http('/api/voucher/admin', {
+        method: 'POST',
+        token: adminToken,
+        body: {
+          ...v,
+          startTime: past30.toISOString(),
+          endTime: future30.toISOString(),
+        },
+      });
+      console.log(`    + voucher ${v.code}`);
     } catch (err: any) {
       // Voucher may already exist if seed ran before; skip duplicate
       if (err?.status === 409 || err?.payload?.error?.message?.includes('đã')) {
