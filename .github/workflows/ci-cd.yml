@@ -233,6 +233,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - service: bootstrap-runner
+            context: .
+            dockerfile: ./Dockerfile.bootstrap
+            needs_shared: false
           # ── Root-context services (Dockerfile copies from services/<name>/ + shared/dist/) ──
           - service: api-gateway
             context: .
@@ -413,7 +417,7 @@ jobs:
             echo "▶ Pre-pulling service images on manager..."
             for svc in api-gateway auth-service ride-service driver-service payment-service \
                        wallet-service user-service booking-service pricing-service \
-                       notification-service review-service ai-service; do
+                       notification-service review-service ai-service bootstrap-runner; do
               docker pull "${DOCKERHUB_USERNAME}/cab-${svc}:${IMAGE_TAG}" &
             done
             wait
@@ -425,7 +429,7 @@ jobs:
               ssh -i ~/.ssh/swarm_key -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$node_ip "
                 for svc in api-gateway auth-service ride-service driver-service payment-service \
                            wallet-service user-service booking-service pricing-service \
-                           notification-service review-service ai-service; do
+                           notification-service review-service ai-service bootstrap-runner; do
                   docker pull ${DOCKERHUB_USERNAME}/cab-\${svc}:${IMAGE_TAG} &
                 done
                 wait

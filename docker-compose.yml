@@ -565,6 +565,44 @@ services:
     privileged: true
     restart: unless-stopped
 
+
+  # ============ Bootstrap runner (Không cần npm trên host) ============
+  # Chạy: docker compose --profile tools run --rm bootstrap-runner
+  # Hoặc: npm run docker:bootstrap
+  # npm ci chỉ trong container + volume node_modules; cần .env và git repo mount tại đây.
+  bootstrap-runner:
+    profiles:
+      - tools
+    build:
+      context: .
+      dockerfile: Dockerfile.bootstrap
+    image: cab-bootstrap-runner:latest
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/workspace:rw
+      - cab_booking_bootstrap_nm:/workspace/node_modules
+    working_dir: /workspace
+
+
+  # Giữ container chạy để dùng: docker exec -it cab-bootstrap-shell npm run system:bootstrap
+  bootstrap-shell:
+    profiles:
+      - tools
+    build:
+      context: .
+      dockerfile: Dockerfile.bootstrap
+    image: cab-bootstrap-runner:latest
+    container_name: cab-bootstrap-shell
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/workspace:rw
+      - cab_booking_bootstrap_nm:/workspace/node_modules
+    working_dir: /workspace
+    command: ["sleep", "infinity"]
+
+
   node-exporter:
     image: prom/node-exporter:v1.8.2
     container_name: cab-node-exporter
@@ -602,6 +640,9 @@ volumes:
     driver: local
   loki_data:
     name: cab-booking-loki-data
+    driver: local
+  cab_booking_bootstrap_nm:
+    name: cab-booking-bootstrap-node-modules
     driver: local
 
 networks:

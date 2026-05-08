@@ -590,22 +590,54 @@ docker exec $(docker ps -q -f name=cab-booking_ride-service) \
 
 **(Gợi ý bảo mật)** Trong AWS Security Group, không mở **5433** ra `0.0.0.0/0` trừ khi cần; tốt nhất chỉ IP của bạn hoặc giữ không public và chỉ làm seed qua SSH trên Manager.
 
-### Cài npm trên Manager (một lần)
+### Bootstrap **không cần npm trên EC2** (Docker — khuyến nghị)
+
+CI/CD build image **`cab-bootstrap-runner`** (Dockerfile.bootstrap). Container có Node + Docker CLI + entrypoint tự **`npm ci`** vào volume `node_modules` (không đụng host).
+
+**Pull + chạy một lần** (xong container tự xóa):
+
+```bash
+cd ~/cab-booking
+export DOCKERHUB_USERNAME=foxxiee04   # đúng username Hub của bạn
+
+docker pull "${DOCKERHUB_USERNAME}/cab-bootstrap-runner:latest"
+
+docker run --rm --network host \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "$PWD:/workspace:rw" \
+  -v cab-booking-bootstrap-node-modules:/workspace/node_modules \
+  -w /workspace \
+  "${DOCKERHUB_USERNAME}/cab-bootstrap-runner:latest"
+```
+
+(Image mặc định chạy `npm run system:bootstrap` ⇢ reset → migrate → seed → verify.)
+
+**Giữ container nền rồi `docker exec` (giống “backend tool”):**
+
+```bash
+docker run -d --name cab-bootstrap-shell --restart unless-stopped --network host \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "$PWD:/workspace:rw" \
+  -v cab-booking-bootstrap-node-modules:/workspace/node_modules \
+  -w /workspace \
+  "${DOCKERHUB_USERNAME}/cab-bootstrap-runner:latest" \
+  sleep infinity
+
+docker exec -it cab-bootstrap-shell npm run system:bootstrap
+```
+
+**Docker Compose local** (cùng repo): `npm run docker:bootstrap` hoặc `docker compose --profile tools up -d bootstrap-shell` rồi `docker exec -it cab-bootstrap-shell npm run system:bootstrap`.
+
+---
+
+### Cách cũ — npm trực tiếp trên Manager
 
 ```bash
 cd ~/cab-booking
 npm install
+chmod +x scripts/bootstrap-system.sh
+./scripts/bootstrap-system.sh
 ```
-
-### Chạy reset + seed cho Swarm
-
-```bash
-cd ~/cab-booking
-chmod +x scripts/reset-database-swarm.sh
-./scripts/reset-database-swarm.sh
-```
-
-Hoặc: `npm run db:reset:swarm` (gọi cùng script).
 
 Script sẽ: drop/tạo lại các DB PostgreSQL + drop Mongo notification/review (trong container), chạy `npx prisma migrate deploy` trong từng service task có Prisma, `docker service update --force` để các service (đặc biệt wallet) bootstrap lại, rồi chạy `scripts/seed-database.ts` qua Gateway `http://127.0.0.1:3000`.
 

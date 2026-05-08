@@ -1,0 +1,19 @@
+# Một shot: reset + migrate + seed qua scripts/bootstrap-system.sh
+# — npm ci chạy trong container (volume node_modules), không cần Node trên EC2 host.
+#
+# Local:  docker compose --profile tools run --rm bootstrap-runner
+# Swarm:  xem deploy/SWARM-SETUP.md (bootstrap-runner / docker run)
+
+FROM node:22-bookworm
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends docker.io curl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+COPY docker/bootstrap-entrypoint.sh /usr/local/bin/bootstrap-entrypoint.sh
+RUN chmod +x /usr/local/bin/bootstrap-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/bootstrap-entrypoint.sh"]
+CMD ["npm", "run", "system:bootstrap"]

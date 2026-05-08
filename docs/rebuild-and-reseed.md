@@ -1,5 +1,36 @@
 # Rebuild & reseed (ngắn gọn)
 
+## Một lệnh (Compose hoặc Swarm)
+
+**Trên host có Node (+ `npm install`):**
+
+```bash
+chmod +x scripts/bootstrap-system.sh
+./scripts/bootstrap-system.sh
+# hoặc: npm run system:bootstrap
+```
+
+**Không cần npm trên host** — runner trong Docker (`Dockerfile.bootstrap`): `npm ci` chỉ chạy trong container (volume `node_modules`).
+
+```bash
+npm run docker:bootstrap
+# = docker compose --profile tools run --rm bootstrap-runner
+```
+
+**Container nền để `docker exec`:**
+
+```bash
+docker compose --profile tools up -d bootstrap-shell
+docker exec -it cab-bootstrap-shell npm run system:bootstrap
+```
+
+- **Swarm EC2:** xem `deploy/SWARM-SETUP.md` — `docker pull …/cab-bootstrap-runner:latest` + `docker run …` (đã ghi sẵn lệnh).
+
+- **Swarm** (stack `cab-booking`): `bootstrap-system.sh` gọi `reset-database-swarm.sh` bên trong.
+- **Docker Compose**: gọi `reset-database.sh` / `reset-database.bat`.
+
+---
+
 ## Rebuild Docker
 
 ```bash

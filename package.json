@@ -11,6 +11,8 @@
   ],
   "scripts": {
     "db:seed": "tsx scripts/seed-database.ts",
+    "system:bootstrap": "bash scripts/bootstrap-system.sh",
+    "docker:bootstrap": "docker compose --profile tools run --rm bootstrap-runner",
     "db:reset:swarm": "bash scripts/reset-database-swarm.sh",
     "seed:flows": "npx tsx scripts/seed-flows.ts",
     "drivers:online": "node scripts/set-drivers-online.mjs",
