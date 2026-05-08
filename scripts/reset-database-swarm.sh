@@ -8,7 +8,8 @@
 # Yêu cầu (trên Primary Manager):
 # - Repo ~/cab-booking (hoặc bất kỳ), đã npm install tại root
 # - Docker Swarm đã deploy stack cab-booking, postgres có map 5433:5432 (thesis stack)
-# - File .env cùng cấp với prisma credentials khớp secrets / env/
+# - File .env + key SSH để tới worker: SWARM_SSH_KEY hoặc ~/.ssh/swarm_key (migrate chạy trong
+#   task trên worker; Manager không thấy container qua docker ps).
 #
 # Workflow: drop PG + Mongo trong container → migrate deploy trong từng service
 # task → restart services → prisma generate auth trên host → npm run db:seed
@@ -75,16 +76,57 @@ fi
 echo ""
 echo "[3/5] Prisma migrate deploy (trong container từng service)..."
 
+resolve_swarm_ssh_key() {
+  if [[ -n "${SWARM_SSH_KEY:-}" && -f "$SWARM_SSH_KEY" ]]; then
+    echo "$SWARM_SSH_KEY"
+    return 0
+  fi
+  for p in "${HOME}/.ssh/swarm_key" "${HOME}/.ssh/id_rsa"; do
+    [[ -f "$p" ]] && echo "$p" && return 0
+  done
+  return 1
+}
+
 migrate_one() {
   local svc="$1"
-  local cid
-  cid="$(docker ps -q -f name="${STACK_NAME}_${svc}" | head -1)"
-  if [[ -z "$cid" ]]; then
-    echo "  ❌ Không có container đang chạy: ${STACK_NAME}_${svc}"
+  local nf="${STACK_NAME}_${svc}"
+  local cid=""
+  cid="$(docker ps -q -f name="$nf" | head -1)"
+
+  if [[ -n "$cid" ]]; then
+    echo "  → $svc (manager/local $cid)"
+    docker exec "$cid" npx prisma migrate deploy
+    return 0
+  fi
+
+  # Task thường chạy trên worker → docker daemon Manager không list được — SSH vào từng node.
+  local key_path=""
+  local user="${SWARM_NODES_SSH_USER:-ubuntu}"
+  if ! key_path="$(resolve_swarm_ssh_key)"; then
+    echo "  ❌ Không thấy $nf trên node này và không có SSH key (đặt SWARM_SSH_KEY hoặc ~/.ssh/swarm_key) để tìm container trên worker."
     exit 1
   fi
-  echo "  → $svc ($cid)"
-  docker exec "$cid" npx prisma migrate deploy
+
+  echo "  → $nf: đang SSH swarm nodes (user=$user key=${key_path})..."
+  local nid=""
+  for nid in $(docker node ls -q 2>/dev/null); do
+    [[ -z "$nid" ]] && continue
+    local addr
+    addr="$(docker node inspect "$nid" -f '{{.Status.Addr}}' 2>/dev/null)"
+    [[ -z "$addr" ]] && continue
+    cid=""
+    cid="$(ssh -i "$key_path" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+      "${user}@${addr}" "docker ps -q -f name=$nf" 2>/dev/null | head -1 || true)"
+    if [[ -n "$cid" ]]; then
+      echo "  → $svc trên $addr ($cid)"
+      ssh -i "$key_path" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+        "${user}@${addr}" "docker exec $cid npx prisma migrate deploy"
+      return 0
+    fi
+  done
+
+  echo "  ❌ Không thấy task $nf trên bất kỳ node nào (manager + swarm SSH)."
+  exit 1
 }
 
 for svc in auth-service booking-service driver-service payment-service ride-service user-service wallet-service; do

@@ -578,10 +578,14 @@ services:
       dockerfile: Dockerfile.bootstrap
     image: cab-bootstrap-runner:latest
     network_mode: host
+    environment:
+      SWARM_SSH_KEY: /workspace/.secrets/swarm_key
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./:/workspace:rw
       - cab_booking_bootstrap_nm:/workspace/node_modules
+      # Prisma migrate cần SSH tới worker (git deploy đã có ~/.ssh/swarm_key trên Manager)
+      - ${HOME}/.ssh/swarm_key:/workspace/.secrets/swarm_key:ro
     working_dir: /workspace
 
 
@@ -595,10 +599,13 @@ services:
     image: cab-bootstrap-runner:latest
     container_name: cab-bootstrap-shell
     network_mode: host
+    environment:
+      SWARM_SSH_KEY: /workspace/.secrets/swarm_key
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./:/workspace:rw
       - cab_booking_bootstrap_nm:/workspace/node_modules
+      - ${HOME}/.ssh/swarm_key:/workspace/.secrets/swarm_key:ro
     working_dir: /workspace
     command: ["sleep", "infinity"]
 

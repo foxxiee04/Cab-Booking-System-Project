@@ -590,6 +590,8 @@ docker exec $(docker ps -q -f name=cab-booking_ride-service) \
 
 **(Gợi ý bảo mật)** Trong AWS Security Group, không mở **5433** ra `0.0.0.0/0` trừ khi cần; tốt nhất chỉ IP của bạn hoặc giữ không public và chỉ làm seed qua SSH trên Manager.
 
+- Migrate Prisma **trên swarm**: task microservice có thể chạy trên **worker** — không xuất hiện trong `docker ps` trên Manager. **`reset-database-swarm.sh`** **SSH** tới từng node (`ubuntu@<private IP>`) và `docker exec` đúng task; cần key **`SWARM_SSH_KEY`** hoặc **`~/.ssh/swarm_key`** (deploy CI đã tạo ở `~/.ssh/swarm_key` trên Manager; nếu thiếu, copy PEM deploy và `chmod 600`). **`SWARM_NODES_SSH_USER`** mặc định `ubuntu`.
+
 ### Bootstrap **không cần npm trên EC2** (Docker — khuyến nghị)
 
 CI/CD build image **`cab-bootstrap-runner`** (Dockerfile.bootstrap). Container có Node + Docker CLI + entrypoint tự **`npm ci`** vào volume `node_modules` (không đụng host).
@@ -606,11 +608,15 @@ docker run --rm --network host \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$PWD:/workspace:rw" \
   -v cab-booking-bootstrap-node-modules:/workspace/node_modules \
+  -v "$HOME/.ssh/swarm_key:/workspace/.secrets/swarm_key:ro" \
+  -e SWARM_SSH_KEY=/workspace/.secrets/swarm_key \
   -w /workspace \
   "${DOCKERHUB_USERNAME}/cab-bootstrap-runner:latest"
 ```
 
-(Image mặc định chạy `npm run system:bootstrap` ⇢ reset → migrate → seed → verify.)
+(Image mặc định chạy `bash scripts/bootstrap-system.sh` ⇢ reset → migrate → seed → verify.)
+
+**Lưu ý:** Trên Manager cần **`git pull`** để có `docker/bootstrap-entrypoint.sh`, `Dockerfile.bootstrap`, và `scripts/bootstrap-system.sh` mới nhất (CI không đồng bộ folder `scripts/`).
 
 **Giữ container nền rồi `docker exec` (giống “backend tool”):**
 
@@ -619,14 +625,16 @@ docker run -d --name cab-bootstrap-shell --restart unless-stopped --network host
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$PWD:/workspace:rw" \
   -v cab-booking-bootstrap-node-modules:/workspace/node_modules \
+  -v "$HOME/.ssh/swarm_key:/workspace/.secrets/swarm_key:ro" \
+  -e SWARM_SSH_KEY=/workspace/.secrets/swarm_key \
   -w /workspace \
   "${DOCKERHUB_USERNAME}/cab-bootstrap-runner:latest" \
   sleep infinity
 
-docker exec -it cab-bootstrap-shell npm run system:bootstrap
+docker exec -it cab-bootstrap-shell bash scripts/bootstrap-system.sh
 ```
 
-**Docker Compose local** (cùng repo): `npm run docker:bootstrap` hoặc `docker compose --profile tools up -d bootstrap-shell` rồi `docker exec -it cab-bootstrap-shell npm run system:bootstrap`.
+**Docker Compose local** (cùng repo): `npm run docker:bootstrap` hoặc `docker compose --profile tools up -d bootstrap-shell` rồi `docker exec -it cab-bootstrap-shell bash scripts/bootstrap-system.sh`.
 
 ---
 
