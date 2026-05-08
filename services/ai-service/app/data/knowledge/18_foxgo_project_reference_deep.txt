@@ -1,0 +1,160 @@
+TIÊU ĐỀ: Tham chiếu sâu dự án FoxGo — hệ thống, API AI, vận hành
+DANH MỤC: kiến trúc, microservice, RAG, LLM, FAISS, BM25, OSRM, Redis, Postgres, docker, gateway, thesis, ops, bảo trì
+
+Tài liệu cho **PM, kỹ sư, reviewer luận văn** và câu hỏi “hệ thống của bạn gồm những gì?”. Nếu mâu thuẫn với bản triển khai docker thực tế, **ưu tiên file cấu hình docker-compose của repo** và **`00_system_overview.txt`**.
+
+---
+Hỏi: Tóm tắt một câu: FoxGo khác Grab/Uber ở đâu (mức dự án)?
+Đáp: FoxGo là **bài toán microservice + realtime matching + thanh toán + AI** trong một repo monorepo — có **AI Service** tách biệt: **dự báo ETA/surge**, **accept probability**, **wait-time**, **RAG Mia**, và **API xếp hạng tài xế** `/api/recommend-driver` để minh hoạ **pipeline quyết định**.
+
+---
+Hỏi: Cổng HTTP mặc định của các service (bản tham chiếu tài liệu)?
+Đáp: **API Gateway 3000**, **Auth 3001**, **Ride 3002**, **Driver 3003**, **Payment 3004**, **Notification 3005**, **Wallet 3006**, **User 3007**, **Booking 3008**, **Pricing 3009**, **Review 3010**, **AI Service 8000**. Số cổng có thể **đổi** theo môi trường.
+
+---
+Hỏi: Client (customer-app / driver-app) gọi trực tiếp Pricing hay Payment?
+Đáp: Thường **không**; traffic qua **API Gateway** (HTTP + WebSocket/Socket.IO), gateway/ BFF điều phối **Ride/Driver/Payment/Pricing**.
+
+---
+Hỏi: Surge multiplier được lưu/tham chiếu ở đâu (khái niệm)?
+Đáp: **Redis** có key kiểu `surge:multiplier` (tài liệu kiến trúc). Pricing **gom** hệ số tối thiểu từ Redis và có thể **tăng** trong giới hạn khi có gợi ý **AI predict** từ ai-service.
+
+---
+Hỏi: Giá ước tính trước chuyến tính bằng gì?
+Đáp: **Pricing Service**: lộ trình qua **OSRM** (hoặc **fallback quãng đường**), bảng giá loại xe, phụ phí thời gian/chuyến ngắn, nhân **surge**. Giá sau chuyến có thể lệch do **thực tế đường đi**, **chờ**, **hủy**, **voucher**.
+
+---
+Hỏi: RAG Mia index hoạt động ra sao tóm tắt kỹ thuật?
+Đáp: Đọc `app/data/knowledge/*.txt` → **chunk Q&A-aware** → **SentenceTransformer** embed → **FAISS** cosine + **BM25** tiếng Việt (bỏ dấu tokenizer) → **RRF** fusion → **cổng tin cậy cosine** `RAG_COSINE_ABSENT` / `RAG_COSINE_LLM` → LLM hoặc template.
+
+---
+Hỏi: Vì sao RRF score không được dùng để gate LLM?
+Đáp: Điểm **RRF** (~0.02–0.15) **không phải cosine**. So sánh RRF với ngưỡng cosine khiến **LLM gần như không bao giờ chạy**. Code hiện **gate** bằng **cosine** top chunks sau RRF.
+
+---
+Hỏi: Các provider LLM hỗ trợ cho Mia và thứ tự ưu tiên?
+Đáp: Biến `RAG_LLM_PROVIDER`: **auto** thử **Claude → Groq → Gemini → OpenAI → template**. Khóa API tương ứng `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`.
+
+---
+Hỏi: Làm sao reload kho tri thức RAG khi sửa file `.txt`?
+Đáp: (1) `AI_AUTO_RELOAD_RAG_SEC>0` trên ai-service để **cron nội bộ** reload. (2) `POST /api/internal/refresh` body `{"rag":true}` + header `Authorization: Bearer <AI_INTERNAL_TOKEN>` (token rỗng → route ẩn 404). (3) Khởi động lại container **ai-service**.
+
+---
+Hỏi: Ngưỡng `RAG_MAX_CONTEXT_CHARS` dùng để làm gì?
+Đáp: Giới hạn **ký tự ngữ cảnh** ghép vào prompt LLM sau khi nối các chunk retrieval — tránh **vỡ context** và **tốn token**. Mặc định code có thể ~**6400** (tune qua biến môi trường).
+
+---
+Hỏi: Endpoint nào cho khách hỏi Mia qua HTTP?
+Đáp: **`POST /api/chat`** với JSON `message`, optional `history[]`, `top_k`. Phản hồi có `mode` (`llm_*`, `retrieval_low_confidence`, `no_context`, …).
+
+---
+Hỏi: Health AI service trả gì liên quan RAG?
+Đáp: **`GET /api/health`**: `rag.ready`, `rag.chunks`, `rag.vector_index`, cờ **đã cấu hình** LLM keys (không lộ giá trị).
+
+---
+Hỏi: Pipeline ML chính trong ai-service?
+Đáp: (1) **`POST /api/predict`** — RandomForest ETA + gợi ý surge (joblib `eta_price_model.joblib`). (2) **`POST /api/predict/accept/batch`** — xác suất nhận cuốc từng tài xế (`accept_model.joblib`). (3) **`POST /api/predict/wait-time`** — thời gian chờ booking→accept (`wait_model.joblib`). (4) **`POST /api/recommend-driver`** — **ghép** cả 3 + scoring giải thích.
+
+---
+Hỏi: Công thức scoring driver trong `/api/recommend-driver` khớp code gateway không?
+Đáp: Docstring Python khớp `api-gateway/driver-matcher.ts`: `score = (0.40×eta + 0.20×rating + 0.15×accept - 0.15×cancel + 0.05×idle + 0.05×priority + aiAdj) × pAccept`.
+
+---
+Hỏi: Accept model trả `p_accept_clamped` trong khoảng nào?
+Đáp: Trong service accept (theo schema/business) thường clamp **[0.3, 1.2]** để áp vào điểm — không phải xác suất thuần sau clamp.
+
+---
+Hỏi: ML retrain tự động?
+Đáp: `AI_AUTO_RETRAIN_ENABLED` + `AI_AUTO_RETRAIN_SEC` gọi script training và **hot reload joblib** — **tốn CPU**, thường **tắt** production nhỏ.
+
+---
+Hỏi: Dữ liệu huấn luyện nằm ở đâu?
+Đáp: Thư mục `training/*.py` + dataset **theo dự án** (xem README training repo). Model đã build nằm `app/models/*.joblib`.
+
+---
+Hỏi: CORS ai-service?
+Đáp: `FastAPI` middleware **allow_origins `*`** trong `main.py` — thuận lợi dev; production nên **thu hẹp domain**.
+
+---
+Hỏi: auth-service / booking-service dùng DB gì (mức khái niệm)?
+Đáp: Thường **PostgreSQL + Prisma** trong repo FoxGo; một số service có **MongoDB** tùy module — **xem từng `schema.prisma`/config**.
+
+---
+Hỏi: Realtime vị trí tài xế đi đâu?
+Đáp: **Gateway WebSocket/Socket.IO + Redis geo** (theo kiến trúc tổng quan); Ride/Driver cập nhật **trạng thái chuyến**.
+
+---
+Hỏi: Thanh toán MoMo/VNPay tích hợp chỗ nào?
+Đáp: **Payment Service** qua gateway; có thể có **mock sandbox** dev. Sau chuyến: khớp **earning** vào **Wallet** (credit/debit) tùy **tiền mặt vs online**.
+
+---
+Hỏi: Review/rating Service vai trò?
+Đáp: **Review Service** lưu đánh giá sau chuyến; ảnh hưởng **điểm tài xế** và matching quality signals.
+
+---
+Hỏi: Notification gửi push/SMS/email?
+Đáp: **Notification Service** tách biệt; channel phụ thuộc **adapter** (APNs/FCM/SMS gateway).
+
+---
+Hỏi: Mia có quyền gọi `/api/predict` thay người dùng hỏi giá?
+Đáp: **Không tự động trong RAG hiện tại.** Mia chỉ có pipeline **retrieve+LLM** văn bản. Muốn “giá live” phải **tích hợp tool-calling** riêng — chưa mô tả.
+
+---
+Hỏi: top_k retrieval ý nghĩa?
+Đáp: Số **chunk** đưa vào prompt. Tăng `top_k` **nhớ nhiều ngữ cảnh** nhưng **nhiễu/tốn token**; client gửi field `top_k` trong ChatRequest (giới hạn trên schema).
+
+---
+Hỏi: Cách BM25 tiếng Việt xử lý không dấu?
+Đáp: Tokenizer **NFKD bỏ dấu** + loại **stopwords** tiếng Việt → user gõ **không dấu** vẫn **match**.
+
+---
+Hỏi: FAQ vận hành: container ai-service không lên?
+Đáp: Kiểm tra log **tải SentenceTransformer lần đầu**, dung lượng RAM, mount volume models; endpoint **`/ready`** cho **predict model file** khác **`/api/health`** cho RAG.
+
+---
+Hỏi: Bảo mật nội bộ token refresh?
+Đáp: `AI_INTERNAL_TOKEN` không commit; để trống → **`/api/internal/refresh` **404** chống lộ endpoint.
+
+---
+Hỏi: Ảnh hưởng thesis khi thêm file knowledge mới?
+Đáp: **Số chunk** tăng → thời gian encode startup/reload tăng tuyến tính; chất lượng trả lời phụ thuộc **trùng lặp** và **độ mâu thuẫn** giữa file — nên **biên tập** trùng khẳng định.
+
+---
+Hỏi: Hybrid search có trọng số BM25 vs semantic?
+Đáp: **RRF** với rank map **1/(60+rank)** cho mỗi nguồn; không có hyperparam alpha trong code — cân bằng gián tiếp qua **MIN_FAISS_PREFILTER** và chất lượng embedding.
+
+---
+Hỏi: Hướng mở rộng RAG “hoàn thiện” cho production?
+Đáp: **(1)** Metadata filter (role=driver/customer). **(2)** Re-ranker cross-encoder. **(3)** Tool use (query ride id). **(4)** Observ tracing (trace_id, citations). **(5)** Eval bộ câu hỏi regression. **(6)** i18n/en.
+
+---
+Hỏi: Vì sao có file `16_` và `17_` roleplay?
+Đáp: Tăng **recall** cho câu hỏi dài theo **natural user story** — đặc biệt tiếng Việt hội thoại — giảm tình huống **no_context** với query ngắn + đại từ.
+
+---
+Hỏi: `GET /api/chat/status` khác gì health?
+Đáp: **Status** thêm **embedding model class**, `chunks_indexed`; **health** chuẩn hoá schema `RagHealthInfo`.
+
+---
+Hỏi: OpenAPI có liệt kê `/api/chat`?
+Đáp: Có trong **`/openapi.json`** nếu router mount; kiểm tra bản build hiện tại của repo.
+
+---
+Hỏi: Trường `mode` trả về ý nghĩa cho app?
+Đáp: **Telemetry**: `llm_*` là LLM; `retrieval_low_confidence` là **trích xuất**; `no_context` là **từ chối trả lời tự tin**.
+
+---
+Hỏi: `MAX_HISTORY_TURNS` trong RAG?
+Đáp: Giới hạn **lượt hội thoại** gửi LLM để tránh **vỡ context** và chi phí — mặc định ~**8**.
+
+---
+Hỏi: Query enrichment xử lý “cái đó”, “vậy thì”?
+Đáp: `_enrich_query` gom **vài lượt user/gần nhất** vào chuỗi embed khi câu **ngắn** hoặc khớp **follow-up regex** tiếng Việt.
+
+---
+Hỏi: Có endpoint batch chat không?
+Đáp: Không trong router hiện public; chỉ **single** `POST /api/chat`.
+
+---
+Hỏi: Trách nhiệm pháp lý nội dung Mia?
+Đáp: Nội dung **không phải hợp đồng**. Quyết định kinh tế/quyền lợi **email CS / hợp đồng merchant**.

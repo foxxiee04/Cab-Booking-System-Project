@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     # Service
     APP_NAME: str = "AI Prediction Service"
-    APP_VERSION: str = "1.0.0"
+    APP_VERSION: str = "1.1.0"
     APP_DESCRIPTION: str = "AI service for ETA and price multiplier prediction"
     MODEL_VERSION: str = "eta-rf-v2"
     FEATURE_VERSION: str = "features-v1"
@@ -29,7 +29,14 @@ class Settings(BaseSettings):
     SUGGESTED_RADIUS_MAX_KM: float = 5.0
     SUGGESTED_SURGE_MIN: float = 1.0
     SUGGESTED_SURGE_MAX: float = 2.0
-    
+
+    # Background maintenance (0 = disabled)
+    AI_AUTO_RELOAD_RAG_SEC: int = 0
+    AI_AUTO_RETRAIN_SEC: int = 0
+    AI_AUTO_RETRAIN_ENABLED: bool = False
+    # Bearer token for POST /api/internal/refresh — empty = endpoint returns 404
+    AI_INTERNAL_TOKEN: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,

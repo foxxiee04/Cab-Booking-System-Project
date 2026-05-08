@@ -35,6 +35,11 @@ describe('EventConsumer', () => {
       hgetall: jest.fn(),
       hset: jest.fn(),
       hincrby: jest.fn(),
+      sadd: jest.fn(),
+      expire: jest.fn(),
+      smembers: jest.fn(),
+      del: jest.fn(),
+      srem: jest.fn(),
       quit: jest.fn(),
     } as any;
 
@@ -42,6 +47,11 @@ describe('EventConsumer', () => {
     mockRedis.hgetall.mockResolvedValue({} as any);
     mockRedis.hset.mockResolvedValue(1 as any);
     mockRedis.hincrby.mockResolvedValue(1 as any);
+    mockRedis.sadd.mockResolvedValue(1 as any);
+    mockRedis.expire.mockResolvedValue(1 as any);
+    mockRedis.smembers.mockResolvedValue([] as any);
+    mockRedis.del.mockResolvedValue(1 as any);
+    mockRedis.srem.mockResolvedValue(1 as any);
     mockDriverGrpc.getDriverById.mockReset();
     mockDriverGrpc.getDriverFullProfile.mockReset();
 
@@ -202,6 +212,8 @@ describe('EventConsumer', () => {
     });
 
     it('should handle ride.accepted and notify customer', async () => {
+      mockRedis.smembers.mockResolvedValueOnce(['user-777', 'user-789'] as any);
+
       mockDriverGrpc.getDriverFullProfile.mockResolvedValueOnce({
         id: 'driver-789',
         userId: 'user-789',
@@ -236,6 +248,15 @@ describe('EventConsumer', () => {
           rideId: 'ride-123',
           status: 'ACCEPTED',
         })
+      );
+
+      expect(mockSocketServer.emitToDriver).toHaveBeenCalledWith(
+        'user-777',
+        'ride:taken_elsewhere',
+        expect.objectContaining({
+          rideId: 'ride-123',
+          reason: 'ACCEPTED_BY_OTHER',
+        }),
       );
     });
 

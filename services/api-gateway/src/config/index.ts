@@ -78,7 +78,9 @@ export const config = {
     retryDelayMs: readBoundedIntEnv('MATCHING_RETRY_DELAY_MS', 2500, 2000, 10000),
     maxWaitMs: readBoundedIntEnv('MATCHING_MAX_WAIT_MS', 120000, 10000, 600000),
     // Format: radiusKm:offerCount:surgeHint,radiusKm:offerCount:surgeHint
-    rounds: process.env.MATCHING_ROUNDS || '2:1:1.0,3:3:1.1,5:5:1.2',
+    // Default: widen radius each round but only **one** active offer at a time (sequential).
+    // Use e.g. `2:1:1.0,3:3:1.1` only if you explicitly want multi-driver broadcast waves.
+    rounds: process.env.MATCHING_ROUNDS || '2:1:1.0,4:1:1.1,6:1:1.2',
     scoreLogVerbose: process.env.MATCHING_SCORE_LOG_VERBOSE === 'true',
     aiAdjustmentEnabled: process.env.MATCHING_AI_ADJUSTMENT_ENABLED === 'true',
     aiAdjustmentDeltaMax: readBoundedFloatEnv('MATCHING_AI_ADJUSTMENT_DELTA_MAX', 0.08, 0, 0.2),

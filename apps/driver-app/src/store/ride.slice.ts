@@ -8,6 +8,8 @@ interface RideState {
   timeoutSeconds: number;
   loading: boolean;
   error: string | null;
+  /** Offer no longer valid (accepted elsewhere / cancelled) — hide from nearby list without reload */
+  revokedFeedRideIds: string[];
 }
 
 const initialState: RideState = {
@@ -16,6 +18,7 @@ const initialState: RideState = {
   timeoutSeconds: 20,
   loading: false,
   error: null,
+  revokedFeedRideIds: [],
 };
 
 const rideSlice = createSlice({
@@ -59,6 +62,19 @@ const rideSlice = createSlice({
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
+
+    revokeRideFromFeed: (state, action: PayloadAction<string>) => {
+      const id = action.payload;
+      if (!state.revokedFeedRideIds.includes(id)) {
+        state.revokedFeedRideIds.push(id);
+      }
+      while (state.revokedFeedRideIds.length > 100) {
+        state.revokedFeedRideIds.shift();
+      }
+      if (state.pendingRide?.id === id) {
+        state.pendingRide = null;
+      }
+    },
   },
   extraReducers: (builder) => {
     // Clear ALL ride state when user logs out — prevents another account seeing this user's ride
@@ -68,6 +84,7 @@ const rideSlice = createSlice({
       timeoutSeconds: 20,
       loading: false,
       error: null,
+      revokedFeedRideIds: [],
     }));
   },
 });
@@ -80,6 +97,7 @@ export const {
   clearCurrentRide,
   setLoading,
   setError,
+  revokeRideFromFeed,
 } = rideSlice.actions;
 
 export default rideSlice.reducer;

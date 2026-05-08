@@ -114,6 +114,11 @@ class AcceptPredictionService:
         except Exception as exc:
             logger.error(f"Failed to load accept model: {exc}")
 
+    def reload_model(self) -> bool:
+        """Reload accept model from disk (after periodic/manual retrain)."""
+        self._load_model()
+        return self._model is not None
+
     @property
     def is_ready(self) -> bool:
         return self._model is not None

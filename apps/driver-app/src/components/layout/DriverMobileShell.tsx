@@ -112,7 +112,7 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
   const dispatch = useAppDispatch();
   const { t, i18n } = useTranslation();
   const { user, accessToken } = useAppSelector((state) => state.auth);
-  const { currentRide, pendingRide } = useAppSelector((state) => state.ride);
+  const { currentRide, pendingRide, revokedFeedRideIds } = useAppSelector((state) => state.ride);
   const { isOnline, profile } = useAppSelector((state) => state.driver);
   const { notification, notificationHistory } = useAppSelector((state) => state.ui);
 
@@ -172,6 +172,15 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
       }
     }
   }, [currentRide, dispatch, effectiveOnline, newRidePopup, pendingRide]);
+
+  useEffect(() => {
+    if (!newRidePopup?.id) {
+      return;
+    }
+    if (revokedFeedRideIds.includes(newRidePopup.id)) {
+      setNewRidePopup(null);
+    }
+  }, [newRidePopup, revokedFeedRideIds]);
 
   useEffect(() => {
     if (!pendingRide || !newRidePopup || pendingRide.id !== newRidePopup.id) {

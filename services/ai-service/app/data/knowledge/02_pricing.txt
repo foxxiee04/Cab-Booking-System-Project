@@ -27,6 +27,10 @@ Hỏi: Surge là gì? Khi nào bị tính giá cao hơn?
 Đáp: Surge là hệ số tăng giá tự động khi có nhiều người đặt xe cùng lúc mà ít tài xế — giống Uber/Grab hay làm vậy. Hệ số từ 1.0 (bình thường) đến 2.0 (gấp đôi giá). Thường xảy ra vào 7–9h sáng, 17–20h chiều, ngày lễ Tết, mưa to. Giá app hiển thị đã nhân hệ số rồi, bạn thấy bao nhiêu thì đúng bấy nhiêu — không bị tính thêm sau.
 
 ---
+Hỏi: Tôi hỏi Mia/chat "chuyến từ điểm A tới điểm B hiện tại bao nhiêu tiền" được không?
+Đáp: Mia **không tính được giá thật** cho tuyến cụ thể của bạn qua chat. Mia chỉ có **kho văn bản** (cách tính, bảng tham khảo) và **không** truy cập tọa độ của bạn, lộ trình OSRM hay hệ số surge lúc đặt như app. Để biết **số tiền chính xác "ngay bây giờ"**: mở app FoxGo → chọn **điểm đón và điểm đến** trên bản đồ / địa chỉ rõ ràng → màn hình đặt xe gọi **Pricing Service** và hiển thị giá theo loại xe. Mia vẫn có thể giải thích **các khoản cấu thành giá** hoặc **ví dụ tham khảo** trong tài liệu, nhưng **không thay** được bước nhập điểm trên app.
+
+---
 Hỏi: Tại sao giá thực tế khác giá ước tính khi đặt?
 Đáp: Giá ước tính dựa trên tuyến đường ngắn nhất lúc đặt xe. Nếu trên đường tài xế phải đi đường khác vì tắc hay cấm đường, quãng đường/thời gian thực tế thay đổi nên giá cuối cũng thay đổi nhẹ. Chênh lệch thường không nhiều, và giá đã bao gồm VAT rồi.
 

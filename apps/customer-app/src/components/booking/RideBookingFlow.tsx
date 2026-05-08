@@ -25,6 +25,7 @@ import {
   StepLabel,
   Stepper,
   TextField,
+  Tooltip,
   Typography,
   useMediaQuery,
 } from '@mui/material';
@@ -44,6 +45,7 @@ import { rideApi } from '../../api/ride.api';
 import { paymentApi } from '../../api/payment.api';
 import voucherApi, { ApplyVoucherResult, MyVoucher, PublicVoucher, VoucherAudience } from '../../api/voucher.api';
 import { Location } from '../../types';
+import { allowPaymentInternalFallback } from '../../config/payment-flags';
 import motorbikeImage from '../../assets/vehicles/xe_may.jpg';
 import scooterImage from '../../assets/vehicles/xe_ga.jpg';
 import car4Image from '../../assets/vehicles/xe_4_cho.jpg';
@@ -576,13 +578,18 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
         }
 
         onClose();
-        const params = new URLSearchParams({ amount: String(amount), provider: selectedPayment, rideId });
+        const params = new URLSearchParams({ amount: String(amount), provider: selectedPayment });
         if (voucherResult) {
           params.set('voucherCode', voucherResult.code);
           params.set('originalAmount', String(Math.round(voucherResult.originalAmount)));
           params.set('discountAmount', String(Math.round(voucherResult.discountAmount)));
         }
-        window.location.assign(`${window.location.origin}/payment/sandbox-gateway?${params.toString()}`);
+        if (allowPaymentInternalFallback) {
+          params.set('rideId', rideId);
+          window.location.assign(`${window.location.origin}/payment/sandbox-gateway?${params.toString()}`);
+        } else {
+          window.location.assign(`${window.location.origin}/payment/online/${rideId}?${params.toString()}`);
+        }
         return;
       }
 
@@ -662,8 +669,25 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                                   <Typography variant="subtitle1" color="primary" fontWeight={700} lineHeight={1.2}>
                                     {formatCurrency(estimate.fare)}
                                   </Typography>
-                                  {estimate.surgeMultiplier > 1 && (
-                                    <Chip size="small" label={`×${estimate.surgeMultiplier}`} color="error" sx={{ height: 16, fontSize: '0.65rem', mt: 0.25 }} />
+                                  {estimate.surgeMultiplier >= 1.01 && (
+                                    <Tooltip
+                                      title={
+                                        <>
+                                          Giá ước tính do <strong>Pricing</strong> tính: quãng đường (OSRM), giá theo loại xe, và hệ số theo khung giờ / cấu hình (Redis) cùng gợi ý từ <strong>ai-service</strong>.
+                                          Hệ số hiện tại khoảng ×{Number(estimate.surgeMultiplier).toFixed(2)} (tham khảo).
+                                        </>
+                                      }
+                                      arrow
+                                      placement="top"
+                                    >
+                                      <Chip
+                                        size="small"
+                                        label="Giá có thể khác theo thời điểm"
+                                        color="warning"
+                                        variant="outlined"
+                                        sx={{ height: 18, fontSize: '0.62rem', mt: 0.25, maxWidth: '100%' }}
+                                      />
+                                    </Tooltip>
                                   )}
                                 </>
                               ) : (
@@ -686,8 +710,8 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                 );
               })}
             </Stack>
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5, textAlign: 'center' }}>
-              Giá cước ước tính theo tuyến đường hiện tại, có thể thay đổi khi hoàn thành chuyến đi.
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5, textAlign: 'center', lineHeight: 1.45 }}>
+              Ô tô 4 chỗ và 7 chỗ dùng chung quãng đường / thời gian ước lượng (ô tô); xe máy và xe ga dùng chung ước lượng riêng (hai bánh). Giá do <strong>Pricing</strong> tính; hệ số cao điểm theo giờ, Redis và AI. Cước thực tế có thể khác khi kết thúc chuyến.
             </Typography>
           </Box>
         );

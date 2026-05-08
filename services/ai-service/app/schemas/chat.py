@@ -9,12 +9,12 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=1000, description="User question")
+    message: str = Field(..., min_length=1, max_length=2000, description="User question")
     history: Optional[List[ChatMessage]] = Field(
         default=None,
         description="Previous conversation turns (up to 10 kept)"
     )
-    top_k: int = Field(default=4, ge=1, le=10, description="Number of chunks to retrieve")
+    top_k: int = Field(default=8, ge=1, le=16, description="Number of chunks to retrieve")
 
 
 class ChatSource(BaseModel):

@@ -326,6 +326,32 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - MODEL_PATH=app/models/eta_price_model.joblib
+      - ACCEPT_MODEL_PATH=app/models/accept_model.joblib
+      - WAIT_MODEL_PATH=app/models/wait_model.joblib
+      - MODEL_VERSION=${MODEL_VERSION:-eta-rf-v2}
+      - FEATURE_VERSION=${FEATURE_VERSION:-features-v1}
+      - SUGGESTED_RADIUS_MIN_KM=${SUGGESTED_RADIUS_MIN_KM:-2.0}
+      - SUGGESTED_RADIUS_MAX_KM=${SUGGESTED_RADIUS_MAX_KM:-5.0}
+      - SUGGESTED_SURGE_MIN=${SUGGESTED_SURGE_MIN:-1.0}
+      - SUGGESTED_SURGE_MAX=${SUGGESTED_SURGE_MAX:-2.0}
+      - RAG_LLM_PROVIDER=${RAG_LLM_PROVIDER:-auto}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - RAG_LLM_MODEL_CLAUDE=${RAG_LLM_MODEL_CLAUDE:-claude-haiku-4-5-20251001}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - RAG_LLM_MODEL=${RAG_LLM_MODEL:-llama3-8b-8192}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - RAG_LLM_MODEL_GEMINI=${RAG_LLM_MODEL_GEMINI:-gemini-2.5-pro}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - RAG_LLM_MODEL_OPENAI=${RAG_LLM_MODEL_OPENAI:-gpt-3.5-turbo}
+      - RAG_LLM_TIMEOUT_S=${RAG_LLM_TIMEOUT_S:-10}
+      - RAG_EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-paraphrase-multilingual-MiniLM-L12-v2}
+      # Prod Swarm: thường 86400 (24h) hoặc 0 — đặt trong .env trước khi deploy stack
+      - AI_AUTO_RELOAD_RAG_SEC=${AI_AUTO_RELOAD_RAG_SEC:-0}
+      - AI_AUTO_RETRAIN_SEC=${AI_AUTO_RETRAIN_SEC:-0}
+      - AI_AUTO_RETRAIN_ENABLED=${AI_AUTO_RETRAIN_ENABLED:-false}
+      - AI_INTERNAL_TOKEN=${AI_INTERNAL_TOKEN:-}
+      - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
+      - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
     networks:
       - backend
     deploy:
@@ -339,10 +365,10 @@ services:
       resources:
         limits:
           cpus: '1'
-          memory: 512M
+          memory: 1536M
         reservations:
-          cpus: '0.5'
-          memory: 256M
+          cpus: '0.25'
+          memory: 512M
 
   prometheus:
     image: prom/prometheus:v2.54.1

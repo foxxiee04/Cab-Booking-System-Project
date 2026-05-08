@@ -58,6 +58,16 @@ interface WaitTimePrediction {
 }
 
 export class PricingService {
+  /** OSRM driving geometry cached per pickup/dropoff — avoids per-vehicle drift & surge mismatch. */
+  private readonly routeBaseCache = new Map<
+    string,
+    { distanceKm: number; durationSec: number; expiresAt: number }
+  >();
+  private readonly routeCacheTtlMs = 45_000;
+  /** Two-wheel trips: shorter path heuristic + faster ETA in urban traffic vs car. */
+  private readonly bikeDistanceFactor = 0.95;
+  private readonly bikeDurationFactor = 0.82;
+
   private normalizeVehicleType(vehicleType: VehicleType): CanonicalVehicleType {
     switch (vehicleType) {
       case 'ECONOMY':
@@ -75,7 +85,61 @@ export class PricingService {
   private clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
   }
-  
+
+  private routeCacheKey(
+    pickupLat: number,
+    pickupLng: number,
+    dropoffLat: number,
+    dropoffLng: number,
+  ): string {
+    const r = (n: number) => n.toFixed(4);
+    return `${r(pickupLat)},${r(pickupLng)}|${r(dropoffLat)},${r(dropoffLng)}`;
+  }
+
+  /**
+   * Single shared “car” route for a coordinate pair (OSRM driving). Surge / AI use this distance only.
+   */
+  private async getBaseDrivingRoute(
+    pickupLat: number,
+    pickupLng: number,
+    dropoffLat: number,
+    dropoffLng: number,
+  ): Promise<{ distanceKm: number; durationSec: number }> {
+    const key = this.routeCacheKey(pickupLat, pickupLng, dropoffLat, dropoffLng);
+    const now = Date.now();
+    const hit = this.routeBaseCache.get(key);
+    if (hit && hit.expiresAt > now) {
+      return { distanceKm: hit.distanceKm, durationSec: hit.durationSec };
+    }
+
+    let distance = 0;
+    let duration = 0;
+
+    try {
+      const osrmUrl = `${config.osrm.baseUrl}/route/v1/driving/${pickupLng},${pickupLat};${dropoffLng},${dropoffLat}?overview=false`;
+      const response = await axios.get(osrmUrl, { timeout: 2000 });
+      const route = response.data?.routes?.[0];
+
+      if (route) {
+        distance = Math.round((route.distance / 1000) * 100) / 100;
+        duration = Math.round(route.duration);
+      } else {
+        throw new Error('OSRM returned no routes');
+      }
+    } catch (error) {
+      logger.warn('OSRM unavailable, using fallback distance', error);
+      distance = calculateDistance(pickupLat, pickupLng, dropoffLat, dropoffLng);
+      duration = estimateDuration(distance);
+    }
+
+    this.routeBaseCache.set(key, {
+      distanceKm: distance,
+      durationSec: duration,
+      expiresAt: now + this.routeCacheTtlMs,
+    });
+    return { distanceKm: distance, durationSec: duration };
+  }
+
   /**
    * Calculate fare estimate
    */
@@ -92,31 +156,20 @@ export class PricingService {
       ? vehicleType
       : normalizedVehicleType;
 
-    // Calculate distance & duration via OSRM (fallback to Haversine)
-    let distance = 0;
-    let duration = 0;
-
-    try {
-      const osrmUrl = `${config.osrm.baseUrl}/route/v1/driving/${pickupLng},${pickupLat};${dropoffLng},${dropoffLat}?overview=false`;
-      const response = await axios.get(osrmUrl, { timeout: 2000 });
-      const route = response.data?.routes?.[0];
-
-      if (route) {
-        distance = Math.round((route.distance / 1000) * 100) / 100; // km
-        duration = Math.round(route.duration); // seconds
-      } else {
-        throw new Error('OSRM returned no routes');
-      }
-    } catch (error) {
-      logger.warn('OSRM unavailable, using fallback distance', error);
-      distance = calculateDistance(pickupLat, pickupLng, dropoffLat, dropoffLng);
-      duration = estimateDuration(distance);
+    const baseRoute = await this.getBaseDrivingRoute(pickupLat, pickupLng, dropoffLat, dropoffLng);
+    const isBike = normalizedVehicleType === 'MOTORBIKE' || normalizedVehicleType === 'SCOOTER';
+    let distance = baseRoute.distanceKm;
+    let duration = baseRoute.durationSec;
+    if (isBike) {
+      distance = Math.round(baseRoute.distanceKm * this.bikeDistanceFactor * 100) / 100;
+      duration = Math.round(baseRoute.durationSec * this.bikeDurationFactor);
     }
     const baseDurationMinutes = Math.ceil(duration / 60);
 
     // Get surge multiplier
     const configuredSurgeMultiplier = await this.getCurrentSurgeMultiplier();
-    const aiResult = await this.getAIPrediction(distance);
+    // Surge / AI always keyed off car-route distance so every vehicle card shares the same multiplier.
+    const aiResult = await this.getAIPrediction(baseRoute.distanceKm);
     const aiPrediction = aiResult.prediction;
     const durationMinutes = aiPrediction?.eta_minutes ?? baseDurationMinutes;
 

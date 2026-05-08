@@ -514,22 +514,7 @@ const MerchantWallet: React.FC = () => {
                 </Card>
               </Stack>
 
-              {/* Ledger identity check */}
-              {(() => {
-                const stats = recon.ledgerStats;
-                const isBalanced = Math.abs((stats.totalIn - stats.totalOut) - stats.netRevenue) < 0.01;
-                return (
-                  <Alert
-                    severity={isBalanced ? 'success' : 'error'}
-                    icon={isBalanced ? <CheckCircle /> : <Warning />}
-                  >
-                    <strong>Đồng nhất sổ cái:</strong> Tổng thu ({vnd(stats.totalIn)}) −
-                    Tổng chi ({vnd(stats.totalOut)}) = Doanh thu ròng ({vnd(stats.netRevenue)})
-                    &nbsp;
-                    {isBalanced ? '✓ CÂN BẰNG' : '✗ SAI LỆCH — cần kiểm tra ngay'}
-                  </Alert>
-                );
-              })()}
+
 
               {/* Category breakdown */}
               <Divider />
@@ -578,8 +563,8 @@ const MerchantWallet: React.FC = () => {
       {/* ── Section 2: Merchant Ledger ── */}
       <Card sx={{ mb: 3 }} elevation={2}>
         <CardHeader
-          title="Sổ cái giao dịch"
-          subheader={`${ledgerTotal.toLocaleString()} bản ghi`}
+          title="Danh sách giao dịch"
+          subheader={`${ledgerTotal.toLocaleString()} bản ghi — Sổ cái kế toán nội bộ (ledger): mọi khoản thu/chi của nền tảng, không phải sao kê ngân hàng.`}
           action={
             <Stack direction="row" spacing={1} alignItems="center">
               <FormControl size="small" sx={{ minWidth: 90 }}>
@@ -908,7 +893,7 @@ const MerchantWallet: React.FC = () => {
               <span>Giao dịch ngân hàng</span>
             </Stack>
           }
-          subheader={`${bankTxnsTotal.toLocaleString()} giao dịch`}
+          subheader={`${bankTxnsTotal.toLocaleString()} giao dịch — Dòng tiền mô phỏng giữa các tài khoản hệ thống (Techcombank demo), bản ghi “bank tx” đối chiếu với ledger.`}
           action={
             <Stack direction="row" spacing={1} alignItems="center">
               <FormControl size="small" sx={{ minWidth: 160 }}>

@@ -1,0 +1,200 @@
+TIÊU ĐỀ: Kịch bản tài xế — đóng vai đối tác FoxGo Driver
+DANH MỤC: tài xế, driver-app, nhận cuốc, online, GPS, ví tài xế, hoa hồng, hủy chuyến, an toàn, khiếu nại, Mia
+
+Tài liệu này viết theo **giọng tài xế** (đối tác vận chuyển). Email CS tài xế: **driver-support@foxgo.vn**. Hotline: **1900-1234** (8h–22h) khi có trong app/tài liệu. Một số chính sách chi tiết (%, phí) **theo bản hợp đồng/merchant trong app** — Mia **không** bịa số.
+
+---
+Hỏi: [Tài xế] Mình mới được duyệt hồ sơ, bước đầu để **bật nhận cuốc** là gì?
+Đáp: Đăng nhập **driver-app**, hoàn tất **giấy tờ** còn thiếu (nếu có), bật **vị trí luôn cho phép**, bật **thông báo**, kiểm tra **trạng thái online/sẵn sàng**. Nạp/liên kết **ví** nếu chính sách yêu cầu để nhận thanh toán online.
+
+---
+Hỏi: [Tài xế] Tôi **bật online** mà **không có cuốc** 30 phút — checklist gì?
+Đáp: (1) GPS có **chính xác** không? (2) Mạng ổn? (3) Bạn có đang **từ chối thầm** do lỗi cấu hình? (4) Khu vực **cầu thấp** giờ đó? (5) **Tài khoản** có cảnh báo? Thử **tắt mở online**, **rót chỗ đông cầu**. Vẫn không có → **driver-support@foxgo.vn**.
+
+---
+Hỏi: [Tài xế] App tự **nhảy offline** — vì sao?
+Đáp: Thường do **pin yếu + tiết kiệm pin**, **quyền vị trí bị revoke**, **crash/lỗi bản build**, hoặc **vi phạm tự động**. Cập nhật app, tắt tối ưu pin quá agressive cho FoxGo; kiểm tra thông báo **vi phạm** trong tài khoản.
+
+---
+Hỏi: [Tài xế] Tôi có được **chọn chỉ ô tô / chỉ xe máy** trong một buổi không?
+Đáp: Tuỳ **cấu hình phương tiện** đã đăng ký. Nếu bạn có **hai loại phương tiện**, app thường cho **chọn profile** đang chạy; nếu không thấy → xem **Cài đặt phương tiện** hoặc hỗ trợ **driver-support@foxgo.vn**.
+
+---
+Hỏi: [Tài xế] **Giá hiển thị** với tài xế có giống khách không?
+Đáp: Khách thấy **giá chuyến**; tài xế thấy **thu nhập/chia sẻ** theo màn hình **Chi tiết cuốc** — có thể **khác** do **hoa hồng, khuyến mãi, thuế, làm tròn**. Không **deal riêng** ngoài app cho phần đã hiển thị.
+
+---
+Hỏi: [Tài xế] Cuốc **tiền mặt** — tôi cần làm gì khi kết thúc?
+Đáp: Thu đúng **số app hiển thị**; bấm **hoàn thành** đúng quy trình. Nếu khách trả thừa **tip** — là **ngoài luồng** nhưng nên **có chứng từ** nếu sau này khiếu nại. **Không** đòi thêm “phí nền tảng lẻ” ngoài quy định.
+
+---
+Hỏi: [Tài xế] Cuốc **thanh toán online** — tiền về ví khi nào?
+Đáp: Theo **chuỗi settlement** của Payment + Wallet (đối soát, hoàn tất chuyến, không tranh chấp). Thường **không realtime từng giây**. Nếu **trễ bất thường > SLA nội bộ** → **driver-support@foxgo.vn** với mã chuyến + ảnh màn hình.
+
+---
+Hỏi: [Tài xế] Làm sao **rút tiền** từ ví tài xế?
+Đáp: Vào **Ví** → **Rút** → thêm **TK ngân hàng đúng chủ** (nếu chưa). Tuỳ cổng thanh toán có thể có **phí rút** và **thời gian** (T+). Chi tiết hiển thị trong app — Mia không thay màn hình đó.
+
+---
+Hỏi: [Tài xế] Tôi bị **trừ phí** sau chuyến tiền mặt — tại sao?
+Đáp: Một số mô hình có **hoa hồng/thu nợ cuốc** qua ví (ví dụ `debitCommission`). Đọc **sổ dư ví + mô tả giao dịch**. Không hiểu → **driver-support@foxgo.vn** kèm **screenshot**.
+
+---
+Hỏi: [Tài xế] **Điểm uy tín / tỷ lệ nhận / tỷ lệ hủy** ảnh hưởng ghép cuốc?
+Đáp: Hệ thống matching thường dùng **tín hiệu chất lượng** (rating, accept, cancel) trong **điểm tổng hợp**. Bạn giữ **ổn định nhận**, **hủy đúng quy định**, phục vụ **lịch sự**.
+
+---
+Hỏi: [Tài xế] Tôi **hủy cuốc** vì kẹt xe quá lâu — có bị phạt không?
+Đáp: **Tuỳ thời điểm** và **lý do**. Hủy khi **đã đến gần điểm đón** thường **nặng** hơn hủy sớm. Nếu lý do **bất khả kháng**, khai báo/ảnh chứng minh gửi **driver-support@foxgo.vn** để xem xét.
+
+---
+Hỏi: [Tài xế] Khách **không xuất hiện** tại điểm đón?
+Đáp: **Gọi/chat** theo app; chờ theo **quy định chờ miễn phí** (nếu có timer). Hết thời gian → **hủy đúng loại** (no-show) để **minh bạch**. Không tranh cãi; tranh chấp → CS.
+
+---
+Hỏi: [Tài xế] Khách ép **chạy quá tải** (quá số người/quá cồng kềnh)?
+Đáp: Bạn **từ chối** đúng luật an toàn; giải thích **nhẹ nhàng**. Nếu khách cố ý → **hủy** theo quy định + báo nếu **hành hung** (113).
+
+---
+Hỏi: [Tài xế] Tôi bị khách **đánh giá 1 sao oan**?
+Đáp: Vào chi tiết chuyến xem **ghi chú**, gửi **phản hồi** trong app (nếu có). Email **driver-support@foxgo.vn** kèm **mã chuyến + timeline + bằng chứng** (camera hành trình nếu hợp pháp). FoxGo xử lý trong phạm vi **policy**.
+
+---
+Hỏi: [Tài xế] **Camera hành trình** — FoxGo có bắt buộc?
+Đáp: Tuỳ **hợp đồng khu vực/loại dịch vụ**. Mia không quyết định; xem **điều khoản đối tác** trong app.
+
+---
+Hỏi: [Tài xế] Tôi muốn biết **AI ghép cuốc** có thiên vị tài xế mới không?
+Đáp: Gateway matching có thể có **boost tài xế mới/nguồn lực** trong **score** (xem gợi ý học thuật/ghi chú API `/api/recommend-driver`). Đây là **vận hành thuật toán**, không phải cam kết cá nhân.
+
+---
+Hỏi: [Tài xế] **Surge** cao — tài xế được hưởng thêm bao nhiêu?
+Đáp: Phần tăng do surge **chia theo mô hình doanh thu/Net** trong hợp đồng. Mia **không** nêu % cụ thể; xem **bảng thu nhập** hoặc **driver-support@foxgo.vn**.
+
+---
+Hỏi: [Tài xế] Chạy **đường dài** — có nên nhận?
+Đáp: Cân nhắc **chi phí quay đầu**, **thời gian**, **an toàn ban đêm**, **nghỉ ngơi**. Đảm bảo **đủ nhiên liệu**; nếu khách đổi lộ trình lớn, **xác nhận trong app chat**.
+
+---
+Hỏi: [Tài xế] **BOT/cầu đường** — tôi xử lý sao cho không tranh chấp?
+Đáp: **Thông báo trước** khi đi qua trạm; ưu tiên **vé điện tử** minh bạch. Kê phát sinh — tuỳ **chính sách hiển thị cho khách**; không rõ → CS.
+
+---
+Hỏi: [Tài xế] Khách nhắn **số điện thoại riêng** để book sau?
+Đáp: **Rủi ro** trốn hoa hồng/gian lận. FoxGo khuyến khích **ở lại trong app**; nghi gian lận → báo **driver-support@foxgo.vn**.
+
+---
+Hỏi: [Tài xế] Tôi bị **cảnh báo gian lận vị trí** — GPS emulator?
+Đáp: **Tắt mock location**, không dùng **fake GPS**. Vi phạm có thể **khóa tài khoản**. Nếu oan do lỗi thiết bị — gửi **model máy + log** cho CS.
+
+---
+Hỏi: [Tài xế] Hai điện thoại cùng một tài khoản tài xế được không?
+Đáp: Thường **không khuyến khích**; dễ **xung đột phiên** và **cờ bảo mật**. Dùng **một thiết bị chính**; đổi máy qua quy trình **đăng xuất/ xác minh**.
+
+---
+Hỏi: [Tài xế] Tôi **tai nạn nhỏ** khi chở khách?
+Đáp: **Ưu tiên người** — sơ cứu/115 nếu cần. Báo **công an** theo luật. Sau đó báo **FoxGo** (hotline/email) kèm **mã chuyến** để hỗ trợ quy trình bảo hiểm/đối soát **theo hợp đồng**.
+
+---
+Hỏi: [Tài xế] **Quấy rối tình dục** từ khách — xử lý?
+Đáp: **Dừng an toàn**, **từ chối tiếp tục** nếu pháp luật cho phép từ chối phục vụ; gọi **113** nếu nguy hiểm. Báo **driver-support@foxgo.vn** + bằng chứng **hợp pháp**.
+
+---
+Hỏi: [Tài xế] Tôi muốn **nghỉ phép** vài tuần — có cần báo?
+Đáp: Bạn **offline** liên tục có thể ảnh hưởng thống kê nhưng thường **không sao**; nếu có **cam kết đội xe/chương trình** thì đọc điều khoản. **Hợp đồng thuê xe** — báo đối tác tài chính riêng (nếu có).
+
+---
+Hỏi: [Tài xế] **Ốm đột xuất** đang có cuốc?
+Đáp: **Không lái** khi không đủ sức. Báo CS **khẩn** theo đường dây nội bộ; hủy/hoán đổi theo **quy định an toàn**. Đừng cố **giao dịch ngoài app** để lách.
+
+---
+Hỏi: [Tài xế] Khách mang **chó/mèo** — tôi từ chối được không?
+Đáp: **Được** nếu **chưa đồng ý** hoặc lo **dị ứng/vệ sinh**, miễn **lịch sự** và không **phân biệt bất hợp pháp**. Nên nhắn **trước** khi đến để tránh **hủy muộn**.
+
+---
+Hỏi: [Tài xế] Tài xế **ăn uống/kẹo cao su** trong khi chờ?
+Đáp: Giữ **vệ sinh xe**; tránh **mùi/mảnh vụn** gây đánh giá xấu. Chờ khách — **tắt nhạc to** nếu khách không thích (xã giao trong giới hạn).
+
+---
+Hỏi: [Tài xế] **Thuốc lá** trên xe có được không?
+Đáp: **Không** trong xe dịch vụ với khách (trừ khi khách đồng ý **và** pháp luật cho phép — thực tế **nên không hút**). Vi phạm dễ bị **khiếu nại**.
+
+---
+Hỏi: [Tài xế] Tôi cần **sửa thông tin ngân hàng** nhận tiền?
+Đáp: Vào **Hồ sơ/ví** → chỉnh **STK**; có thể cần **xác minh OTP** lại. Sai tên chủ → **rút không được**, CS hỗ trợ đối soát.
+
+---
+Hỏi: [Tài xế] **Thuế** đối tác — Mia tư vấn được không?
+Đáp: Mia chỉ **định hướng**: hãy hỏi **kế toán/khoanh vùng pháp luật**. FoxGo có thể **khấu trừ/kết xuất** theo hợp đồng — chi tiết trong **merchant agreement**.
+
+---
+Hỏi: [Tài xế] Mình là tài xế, Mia có xem được **doanh thu hôm nay** của tôi không?
+Đáp: **Không.** Mia không truy cập **dashboard** riêng bạn; xem **driver-app báo cáo** hoặc CS.
+
+---
+Hỏi: [Tài xế] Tôi nghe nói có **AI retrain định kỳ** — ảnh hưởng gì?
+Đáp: Các mô hình **ETA/surge gợi ý, accept, wait-time** có thể **cập nhật** trên AI service; không đồng nghĩa **đổi hợp đồng tài xế**. Ops reload bằng **`POST /api/internal/refresh`** (có token).
+
+---
+Hỏi: [Tài xế] Tôi muốn hiểu **Accept model** là gì (học thuật)?
+Đáp: Là API **`POST /api/predict/accept/batch`** — dự đoán **xác suất nhận cuốc** từng tài xế; được dùng để **điều chỉnh điểm ghép** trong pipeline đề xuất. Không phán quyết “tốt/xấu” cá nhân đơn lẻ.
+
+---
+Hỏi: [Tài xế] **Điện thoại nóng/quá tải** khi bật GPS lâu?
+Đáp: Hạ **độ sáng**, tắt app nền, dùng **đế tản nhiệt**, **sạc ô tô** chất lượng. Nóng quá → **tạm nghỉ** tránh **tắt GPS giữa chuyến**.
+
+---
+Hỏi: [Tài xế] Tôi cần **in biên lai** cho khách doanh nghiệp?
+Đáp: Tuỳ **tính năng app**. Thường doanh nghiệp xuất qua **email khách/support**. Tài xế không tự **phát hành VAT** thay FoxGo trừ khi được uỷ quyền.
+
+---
+Hỏi: [Tài xế] **Cảnh sát kiểm tra** — tôi cần giấy gì?
+Đáp: **GPLX, đăng ký xe, hợp đồng/QR đối tác** theo quy định địa phương. Tuân thủ **luật giao thông**.
+
+---
+Hỏi: [Tài xế] **Chat trong app** bị lỗi không nhắn được tới khách?
+Đáp: Dùng **gọi thoại** (che số nếu có **call masking**) khi khẩn; đồng thời báo **bug** qua **driver-support@foxgo.vn** kèm **mã chuyến + OS version**.
+
+---
+Hỏi: [Tài xế] Tôi nghi app **tính km sai** so máy đếm?
+Đáp: **GPS drift**, **vào hầm**, **đứt tín hiệu** làm sai lệch. Ghi nhận **screenshot bản đồ** + **mã chuyến**; khiếu nại **driver-support@foxgo.vn**.
+
+---
+Hỏi: [Tài xế] Có được **xem training ML** của FoxGo?
+Đáp: **Mã nguồn nội bộ** không công khai chi tiết cho tài xế; khái niệm nằm trong **00_system_overview** / tài liệu kỹ thuật cho dev.
+
+---
+Hỏi: [Tài xế] Tôi muốn **chuyển thành phố** hoạt động?
+Đáp: **Vùng phục vụ** gắn **hồ sơ**. Đổi TP có thể cần **đăng ký lại/bổ sung** — email **driver-support@foxgo.vn**.
+
+---
+Hỏi: [Tài xế] **Bản đồ** chỉ đường khác **FoxGo navigation**?
+Đáp: Bạn có thể mở **Waze/Google Maps** song song; nhưng **điểm đón/đến chính thức** là trên **app**. Lệch lớn → **thông báo khách**.
+
+---
+Hỏi: [Tài xế] Tôi bị **hack tài khoản** (email lạ)?
+Đáp: **Đổi mật khẩu ngay**, bật 2FA nếu có, kiểm tra **session**; báo **driver-support@foxgo.vn**. Không bấm link lạ.
+
+---
+Hỏi: [Tài xế] Cuốc **4.9★ khách** có an toàn hơn 4.0★?
+Đáp: Rating chỉ là **tham khảo**; vẫn **cảnh giác** mọi cuốc. An toàn phụ thuộc **hành vi thực tế**.
+
+---
+Hỏi: [Tài xế] Tôi là tài xế nữ, cần **nút SOS** trong app?
+Đáp: Xem **mục an toàn** trong driver-app; nếu chưa có, **1900-1234** / **113** là kênh khẩn. FoxGo nên có **hotline rider safety** theo roadmap.
+
+---
+Hỏi: [Tài xế] **Tiếng Anh** giao tiếp khách nước ngoài?
+Đáp: Giữ **tối thiểu**: điểm A/B trên app, **OK/Yes/No**, **Google Translate**. Không tranh cãi về **tiền** — nhìn số trên app.
+
+---
+Hỏi: [Tài xế] Tôi muốn biết **Redis surge key** để “ăn theo”?
+Đáp: **Không được** can thiệp hạ tầng. `surge:multiplier` là **nội bộ** Pricing — truy cập trái phép là **vi phạm pháp luật** và hợp đồng.
+
+---
+Hỏi: [Tài xế] **Đa nền tảng** — chạy FoxGo cùng app khác được không?
+Đáp: Tuỳ **điều khoản độc quyền** từng thời kỳ. Vi phạm exclusive có thể bị **khóa**. Đọc hợp đồng hiện hành.
+
+---
+Hỏi: [Tài xế] Mia có **đặt/hủy cuốc hộ** tôi không?
+Đáp: **Không.** Mia là **trợ lý văn bản**; không thao tác tài khoản thay bạn.

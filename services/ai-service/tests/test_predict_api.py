@@ -24,8 +24,15 @@ class TestHealthEndpoint:
         assert "status" in data
         assert "service" in data
         assert "version" in data
+        assert "rag" in data
         assert data["status"] == "healthy"
         assert data["service"] == "ai-service"
+        rag = data["rag"]
+        assert "ready" in rag
+        assert "chunks" in rag
+        assert "vector_index" in rag
+        assert "llm_provider" in rag
+        assert "gemini_key_configured" in rag
 
 
 class TestPredictEndpoint:

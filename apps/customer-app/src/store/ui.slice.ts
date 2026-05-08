@@ -14,7 +14,7 @@ const getNotificationHistoryStorageKey = (): string => {
   }
 
   try {
-    const rawUser = localStorage.getItem('user');
+    const rawUser = sessionStorage.getItem('user');
     if (!rawUser) {
       return ANONYMOUS_NOTIFICATION_HISTORY_KEY;
     }
@@ -30,13 +30,26 @@ const getNotificationHistoryStorageKey = (): string => {
   return ANONYMOUS_NOTIFICATION_HISTORY_KEY;
 };
 
+/** Pre-fix builds stored everyone in localStorage :anonymous — drop it once per tab. */
+const purgeLegacyNotificationLocalStorage = (): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(NOTIFICATION_HISTORY_BASE_KEY);
+    localStorage.removeItem(ANONYMOUS_NOTIFICATION_HISTORY_KEY);
+  } catch {
+    /* ignore */
+  }
+};
+
 const loadNotificationHistory = (): Notification[] => {
   if (typeof window === 'undefined') {
     return [];
   }
 
+  purgeLegacyNotificationLocalStorage();
+
   try {
-    const rawValue = localStorage.getItem(getNotificationHistoryStorageKey());
+    const rawValue = sessionStorage.getItem(getNotificationHistoryStorageKey());
     if (!rawValue) {
       return [];
     }
@@ -72,7 +85,7 @@ const persistNotificationHistory = (history: Notification[]) => {
   }
 
   try {
-    localStorage.setItem(
+    sessionStorage.setItem(
       getNotificationHistoryStorageKey(),
       JSON.stringify(history.slice(0, MAX_NOTIFICATION_HISTORY)),
     );
@@ -154,8 +167,7 @@ const uiSlice = createSlice({
       persistNotificationHistory(state.notificationHistory);
     });
     builder.addCase(setCredentials, (state) => {
-      // auth.slice persists user to localStorage before this runs,
-      // so getNotificationHistoryStorageKey() returns the user-specific key.
+      // auth uses sessionStorage — history keys must match the same user per tab.
       state.notification = null;
       state.notificationHistory = loadNotificationHistory();
       try {

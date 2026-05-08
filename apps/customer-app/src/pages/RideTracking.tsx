@@ -937,7 +937,7 @@ const RideTracking: React.FC = () => {
                   </Stack>
                 </Stack>
                 {/* Live tracking info panel — only show when real data is available */}
-                {!isChatReadOnly && (estimatedPickupEtaMinutes != null || pickupDistanceKmToDriver != null || trackingSpeedText || status === 'PICKING_UP') && (
+                {!isChatReadOnly && status !== 'IN_PROGRESS' && (estimatedPickupEtaMinutes != null || pickupDistanceKmToDriver != null || trackingSpeedText || status === 'PICKING_UP') && (
                   <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#f0f9ff', borderRadius: 3, border: '1px solid #bae6fd' }}>
                     <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 1 }}>
                       <FiberManualRecord sx={{ fontSize: 10, color: effectiveDriverLocation ? '#16a34a' : '#f59e0b' }} />

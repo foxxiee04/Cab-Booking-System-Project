@@ -9,12 +9,13 @@ Pipeline:
      b. Embed the enriched query + BM25 tokenize.
      c. Hybrid search: FAISS (semantic) + BM25 (keyword) → Reciprocal Rank Fusion.
      d. Build a prompt with context + full history.
-     e. Generate a natural, human-like answer via LLM (Claude → Groq → OpenAI → template).
+     e. Generate a natural, human-like answer via LLM (Claude → Groq → Gemini → OpenAI → template).
 """
 
 import logging
 import os
 import re
+import threading
 import time
 import unicodedata
 from pathlib import Path
@@ -67,49 +68,56 @@ EMBEDDING_MODEL_NAME = os.getenv(
 KNOWLEDGE_DIR = Path(__file__).resolve().parents[1] / "data" / "knowledge"
 CHUNK_SIZE = 450
 CHUNK_OVERLAP = 80
-TOP_K = 7
-MIN_SCORE = 0.35          # Lower than before — hybrid search compensates for false negatives
-MAX_CONTEXT_CHARS = 4000  # Wider context window for LLM
+TOP_K = int(os.getenv("RAG_TOP_K", "8"))
+# Cosine similarity on normalized embeddings (inner product). NOT the same as RRF scores.
+MIN_SEMANTIC_RETURN = float(os.getenv("RAG_MIN_SEMANTIC", "0.35"))  # legacy `search()` threshold
+MIN_FAISS_PREFILTER = float(os.getenv("RAG_FAISS_PREFILTER", "0.16"))  # widen recall into RRF pool
+MAX_CONTEXT_CHARS = int(os.getenv("RAG_MAX_CONTEXT_CHARS", "6400"))
+# Hybrid gating: RRF scores are ~0.02–0.15 — never compare them to cosine.
+RAG_COSINE_ABSENT = float(os.getenv("RAG_COSINE_ABSENT", "0.22"))  # below → no relevant KB hit
+RAG_COSINE_LLM = float(os.getenv("RAG_COSINE_LLM", "0.30"))  # at/above → allow LLM synthesis
 
-# LLM provider priority: claude → groq → openai → template
+# LLM provider priority: claude → groq → gemini → openai → template
 LLM_PROVIDER = os.getenv("RAG_LLM_PROVIDER", "auto")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 LLM_MODEL_CLAUDE = os.getenv("RAG_LLM_MODEL_CLAUDE", "claude-haiku-4-5-20251001")
 LLM_MODEL_GROQ = os.getenv("RAG_LLM_MODEL", "llama3-8b-8192")
 LLM_MODEL_OPENAI = os.getenv("RAG_LLM_MODEL_OPENAI", "gpt-3.5-turbo")
-LLM_TIMEOUT_S = float(os.getenv("RAG_LLM_TIMEOUT_S", "10"))
+LLM_MODEL_GEMINI = os.getenv("RAG_LLM_MODEL_GEMINI", "gemini-2.0-flash")
+LLM_TIMEOUT_S = float(os.getenv("RAG_LLM_TIMEOUT_S", "14"))
+LLM_MAX_TOKENS = int(os.getenv("RAG_LLM_MAX_TOKENS", "768"))
+LLM_TEMPERATURE = float(os.getenv("RAG_LLM_TEMPERATURE", "0.22"))
 MAX_HISTORY_TURNS = 8
 
 # ─────────────────────────────────────────────────────────────────────────────
-# System prompt — Mia persona
+# System prompt — Mia persona (accuracy-first)
 # ─────────────────────────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """Bạn là Mia — trợ lý hỗ trợ thông minh của FoxGo, ứng dụng gọi xe công nghệ tại Việt Nam.
+SYSTEM_PROMPT = """Bạn là Mia — trợ lý CSKH FoxGo (ứng dụng gọi xe). Nhiệm vụ: trả lời ĐÚNG, RÕ, ĐỦ Ý — văn phong tự nhiên, tránh trả lời chung chung hoặc lặp câu chào máy móc.
 
-QUY TẮC BẮT BUỘC (không được vi phạm):
-1. CHỈ trả lời dựa trên thông tin trong phần [NGỮ CẢNH] bên dưới.
-2. KHÔNG được bịa thêm số liệu, chính sách, giá cước, hoặc bất kỳ thông tin nào không có trong [NGỮ CẢNH].
-3. Nếu [NGỮ CẢNH] KHÔNG có thông tin để trả lời → nói chính xác: "Mình chưa có thông tin chính xác về vấn đề này. Bạn liên hệ hotline 1900-1234 hoặc email support@foxgo.vn để được hỗ trợ trực tiếp nhé! 🙏"
-4. KHÔNG suy luận, KHÔNG giả định, KHÔNG dùng kiến thức bên ngoài FoxGo.
+VAI TRÒ NGƯỜI DÙNG:
+- Nếu người dùng nói rõ (hoặc ngữ cảnh cho thấy) họ là **khách** vs **tài xế**, trả lời đúng góc: khách thì ưu tiên luồng đặt xe/thanh toán/CSKH **support@foxgo.vn**; tài xế thì ưu tiên nhận cuốc/GPS/ví/hoa hồng/CS **driver-support@foxgo.vn**.
+- Câu hỏi tổng quát thì trả lời trung tính — không ép khuôn “chỉ khách” hoặc “chỉ tài xế”.
 
-Phong cách giao tiếp:
-- Thân thiện, ấm áp, gần gũi — xưng "mình" với người dùng là "bạn"
-- Nếu người dùng đang bực bội hoặc gặp sự cố khó chịu → thể hiện đồng cảm trước ("Ôi, tình huống đó nghe khó chịu thiệt!"), rồi mới hướng dẫn
-- Câu trả lời ngắn gọn (≤ 120 từ) trừ khi cần hướng dẫn nhiều bước
-- Khi hướng dẫn nhiều bước → dùng số thứ tự (1, 2, 3...) cho dễ làm theo
-- Thỉnh thoảng dùng emoji nhẹ nhàng (1–2 cái) — không lạm dụng
-- Đọc ngữ cảnh hội thoại — không lặp lại những gì đã giải thích trước đó
-- Nếu câu hỏi mơ hồ → hỏi lại một câu ngắn để hiểu đúng ý ("Bạn đang dùng app khách hay app tài xế vậy?")
+NGUỒN DUY NHẤT:
+- Chỉ dùng nội dung trong phần "NGỮ CẢNH TÌM ĐƯỢC" do hệ thống cung cấp kèm câu hỏi.
+- Không dùng kiến thức thế giới mở. Không đoán mò số liệu, giá, chính sách, tên dịch vụ, hoặc luồng kỹ thuật nếu không ghi trong ngữ cảnh.
 
-Nhận biết ngữ cảnh người dùng:
-- Tài xế: hỏi về thu nhập, hoa hồng, chuyến, online/offline, ví driver, nạp/rút tiền, đăng ký tài xế
-- Khách hàng: hỏi về đặt xe, theo dõi, hủy chuyến, thanh toán, hoàn tiền, voucher
-- Điều chỉnh cách giải thích phù hợp với từng đối tượng
+KHI ĐỦ THÔNG TIN:
+- Trả lời trực tiếp câu hỏi; ưu tiên gạch đầu dòng hoặc bước 1,2,3 nếu là hướng dẫn.
+- Có thể dài tới ~250 từ nếu cần nhiều bước; tránh lặp ý.
+- Nếu ngữ cảnh có **Đáp:** hoặc Q&A, giữ đúng ý chính — diễn đạt lại mượt hơn được, không được thêm ý mới.
 
-Thông tin liên hệ hỗ trợ:
-- Hotline: 1900-1234 (8h–22h hàng ngày)
-- Email: support@foxgo.vn"""
+KHI THIẾU HOẶC CHỈ LIÊN QUAN MỘT PHẦN:
+- Nói rõ phần nào có/không có trong kho tri thức. Ví dụ: "Trong tài liệu FoxGo mình có [X]; phần [Y] mình chưa có chi tiết."
+- Kết thúc bằng một câu: hotline **1900-1234** (8h–22h) và/hoặc email **support@foxgo.vn** / **driver-support@foxgo.vn** tùy ngữ cảnh (chỉ nêu email có trong ngữ cảnh hoặc đã là chuẩn FoxGo trong đoạn trích).
+
+KHÔNG ĐƯỢC:
+- Giả làm đã tra cứu bên ngoài. Không nói "theo internet". Không hứa thao tác trong app thay người dùng.
+
+Giọng điệu: thân thiện, xưng "mình", gọi người dùng là "bạn"; emoji tối đa 1–2, chỉ khi hợp ngữ cảnh."""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -295,13 +303,13 @@ class VectorIndex:
         if self.use_faiss:
             scores, indices = self.index.search(q, k)
             for rank, (score, idx) in enumerate(zip(scores[0], indices[0])):
-                if idx >= 0 and float(score) >= MIN_SCORE * 0.7:
+                if idx >= 0 and float(score) >= MIN_FAISS_PREFILTER:
                     ranks[int(idx)] = 1.0 / (60 + rank)
         else:
             sims = (self.embeddings @ q.T).flatten()
             top = np.argsort(sims)[::-1][:k]
             for rank, idx in enumerate(top):
-                if float(sims[idx]) >= MIN_SCORE * 0.7:
+                if float(sims[idx]) >= MIN_FAISS_PREFILTER:
                     ranks[int(idx)] = 1.0 / (60 + rank)
         return ranks
 
@@ -327,10 +335,10 @@ class VectorIndex:
         query_embedding,
         query_text: str,
         top_k: int = TOP_K,
-    ) -> List[Tuple[float, Chunk]]:
+    ) -> List[Tuple[float, float, Chunk]]:
         """
-        Reciprocal Rank Fusion of semantic (FAISS) + keyword (BM25) results.
-        Falls back to semantic-only if BM25 is unavailable.
+        Hybrid RRF (semantic + BM25) ranking. Returns tuples of
+        (rrf_score, cosine_similarity, chunk) — **cosine** must be used for confidence gating.
         """
         k_inner = min(top_k * 3, self.n)
 
@@ -343,7 +351,20 @@ class VectorIndex:
 
         rrf = {i: semantic.get(i, 0.0) + bm25.get(i, 0.0) for i in all_indices}
         top_indices = sorted(rrf.keys(), key=lambda i: -rrf[i])[:top_k]
-        return [(rrf[i], self.chunks[i]) for i in top_indices]
+
+        _ensure_imports()
+        np = _np
+        q = query_embedding.astype("float32")
+        norm = np.linalg.norm(q)
+        if norm > 0:
+            q = q / norm
+        q1 = q.flatten()
+
+        out: List[Tuple[float, float, Chunk]] = []
+        for i in top_indices:
+            cos = float(np.dot(self.embeddings[i], q1))
+            out.append((float(rrf[i]), cos, self.chunks[i]))
+        return out
 
     def search(self, query_embedding, top_k: int = TOP_K) -> List[Tuple[float, Chunk]]:
         """Pure semantic search (kept for compatibility)."""
@@ -360,7 +381,7 @@ class VectorIndex:
             return [
                 (float(score), self.chunks[idx])
                 for score, idx in zip(scores[0], indices[0])
-                if idx >= 0 and float(score) >= MIN_SCORE
+                if idx >= 0 and float(score) >= MIN_SEMANTIC_RETURN
             ]
         else:
             sims = (self.embeddings @ q.T).flatten()
@@ -368,7 +389,7 @@ class VectorIndex:
             return [
                 (float(sims[i]), self.chunks[i])
                 for i in top
-                if float(sims[i]) >= MIN_SCORE
+                if float(sims[i]) >= MIN_SEMANTIC_RETURN
             ]
 
 
@@ -412,6 +433,125 @@ def _enrich_query(query: str, history: Optional[List[dict]]) -> str:
     return " ".join(context_parts)
 
 
+def _keyword_hits(low: str, plain: str, keywords: tuple[str, ...]) -> bool:
+    """Match either raw lowercase or diacritic-stripped (user often types without accents)."""
+    for k in keywords:
+        kl = k.lower()
+        if kl in low:
+            return True
+        ks = _strip_diacritics(kl)
+        if ks and ks in plain:
+            return True
+    return False
+
+
+def _query_embedding_text(enriched_user_query: str) -> str:
+    """
+    Expand query text **only for embedding** (better recall). BM25 still uses the raw enriched query.
+    Keep expansions short to avoid drift.
+    """
+    q = enriched_user_query.strip()
+    if not q:
+        return q
+    low = q.lower()
+    plain = _strip_diacritics(low)
+    boost: List[str] = []
+    if _keyword_hits(
+        low,
+        plain,
+        (
+            "kiến trúc",
+            "microservice",
+            "microservices",
+            "service",
+            "backend",
+            "hạ tầng",
+            "gateway",
+            "api ",
+            "cổng",
+            "server",
+            "hệ thống gồm",
+            "luận văn",
+            "đồ án",
+            "pipeline",
+            "faiss",
+            "bm25",
+            "rrf",
+            "internal/refresh",
+        ),
+    ):
+        boost.append(
+            "FoxGo API Gateway Auth Ride Driver Payment Pricing Wallet Notification Review Booking User AI service cổng HTTP"
+        )
+    if _keyword_hits(low, plain, ("mia", "chatbot", "trợ lý", "rag", "kho tri thức", "embedding")):
+        boost.append("Mia trợ lý chat RAG knowledge base AI service")
+    if _keyword_hits(
+        low,
+        plain,
+        (
+            "giá",
+            "cước",
+            "surge",
+            "pricing",
+            "ước tính",
+            "phí chuyến",
+        ),
+    ):
+        boost.append("Pricing OSRM Redis surge ước tính giá")
+    if _keyword_hits(
+        low,
+        plain,
+        ("momo", "vnpay", "thanh toán online", "payment", "ví tài xế", "hoàn tiền"),
+    ):
+        boost.append("Payment Service MoMo VNPay ví tài xế wallet")
+    if _keyword_hits(
+        low,
+        plain,
+        ("đặt xe", "chuyến", "ride", "matching", "điều phối", "ghép tài xế"),
+    ):
+        boost.append("Ride Service đặt xe matching tài xế Booking Gateway")
+    if _keyword_hits(
+        low,
+        plain,
+        (
+            "tài xế",
+            "lái xe",
+            "tôi chạy foxgo",
+            "driver",
+            "nhận cuốc",
+            "nhận chuyến",
+            "bật online",
+            "bật sẵn sàng",
+            "không có cuốc",
+            "không nhận được cuốc",
+            "thu nhập tài xế",
+            "hoa hồng",
+            "ví tài xế",
+            "điểm uy tín",
+        ),
+    ):
+        boost.append(
+            "driver-app Driver Service ví tài xế Wallet nhận cuốc GPS online trạng thái"
+        )
+    if _keyword_hits(
+        low,
+        plain,
+        (
+            "khách",
+            "khách hàng",
+            "hành khách",
+            "đi xe",
+            "đặt hộ",
+            "book ride",
+            "customer",
+        ),
+    ):
+        boost.append("customer-app khách đặt xe điểm đón điểm đến voucher thanh toán")
+    if not boost:
+        return q
+    return q + "\n" + " ".join(boost)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # LLM calls
 # ─────────────────────────────────────────────────────────────────────────────
@@ -443,7 +583,8 @@ async def _call_llm_claude(messages: List[dict]) -> Optional[str]:
                 },
                 json={
                     "model": LLM_MODEL_CLAUDE,
-                    "max_tokens": 512,
+                    "max_tokens": LLM_MAX_TOKENS,
+                    "temperature": LLM_TEMPERATURE,
                     "system": SYSTEM_PROMPT,
                     "messages": messages,
                 },
@@ -456,12 +597,11 @@ async def _call_llm_claude(messages: List[dict]) -> Optional[str]:
         return None
 
 
-async def _call_llm_groq(context: str, messages: List[dict]) -> Optional[str]:
+async def _call_llm_groq(messages: List[dict]) -> Optional[str]:
     if not GROQ_API_KEY:
         return None
     try:
         _ensure_imports()
-        system = f"{SYSTEM_PROMPT}\n\nNGỮ CẢNH:\n{context}"
         async with _httpx.AsyncClient(timeout=LLM_TIMEOUT_S) as client:
             resp = await client.post(
                 "https://api.groq.com/openai/v1/chat/completions",
@@ -471,9 +611,9 @@ async def _call_llm_groq(context: str, messages: List[dict]) -> Optional[str]:
                 },
                 json={
                     "model": LLM_MODEL_GROQ,
-                    "messages": [{"role": "system", "content": system}] + messages,
-                    "max_tokens": 512,
-                    "temperature": 0.4,
+                    "messages": [{"role": "system", "content": SYSTEM_PROMPT}] + messages,
+                    "max_tokens": LLM_MAX_TOKENS,
+                    "temperature": LLM_TEMPERATURE,
                 },
             )
             resp.raise_for_status()
@@ -483,12 +623,68 @@ async def _call_llm_groq(context: str, messages: List[dict]) -> Optional[str]:
         return None
 
 
-async def _call_llm_openai(context: str, messages: List[dict]) -> Optional[str]:
+async def _call_llm_gemini(messages: List[dict]) -> Optional[str]:
+    """Google Gemini (AI Studio API key) — often cost-effective vs Claude/OpenAI."""
+    if not GEMINI_API_KEY:
+        return None
+    try:
+        _ensure_imports()
+        contents = []
+        for m in messages:
+            role = m.get("role", "user")
+            text = m.get("content", "")
+            if role == "user":
+                contents.append({"role": "user", "parts": [{"text": text}]})
+            elif role == "assistant":
+                contents.append({"role": "model", "parts": [{"text": text}]})
+        if not contents:
+            return None
+
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{LLM_MODEL_GEMINI}:generateContent"
+        )
+        payload = {
+            "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+            "contents": contents,
+            "generationConfig": {
+                "maxOutputTokens": LLM_MAX_TOKENS,
+                "temperature": LLM_TEMPERATURE,
+            },
+            "safetySettings": [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
+            ],
+        }
+        async with _httpx.AsyncClient(timeout=LLM_TIMEOUT_S) as client:
+            resp = await client.post(
+                url,
+                params={"key": GEMINI_API_KEY},
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        cands = data.get("candidates") or []
+        if not cands:
+            logger.warning("Gemini returned no candidates: %s", data.get("promptFeedback", data))
+            return None
+        parts = cands[0].get("content", {}).get("parts") or []
+        out = "".join(p.get("text", "") for p in parts).strip()
+        return out or None
+    except Exception as exc:
+        logger.warning(f"Gemini API failed: {exc}")
+        return None
+
+
+async def _call_llm_openai(messages: List[dict]) -> Optional[str]:
     if not OPENAI_API_KEY:
         return None
     try:
         _ensure_imports()
-        system = f"{SYSTEM_PROMPT}\n\nNGỮ CẢNH:\n{context}"
         async with _httpx.AsyncClient(timeout=LLM_TIMEOUT_S) as client:
             resp = await client.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -498,9 +694,9 @@ async def _call_llm_openai(context: str, messages: List[dict]) -> Optional[str]:
                 },
                 json={
                     "model": LLM_MODEL_OPENAI,
-                    "messages": [{"role": "system", "content": system}] + messages,
-                    "max_tokens": 512,
-                    "temperature": 0.4,
+                    "messages": [{"role": "system", "content": SYSTEM_PROMPT}] + messages,
+                    "max_tokens": LLM_MAX_TOKENS,
+                    "temperature": LLM_TEMPERATURE,
                 },
             )
             resp.raise_for_status()
@@ -572,8 +768,9 @@ async def _generate_answer(
 
     if context:
         user_content = (
-            f"NGỮ CẢNH TÌM ĐƯỢC:\n{context}\n\n"
-            f"CÂU HỎI: {query}"
+            f"NGỮ CẢNH TÌM ĐƯỢC (ưu tiên đọc từ trên xuống — đoạn đầu khớp nhất):\n{context}\n\n"
+            f"CÂU HỎI HIỆN TẠI: {query}\n\n"
+            "Trả lời ngay vào ý chính; không mở bài dài. Nếu nhiều mục trong ngữ cảnh mâu thuẫn, ưu tiên đoạn khớp câu hỏi nhất."
         )
     else:
         user_content = (
@@ -591,12 +788,17 @@ async def _generate_answer(
             return answer, "llm_claude"
 
     if provider in ("groq", "auto") and GROQ_API_KEY:
-        answer = await _call_llm_groq(context, llm_messages[:-1] + [{"role": "user", "content": query}])
+        answer = await _call_llm_groq(llm_messages)
         if answer:
             return answer, "llm_groq"
 
+    if provider in ("gemini", "auto") and GEMINI_API_KEY:
+        answer = await _call_llm_gemini(llm_messages)
+        if answer:
+            return answer, "llm_gemini"
+
     if provider in ("openai", "auto") and OPENAI_API_KEY:
-        answer = await _call_llm_openai(context, llm_messages[:-1] + [{"role": "user", "content": query}])
+        answer = await _call_llm_openai(llm_messages)
         if answer:
             return answer, "llm_openai"
 
@@ -614,10 +816,10 @@ class RagService:
         self._index: Optional[VectorIndex] = None
         self._chunks: List[Chunk] = []
         self._init_error: Optional[str] = None
+        self._rag_lock = threading.RLock()
 
-    def initialize(self) -> bool:
-        if self._ready:
-            return True
+    def _initialize_locked(self) -> bool:
+        """Assume `_rag_lock` is held. First-time load of embedder + index."""
         try:
             _ensure_imports()
             t0 = time.time()
@@ -641,6 +843,7 @@ class RagService:
 
             logger.info(f"RAG ready in {time.time() - t0:.2f}s")
             self._ready = True
+            self._init_error = None
             return True
 
         except Exception as exc:
@@ -648,9 +851,73 @@ class RagService:
             logger.error(f"RAG init failed: {exc}", exc_info=True)
             return False
 
+    def initialize(self) -> bool:
+        with self._rag_lock:
+            if self._ready:
+                return True
+            return self._initialize_locked()
+
+    def reload_knowledge_from_disk(self) -> dict:
+        """
+        Rebuild FAISS/BM25 from KNOWLEDGE_DIR (.txt). Embedding model stays in memory.
+        Safe to call from a background thread. Chat requests may use the previous index
+        until the swap completes.
+        """
+        try:
+            _ensure_imports()
+            with self._rag_lock:
+                if self._model is None:
+                    if self._ready:
+                        return {"ok": False, "error": "inconsistent state: ready but no model"}
+                    ok = self._initialize_locked()
+                    return {
+                        "ok": ok,
+                        "chunks": len(self._chunks),
+                        "action": "full_init",
+                        "error": self._init_error,
+                    }
+
+            docs = _load_documents(KNOWLEDGE_DIR)
+            chunks = _build_chunks(docs)
+            if not chunks:
+                with self._rag_lock:
+                    self._chunks = []
+                    self._index = None
+                    self._ready = True
+                return {"ok": True, "chunks": 0, "action": "reload"}
+
+            model = self._model
+            texts = [c.text for c in chunks]
+            embeddings = model.encode(
+                texts, batch_size=32, show_progress_bar=False, normalize_embeddings=True
+            )
+            new_index = VectorIndex(chunks, embeddings)
+
+            with self._rag_lock:
+                self._chunks = chunks
+                self._index = new_index
+                self._ready = True
+
+            logger.info("RAG knowledge reloaded: %s chunks", len(chunks))
+            return {"ok": True, "chunks": len(chunks), "action": "reload"}
+
+        except Exception as exc:
+            logger.error(f"RAG reload failed: {exc}", exc_info=True)
+            return {"ok": False, "error": str(exc)}
+
     @property
     def is_ready(self) -> bool:
         return self._ready
+
+    def get_health_snapshot(self) -> dict:
+        """Non-secret diagnostics for /api/health (ops: RAG up, chunk count, key presence)."""
+        with self._rag_lock:
+            return {
+                "ready": self._ready,
+                "chunks": len(self._chunks),
+                "vector_index": self._index is not None,
+                "init_error": self._init_error,
+            }
 
     async def chat(
         self,
@@ -669,13 +936,18 @@ class RagService:
                     "error": self._init_error,
                 }
 
-        retrieved: List[Tuple[float, Chunk]] = []
-        if self._index is not None and message.strip():
-            enriched_query = _enrich_query(message.strip(), history)
-            query_emb = self._model.encode([enriched_query], normalize_embeddings=True)
-            retrieved = self._index.search_hybrid(query_emb[0], enriched_query, top_k=top_k)
+        with self._rag_lock:
+            model = self._model
+            index = self._index
 
-        if not retrieved:
+        raw_hits: List[Tuple[float, float, Chunk]] = []
+        if index is not None and message.strip() and model is not None:
+            enriched_query = _enrich_query(message.strip(), history)
+            embed_text = _query_embedding_text(enriched_query)
+            query_emb = model.encode([embed_text], normalize_embeddings=True)
+            raw_hits = index.search_hybrid(query_emb[0], enriched_query, top_k=top_k)
+
+        if not raw_hits:
             return {
                 "answer": (
                     "Mình chưa tìm thấy thông tin về vấn đề này trong hệ thống FoxGo. "
@@ -689,7 +961,40 @@ class RagService:
                 "latency_ms": int((time.time() - t0) * 1000),
             }
 
-        score_max = max((s for s, _ in retrieved), default=0.0)
+        score_max = max(h[1] for h in raw_hits)
+        if score_max < RAG_COSINE_ABSENT:
+            return {
+                "answer": (
+                    "Mình chưa tìm thấy đoạn tài liệu FoxGo nào khớp đủ với câu hỏi của bạn, "
+                    "nên không thể trả lời tự tin — tránh nói sai.\n\n"
+                    "Bạn hãy diễn đạt thêm từ khóa (ví dụ: đặt xe, thanh toán, ví tài xế, hủy chuyến), "
+                    "hoặc liên hệ **1900-1234** / **support@foxgo.vn** hoặc **driver-support@foxgo.vn** "
+                    "để được hỗ trợ trực tiếp nhé."
+                ),
+                "sources": [],
+                "retrieval_count": len(raw_hits),
+                "score_max": round(float(score_max), 4),
+                "mode": "no_context",
+                "latency_ms": int((time.time() - t0) * 1000),
+            }
+
+        # Highest-cosine chunks first → better LLM grounding
+        retrieved: List[Tuple[float, Chunk]] = sorted(
+            ((h[1], h[2]) for h in raw_hits),
+            key=lambda x: -x[0],
+        )
+
+        if score_max < RAG_COSINE_LLM:
+            answer = _template_answer(message, retrieved)
+            return {
+                "answer": answer,
+                "sources": list({chunk.title for _, chunk in retrieved}),
+                "retrieval_count": len(retrieved),
+                "score_max": round(float(score_max), 4),
+                "mode": "retrieval_low_confidence",
+                "latency_ms": int((time.time() - t0) * 1000),
+            }
+
         answer, mode = await _generate_answer(message, retrieved, history=history)
 
         return {

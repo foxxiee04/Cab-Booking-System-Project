@@ -100,6 +100,11 @@ class WaitTimeService:
             logger.warning(f"Wait-time model not loaded ({exc}) — heuristic fallback active")
             self.model = None
 
+    def reload_model(self) -> bool:
+        """Reload wait-time model from disk (after periodic/manual retrain)."""
+        self._load_model()
+        return self.model is not None
+
     def predict(self, req: WaitTimePredictionRequest) -> WaitTimePredictionResponse:
         start = time.perf_counter()
 

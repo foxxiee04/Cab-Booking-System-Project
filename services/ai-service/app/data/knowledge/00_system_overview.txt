@@ -1,0 +1,44 @@
+TIÊU ĐỀ: Tổng quan hệ thống & kiến trúc FoxGo (Mia RAG)
+DANH MỤC: kiến trúc, microservice, backend, API gateway, Mia, RAG, kho tri thức, luồng dữ liệu, cổng dịch vụ
+
+FoxGo là hệ thống gọi xe đa microservice. Ứng dụng khách (customer-app), tài xế (driver-app) và admin (admin-dashboard) **không gọi trực tiếp** từng service: traffic đi qua **API Gateway** (HTTP, WebSocket Socket.IO). Mỗi service có vai trò riêng; dữ liệu nằm ở PostgreSQL / MongoDB / Redis tùy service.
+
+---
+Hỏi: Mia và RAG trong FoxGo hoạt động thế nào?
+Đáp: **Mia** là trợ lý chat trong app. Phía server, **AI Service** (cổng HTTP mặc định 8000) chạy pipeline RAG: (1) băm tài liệu kho tri thức (*.txt trong thư mục knowledge), (2) tìm kiếm lai (embedding + BM25), (3) nếu độ khớp đủ cao → LLM (Claude / Groq / Gemini / OpenAI — tùy biến môi trường) tổng hợp câu trả lời **chỉ dựa trên đoạn tìm được**. Nếu không khớp kho tri thức → Mia thành thật báo chưa có thông tin và hướng dẫn hotline/email. Mia **không** tra cứu Internet tự do; không thay thế xử lý booking/thanh toán thật trên backend.
+
+---
+Hỏi: Danh sách microservice và cổng HTTP chính?
+Đáp: **API Gateway 3000** (điểm vào, WebSocket, matching). **Auth 3001**. **Ride 3002**. **Driver 3003**. **Payment 3004**. **Notification 3005**. **Wallet 3006**. **User 3007**. **Booking 3008**. **Pricing 3009**. **Review 3010**. **AI Service 8000** (dự báo ETA/surge, chat RAG). Một số service còn giao tiếp **gRPC** nội bộ (ví dụ Pricing ↔ service khác). Số cổng có thể đổi theo docker-compose khi triển khai.
+
+---
+Hỏi: Ai tính giá cước ước tính khi đặt xe?
+Đáp: **Pricing Service** tính: lộ trình (thường qua **OSRM** / fallback khoảng cách), bảng giá theo loại xe, phí thời gian/chuyến ngắn; hệ số **surge** lấy tối thiểu từ **Redis** (`surge:multiplier`) và có thể tăng theo gợi ý **AI predict** (`/api/predict` trên ai-service) trong giới hạn cấu hình. Giá cuối có thể khác ước lính sau khi chuyến kết thúc (đường thực tế, chờ, hủy, voucher).
+
+---
+Hỏi: Thanh toán online (MoMo/VNPay) đi qua đâu trong hệ thống?
+Đáp: Client tạo yêu cầu thanh toán qua **API Gateway → Payment Service**. Cổng MoMo/VNPay (hoặc mock sandbox) xử lý thu tiền. Khi chuyến hoàn thành và thanh toán điện tử thành công, logic payment-service ghi nhận và (theo mô hình ví nội bộ) có thể **ghi có thu nhập ròng** vào ví tài xế (`creditEarning`), khác với chuyến **tiền mặt** (tài xế thu tiền mặt, hệ thống có thể trừ phí/ ký quỹ qua `debitCommission`). Chi tiết phụ thuộc phiên bản code và cấu hình môi trường.
+
+---
+Hỏi: Chuyến đi (ride) được tạo và điều phối thế nào?
+Đáp: Khách đặt xe → **Ride Service** (và/hoặc **Booking Service** tùy luồng) tạo bản ghi chuyến. **API Gateway** chứa **matching engine** định vị tài xế (Redis geo, vòng điều phối). Trạng thái chuyến cập nhật qua REST + realtime Socket.IO. Tài xế nhận/kết thúc chuyến qua driver-app.
+
+---
+Hỏi: Làm sao biết Mia đang dùng LLM hay chỉ trích đoạn văn?
+Đáp: API `POST /api/chat` trả về trường `mode` (ví dụ `llm_gemini`, `llm_groq`, `retrieval_low_confidence`, `no_context`). Bạn có thể gọi `GET /api/health` để xem cờ API key (không lộ giá trị key) và trạng thái RAG. Người dùng cuối trong app không cần quan tâm — chỉ cần biết Mia luôn bám kho tri thức nội bộ.
+
+---
+Hỏi: FoxGo có những app nào?
+Đáp: **Ứng dụng khách** (đặt xe, theo dõi, thanh toán, Mia). **Ứng dụng tài xế** (nhận cuốc, GPS, ví, Mia). **Admin dashboard** (vận hành, merchant, cấu hình — tùy triển khai).
+
+---
+Hỏi: Bạn là AI gì? Có phải ChatGPT không?
+Đáp: Mia là **chatbot FoxGo** chạy trên **AI Service** của nền tảng. Kiến thức trả lời lấy từ **kho văn bản FoxGo** + có thể qua mô hình LLM do tổ chức bạn cấu hình (Gemini/Groq/OpenAI/Claude). Đây **không phải** ChatGPT công cộng; Mia **không** tự tra cứu web và không được bịa thông tin không có trong kho tri thức.
+
+---
+Hỏi: Dữ liệu cá nhân và vị trí được xử lý ở đâu?
+Đáp: Tài khoản JWT qua **Auth Service**; hồ sơ người dùng **User Service**; hồ sơ/ trạng thái tài xế **Driver Service**. Vị trí realtime thường qua Gateway/Redis geo và cập nhật chuyến **Ride Service**. Không mô tả chi tiết bảo mật — level production cần đánh giá riêng.
+
+---
+Hỏi: Khi nào nên gọi hotline thay vì hỏi Mia?
+Đáp: Khi **mất tiền / tranh chấp / an toàn khẩn cấp / lỗi không đăng nhập được / nghi gian lận**, hoặc khi Mia báo **chưa có thông tin**. Hotline tham khảo trong app: **1900-1234** (khung giờ ghi trong tài liệu hỗ trợ). Email **support@foxgo.vn** (khách), **driver-support@foxgo.vn** (tài xế) khi có trong kho tri thức.

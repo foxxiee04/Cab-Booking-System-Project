@@ -155,11 +155,16 @@ export const formatDuration = (seconds: number): string => {
 // Demo fallback locations keyed by driver phone number.
 // Used when the browser denies GPS permission (e.g. DevTools Sensors not set).
 // IUH (Đại học Công Nghiệp) = 10.8192, 106.6685
+// Bến Thành cluster — khớp seed (`0911234561` …) để E2E pickup "Ben Thanh" bắt tài xế.
 // Drivers placed at distinct distances to demonstrate 3-round dispatch:
 //   Round 1 (2km radius)  → catches Driver A at ~1.5km
 //   Round 2 (3km radius)  → catches Driver B at ~2.7km
 //   Round 3 (5km radius)  → catches Driver C at ~4.2km
+// Drivers cụm Chợ Bến Thành — khớp `scripts/seed-database.ts` (E2E: pickup Ben Thanh).
 const DEMO_DRIVER_FALLBACK_LOCATIONS: Record<string, Location> = {
+  '0911234561': { lat: 10.77295, lng: 106.69905 },
+  '0911234562': { lat: 10.77195, lng: 106.69855 },
+  '0911234568': { lat: 10.77215, lng: 106.69675 },
   '0911234583': { lat: 10.8327, lng: 106.6876 }, // Pham Van Bao  — ~1.2km N of IUH (Round 1, 2km)
   '0911234585': { lat: 10.8463, lng: 106.6876 }, // Le Thi Mai    — ~2.7km N of IUH (Round 2, 3km)
   '0911234573': { lat: 10.8551, lng: 106.6685 }, // Le Minh N     — ~4.2km N of IUH (Round 3, 5km)

@@ -27,15 +27,18 @@ class PredictionService:
         self.model = None
         self.scaler = None
         self.load_model()
-    
+
+    def _resolve_model_path(self) -> Path:
+        model_path = Path(settings.MODEL_PATH)
+        if not model_path.is_absolute():
+            service_root = Path(__file__).resolve().parents[2]
+            model_path = service_root / model_path
+        return model_path
+
     def load_model(self):
         """Load trained model from disk"""
         try:
-            model_path = Path(settings.MODEL_PATH)
-            if not model_path.is_absolute():
-                service_root = Path(__file__).resolve().parents[2]
-                model_path = service_root / model_path
-
+            model_path = self._resolve_model_path()
             model_data = joblib.load(model_path)
             self.model = model_data['model']
             self.scaler = model_data['scaler']
@@ -46,6 +49,19 @@ class PredictionService:
         except Exception as e:
             logger.error(f"Error loading model: {str(e)}")
             raise RuntimeError(f"Error loading model: {str(e)}")
+
+    def reload_model(self) -> bool:
+        """Reload eta/price model from disk after retrain. Keeps previous weights if reload fails."""
+        try:
+            model_path = self._resolve_model_path()
+            model_data = joblib.load(model_path)
+            self.model = model_data['model']
+            self.scaler = model_data['scaler']
+            logger.info(f"Prediction model reloaded from {model_path}")
+            return True
+        except Exception as exc:
+            logger.error(f"Prediction model reload failed: {exc}")
+            return False
     
     def _encode_features(self, request: PredictionRequest) -> np.ndarray:
         """

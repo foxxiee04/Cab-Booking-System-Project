@@ -110,7 +110,7 @@ services:
       - MATCHING_MAX_ATTEMPTS=${MATCHING_MAX_ATTEMPTS:-3}
       - MATCHING_RETRY_DELAY_MS=${MATCHING_RETRY_DELAY_MS:-2500}
       - MATCHING_MAX_WAIT_MS=${MATCHING_MAX_WAIT_MS:-120000}
-      - MATCHING_ROUNDS=${MATCHING_ROUNDS:-2:1:1.0,3:3:1.1,5:5:1.2}
+      - MATCHING_ROUNDS=${MATCHING_ROUNDS:-2:1:1.0,4:1:1.1,6:1:1.2}
       - MATCHING_SCORE_LOG_VERBOSE=${MATCHING_SCORE_LOG_VERBOSE:-false}
       - MATCHING_AI_ADJUSTMENT_ENABLED=${MATCHING_AI_ADJUSTMENT_ENABLED:-true}
       - MATCHING_AI_ADJUSTMENT_DELTA_MAX=${MATCHING_AI_ADJUSTMENT_DELTA_MAX:-0.08}
@@ -462,15 +462,24 @@ services:
       - SUGGESTED_SURGE_MIN=${SUGGESTED_SURGE_MIN:-1.0}
       - SUGGESTED_SURGE_MAX=${SUGGESTED_SURGE_MAX:-2.0}
       # RAG chatbot — set at least one LLM key for human-like answers
-      # Priority order: Claude → Groq → OpenAI → template fallback
+      # Priority order: Claude → Groq → Gemini → OpenAI → template fallback
       - RAG_LLM_PROVIDER=${RAG_LLM_PROVIDER:-auto}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - RAG_LLM_MODEL_CLAUDE=${RAG_LLM_MODEL_CLAUDE:-claude-haiku-4-5-20251001}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - RAG_LLM_MODEL=${RAG_LLM_MODEL:-llama3-8b-8192}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - RAG_LLM_MODEL_GEMINI=${RAG_LLM_MODEL_GEMINI:-gemini-2.5-pro}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - RAG_LLM_TIMEOUT_S=${RAG_LLM_TIMEOUT_S:-10}
       - RAG_EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-paraphrase-multilingual-MiniLM-L12-v2}
+      # Periodic maintenance (0 = off): RAG re-index from app/data/knowledge/*.txt
+      - AI_AUTO_RELOAD_RAG_SEC=${AI_AUTO_RELOAD_RAG_SEC:-0}
+      # ML retrain: heavy CPU; enable AI_AUTO_RETRAIN_ENABLED=true and interval > 0
+      - AI_AUTO_RETRAIN_SEC=${AI_AUTO_RETRAIN_SEC:-0}
+      - AI_AUTO_RETRAIN_ENABLED=${AI_AUTO_RETRAIN_ENABLED:-false}
+      # Bearer secret for POST /api/internal/refresh (empty = route hidden as 404)
+      - AI_INTERNAL_TOKEN=${AI_INTERNAL_TOKEN:-}
     healthcheck:
       test: ["CMD", "python", "-c", "from urllib.request import urlopen; raise SystemExit(0 if urlopen('http://localhost:8000/api/health').status == 200 else 1)"]
       interval: 30s

@@ -29,7 +29,7 @@ import {
   setCurrentLocation,
   setEarnings,
 } from '../store/driver.slice';
-import { clearPendingRide, setCurrentRide, clearCurrentRide } from '../store/ride.slice';
+import { clearPendingRide, setCurrentRide, clearCurrentRide, revokeRideFromFeed } from '../store/ride.slice';
 import { driverApi } from '../api/driver.api';
 import { rideApi } from '../api/ride.api';
 import { driverSocketService } from '../socket/driver.socket';
@@ -60,30 +60,6 @@ const hasSameRideList = (left: Ride[], right: Ride[]) => {
       && (ride.duration || ride.estimatedDuration || 0) === (other.duration || other.estimatedDuration || 0)
     );
   });
-};
-
-const pickBestRide = (rides: Ride[]): Ride | null => {
-  if (rides.length === 0) {
-    return null;
-  }
-
-  const scored = [...rides].sort((a, b) => {
-    const fareA = a.fare || 0;
-    const fareB = b.fare || 0;
-    if (fareB !== fareA) {
-      return fareB - fareA;
-    }
-
-    const distanceA = a.distance || 0;
-    const distanceB = b.distance || 0;
-    if (distanceA !== distanceB) {
-      return distanceA - distanceB;
-    }
-
-    return a.id.localeCompare(b.id);
-  });
-
-  return scored[0] || null;
 };
 
 const normalizeDistanceMeters = (distance?: number): number | undefined => {
@@ -143,7 +119,6 @@ const getRideMetrics = (ride: Ride) => {
 const Dashboard: React.FC = () => {
   const loggedGeoErrorCodesRef = useRef<Set<number>>(new Set());
   const ignoredRideIdsRef = useRef<Map<string, number>>(new Map());
-  const seenRidePopupIdsRef = useRef<Set<string>>(new Set());
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -152,7 +127,7 @@ const Dashboard: React.FC = () => {
   const { profile, isOnline, currentLocation, earnings } = useAppSelector(
     (state) => state.driver
   );
-  const { pendingRide, currentRide } = useAppSelector(
+  const { pendingRide, currentRide, revokedFeedRideIds } = useAppSelector(
     (state) => state.ride
   );
 
@@ -162,26 +137,9 @@ const Dashboard: React.FC = () => {
   const [watchId, setWatchId] = useState<number | null>(null);
   const [completedRidesCount, setCompletedRidesCount] = useState(0);
   const [availableRides, setAvailableRides] = useState<Ride[]>([]);
-  const [newRidePopup, setNewRidePopup] = useState<Ride | null>(null);
   const [isListLoading, setIsListLoading] = useState(false);
   const [showGpsWarning, setShowGpsWarning] = useState(true);
   const hasInitialPollRef = useRef(false);
-
-  const notifyNewRide = (ride: Ride) => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      return;
-    }
-
-    if (Notification.permission === 'granted') {
-      const fareText = ride.fare ? formatCurrency(ride.fare) : 'chua co gia';
-      const pickupText = ride.pickupLocation?.address || 'diem don gan ban';
-      const notification = new Notification('Co cuoc moi', {
-        body: `${fareText} - ${pickupText}`,
-      });
-
-      window.setTimeout(() => notification.close(), 7000);
-    }
-  };
 
   const dismissPendingRide = (rideId: string) => {
     const holdUntil = Date.now() + 30_000;
@@ -207,18 +165,18 @@ const Dashboard: React.FC = () => {
   const ridesToDisplay = useMemo(() => {
     const merged = new Map<string, Ride>();
 
-    if (pendingRide && !ignoredRideIdsRef.current.has(pendingRide.id)) {
+    if (pendingRide && !ignoredRideIdsRef.current.has(pendingRide.id) && !revokedFeedRideIds.includes(pendingRide.id)) {
       merged.set(pendingRide.id, pendingRide);
     }
 
     availableRides.forEach((ride) => {
-      if (!ignoredRideIdsRef.current.has(ride.id)) {
+      if (!ignoredRideIdsRef.current.has(ride.id) && !revokedFeedRideIds.includes(ride.id)) {
         merged.set(ride.id, ride);
       }
     });
 
     return Array.from(merged.values()).slice(0, 8);
-  }, [availableRides, pendingRide]);
+  }, [availableRides, pendingRide, revokedFeedRideIds]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -229,22 +187,6 @@ const Dashboard: React.FC = () => {
       Notification.requestPermission().catch(() => undefined);
     }
   }, []);
-
-  useEffect(() => {
-    if (newRidePopup || !isOnline || currentRide) {
-      return;
-    }
-
-    const unseenRides = ridesToDisplay.filter((ride) => !seenRidePopupIdsRef.current.has(ride.id));
-    const bestRide = pickBestRide(unseenRides);
-    if (!bestRide) {
-      return;
-    }
-
-    seenRidePopupIdsRef.current.add(bestRide.id);
-    setNewRidePopup(bestRide);
-    notifyNewRide(bestRide);
-  }, [currentRide, isOnline, newRidePopup, ridesToDisplay]);
 
   // Fetch driver profile
   useEffect(() => {
@@ -344,7 +286,6 @@ const Dashboard: React.FC = () => {
       setAvailableRides([]);
       setIsListLoading(false);
       hasInitialPollRef.current = false;
-      setNewRidePopup(null);
       return;
     }
 
@@ -375,7 +316,9 @@ const Dashboard: React.FC = () => {
         });
 
         const rides = (response.data?.rides || []).filter(
-          (ride) => !ignoredRideIdsRef.current.has(ride.id)
+          (ride) =>
+            !ignoredRideIdsRef.current.has(ride.id)
+            && !revokedFeedRideIds.includes(ride.id)
         );
 
         if (!cancelled) {
@@ -392,13 +335,13 @@ const Dashboard: React.FC = () => {
     };
 
     pollAvailableRides();
-    const intervalId = window.setInterval(pollAvailableRides, 8000);
+    const intervalId = window.setInterval(pollAvailableRides, 4000);
 
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [browsingLocation, currentRide, isOnline, profile?.vehicleType]);
+  }, [browsingLocation, currentRide, isOnline, profile?.vehicleType, revokedFeedRideIds]);
 
   // Handle go online/offline
   const handleToggleOnline = async () => {
@@ -448,6 +391,7 @@ const Dashboard: React.FC = () => {
       setError(msg);
       // Remove the ride from list if it was already taken or expired
       if (acceptError.response?.status === 409 || acceptError.response?.status === 404) {
+        dispatch(revokeRideFromFeed(rideId));
         setAvailableRides((prev) => prev.filter((r) => r.id !== rideId));
         dispatch(clearPendingRide());
       }

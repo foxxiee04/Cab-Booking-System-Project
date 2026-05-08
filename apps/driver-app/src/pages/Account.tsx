@@ -365,36 +365,32 @@ secondary={profile?.licensePlate ? `Biển số ${profile.licensePlate}` : 'Bổ
           </CardContent>
         </Card>
 
-        <Card sx={{ borderRadius: 5, border: '1px solid #fecaca', bgcolor: '#fff7f7' }}>
+        <Card
+          sx={{
+            borderRadius: 5,
+            border: '1px solid #fecaca',
+            bgcolor: '#fff7f7',
+          }}
+        >
           <CardContent>
-            <Typography variant="h6" fontWeight={800} sx={{ mb: 0.75 }}>
-              Ngừng làm tài xế
+            <Typography variant="h6" fontWeight={800} sx={{ mb: 1.5 }}>
+              Hủy dịch vụ tài xế
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              Khi ngừng hoạt động, hệ thống sẽ đối soát tự động theo công thức: ký quỹ + số dư khả dụng - công nợ. Không cần admin duyệt.
+              Sau khi hủy, bạn không còn đăng nhập và sử dụng ứng dụng với tư cách tài xế (nhận chuyến, cập nhật trạng thái chuyến đi, v.v.). Tiền ký quỹ đang giữ sẽ được hoàn trả về ví của bạn.
             </Typography>
-            <Stack spacing={0.75} sx={{ mb: 2 }}>
-              {[
-                ['Ký quỹ đang giữ', formatCurrency(Number(walletSummary?.lockedBalance ?? 0))],
-                ['Số dư khả dụng', formatCurrency(Number(walletSummary?.availableBalance ?? 0))],
-                ['Công nợ hiện tại', `-${formatCurrency(Number(walletSummary?.debt ?? 0))}`],
-                ['Hoàn dự kiến', formatCurrency(settlementPreview)],
-              ].map(([label, value]) => (
-                <Stack key={label} direction="row" justifyContent="space-between">
-                  <Typography variant="body2" color="text.secondary">{label}</Typography>
-                  <Typography variant="body2" fontWeight={800}>{value}</Typography>
-                </Stack>
-              ))}
+
+            <Stack direction="row" justifyContent="center" sx={{ mt: 1.5 }}>
+              <Button
+                variant="outlined"
+                color="error"
+                sx={{ borderRadius: 3, minWidth: 220 }}
+                disabled={deactivateLoading || loading}
+                onClick={() => setDeactivateOpen(true)}
+              >
+                Ngừng hoạt động
+              </Button>
             </Stack>
-            <Button
-              variant="outlined"
-              color="error"
-              sx={{ borderRadius: 3 }}
-              disabled={deactivateLoading || loading}
-              onClick={() => setDeactivateOpen(true)}
-            >
-              Ngừng hoạt động tài xế
-            </Button>
           </CardContent>
         </Card>
 
@@ -486,12 +482,10 @@ secondary={profile?.licensePlate ? `Biển số ${profile.licensePlate}` : 'Bổ
             <Typography variant="body2" color="text.secondary">
               Hệ thống sẽ tự động đối soát ví của bạn và hoàn trả phần còn lại về tài khoản cá nhân sau khi trừ công nợ.
             </Typography>
-            <Alert severity="info" sx={{ borderRadius: 2 }}>
-              Số tiền hoàn dự kiến: <strong>{formatCurrency(settlementPreview)}</strong>
-            </Alert>
+
             {isOnline && (
               <Alert severity="warning" sx={{ borderRadius: 2 }}>
-                Tài khoản đang trực tuyến. Hệ thống sẽ tự chuyển sang ngoại tuyến trước khi đối soát.
+                Tài khoản đang trực tuyến. Hệ thống sẽ tự chuyển sang ngoại tuyến.
               </Alert>
             )}
           </Stack>
@@ -499,7 +493,7 @@ secondary={profile?.licensePlate ? `Biển số ${profile.licensePlate}` : 'Bổ
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <Button onClick={() => setDeactivateOpen(false)} disabled={deactivateLoading}>Hủy</Button>
           <Button color="error" variant="contained" onClick={handleDeactivateDriver} disabled={deactivateLoading}>
-            {deactivateLoading ? <CircularProgress size={20} color="inherit" /> : 'Xác nhận ngừng hoạt động'}
+            {deactivateLoading ? <CircularProgress size={20} color="inherit" /> : 'Xác nhận'}
           </Button>
         </DialogActions>
       </Dialog>

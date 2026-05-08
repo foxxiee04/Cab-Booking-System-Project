@@ -34,83 +34,27 @@ import { closeMessenger } from '../../store/ui.slice';
 import { useRideChat, ChatMessage as RideChatMessage } from '../../hooks/useRideChat';
 import { CallState, useWebRTCCall } from '../../hooks/useWebRTCCall';
 import RideCall from '../RideCall';
-
-// ─── Pattern matching ──────────────────────────────────────────────────────
-const GREETING_RE = /^(hi+|hello+|hey+|xin chào|chào|alo|oi|ừ|ok|okay|bạn ơi|ơi|yo)\s*[!.]*$/i;
-const GREETING_RESPONSES = [
-  'Xin chào! Mình là trợ lý FoxGo, sẵn sàng hỗ trợ bạn 24/7. Bạn cần giúp gì ạ?',
-  'Chào bạn! Mình là bot hỗ trợ của FoxGo. Bạn có thắc mắc gì về đặt xe, thanh toán hay tài khoản không?',
-  'Xin chào! Rất vui được gặp bạn. Hãy cho mình biết mình có thể giúp gì cho bạn nhé?',
-];
-const THANKS_RE = /^(cảm ơn+|thanks+|thank you|ok cảm ơn|oke cảm ơn|cảm ơn bạn)\s*[!.]*$/i;
-const THANKS_RESPONSES = [
-  'Không có gì bạn ơi! Nếu cần hỗ trợ thêm, mình luôn ở đây nhé.',
-  'Vui lòng được giúp bạn! Chúc bạn có chuyến đi tuyệt vời.',
-  'Sẵn sàng hỗ trợ bất cứ lúc nào, bạn nhé!',
-];
-
-interface QuickPattern { re: RegExp; answer: string }
-const QUICK_PATTERNS: QuickPattern[] = [
-  {
-    re: /giá|cước|bảng giá|phí|bao nhiêu tiền/i,
-    answer: 'Giá cước FoxGo theo loại xe:\n• Xe máy: từ 10.000đ + 6.200đ/km\n• Xe ga: từ 16.000đ + 9.500đ/km\n• Ô tô 4 chỗ: từ 28.000đ + 18.000đ/km\n• Ô tô 7 chỗ: từ 40.000đ + 24.000đ/km\n\nGiá có thể cao hơn vào giờ cao điểm (surge). Giá chính xác hiển thị khi bạn đặt xe.',
-  },
-  {
-    re: /hủy|cancel|hủy chuyến|huỷ/i,
-    answer: 'Bạn có thể hủy chuyến trước khi tài xế đến đón.\n• Hủy trong 2 phút đầu: miễn phí\n• Hủy sau 2 phút hoặc tài xế đã đến: có thể mất phí hủy tùy trường hợp\n\nĐể hủy: vào màn hình chuyến đang chạy → nhấn "Hủy chuyến".',
-  },
-  {
-    re: /momo|vnpay|thanh toán|payment|trả tiền/i,
-    answer: 'FoxGo hỗ trợ các hình thức thanh toán:\n• Tiền mặt: trả trực tiếp cho tài xế\n• Ví MoMo: thanh toán online, tự động\n• VNPay: quét QR hoặc chuyển khoản ngân hàng\n\nChọn hình thức khi đặt xe. Thanh toán online được xử lý ngay sau khi hoàn thành chuyến.',
-  },
-  {
-    re: /voucher|mã giảm giá|khuyến mãi|promo|ưu đãi/i,
-    answer: 'Voucher giảm giá FoxGo:\n• Vào mục "Ưu đãi" để xem & thu thập voucher công khai\n• Khi đặt xe, bước xác nhận → nhập mã hoặc chọn voucher đã lưu\n• Mỗi voucher có điều kiện riêng (đơn tối thiểu, loại xe, thời hạn)\n\nVoucher tốt nhất sẽ được gợi ý tự động cho chuyến của bạn.',
-  },
-  {
-    re: /đặt xe|book|cách đặt|đặt như thế nào/i,
-    answer: 'Cách đặt xe FoxGo:\n1. Nhập điểm đón và điểm đến trên bản đồ\n2. Chọn loại xe phù hợp (xe máy, ô tô 4/7 chỗ)\n3. Chọn hình thức thanh toán\n4. Nhấn "Xác nhận và tìm tài xế"\n\nHệ thống sẽ ghép tài xế gần nhất cho bạn trong vài phút.',
-  },
-  {
-    re: /quên đồ|bỏ quên|để quên/i,
-    answer: 'Nếu bạn quên đồ trên xe:\n1. Vào mục "Lịch sử chuyến" → chọn chuyến đi đó\n2. Nhấn "Liên hệ tài xế" để nhắn tin/gọi điện\n3. Nếu không liên hệ được: email support@foxgo.vn hoặc hotline 1900-1234\n\nFoxGo không chịu trách nhiệm về đồ thất lạc, nhưng sẽ hỗ trợ kết nối bạn với tài xế.',
-  },
-  {
-    re: /đăng ký tài xế|lái xe|trở thành tài xế|partner/i,
-    answer: 'Đăng ký trở thành tài xế FoxGo:\n• Tải app FoxGo Driver và đăng ký tài khoản\n• Cần: CMND/CCCD, bằng lái xe, đăng ký xe, ảnh xe\n• Đặt cọc ký quỹ ban đầu (bảo đảm chất lượng dịch vụ)\n\nSau khi duyệt hồ sơ (~1–3 ngày), bạn có thể bắt đầu nhận cuốc.',
-  },
-  {
-    re: /liên hệ|hỗ trợ|hotline|support|contact/i,
-    answer: 'Liên hệ hỗ trợ FoxGo:\n• Hotline: 1900-1234 (8h–22h hàng ngày)\n• Email: support@foxgo.vn\n• Chat trong app (mục này)\n\nThời gian phản hồi email: trong vòng 24 giờ làm việc.',
-  },
-];
-
-const pickRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
-
-const findQuickAnswer = (text: string): string | null => {
-  const matched = QUICK_PATTERNS.find((p) => p.re.test(text));
-  return matched ? matched.answer : null;
-};
+import {
+  FOXGO_AI_CHAT_TOP_K,
+  FOXGO_AI_WELCOME_ASSISTANT,
+  FOXGO_QUICK_REPLIES,
+  miaOfflineFallbackReply,
+} from '../../config/foxgoAiUnified';
 
 type AIMessage = { role: 'user' | 'assistant'; content: string; sources?: string[]; isError?: boolean };
 
 const WELCOME: AIMessage = {
   role: 'assistant',
-  content: 'Xin chào! Mình là trợ lý hỗ trợ FoxGo 🦊\nBạn cần tư vấn gì ạ? Chọn nhanh bên dưới hoặc nhập câu hỏi:',
+  content: FOXGO_AI_WELCOME_ASSISTANT,
 };
 
-const QUICK_REPLIES = [
-  'Bảng giá xe máy',
-  'Cách đặt xe',
-  'Thanh toán MoMo/VNPay',
-  'Voucher giảm giá',
-  'Hủy chuyến mất phí không?',
-  'Đăng ký tài xế',
-  'Quên đồ trên xe',
-  'Liên hệ hỗ trợ',
-];
+function foxgoToChatHistory(messages: AIMessage[]): ChatMessage[] {
+  return messages
+    .filter((m) => !m.isError && m !== WELCOME)
+    .slice(-10)
+    .map((m) => ({ role: m.role, content: m.content }));
+}
 
-// ─── Bubble ────────────────────────────────────────────────────────────────
 const AIBubble: React.FC<{ msg: AIMessage }> = ({ msg }) => (
   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start', mb: 1 }}>
     <Paper
@@ -282,43 +226,41 @@ const AIChatWidget: React.FC = () => {
     if (!text || aiLoading) return;
     setAiInput('');
     const userMsg: AIMessage = { role: 'user', content: text };
-    setAiMessages((prev) => [...prev, userMsg]);
+    const conversation = [...aiMessages, userMsg];
+    setAiMessages(conversation);
     setAiLoading(true);
 
-    // Client-side shortcuts — instant responses, no API call
-    if (GREETING_RE.test(text)) {
-      setTimeout(() => {
-        setAiMessages((prev) => [...prev, { role: 'assistant', content: pickRandom(GREETING_RESPONSES) }]);
-        setAiLoading(false);
-      }, 280);
-      return;
-    }
-    if (THANKS_RE.test(text)) {
-      setTimeout(() => {
-        setAiMessages((prev) => [...prev, { role: 'assistant', content: pickRandom(THANKS_RESPONSES) }]);
-        setAiLoading(false);
-      }, 280);
-      return;
-    }
-    const quickAnswer = findQuickAnswer(text);
-    if (quickAnswer) {
-      setTimeout(() => {
-        setAiMessages((prev) => [...prev, { role: 'assistant', content: quickAnswer }]);
-        setAiLoading(false);
-      }, 400);
-      return;
-    }
-
     try {
-      // Exclude the static welcome message and error bubbles from history
-      const history: ChatMessage[] = aiMessages
-        .filter((m) => !m.isError && m !== WELCOME)
-        .slice(-10)
-        .map((m) => ({ role: m.role, content: m.content }));
-      const { data } = await aiApi.chat({ message: text, history, top_k: 5 });
-      setAiMessages((prev) => [...prev, { role: 'assistant', content: data.answer, sources: data.sources }]);
+      const history = foxgoToChatHistory(conversation);
+      const { data } = await aiApi.chat({ message: text, history, top_k: FOXGO_AI_CHAT_TOP_K });
+      const answer = (data.answer || '').trim();
+      if (answer) {
+        setAiMessages((prev) => [...prev, { role: 'assistant', content: data.answer, sources: data.sources }]);
+      } else {
+        const fb = miaOfflineFallbackReply(text);
+        setAiMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content:
+              fb ||
+              'Mình chưa nhận được câu trả lời từ máy chủ. Bạn thử lại sau vài giây nhé!',
+            isError: !fb,
+          },
+        ]);
+      }
     } catch {
-      setAiMessages((prev) => [...prev, { role: 'assistant', content: 'Xin lỗi, mình đang gặp sự cố kỹ thuật. Vui lòng thử lại sau ít phút nhé!', isError: true }]);
+      const fb = miaOfflineFallbackReply(text);
+      setAiMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content:
+            fb ||
+            'Xin lỗi, mình đang gặp sự cố kỹ thuật. Vui lòng thử lại sau ít phút nhé!',
+          isError: !fb,
+        },
+      ]);
     } finally {
       setAiLoading(false);
     }
@@ -327,28 +269,43 @@ const AIChatWidget: React.FC = () => {
   const handleQuickReply = useCallback((text: string) => {
     setAiInput('');
     const userMsg: AIMessage = { role: 'user', content: text };
-    setAiMessages((prev) => [...prev, userMsg]);
+    const conversation = [...aiMessages, userMsg];
+    setAiMessages(conversation);
     setAiLoading(true);
 
-    const quickAnswer = findQuickAnswer(text);
-    if (quickAnswer) {
-      setTimeout(() => {
-        setAiMessages((prev) => [...prev, { role: 'assistant', content: quickAnswer }]);
-        setAiLoading(false);
-      }, 400);
-      return;
-    }
-
-    const history: ChatMessage[] = aiMessages
-      .filter((m) => !m.isError && m !== WELCOME)
-      .slice(-10)
-      .map((m) => ({ role: m.role, content: m.content }));
-    aiApi.chat({ message: text, history, top_k: 5 })
+    const history = foxgoToChatHistory(conversation);
+    aiApi
+      .chat({ message: text, history, top_k: FOXGO_AI_CHAT_TOP_K })
       .then(({ data }) => {
-        setAiMessages((prev) => [...prev, { role: 'assistant', content: data.answer, sources: data.sources }]);
+        const answer = (data.answer || '').trim();
+        if (answer) {
+          setAiMessages((prev) => [...prev, { role: 'assistant', content: data.answer, sources: data.sources }]);
+        } else {
+          const fb = miaOfflineFallbackReply(text);
+          setAiMessages((prev) => [
+            ...prev,
+            {
+              role: 'assistant',
+              content:
+                fb ||
+                'Mình chưa nhận được câu trả lời từ máy chủ. Bạn thử lại sau vài giây nhé!',
+              isError: !fb,
+            },
+          ]);
+        }
       })
       .catch(() => {
-        setAiMessages((prev) => [...prev, { role: 'assistant', content: 'Xin lỗi, mình đang gặp sự cố kỹ thuật. Vui lòng thử lại sau ít phút nhé!', isError: true }]);
+        const fb = miaOfflineFallbackReply(text);
+        setAiMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content:
+              fb ||
+              'Xin lỗi, mình đang gặp sự cố kỹ thuật. Vui lòng thử lại sau ít phút nhé!',
+            isError: !fb,
+          },
+        ]);
       })
       .finally(() => setAiLoading(false));
   }, [aiMessages]);
@@ -427,28 +384,6 @@ const AIChatWidget: React.FC = () => {
       </Box>
       <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, py: 1.25, bgcolor: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
         {aiMessages.map((msg, i) => <AIBubble key={i} msg={msg} />)}
-        {/* Quick reply chips — show after welcome and after each AI response */}
-        {aiMessages[aiMessages.length - 1]?.role === 'assistant' && !aiLoading && (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, pl: 0.25, pt: 0.5 }}>
-            {QUICK_REPLIES.map((q) => (
-              <Chip
-                key={q}
-                label={q}
-                size="small"
-                onClick={() => handleQuickReply(q)}
-                sx={{
-                  fontSize: '0.72rem',
-                  height: 26,
-                  bgcolor: '#e8f0fe',
-                  color: '#1d4ed8',
-                  border: '1px solid #c7d7fb',
-                  cursor: 'pointer',
-                  '&:hover': { bgcolor: '#dbeafe' },
-                }}
-              />
-            ))}
-          </Box>
-        )}
         {aiLoading && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, pl: 0.5 }}>
             <CircularProgress size={14} thickness={4} />
@@ -457,7 +392,34 @@ const AIChatWidget: React.FC = () => {
         )}
         <div ref={aiEndRef} />
       </Box>
-      <Box sx={{ px: 1.5, py: 1, borderTop: '1px solid', borderColor: 'divider', bgcolor: '#fff' }}>
+      <Box sx={{ flexShrink: 0, borderTop: '1px solid', borderColor: 'divider', bgcolor: '#fff' }}>
+        {!aiLoading && (
+          <Box sx={{ px: 1.5, py: 0.85, bgcolor: '#f8fafc', borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontSize: '0.68rem' }}>
+              Gợi ý nhanh
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+              {FOXGO_QUICK_REPLIES.map((q) => (
+                <Chip
+                  key={q}
+                  label={q}
+                  size="small"
+                  onClick={() => handleQuickReply(q)}
+                  sx={{
+                    fontSize: '0.72rem',
+                    height: 26,
+                    bgcolor: '#e8f0fe',
+                    color: '#1d4ed8',
+                    border: '1px solid #c7d7fb',
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: '#dbeafe' },
+                  }}
+                />
+              ))}
+            </Box>
+          </Box>
+        )}
+        <Box sx={{ px: 1.5, py: 1 }}>
         <TextField
           fullWidth size="small" multiline maxRows={3}
           placeholder="Nhập tin nhắn..." value={aiInput}
@@ -476,6 +438,7 @@ const AIChatWidget: React.FC = () => {
             ),
           }}
         />
+        </Box>
       </Box>
     </>
   );

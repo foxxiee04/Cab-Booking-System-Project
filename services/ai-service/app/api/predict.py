@@ -1,13 +1,15 @@
 """Prediction API endpoints"""
 
+import asyncio
 import time
 from typing import List
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel, Field
 from app.schemas.prediction import (
     PredictionRequest,
     PredictionResponse,
     HealthResponse,
+    RagHealthInfo,
 )
 from app.schemas.accept_prediction import (
     AcceptPredictionBatchRequest,
@@ -23,7 +25,15 @@ from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.prediction_service import prediction_service
 from app.services.accept_service import accept_service
 from app.services.wait_service import wait_service
-from app.services.rag_service import rag_service
+from app.services.rag_service import (
+    rag_service,
+    LLM_PROVIDER,
+    ANTHROPIC_API_KEY,
+    OPENAI_API_KEY,
+    GROQ_API_KEY,
+    GEMINI_API_KEY,
+)
+from app.services.ml_retrain import run_training_scripts_and_reload_models
 from app.core.config import settings
 
 router = APIRouter(prefix="/api", tags=["predictions"])
@@ -35,12 +45,24 @@ async def health_check():
     Health check endpoint
     
     Returns:
-        HealthResponse with service status
+        HealthResponse with service status and RAG/LLM diagnostics (keys reported as configured/non-empty only).
     """
+    snap = rag_service.get_health_snapshot()
     return HealthResponse(
         status="healthy",
         service="ai-service",
-        version=settings.APP_VERSION
+        version=settings.APP_VERSION,
+        rag=RagHealthInfo(
+            ready=bool(snap["ready"]),
+            chunks=int(snap["chunks"]),
+            vector_index=bool(snap["vector_index"]),
+            init_error=snap["init_error"],
+            llm_provider=LLM_PROVIDER,
+            anthropic_key_configured=bool(ANTHROPIC_API_KEY),
+            openai_key_configured=bool(OPENAI_API_KEY),
+            groq_key_configured=bool(GROQ_API_KEY),
+            gemini_key_configured=bool(GEMINI_API_KEY),
+        ),
     )
 
 
@@ -143,6 +165,40 @@ async def get_stats():
         "accept_model_path": settings.ACCEPT_MODEL_PATH,
         "wait_model_path": settings.WAIT_MODEL_PATH,
     }
+
+
+class InternalRefreshBody(BaseModel):
+    """Manual trigger for ops (protected by AI_INTERNAL_TOKEN)."""
+
+    rag: bool = True
+    ml: bool = False
+
+
+def _require_internal_token(authorization: str | None) -> None:
+    token = (settings.AI_INTERNAL_TOKEN or "").strip()
+    if not token:
+        raise HTTPException(status_code=404, detail="Not Found")
+    if (authorization or "").strip() != f"Bearer {token}":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
+@router.post("/internal/refresh")
+async def internal_ai_refresh(
+    body: InternalRefreshBody,
+    authorization: str | None = Header(None),
+):
+    """
+    Reload RAG index from disk and/or re-run training/*.py then hot-reload joblibs.
+
+    Requires `Authorization: Bearer <AI_INTERNAL_TOKEN>` and non-empty `AI_INTERNAL_TOKEN`.
+    """
+    _require_internal_token(authorization)
+    out: dict = {}
+    if body.rag:
+        out["rag"] = rag_service.reload_knowledge_from_disk()
+    if body.ml:
+        out["ml"] = await asyncio.to_thread(run_training_scripts_and_reload_models)
+    return out
 
 
 @router.post("/chat", response_model=ChatResponse, tags=["rag"])

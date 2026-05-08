@@ -3,7 +3,7 @@ import { driverApi } from '../api/driver.api';
 import { store } from '../store';
 import { logout } from '../store/auth.slice';
 import { setProfile, updateProfile } from '../store/driver.slice';
-import { setPendingRide, clearPendingRide, updateRideStatus } from '../store/ride.slice';
+import { setPendingRide, clearPendingRide, updateRideStatus, revokeRideFromFeed } from '../store/ride.slice';
 import { showNotification } from '../store/ui.slice';
 import { Ride, VehicleType } from '../types';
 import { refreshAuthSession } from '../api/axios.config';
@@ -125,6 +125,20 @@ class DriverSocketService {
       }
     });
 
+    // Ride taken by another driver / no longer offered — keep UI in sync without waiting for poll
+    this.socket.on('ride:taken_elsewhere', (data: { rideId: string; reason?: string }) => {
+      if (!data?.rideId) {
+        return;
+      }
+      store.dispatch(revokeRideFromFeed(data.rideId));
+      store.dispatch(
+        showNotification({
+          type: 'info',
+          message: data.reason === 'CANCELLED' ? 'Cuốc này đã bị hủy hoặc đóng.' : 'Cuốc đã được tài xế khác nhận.',
+        }),
+      );
+    });
+
     // Listen for new ride requests - match backend event name
     this.socket.on('NEW_RIDE_AVAILABLE', (data: { rideId: string; customerId: string; pickup: any; dropoff: any; estimatedFare?: number; vehicleType?: string; distance?: number; duration?: number; distanceFromDriverMeters?: number; durationFromDriverSeconds?: number; etaMinutes?: number; timeoutSeconds?: number; customer?: any }) => {
       console.log('🚗 New ride available:', data);
@@ -191,7 +205,8 @@ class DriverSocketService {
     // Ride timeout (driver didn't accept in time)
     this.socket.on('ride:timeout', (data: { rideId: string }) => {
       console.log('⏱️ Ride request timeout:', data.rideId);
-      
+
+      store.dispatch(revokeRideFromFeed(data.rideId));
       store.dispatch(clearPendingRide());
       
       store.dispatch(
@@ -205,17 +220,14 @@ class DriverSocketService {
     // Ride cancelled by customer
     this.socket.on('ride:cancelled', (data: { rideId: string; reason: string }) => {
       console.log('❌ Ride cancelled:', data);
-      
-      const state = store.getState();
-      
-      // Clear pending or current ride
-      if (state.ride.pendingRide?.id === data.rideId) {
-        store.dispatch(clearPendingRide());
-      }
-      if (state.ride.currentRide?.id === data.rideId) {
+
+      store.dispatch(revokeRideFromFeed(data.rideId));
+
+      const s = store.getState().ride;
+      if (s.currentRide?.id === data.rideId) {
         store.dispatch(updateRideStatus('CANCELLED'));
       }
-      
+
       store.dispatch(
         showNotification({
           type: 'error',
@@ -227,7 +239,8 @@ class DriverSocketService {
     // Ride reassigned to another driver
     this.socket.on('ride:reassigned', (data: { rideId: string }) => {
       console.log('🔄 Ride reassigned:', data.rideId);
-      
+
+      store.dispatch(revokeRideFromFeed(data.rideId));
       store.dispatch(clearPendingRide());
       
       store.dispatch(

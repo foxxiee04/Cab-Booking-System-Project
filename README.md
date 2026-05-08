@@ -9,18 +9,8 @@
 
 Hệ thống đặt xe công nghệ xây dựng theo kiến trúc **microservices**, phục vụ ba nhóm người dùng: khách hàng, tài xế và quản trị viên. Hệ thống gồm ba ứng dụng React SPA, mười một service Node.js/TypeScript (một **API Gateway** + mười dịch vụ nghiệp vụ), một **AI service** FastAPI/Python, hạ tầng dữ liệu đa mô hình (PostgreSQL, MongoDB, Redis, RabbitMQ) và pipeline CI/CD trên GitHub Actions triển khai lên AWS EC2.
 
-**Domain công khai (mẫu trong repo, HTTP server block — chỉnh theo môi trường thật):**
 
-| Thành phần | Host mẫu (`deploy/nginx/nginx-apps.conf`) |
-|------------|---------------------------------------------|
-| Website khách | `https://foxgo.io.vn` |
-| App tài xế | `https://driver.foxgo.io.vn` |
-| Admin | `https://admin.foxgo.io.vn` |
-| API + WebSocket | `https://api.foxgo.io.vn` |
-
-Frontend build và Secret GitHub cần **`REACT_APP_API_URL` / `REACT_APP_SOCKET_URL` trùng origin API công khai** (ví dụ `https://api.foxgo.io.vn`). Collection Postman deploy mặc định **`foxgo_gateway_url=https://api.foxgo.io.vn`** — đổi nếu bạn dùng miền khác.
-
-> **Mục lục tài liệu Markdown:** [docs/README.md](docs/README.md) — **Báo cáo KLTN:** [docs/bao-cao-kltn.md](docs/bao-cao-kltn.md)
+> **Mục lục tài liệu Markdown:** [docs/README.md](docs/README.md) 
 
 ---
 
@@ -761,8 +751,6 @@ flowchart LR
 
 ## 10. Triển khai trên AWS
 
-**Domain / HTTPS:** bảng host mẫu **`foxgo.io.vn`** nằm ở **đầu README**; cấu hình `server_name` và proxy API `:3000` tham chiếu [`deploy/nginx/nginx-apps.conf`](deploy/nginx/nginx-apps.conf). **Postman deploy** mặc định `https://api.foxgo.io.vn` ([`postman/FoxGo-API-Deploy.postman_collection.json`](postman/FoxGo-API-Deploy.postman_collection.json)) — phải khớp URL bạn cấu hình thật (`REACT_APP_API_URL`, `REACT_APP_SOCKET_URL` trong GitHub Secrets).
-
 ### 10.1 Kiến trúc minh họa (Nginx trên host + Docker Swarm)
 
 ```
@@ -876,17 +864,6 @@ Xem chi tiết: [`monitoring/README.md`](monitoring/README.md)
 
 ## 13. Bộ sơ đồ và tài liệu hình (PNG / Mermaid)
 
-**Trong repo không có** thư mục `img_hethong/` hay script `export-system-diagrams.cjs` — sơ đồ xuất ra PNG tập trung ở **`img/`** (đặt tên `{loại}_{chức_năng}_….png`, xem **Danh mục hình** trong [`docs/bao-cao-kltn.md`](docs/bao-cao-kltn.md)).
-
-| Nguồn | Lệnh / file | Đích |
-|-------|----------------|------|
-| Mermaid “gốc” phục vụ slides / README | `python scripts/generate_diagrams.py` | `img/*.png` (stem `.mmd` trong `docs/diagrams/mermaid/`) |
-| Khối Mermaid **nhúng trong** `docs/bao-cao-kltn.md` | `node scripts/export-bao-cao-mermaid.mjs` | `img/*.png` + mapping [`docs/diagrams/mermaid/report-mermaid-png-mapping.json`](docs/diagrams/mermaid/report-mermaid-png-mapping.json) |
-| AI (train / RAG) | `docs/diagrams/mermaid/source/ai_*.mmd` → `npx @mermaid-js/mermaid-cli …` | `img/ai_ml_sklearn_train_infer_pipeline.png`, `img/ai_agent_rag_retrieval.png` |
-| Đổi tên taxonomy hàng loạt | `node scripts/apply-img-taxonomy.mjs` | Đồng bộ `img/` + tham chiếu trong docs |
-
-- Đối chiếu mọi `../img/…` trong báo cáo với file thật: `npm run docs:verify-bao-cao-img`
-- Gói nộp Markdown + ảnh: `npm run docs:bao-cao-bundle` → `docs/bao-cao-bundle/`
 - Quy ước vẽ / đặt tên: [`docs/diagrams/DIAGRAM_GUIDE.md`](docs/diagrams/DIAGRAM_GUIDE.md)
 
 ---

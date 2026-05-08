@@ -56,6 +56,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
+    "test:e2e:tri-app": "playwright test tests/playwright/specs/tri-app-ride-flow.spec.ts --workers=1",
     "test:e2e:install": "playwright install chromium",
     "test:e2e:report": "playwright show-report playwright-report",
     "docs:bao-cao-bundle": "node scripts/publish-bao-cao-docs-bundle.mjs",

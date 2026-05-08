@@ -21,6 +21,7 @@ import { paymentApi } from '../api/payment.api';
 import { rideApi } from '../api/ride.api';
 import voucherApi, { ApplyVoucherResult } from '../api/voucher.api';
 import { QRCodePayment } from '../components/payment/QRCodePayment';
+import { allowPaymentInternalFallback } from '../config/payment-flags';
 
 export type PaymentMethod = 'CASH' | 'MOMO' | 'VNPAY';
 
@@ -223,9 +224,16 @@ const OnlinePaymentPage: React.FC = () => {
             setDeeplink('');
             setQrCodeUrl('');
             setError('Giao dịch này đã được thanh toán trước đó. Vui lòng kiểm tra trạng thái chuyến đi.');
-          } else {
+          } else if (allowPaymentInternalFallback) {
             applySandboxFallback('MOMO');
             setError('sandbox: Đang dùng cổng thử nghiệm MoMo nội bộ.');
+          } else {
+            setPaymentUrl('');
+            setDeeplink('');
+            setQrCodeUrl('');
+            setError(
+              'Không nhận được link thanh toán MoMo từ server. Bật MOMO_ENABLED và cấu hình khóa sandbox trong payment-service, hoặc bật lại REACT_APP_PAYMENT_INTERNAL_FALLBACK.',
+            );
           }
         } else if (selectedMethod === 'VNPAY') {
           const response = await withTimeout(
@@ -250,14 +258,30 @@ const OnlinePaymentPage: React.FC = () => {
             setDeeplink('');
             setQrCodeUrl('');
             setError('Giao dịch này đã được thanh toán trước đó. Vui lòng kiểm tra trạng thái chuyến đi.');
-          } else {
+          } else if (allowPaymentInternalFallback) {
             applySandboxFallback('VNPAY');
             setError('sandbox: Đang dùng cổng thử nghiệm VNPay nội bộ.');
+          } else {
+            setPaymentUrl('');
+            setDeeplink('');
+            setQrCodeUrl('');
+            setError(
+              'Không nhận được link thanh toán VNPay từ server. Bật VNPAY_ENABLED và cấu hình TMN/hash sandbox trong payment-service, hoặc bật lại REACT_APP_PAYMENT_INTERNAL_FALLBACK.',
+            );
           }
         }
       } catch (err: any) {
-        applySandboxFallback(selectedMethod as 'MOMO' | 'VNPAY');
-        setError('sandbox: Đang dùng cổng thử nghiệm nội bộ.');
+        if (allowPaymentInternalFallback) {
+          applySandboxFallback(selectedMethod as 'MOMO' | 'VNPAY');
+          setError('sandbox: Đang dùng cổng thử nghiệm nội bộ.');
+        } else {
+          setPaymentUrl('');
+          setDeeplink('');
+          setQrCodeUrl('');
+          setError(
+            `Lỗi kết nối cổng ${selectedMethod === 'MOMO' ? 'MoMo' : 'VNPay'}: ${err?.message || 'Không xác định'}. Kiểm tra payment-service và mạng.`,
+          );
+        }
         console.error('Payment creation error:', err);
       } finally {
         setProcessing(false);

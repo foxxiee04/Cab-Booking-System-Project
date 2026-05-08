@@ -33,8 +33,8 @@ interface DispatchRoundPlan {
 
 const DISPATCH_ROUND_PLANS: DispatchRoundPlan[] = [
   { radiusKm: 2, offerCount: 1, surgeMultiplierHint: 1.0 },
-  { radiusKm: 3, offerCount: 3, surgeMultiplierHint: 1.1 },
-  { radiusKm: 5, offerCount: 5, surgeMultiplierHint: 1.2 },
+  { radiusKm: 4, offerCount: 1, surgeMultiplierHint: 1.1 },
+  { radiusKm: 6, offerCount: 1, surgeMultiplierHint: 1.2 },
 ];
 
 function parseRoundPlans(raw: string): DispatchRoundPlan[] {
@@ -358,6 +358,44 @@ export class EventConsumer {
     this.redis = new Redis(config.redisUrl);
   }
 
+  /** Redis set of driver userIds who received an offer — used to push realtime “ride closed” to losers. */
+  private offerRecipientsRedisKey(rideId: string): string {
+    return `ride:offered:users:${rideId}`;
+  }
+
+  private async trackOfferRecipient(rideId: string, userId: string): Promise<void> {
+    try {
+      const key = this.offerRecipientsRedisKey(rideId);
+      await this.redis.sadd(key, userId);
+      await this.redis.expire(key, 3600);
+    } catch {
+      /* non-fatal */
+    }
+  }
+
+  /**
+   * Notify everyone who was offered the ride except the winning driver's user (if any), then clear the set.
+   */
+  private async fanOutRideClosedToOfferedDrivers(
+    rideId: string,
+    winningUserId: string | null,
+    payload: { reason: string; cancelledBy?: string },
+  ): Promise<void> {
+    try {
+      const key = this.offerRecipientsRedisKey(rideId);
+      const userIds = await this.redis.smembers(key);
+      for (const uid of userIds) {
+        if (winningUserId && uid === winningUserId) {
+          continue;
+        }
+        this.socketServer.emitToDriver(uid, 'ride:taken_elsewhere', { rideId, ...payload });
+      }
+      await this.redis.del(key);
+    } catch {
+      /* ignore */
+    }
+  }
+
   async connect(): Promise<void> {
     try {
       const rabbitmqUrl = process.env.RABBITMQ_URL || 'amqp://localhost:5672';
@@ -572,7 +610,7 @@ export class EventConsumer {
         return;
       }
 
-      const offeredDrivers = result.ranked.slice(0, roundPlan.offerCount);
+      const offeredDrivers = result.dispatchList;
       const canonicalFare = Math.round(payload.fare ?? payload.estimatedFare ?? 0);
       const customer = await this.resolveRealtimeCustomerProfile(payload.customerId);
 
@@ -603,6 +641,7 @@ export class EventConsumer {
           driverScore: candidate.score.toFixed(3),
           driverPriority: ((candidate.driverPriority ?? 0) * 100).toFixed(0),
         });
+        void this.trackOfferRecipient(payload.rideId, candidate.userId);
       }
 
       logger.info(
@@ -1062,6 +1101,8 @@ export class EventConsumer {
       timeoutSeconds: payload.ttlSeconds ?? DEFAULT_OFFER_TIMEOUT_SECONDS,
       expiresAt: payload.expiresAt,
     });
+
+    void this.trackOfferRecipient(payload.rideId, driverUserId);
   }
 
   private async handleRideAssigned(payload: RideEventPayload): Promise<void> {
@@ -1107,6 +1148,11 @@ export class EventConsumer {
         this.socketServer.emitToDriver(driverUserId, 'ride:timeout', {
           rideId: payload.rideId,
         });
+        try {
+          await this.redis.srem(this.offerRecipientsRedisKey(payload.rideId), driverUserId);
+        } catch {
+          /* ignore */
+        }
       }
       // Count timeout as a declined offer for scoring purposes
       this.redis.hincrby(driverStatsKey(payload.timedOutDriverId), 'totalDeclined', 1).catch(() => {});
@@ -1152,6 +1198,10 @@ export class EventConsumer {
         status: 'ACCEPTED',
       });
     }
+
+    void this.fanOutRideClosedToOfferedDrivers(payload.rideId, driverUserId ?? null, {
+      reason: 'ACCEPTED_BY_OTHER',
+    });
 
     // Track acceptance for scoring
     if (payload.driverId) {
@@ -1264,6 +1314,11 @@ export class EventConsumer {
 
     // Notify customer
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
+
+    void this.fanOutRideClosedToOfferedDrivers(payload.rideId, null, {
+      reason: 'CANCELLED',
+      cancelledBy: payload.cancelledBy,
+    });
 
     const driverUserId = await this.resolveDriverUserId(payload.driverId);
     if (driverUserId) {

@@ -164,7 +164,7 @@ const MobileAppShell: React.FC<MobileAppShellProps> = ({ children }) => {
         <Toolbar sx={{ minHeight: 76, width: shellMaxWidth, mx: 'auto', px: { xs: 2, sm: 2.5 } }}>
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '0.12em' }}>
-              FoxGo Khách hàng
+              FoxGo
             </Typography>
             <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.15 }}>
               {t(currentView.labelKey, currentView.fallback)}

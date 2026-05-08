@@ -107,7 +107,7 @@ describe('PricingService - Simple Test Suite', () => {
       });
 
       expect(result.fare).toBeGreaterThan(0);
-      expect(result.distance).toBe(5.5);
+      expect(result.distance).toBeCloseTo(5.23, 2);
       expect(result.surgeMultiplier).toBe(1.0);
       expect(result.breakdown).toBeDefined();
       expect(result.aiPrediction).toBeNull();
@@ -180,8 +180,8 @@ describe('PricingService - Simple Test Suite', () => {
         vehicleType: 'ECONOMY',
       });
 
-      expect(result.distance).toBe(8.2);
-      expect(result.duration).toBe(900);
+      expect(result.distance).toBeCloseTo(7.79, 2);
+      expect(result.duration).toBe(780);
       expect(calculateDistance).not.toHaveBeenCalled();
       expect(estimateDuration).not.toHaveBeenCalled();
     });
@@ -198,7 +198,7 @@ describe('PricingService - Simple Test Suite', () => {
         vehicleType: 'ECONOMY',
       });
 
-      expect(result.distance).toBe(5.5);
+      expect(result.distance).toBeCloseTo(5.23, 2);
       expect(calculateDistance).toHaveBeenCalled();
       expect(estimateDuration).toHaveBeenCalledWith(5.5);
     });
@@ -222,7 +222,7 @@ describe('PricingService - Simple Test Suite', () => {
 
       expect(result.aiPrediction).toBeNull();
       expect(result.surgeMultiplier).toBe(1.2);
-      expect(result.durationMinutes).toBe(17);
+      expect(result.durationMinutes).toBe(14);
       expect(result.operationalHints.predictionSource).toBe('RULE_ENGINE');
     });
 

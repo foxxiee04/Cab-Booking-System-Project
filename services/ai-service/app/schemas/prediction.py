@@ -1,6 +1,7 @@
 """Prediction request/response schemas"""
 
 from enum import Enum
+from typing import Optional
 from pydantic import BaseModel, Field
 
 
@@ -191,9 +192,24 @@ class PredictionResponse(BaseModel):
     }
 
 
+class RagHealthInfo(BaseModel):
+    """RAG / LLM configuration snapshot (no secret values)."""
+
+    ready: bool = Field(description="RAG embedder and index finished initializing")
+    chunks: int = Field(description="Knowledge chunks loaded into the index")
+    vector_index: bool = Field(description="Hybrid vector index is available")
+    init_error: Optional[str] = Field(default=None, description="Last RAG init error when not ready")
+    llm_provider: str = Field(description="RAG_LLM_PROVIDER (auto, claude, groq, gemini, openai, …)")
+    anthropic_key_configured: bool = Field(default=False, description="ANTHROPIC_API_KEY is non-empty")
+    openai_key_configured: bool = Field(default=False, description="OPENAI_API_KEY is non-empty")
+    groq_key_configured: bool = Field(default=False, description="GROQ_API_KEY is non-empty")
+    gemini_key_configured: bool = Field(default=False, description="GEMINI_API_KEY is non-empty")
+
+
 class HealthResponse(BaseModel):
     """Health check response"""
     
     status: str = Field(default="healthy", description="Service status")
     service: str = Field(default="ai-service", description="Service name")
     version: str = Field(..., description="Service version")
+    rag: RagHealthInfo = Field(description="RAG readiness and LLM key presence flags")

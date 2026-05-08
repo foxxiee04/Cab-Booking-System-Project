@@ -62,3 +62,6 @@ services:
       dockerfile: Dockerfile
     ports:
       - '18000:8000'
+    environment:
+      AI_AUTO_RELOAD_RAG_SEC: "0"
+      AI_AUTO_RETRAIN_ENABLED: "false"
