@@ -159,8 +159,27 @@ restart_svc pricing-service
 restart_svc api-gateway
 
 echo ""
-echo "  Đợi 20s để các service và wallet bootstrap..."
-sleep 20
+echo "  Chờ rolling update + Prisma db push trên các worker..."
+echo "  (payment-service có thể dùng start-first → traffic tạm tới replica cũ sau DROP DB → 500 tới schema sẵn sàng)"
+BOOTSTRAP_SETTLE_SECS="${BOOTSTRAP_SETTLE_SECS:-180}"
+BOOTSTRAP_SETTLE_INTERVAL="${BOOTSTRAP_SETTLE_INTERVAL:-3}"
+elapsed=0
+voucher_route_ok=0
+while [[ "$elapsed" -lt "$BOOTSTRAP_SETTLE_SECS" ]]; do
+  # Public route chạy findMany vouchers — bàn vouchers phải tồn tại (khác với /health chỉ báo gateway sống)
+  resp="$(curl -sf "http://127.0.0.1:3000/api/voucher/public" 2>/dev/null || true)"
+  case "$resp" in
+    *'"success":true'*|*'"success": true'*) voucher_route_ok=1; break ;;
+  esac
+  sleep "$BOOTSTRAP_SETTLE_INTERVAL"
+  elapsed=$((elapsed + BOOTSTRAP_SETTLE_INTERVAL))
+done
+
+if [[ "$voucher_route_ok" -eq 1 ]]; then
+  echo "  ✓ GET /api/voucher/public đã OK sau ~${elapsed}s (gateway → payment có schema vouchers)"
+else
+  echo "  ⚠ Trong ${BOOTSTRAP_SETTLE_SECS}s chưa thấy /api/voucher/public success — tiếp tục seed; có thể tăng BOOTSTRAP_SETTLE_SECS hoặc chạy lại seed"
+fi
 
 echo ""
 echo "[5/5] Prisma generate (auth-service, trên Manager) + seed qua Gateway..."

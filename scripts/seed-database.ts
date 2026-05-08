@@ -362,16 +362,42 @@ async function seedVouchers(adminToken: string) {
 
   for (const v of VOUCHER_SEEDS) {
     try {
-      await http('/api/voucher/admin', {
-        method: 'POST',
-        token: adminToken,
-        body: {
-          ...v,
-          startTime: past30.toISOString(),
-          endTime: future30.toISOString(),
-        },
-      });
-      console.log(`    + voucher ${v.code}`);
+      // Swarm: payment-service deploy start-first có thể gửi request tới replica cũ (trước db push) → 5xx ngắn
+      const maxAttempts = 15;
+      let lastErr: any;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          await http('/api/voucher/admin', {
+            method: 'POST',
+            token: adminToken,
+            body: {
+              ...v,
+              startTime: past30.toISOString(),
+              endTime: future30.toISOString(),
+            },
+          });
+          console.log(`    + voucher ${v.code}`);
+          lastErr = undefined;
+          break;
+        } catch (err: any) {
+          lastErr = err;
+          const transient =
+            err?.status === 502
+            || err?.status === 503
+            || err?.status === 504
+            || err?.status === 500;
+          if (transient && attempt < maxAttempts) {
+            const waitMs = Math.min(8000, 2000 + attempt * 500);
+            console.log(
+              `    ! voucher ${v.code} HTTP ${err?.status} (lần ${attempt}/${maxAttempts}); chờ rollout payment ${waitMs}ms...`,
+            );
+            await sleep(waitMs);
+            continue;
+          }
+          throw err;
+        }
+      }
+      if (lastErr) throw lastErr;
     } catch (err: any) {
       // Voucher may already exist if seed ran before; skip duplicate
       if (err?.status === 409 || err?.payload?.error?.message?.includes('đã')) {
