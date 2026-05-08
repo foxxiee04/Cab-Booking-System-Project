@@ -33,7 +33,7 @@ import { authApi } from '../api/auth.api';
 import { driverApi } from '../api/driver.api';
 import { updateUser } from '../store/auth.slice';
 import { setOnlineStatus, setProfile } from '../store/driver.slice';
-import { walletApi, WalletBalance } from '../api/wallet.api';
+import { walletApi } from '../api/wallet.api';
 import { formatCurrency, getVehicleTypeLabel } from '../utils/format.utils';
 
 const APPROVAL_META: Record<string, { label: string; color: 'success' | 'warning' | 'error' | 'default' }> = {
@@ -56,7 +56,6 @@ const Account: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [passwordEditing, setPasswordEditing] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
-  const [walletSummary, setWalletSummary] = useState<WalletBalance | null>(null);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [deactivateLoading, setDeactivateLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -76,16 +75,14 @@ const Account: React.FC = () => {
     setError('');
 
     try {
-      const [meResult, profileResult, walletResult] = await Promise.all([
+      const [meResult, profileResult] = await Promise.all([
         authApi.getMe(),
         driverApi.getProfile(),
-        walletApi.getBalance(),
       ]);
       if (meResult.success) {
         dispatch(updateUser(meResult.data.user));
       }
       dispatch(setProfile(profileResult.data.driver));
-      setWalletSummary(walletResult.data?.data ?? (walletResult.data as any));
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Không thể tải thông tin tài khoản.');
     } finally {
@@ -118,12 +115,6 @@ const Account: React.FC = () => {
   const vehicleSummary = [profile?.vehicleModel]
     .filter(Boolean)
     .join(' ');
-  const settlementPreview = Math.max(
-    0,
-    Number(walletSummary?.lockedBalance ?? 0)
-      + Number(walletSummary?.availableBalance ?? 0)
-      - Number(walletSummary?.debt ?? 0),
-  );
 
   const handleChange = (field: keyof typeof formData) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({ ...prev, [field]: event.target.value }));

@@ -862,7 +862,6 @@ Xem chi tiết: [`monitoring/README.md`](monitoring/README.md)
 
 ---
 
-
 ## 13. Bộ sơ đồ và tài liệu hình (PNG / Mermaid)
 
 - Quy ước vẽ / đặt tên: [`docs/diagrams/DIAGRAM_GUIDE.md`](docs/diagrams/DIAGRAM_GUIDE.md)

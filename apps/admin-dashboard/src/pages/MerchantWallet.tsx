@@ -35,7 +35,6 @@ import {
   TableRow,
   Tooltip,
   Typography,
-  Alert,
   Divider,
 } from '@mui/material';
 import {
@@ -43,8 +42,6 @@ import {
   ArrowUpward,
   ArrowDownward,
   Refresh,
-  CheckCircle,
-  Warning,
   ContentCopy,
   AccountBalanceWallet,
   SwapHoriz,

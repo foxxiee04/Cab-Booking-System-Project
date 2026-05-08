@@ -27,7 +27,7 @@ export const THANKS_RESPONSES = [
 /** First match wins — đặt mẫu cụ thể trước mẫu chung. */
 export const FOXGO_QUICK_PATTERNS: FoxgoQuickPattern[] = [
   {
-    re: /^(bạn\s+là\s+ai|ban\s+la\s+ai|mia\s+là\s+ai|who\s+are\s+you|what\s+are\s+you|you\s+are\s+\?)\s*[\?!\.]*$/i,
+    re: /^(bạn\s+là\s+ai|ban\s+la\s+ai|mia\s+là\s+ai|who\s+are\s+you|what\s+are\s+you|you\s+are\s+\?)\s*[?!.]*$/i,
     answer:
       'Mình là **Mia** — trợ lý chat của FoxGo trong app (không phải người thật). Mình trả lời theo kho tri thức FoxGo; câu hỏi mơ hồ mình có thể hỏi lại để hiểu đúng ý bạn.',
   },
