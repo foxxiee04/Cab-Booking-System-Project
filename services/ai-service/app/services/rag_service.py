@@ -334,7 +334,7 @@ def _build_chunks(docs: List[Tuple[str, str, str]]) -> List[Chunk]:
         for seg in _split_qa_pairs(content):
             lines = [
                 l for l in seg.split("\n")
-                if l.strip() and not l.startswith(("TIÊU ĐỀ:", "DANH MỤC:"))
+                if l.strip() and not l.startswith(("TIÊU ĐỀ:", "DANH MỤC:", "---"))
             ]
             clean = "\n".join(lines).strip()
             if clean:
@@ -767,13 +767,19 @@ async def _call_llm_gemini(messages: List[dict]) -> Optional[str]:
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{LLM_MODEL_GEMINI}:generateContent"
         )
+        gen_config: dict = {
+            "maxOutputTokens": LLM_MAX_TOKENS,
+            "temperature": LLM_TEMPERATURE,
+        }
+        # Disable thinking for Gemini 2.5 models — RAG context already does the reasoning;
+        # thinking adds 15-40s latency with no benefit for retrieval-grounded QA.
+        if "2.5" in LLM_MODEL_GEMINI:
+            gen_config["thinkingConfig"] = {"thinkingBudget": 0}
+
         payload = {
             "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
             "contents": contents,
-            "generationConfig": {
-                "maxOutputTokens": LLM_MAX_TOKENS,
-                "temperature": LLM_TEMPERATURE,
-            },
+            "generationConfig": gen_config,
             "safetySettings": [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
                 {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
@@ -840,10 +846,17 @@ def _template_answer(query: str, retrieved: List[Tuple[float, Chunk]]) -> str:
         )
 
     def clean(text: str) -> str:
-        lines = [
-            l.strip() for l in text.split("\n")
-            if l.strip() and not l.startswith(("TIÊU ĐỀ:", "DANH MỤC:", "---"))
-        ]
+        lines = []
+        for l in text.split("\n"):
+            s = l.strip()
+            if not s or s.startswith(("TIÊU ĐỀ:", "DANH MỤC:", "---")):
+                continue
+            if s.startswith("Hỏi:"):
+                s = s[4:].strip()
+            elif s.startswith("Đáp:"):
+                s = s[4:].strip()
+            if s:
+                lines.append(s)
         return "\n".join(lines)
 
     def trim(text: str, max_chars: int = 500) -> str:
