@@ -23,7 +23,7 @@ export function createApp({ authService, otpService, getReadiness }: AuthAppOpti
   app.use(createRequestContextMiddleware() as express.RequestHandler);
   app.use(helmet());
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', service: config.serviceName });

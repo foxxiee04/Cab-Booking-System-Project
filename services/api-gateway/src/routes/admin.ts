@@ -192,17 +192,54 @@ router.get('/drivers', async (req: Request, res: Response) => {
   try {
     const { limit, page } = getPaging(req);
     const status = req.query.status as string | undefined;
-    const userLimit = Math.max(limit * 5, 1000);
 
-    const [driverResponse, userResponse] = await Promise.all([
-      callHttpService<any>('driver', req, '/api/drivers', { page, limit, status }),
-      callHttpService<any>('auth', req, '/api/auth/users', { page: 1, limit: userLimit, role: 'DRIVER' }),
-    ]);
+    const driverResponse = await callHttpService<any>('driver', req, '/api/drivers', { page, limit, status });
 
     const payload = unwrapPayload<any>(driverResponse);
     let rawDrivers = Array.isArray(payload.drivers) ? payload.drivers : [];
-    const usersPayload = unwrapPayload<any>(userResponse);
-    let users = Array.isArray(usersPayload.users) ? usersPayload.users : [];
+
+    // Resolve user profile + avatar per driver row. Listing GET /api/auth/users with a cap
+    // only returned the newest N DRIVER accounts by createdAt, so older accounts that
+    // completed onboarding later never merged — admin saw empty portrait/user fields.
+    const userIdsOnPage = [...new Set(
+      rawDrivers
+        .map((driver: any) => driver.userId)
+        .filter((id: unknown): id is string => typeof id === 'string' && id.trim() !== ''),
+    )];
+
+    const usersById = new Map<string, {
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      phoneNumber: string;
+      avatar: string | null;
+    }>();
+
+    await Promise.all(
+      userIdsOnPage.map(async (userId) => {
+        try {
+          const raw = await callInternalHttpService<any>('auth', `/internal/users/${userId}`);
+          const wrapped = unwrapPayload<any>(raw);
+          const user = wrapped?.user ?? wrapped;
+          if (!user || typeof user.id !== 'string') {
+            return;
+          }
+
+          usersById.set(user.id, {
+            id: user.id,
+            firstName: user.firstName || '',
+            lastName: user.lastName || '',
+            email: user.email || '',
+            phoneNumber: user.phone || user.phoneNumber || '',
+            avatar: typeof user.avatar === 'string' ? user.avatar : null,
+          });
+        } catch {
+          // Driver row still returned; approval UI may miss name/avatar until auth is reachable.
+        }
+      }),
+    );
+
     const driverActorIds: string[] = rawDrivers.reduce((ids: string[], driver: any) => {
       if (driver.id) {
         ids.push(driver.id);
@@ -216,27 +253,6 @@ router.get('/drivers', async (req: Request, res: Response) => {
       ? await callInternalHttpService<any>('ride', '/internal/drivers/stats', { ids: driverActorIds.join(',') })
       : null;
     const driverRideCounts = driverStatsResponse ? unwrapPayload<any>(driverStatsResponse)?.counts || {} : {};
-
-    const usersById = new Map<string, {
-      id: string;
-      firstName: string;
-      lastName: string;
-      email: string;
-      phoneNumber: string;
-      avatar: string | null;
-    }>(
-      users.map((user: any) => [
-        user.id,
-        {
-          id: user.id,
-          firstName: user.firstName || '',
-          lastName: user.lastName || '',
-          email: user.email || '',
-          phoneNumber: user.phone || user.phoneNumber || '',
-          avatar: typeof user.avatar === 'string' ? user.avatar : null,
-        },
-      ])
-    );
 
     const drivers = rawDrivers.map((driver: any) => {
       const mergedUser = usersById.get(driver.userId) || null;
@@ -254,8 +270,8 @@ router.get('/drivers', async (req: Request, res: Response) => {
       vehicleModel: driver.vehicleModel,
       vehicleColor: driver.vehicleColor,
       vehicleYear: driver.vehicleYear,
-      vehicleImageUrl: driver.vehicleImageUrl,
-      cccdImageUrl: driver.cccdImageUrl,
+      vehicleImageUrl: driver.vehicleImageUrl ?? driver.vehicle_image_url,
+      cccdImageUrl: driver.cccdImageUrl ?? driver.cccd_image_url,
       avatarUrl,
       licensePlate: driver.vehiclePlate,
       licenseClass: driver.licenseClass,

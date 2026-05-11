@@ -575,9 +575,10 @@ services:
       - AI_AUTO_RETRAIN_SEC=${AI_AUTO_RETRAIN_SEC:-0}
       - AI_AUTO_RETRAIN_ENABLED=${AI_AUTO_RETRAIN_ENABLED:-false}
       - AI_INTERNAL_TOKEN=${AI_INTERNAL_TOKEN:-}
-      - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
-      - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
+      - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0}
+      - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-0}
     networks:
+      - frontend
       - backend
     deploy:
       replicas: 1
@@ -600,6 +601,37 @@ services:
         reservations:
           cpus: '0.25'
           memory: 512M
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # AUTO-SCALER — chạy trên Manager, query Prometheus → docker service scale
+  # ══════════════════════════════════════════════════════════════════════════
+
+  autoscaler:
+    image: ${DOCKERHUB_USERNAME}/cab-autoscaler:${IMAGE_TAG:-latest}
+    environment:
+      - PROMETHEUS_URL=http://prometheus:9090
+      - STACK_NAME=cab-booking
+      - SCALE_INTERVAL_SEC=30
+      - SCALE_UP_CPU_PCT=65
+      - SCALE_DOWN_CPU_PCT=20
+      - MAX_REPLICAS=3
+      - MIN_REPLICAS=1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.infra == true
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
 
   # ══════════════════════════════════════════════════════════════════════════
   # MONITORING — Collectors: mode global (chạy trên TẤT CẢ nodes tự động)

@@ -1,0 +1,12 @@
+# Auto-Scaler image — alpine + curl + jq + docker-cli (bash)
+# Build context: repo root
+# Usage: tích hợp vào docker-stack.thesis.yml (service autoscaler)
+
+FROM alpine:3.19
+
+RUN apk add --no-cache bash curl jq docker-cli
+
+COPY scripts/autoscaler.sh /autoscaler.sh
+RUN chmod +x /autoscaler.sh
+
+ENTRYPOINT ["/autoscaler.sh"]

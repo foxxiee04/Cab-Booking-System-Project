@@ -48,15 +48,20 @@ const resolveVehicleImageUrl = (rawUrl?: string | null) => {
     return '';
   }
 
-  if (/^data:image\//i.test(rawUrl) || /^https?:\/\//i.test(rawUrl)) {
-    return rawUrl;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) {
+    return '';
   }
 
-  if (rawUrl.startsWith('/')) {
-    return `${API_ROOT}${rawUrl}`;
+  if (/^data:image\//i.test(trimmed) || /^https?:\/\//i.test(trimmed)) {
+    return trimmed;
   }
 
-  return `${API_ROOT}/${rawUrl}`;
+  if (trimmed.startsWith('/')) {
+    return `${API_ROOT}${trimmed}`;
+  }
+
+  return `${API_ROOT}/${trimmed}`;
 };
 
 const portraitSrc = (driver: Driver) =>
@@ -333,6 +338,7 @@ const DriverApprovals: React.FC = () => {
             )}
           </Paper>
         </Grid>
+        
         <Grid item xs={12} sm={6}>
           <Paper variant="outlined" sx={{ p: 1.25, borderRadius: 3, borderColor: 'rgba(148,163,184,0.25)', height: '100%' }}>
             <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" sx={{ mb: 0.75 }}>

@@ -724,7 +724,126 @@ curl http://18.136.250.236:3000/health
 
 ---
 
-## PHASE 18 — Cập nhật GitHub Secrets
+## PHASE 18 — Auto-Scaler (Prometheus → docker service scale)
+
+Auto-scaler chạy như 1 Swarm service trên Manager, query CPU từ Prometheus mỗi 30s, tự scale các stateless services.
+
+> CI/CD đã build + push image `foxxiee04/cab-autoscaler:latest` và stack file đã khai báo service `autoscaler`. Sau khi deploy stack, auto-scaler chạy tự động.
+
+**Xem logs auto-scaler:**
+```bash
+docker service logs cab-booking_autoscaler -f
+# Output mẫu:
+# [17:05:00] Cluster CPU: 12%
+# [17:05:00]   = api-gateway: 1 replicas
+# [17:05:00]   = auth-service: 1 replicas
+# [17:05:30] Cluster CPU: 78%          ← traffic tăng
+# [17:05:30]   ↑ SCALE UP api-gateway: 1 → 2 replicas  (CPU 78% > 65%)
+# [17:05:30]   ↑ SCALE UP auth-service: 1 → 2 replicas
+```
+
+**Tuỳ chỉnh ngưỡng** (không cần redeploy — sửa env rồi `docker service update`):
+```bash
+docker service update \
+  --env-add SCALE_UP_CPU_PCT=70 \
+  --env-add SCALE_DOWN_CPU_PCT=25 \
+  --env-add MAX_REPLICAS=3 \
+  cab-booking_autoscaler
+```
+
+**Scale thủ công** (override auto-scaler):
+```bash
+docker service scale cab-booking_api-gateway=2
+```
+
+---
+
+## PHASE 19 — Kiểm tra disk tất cả nodes
+
+Mỗi node Spot chỉ có 19-20GB. Khi disk đầy → service crash với trạng thái `0/1`.
+
+**Kiểm tra tất cả nodes:**
+```bash
+for node_id in $(docker node ls -q); do
+  name=$(docker node inspect $node_id --format '{{.Description.Hostname}}')
+  ip=$(docker node inspect $node_id --format '{{.Status.Addr}}')
+  echo -n "=== $name ($ip) === "
+  ssh -i ~/.ssh/swarm_key -o StrictHostKeyChecking=no ubuntu@$ip \
+    "df -h / | tail -1" 2>/dev/null
+done
+```
+
+**Ngưỡng an toàn:** dưới 80%. Nếu node nào vượt 85% → dọn ngay:
+```bash
+ssh -i ~/.ssh/swarm_key ubuntu@<NODE_IP> "docker system prune -af && df -h /"
+```
+
+> Docker Swarm **không tự di chuyển service** khi disk đầy — chỉ reschedule khi container crash. Phòng ngừa bằng cách prune định kỳ.
+
+---
+
+## PHASE 20 — Chứng minh auto-scaling hoạt động (demo/báo cáo)
+
+### Bước 1 — Tạo traffic tăng đột biến
+
+```bash
+# Từ máy local hoặc trên Manager — gửi 200 requests song song
+for i in $(seq 1 200); do
+  curl -s http://18.136.250.236:3000/health &
+done
+wait
+
+# Hoặc vòng lặp liên tục trong 2 phút
+end=$((SECONDS + 120))
+while [ $SECONDS -lt $end ]; do
+  for i in $(seq 1 20); do
+    curl -s http://18.136.250.236:3000/health >/dev/null &
+  done
+  sleep 1
+done
+```
+
+### Bước 2 — Quan sát auto-scaler
+
+```bash
+# Terminal 1: xem auto-scaler log
+docker service logs cab-booking_autoscaler -f
+
+# Terminal 2: xem replicas thay đổi real-time
+watch -n 5 "docker stack services cab-booking | grep -E 'api-gateway|auth-service|ride-service'"
+```
+
+### Bước 3 — Xem metric trên Grafana
+
+```
+http://18.136.250.236:3030
+Dashboard: System Overview
+Panel: CPU Usage, Network In/Out
+```
+
+### Bước 4 — Screenshot cho báo cáo
+
+Cần chụp 3 màn hình:
+
+| Màn hình | Nội dung |
+|----------|----------|
+| **Before** | `docker stack services` → tất cả `1/1` |
+| **During** | Grafana CPU spike + auto-scaler log đang scale UP |
+| **After** | `docker stack services` → các service `2/2` hoặc `3/3` |
+
+### Bước 5 — Scale down về bình thường
+
+Auto-scaler tự scale down khi CPU về dưới 20%. Hoặc thủ công:
+```bash
+docker service scale \
+  cab-booking_api-gateway=1 \
+  cab-booking_auth-service=1 \
+  cab-booking_ride-service=1
+```
+
+---
+
+## PHASE 21 — Cập nhật GitHub Secrets
 
 > GitHub → repo → Settings → Secrets and variables → Actions
 

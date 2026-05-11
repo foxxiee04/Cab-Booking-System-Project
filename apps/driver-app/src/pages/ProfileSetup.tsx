@@ -333,9 +333,12 @@ const ProfileSetup: React.FC = () => {
         dispatch(setProfile(response.data.driver));
         setSnackbarOpen(true);
         setTimeout(() => navigate('/dashboard'), 2500);
+      } else {
+        throw new Error(response.error?.message || t('errors.profileSetupFailed'));
       }
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || t('errors.profileSetupFailed'));
+      const msg = err?.response?.data?.error?.message || err?.message || t('errors.profileSetupFailed');
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -609,7 +612,7 @@ const ProfileSetup: React.FC = () => {
                     </TextField>
                   </Grid>
 
-                  <Grid item xs={12}>
+                  <Grid item xs={12} sm={6}>
                     <TextField
                       fullWidth
                       label={t('profileSetup.licenseExpiry', 'Ngày hết hạn GPLX')}
@@ -629,7 +632,7 @@ const ProfileSetup: React.FC = () => {
                       Ảnh nhận diện &amp; giấy tờ
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-                      Ảnh chân dung 3×4 (ảnh đại diện cho khách) và ảnh CCCD/GPLX để admin xác minh — mỗi loại một hàng.
+                      Ảnh chân dung 3×4 (ảnh đại diện cho khách) và ảnh CCCD/GPLX để admin xác minh
                     </Typography>
                   </Grid>
 
@@ -699,7 +702,7 @@ const ProfileSetup: React.FC = () => {
                   </Grid>
 
                   <Grid item xs={12}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, mt: 3 }}>
                       Ảnh CCCD / GPLX
                     </Typography>
                     <Box

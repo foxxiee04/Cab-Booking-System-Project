@@ -52,8 +52,9 @@ describe('admin routes', () => {
         ok: true,
         status: 200,
         text: async () => JSON.stringify({
+          success: true,
           data: {
-            users: [{ id: 'user-1', firstName: 'A', lastName: 'B', email: 'a@test.com', phone: '0909' }],
+            user: { id: 'user-1', firstName: 'A', lastName: 'B', email: 'a@test.com', phone: '0909', avatar: null },
           },
         }),
       })

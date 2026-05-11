@@ -237,6 +237,10 @@ jobs:
             context: .
             dockerfile: ./Dockerfile.bootstrap
             needs_shared: false
+          - service: autoscaler
+            context: .
+            dockerfile: ./Dockerfile.autoscaler
+            needs_shared: false
           # ── Root-context services (Dockerfile copies from services/<name>/ + shared/dist/) ──
           - service: api-gateway
             context: .
