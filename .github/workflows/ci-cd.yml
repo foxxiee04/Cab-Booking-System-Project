@@ -15,8 +15,13 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: '20'
+  # Node 22: dependency tree (e.g. chevrotain) declares engines >=22; aligns with npm registry tooling.
+  NODE_VERSION: '22'
   PYTHON_VERSION: '3.11'
+  # Harden npm against transient ECONNRESET / aborted downloads on registry.npmjs.org
+  NPM_CONFIG_FETCH_RETRIES: '5'
+  NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: '20000'
+  NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: '120000'
   IMAGE_NAMESPACE: ${{ secrets.DOCKERHUB_USERNAME || github.repository_owner }}
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -81,7 +86,13 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          for attempt in 1 2 3 4; do
+            npm ci && exit 0
+            echo "::warning::npm ci failed (attempt ${attempt}/4), retrying in 20s..."
+            sleep 20
+          done
+          exit 1
 
       - name: Build shared helpers
         run: npm run build:shared
@@ -116,7 +127,13 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          for attempt in 1 2 3 4; do
+            npm ci && exit 0
+            echo "::warning::npm ci failed (attempt ${attempt}/4), retrying in 20s..."
+            sleep 20
+          done
+          exit 1
 
       - name: Build shared helpers
         run: npm run build:shared
@@ -163,7 +180,13 @@ jobs:
         # --build removed: images already public; --wait ensures containers are healthy
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          for attempt in 1 2 3 4; do
+            npm ci && exit 0
+            echo "::warning::npm ci failed (attempt ${attempt}/4), retrying in 20s..."
+            sleep 20
+          done
+          exit 1
 
       - name: Build shared helpers
         run: npm run build:shared
@@ -305,7 +328,13 @@ jobs:
 
       - name: Install dependencies
         if: matrix.needs_shared
-        run: npm ci
+        run: |
+          for attempt in 1 2 3 4; do
+            npm ci && exit 0
+            echo "::warning::npm ci failed (attempt ${attempt}/4), retrying in 20s..."
+            sleep 20
+          done
+          exit 1
 
       - name: Build shared helpers
         if: matrix.needs_shared
@@ -539,7 +568,13 @@ jobs:
 
       - name: Install app dependencies
         working-directory: ${{ matrix.dir }}
-        run: npm ci
+        run: |
+          for attempt in 1 2 3 4; do
+            npm ci && exit 0
+            echo "::warning::npm ci failed (attempt ${attempt}/4), retrying in 20s..."
+            sleep 20
+          done
+          exit 1
 
       - name: Build React app
         working-directory: ${{ matrix.dir }}
