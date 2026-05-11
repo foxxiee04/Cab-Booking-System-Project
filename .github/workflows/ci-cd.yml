@@ -418,10 +418,16 @@ jobs:
             # Requires DOCKERHUB_TOKEN in ~/cab-booking/.env on the server.
             echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin 2>/dev/null || true
 
+            echo "▶ Cleaning up disk BEFORE pulling (prune old images)..."
+            for node_ip in $(docker node inspect $(docker node ls -q) --format '{{.Status.Addr}}' 2>/dev/null); do
+              ssh -i ~/.ssh/swarm_key -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$node_ip \
+                "docker image prune -af --filter 'until=1h' 2>/dev/null || true; docker builder prune -af 2>/dev/null || true" 2>/dev/null || true
+            done
+
             echo "▶ Pre-pulling service images on manager..."
             for svc in api-gateway auth-service ride-service driver-service payment-service \
                        wallet-service user-service booking-service pricing-service \
-                       notification-service review-service ai-service bootstrap-runner; do
+                       notification-service review-service ai-service autoscaler bootstrap-runner; do
               docker pull "${DOCKERHUB_USERNAME}/cab-${svc}:${IMAGE_TAG}" &
             done
             wait
@@ -433,17 +439,11 @@ jobs:
               ssh -i ~/.ssh/swarm_key -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$node_ip "
                 for svc in api-gateway auth-service ride-service driver-service payment-service \
                            wallet-service user-service booking-service pricing-service \
-                           notification-service review-service ai-service bootstrap-runner; do
+                           notification-service review-service ai-service autoscaler bootstrap-runner; do
                   docker pull ${DOCKERHUB_USERNAME}/cab-\${svc}:${IMAGE_TAG} &
                 done
                 wait
               " 2>/dev/null || true
-            done
-
-            echo "▶ Cleaning up disk on all swarm nodes (remove all unused images)..."
-            for node_ip in $(docker node inspect $(docker node ls -q) --format '{{.Status.Addr}}' 2>/dev/null); do
-              ssh -i ~/.ssh/swarm_key -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$node_ip \
-                "docker image prune -af 2>/dev/null || true; docker builder prune -af 2>/dev/null || true" 2>/dev/null || true
             done
 
             echo "▶ Setting node labels on Primary Manager..."

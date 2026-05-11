@@ -575,10 +575,9 @@ services:
       - AI_AUTO_RETRAIN_SEC=${AI_AUTO_RETRAIN_SEC:-0}
       - AI_AUTO_RETRAIN_ENABLED=${AI_AUTO_RETRAIN_ENABLED:-false}
       - AI_INTERNAL_TOKEN=${AI_INTERNAL_TOKEN:-}
-      - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0}
-      - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-0}
+      - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
+      - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
     networks:
-      - frontend
       - backend
     deploy:
       replicas: 1
