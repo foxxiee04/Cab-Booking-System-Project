@@ -586,6 +586,9 @@ services:
       - AI_INTERNAL_TOKEN=${AI_INTERNAL_TOKEN:-}
       - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
       - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
+      # When HF offline + no image cache, reranker download fails → set RAG_RERANKER_ENABLED=false in .env or enable HF below.
+      - RAG_RERANKER_ENABLED=${RAG_RERANKER_ENABLED:-true}
+      - RAG_RERANKER_MODEL=${RAG_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
     networks:
       - backend
     deploy:
