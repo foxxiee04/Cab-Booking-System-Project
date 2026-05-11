@@ -872,7 +872,6 @@ Xem chi tiết: [`monitoring/README.md`](monitoring/README.md)
 
 **Tài liệu chi tiết:**
 - Triển khai Swarm / AWS: [`deploy/SWARM-SETUP.md`](deploy/SWARM-SETUP.md)
-- Báo cáo KLTN + danh mục hình: [`docs/bao-cao-kltn.md`](docs/bao-cao-kltn.md)
 - Mục lục `docs/`: [`docs/README.md`](docs/README.md)
 - Monitoring: [`monitoring/README.md`](monitoring/README.md)
 - Từng microservice: [`docs/services/`](docs/services/)

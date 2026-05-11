@@ -29,11 +29,11 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 # Query Prometheus → CPU % trung bình toàn cluster (từ node-exporter)
 get_cluster_cpu() {
   local query='100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100)'
-  local encoded
-  encoded=$(printf '%s' "$query" | jq -sRr @uri)
-  curl -sf --max-time 5 "${PROMETHEUS}/api/v1/query?query=${encoded}" \
-    | jq -r '.data.result[0].value[1] // "0"' 2>/dev/null \
-    | awk '{printf "%.0f", $1}'
+  local encoded result
+  encoded=$(printf '%s' "$query" | jq -sRr @uri) || { echo "0"; return 0; }
+  result=$(curl -sf --max-time 5 "${PROMETHEUS}/api/v1/query?query=${encoded}" 2>/dev/null) || { echo "0"; return 0; }
+  echo "$result" | jq -r '.data.result[0].value[1] // "0"' 2>/dev/null \
+    | awk '{printf "%.0f", $1}' || echo "0"
 }
 
 get_replicas() {
@@ -47,6 +47,8 @@ do_scale() {
 }
 
 log "━━━ Auto-Scaler started ━━━"
+log "  Đợi 30s cho network overlay sẵn sàng..."
+sleep 30
 log "  Prometheus : ${PROMETHEUS}"
 log "  Stack      : ${STACK}"
 log "  Interval   : ${INTERVAL}s"
