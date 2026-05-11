@@ -28,6 +28,7 @@ export interface AuditEntry {
 }
 
 export async function auditLog(entry: AuditEntry): Promise<void> {
+  if (process.env.NODE_ENV === 'test') return;
   try {
     await prisma.auditLog.create({
       data: {

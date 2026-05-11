@@ -272,6 +272,7 @@ router.get('/drivers', async (req: Request, res: Response) => {
           : null,
       user: mergedUser
         ? {
+            id: mergedUser.id,
             firstName: mergedUser.firstName,
             lastName: mergedUser.lastName,
             email: mergedUser.email,
