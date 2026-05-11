@@ -5,7 +5,7 @@ module.exports = {
   roots: ['<rootDir>/utils'],
   testMatch: ['**/__tests__/**/*.test.ts'],
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
+    '^.+\\.tsx?$': ['ts-jest', { isolatedModules: true }],
   },
   collectCoverageFrom: [
     'utils/**/*.ts',
