@@ -4,8 +4,8 @@
 #   Manager     (on-demand, t3.medium) : infra stateful (postgres, mongodb,
 #                                         redis, rabbitmq), api-gateway,
 #                                         monitoring (prometheus, grafana, loki)
-#   Worker-1..N (spot,      t3.medium) : all 11 microservices — Swarm
-#                                         auto-spreads across available workers
+#   Worker-1..N (spot,      t3.medium) : all microservices + ai-service — Swarm
+#                                         spreads across workers (ai-service not on infra: RAM)
 #
 #   Global services (every node): promtail, cadvisor, node-exporter
 #
@@ -595,13 +595,29 @@ services:
       # When HF offline + no image cache, reranker download fails → set RAG_RERANKER_ENABLED=false in .env or enable HF below.
       - RAG_RERANKER_ENABLED=${RAG_RERANKER_ENABLED:-true}
       - RAG_RERANKER_MODEL=${RAG_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
+    # Swarm: image HEALTHCHECK start_period=60s can be too short on small CPUs (RAG + reranker load).
     networks:
       - backend
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "from urllib.request import urlopen; r=urlopen('http://127.0.0.1:8000/api/health'); raise SystemExit(0 if r.status==200 else 1)",
+        ]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 180s
     deploy:
       replicas: 1
       placement:
+        # Ghim infra thường đè AI lên cùng máy DB/nginx (RAM nhỏ → 137). Worker + spread giống các API stateless.
         constraints:
-          - node.labels.infra == true
+          - node.role == worker
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
@@ -614,7 +630,7 @@ services:
       resources:
         limits:
           cpus: '1.5'
-          # RAG (embedding + optional reranker) on same infra node as DBs easily exceeds 1.5G → exit 137 (OOM).
+          # RAG + reranker: đủ headroom; chạy trên worker để tránh tranh RAM với DB trên infra.
           memory: 3072M
         reservations:
           cpus: '0.25'

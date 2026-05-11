@@ -280,7 +280,7 @@ To add a manager to this swarm, run 'docker swarm join-token manager' and follow
 > Vẫn trên **Primary Manager** — phải làm TRƯỚC khi deploy stack
 
 Stack file dùng constraints để quyết định service chạy trên node nào:
-- `node.labels.infra == true` → postgres, mongodb, redis, rabbitmq, ai-service, monitoring
+- `node.labels.infra == true` → postgres, mongodb, redis, rabbitmq, monitoring (Prometheus/Grafana/Loki), autoscaler, … — **không** gồm `ai-service` (file thesis: AI chạy trên `node.role == worker` để tránh tranh RAM với DB)
 - `node.labels.nginx == true` → api-gateway (public entry point, cần IP cố định)
 - `node.role == worker` → tất cả microservices còn lại
 
