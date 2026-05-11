@@ -135,7 +135,7 @@ export const authApi = {
   },
 
   updateMe: async (data: UpdateProfileRequest): Promise<ApiResponse<{ user: any }>> => {
-    const response = await axiosInstance.patch('/auth/me', data);
+    const response = await axiosInstance.patch('/auth/me', data, { timeout: 120_000 });
     const result = response.data;
     if (result.success && result.data?.user) {
       result.data.user = normalizeUser(result.data.user);

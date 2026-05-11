@@ -159,6 +159,46 @@ wait_for_gateway_http() {
   return 1
 }
 
+# Seed POST /api/admin/wallet/incentive-rules → gateway proxy HTTP tới WALLET_SERVICE_URL.
+# Nếu thiếu biến này, gateway fallback http://localhost:3006 trong container → 502 "Service temporarily unavailable".
+wait_for_wallet_proxy_ready() {
+  local max_sec="${SWARM_WALLET_WAIT_TIMEOUT_SEC:-120}"
+  local interval=4
+  local elapsed=0
+  local gw_cid=""
+  gw_cid="$(docker ps -q -f name="${STACK_NAME}_api-gateway" | head -1)"
+
+  if [[ -z "$gw_cid" ]]; then
+    echo "  ⚠ Không thấy task ${STACK_NAME}_api-gateway trên node này — bỏ qua probe wallet (chạy reset trên Manager có gateway)."
+    return 0
+  fi
+
+  local wurl
+  wurl="$(docker exec "$gw_cid" node -p "process.env.WALLET_SERVICE_URL || ''" 2>/dev/null | tr -d '\r\n' || true)"
+  if [[ -z "$wurl" ]] || [[ "$wurl" == *localhost* ]] || [[ "$wurl" == *127.0.0.1* ]]; then
+    echo "❌ Trong container api-gateway, WALLET_SERVICE_URL không hợp lệ cho Docker Swarm."
+    echo "   Hiện tại: '${wurl:-<trống — fallback localhost trong code gateway>}'"
+    echo "   Sửa ~/cab-booking/env/gateway.env (hoặc repo env/gateway.env):"
+    echo "     WALLET_SERVICE_URL=http://wallet-service:3006"
+    echo "   Rồi: docker stack deploy ... hoặc docker service update --force ${STACK_NAME}_api-gateway"
+    return 1
+  fi
+
+  while [[ "$elapsed" -lt "$max_sec" ]]; do
+    if docker exec "$gw_cid" node -e 'const b=(process.env.WALLET_SERVICE_URL||"").replace(/\/+$/,"");fetch(b+"/health").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1));' 2>/dev/null; then
+      echo "  ✓ Gateway → wallet $wurl/health OK (${elapsed}s)"
+      return 0
+    fi
+    if [[ $elapsed -eq 0 ]] || [[ $((elapsed % 20)) -eq 0 ]]; then
+      echo "  … Chờ gateway → wallet ($wurl) — ${elapsed}s / ${max_sec}s"
+    fi
+    sleep "$interval"
+    elapsed=$((elapsed + interval))
+  done
+  echo "❌ Sau ${max_sec}s vẫn không gọi được wallet từ api-gateway. Xem: docker service logs ${STACK_NAME}_wallet-service"
+  return 1
+}
+
 migrate_one() {
   local svc="$1"
   local db="$2"
@@ -259,6 +299,10 @@ export GATEWAY_BASE_URL="${GATEWAY_BASE_URL:-http://127.0.0.1:3000}"
 wait_for_gateway_http || exit 1
 
 echo ""
+echo "  Kiểm tra WALLET_SERVICE_URL trong api-gateway + gọi wallet /health (tránh 502 incentive-rules)..."
+wait_for_wallet_proxy_ready || exit 1
+
+echo ""
 echo "[5/5] Prisma generate (auth-service) + seed qua Gateway..."
 
 if ! timeout 2 bash -c 'exec 3<>/dev/tcp/127.0.0.1/5433' 2>/dev/null; then
@@ -274,6 +318,7 @@ export REDIS_PASSWORD
 
 # Sau rolling restart + auto-scaler, auth qua gateway có thể cần >25s — tăng mặc định khi chạy từ script này.
 export SEED_AUTH_PROXY_WAIT_ATTEMPTS="${SEED_AUTH_PROXY_WAIT_ATTEMPTS:-90}"
+export SEED_INCENTIVE_RULE_ATTEMPTS="${SEED_INCENTIVE_RULE_ATTEMPTS:-30}"
 
 run_seed_on_host() {
   (
@@ -307,6 +352,7 @@ run_seed_bootstrap_runner() {
     dr+=( -e "REDIS_PASSWORD=$REDIS_PASSWORD" )
   fi
   dr+=( -e "SEED_AUTH_PROXY_WAIT_ATTEMPTS=$SEED_AUTH_PROXY_WAIT_ATTEMPTS" )
+  dr+=( -e "SEED_INCENTIVE_RULE_ATTEMPTS=$SEED_INCENTIVE_RULE_ATTEMPTS" )
   if [[ -f "${HOME}/.ssh/swarm_key" ]]; then
     dr+=( -v "$HOME/.ssh/swarm_key:/workspace/.secrets/swarm_key:ro" -e SWARM_SSH_KEY=/workspace/.secrets/swarm_key )
   fi

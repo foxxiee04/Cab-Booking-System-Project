@@ -34,31 +34,67 @@ export async function start() {
       });
     });
 
+    let shuttingDown = false;
     const shutdown = async () => {
+      if (shuttingDown) {
+        return;
+      }
+      shuttingDown = true;
       logger.info('Shutting down API Gateway gracefully');
-      await eventConsumer.close();
-      await socketServer.close();
-      await closeMapRedis();
-      await closeLocationRedis();
-      await new Promise<void>((resolve, reject) => {
+      try {
+        await eventConsumer.close();
+      } catch (e) {
+        logger.warn('EventConsumer close error (ignored during shutdown)', e);
+      }
+      try {
+        await socketServer.close();
+      } catch (e) {
+        logger.warn('Socket server close error (ignored during shutdown)', e);
+      }
+      try {
+        await closeMapRedis();
+      } catch (e) {
+        logger.warn('Map Redis close error (ignored during shutdown)', e);
+      }
+      try {
+        await closeLocationRedis();
+      } catch (e) {
+        logger.warn('Location Redis close error (ignored during shutdown)', e);
+      }
+
+      await new Promise<void>((resolve) => {
+        if (!httpServer.listening) {
+          resolve();
+          return;
+        }
         httpServer.close((error) => {
-          if (error) {
-            reject(error);
+          if (!error) {
+            resolve();
             return;
           }
+          const code = (error as NodeJS.ErrnoException).code;
+          if (code === 'ERR_SERVER_NOT_RUNNING') {
+            resolve();
+            return;
+          }
+          logger.error('httpServer.close error during shutdown', error);
           resolve();
         });
       });
     };
 
-    process.on('SIGTERM', async () => {
-      await shutdown();
-      process.exit(0);
+    process.on('SIGTERM', () => {
+      void shutdown().then(() => process.exit(0)).catch((e) => {
+        logger.error('Shutdown error', e);
+        process.exit(1);
+      });
     });
 
-    process.on('SIGINT', async () => {
-      await shutdown();
-      process.exit(0);
+    process.on('SIGINT', () => {
+      void shutdown().then(() => process.exit(0)).catch((e) => {
+        logger.error('Shutdown error', e);
+        process.exit(1);
+      });
     });
 
     return { app, httpServer, socketServer, eventConsumer };

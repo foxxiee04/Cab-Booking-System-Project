@@ -386,6 +386,12 @@ jobs:
 #   ~/cab-booking/.env              — all service environment variables
 #   ~/cab-booking/env/*.env         — per-service env files (if used)
 #   ~/cab-booking/docker-stack.thesis.yml  — uploaded by this workflow
+#
+# Nginx: workflow installs deploy/nginx/conf.d/00-cab-client-max-body.conf so
+# API uploads (driver profile JSON) are not capped at the default 1m.
+#
+# GitHub secrets: REACT_APP_API_URL / REACT_APP_SOCKET_URL must use https:// when
+# SPAs are served over HTTPS (mixed content blocks http:// API calls).
 # ──────────────────────────────────────────────────────────────────────────────
   deploy-backend:
     name: Deploy - Backend (Swarm)
@@ -406,7 +412,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
-          source: "docker-stack.thesis.yml,monitoring,env,scripts,reset-and-seed.sh"
+          source: "docker-stack.thesis.yml,monitoring,env,scripts,reset-and-seed.sh,deploy/nginx"
           target: "~/cab-booking/"
           strip_components: 0
 
@@ -519,6 +525,16 @@ jobs:
             done
 
             echo "✅ Swarm deployment complete"
+
+            echo "▶ Nginx: ensure API body size limit (driver profile / large JSON)..."
+            NGX_SNIPPET="$HOME/cab-booking/deploy/nginx/conf.d/00-cab-client-max-body.conf"
+            if [ -f "$NGX_SNIPPET" ]; then
+              sudo install -m 644 "$NGX_SNIPPET" /etc/nginx/conf.d/00-cab-client-max-body.conf
+              sudo nginx -t && sudo systemctl reload nginx
+              echo "  nginx OK (client_max_body_size via conf.d)"
+            else
+              echo "  ⚠ skip — snippet missing at $NGX_SNIPPET (older checkout?)"
+            fi
 
 # ──────────────────────────────────────────────────────────────────────────────
 # STAGE 3b — Deploy Frontend (Build React SPAs → rsync → Nginx)

@@ -403,12 +403,13 @@ echo "INTERNAL_SERVICE_TOKEN=$(openssl rand -hex 16)"
 
 > Các file trong `env/` đã có sẵn trong repo nhưng cần cập nhật password cho production.
 
-**gateway.env** — cập nhật 3 dòng:
+**gateway.env** — cập nhật các dòng sau (JWT / Rabbit / Redis / DB location + **bắt buộc có `WALLET_SERVICE_URL`** — nếu thiếu, gateway trong container fallback `http://localhost:3006` → mọi route `/api/admin/wallet/*` và phần lớn `/api/wallet/*` trả **502** trong khi `/api/voucher` vẫn OK vì đi qua payment):
 ```bash
 nano ~/cab-booking/env/gateway.env
 ```
-Sửa:
+Sửa / thêm:
 ```
+WALLET_SERVICE_URL=http://wallet-service:3006
 JWT_SECRET=<giá trị JWT_SECRET ở bước trên>
 RABBITMQ_URL=amqp://rabbit:FoxGo@Rabbit2025!@rabbitmq:5672
 INTERNAL_SERVICE_TOKEN=<giá trị INTERNAL_SERVICE_TOKEN>

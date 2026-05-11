@@ -112,7 +112,7 @@ export const driverApi = {
       },
       cccdImageUrl: data.cccdImageUrl,
     };
-    const response = await axiosInstance.post('/drivers/register', payload);
+    const response = await axiosInstance.post('/drivers/register', payload, { timeout: 120_000 });
     return response.data;
   },
 

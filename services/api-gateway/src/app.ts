@@ -46,7 +46,7 @@ export function createApp({
   app.use(morgan(':method :url :status :response-time ms request_id=:request-id', {
     stream: { write: (message) => logger.info(message.trim()) },
   }));
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: '25mb' }));
 
   if (enableRateLimit) {
     app.use(generalLimiter);

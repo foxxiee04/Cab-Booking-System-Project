@@ -20,7 +20,7 @@ export function createApp({ driverService, getReadiness }: DriverAppOptions) {
   app.use(createRequestContextMiddleware() as express.RequestHandler);
   app.use(helmet());
   app.use(cors());
-  app.use(express.json({ limit: '15mb' }));
+  app.use(express.json({ limit: '25mb' }));
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', service: config.serviceName });
