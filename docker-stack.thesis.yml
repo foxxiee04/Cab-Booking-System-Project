@@ -550,11 +550,17 @@ services:
 
   ai-service:
     image: ${DOCKERHUB_USERNAME}/cab-ai-service:${IMAGE_TAG:-latest}
-    # Avoid flaky Swarm/embedded DNS (127.0.0.11) → Gemini "Temporary failure in name resolution".
-    # If outbound 8.8.8.8 is blocked, set in ~/cab-booking/.env: AI_SERVICE_DNS_1=172.31.0.2 (VPC +2) etc.
+    # Avoid flaky Swarm/embedded DNS (127.0.0.11) → Gemini / huggingface name resolution errors.
+    # Set in ~/cab-booking/.env before deploy: AI_SERVICE_DNS_1=172.31.0.2 AI_SERVICE_DNS_2=8.8.8.8 (AWS VPC).
+    # Note: dns_opt is not supported on some docker stack deploy versions; rely on VPC DNS order above.
     dns:
       - ${AI_SERVICE_DNS_1:-8.8.8.8}
       - ${AI_SERVICE_DNS_2:-8.8.4.4}
+    # When 127.0.0.11 still returns -3 for huggingface.co, pin IPv4 from VPC DNS:
+    #   HUGGINGFACE_EXTRA_HOST=$(dig +short huggingface.co @172.31.0.2 | head -1)
+    # Put HUGGINGFACE_EXTRA_HOST=that-ip in ~/cab-booking/.env before deploy. Update if CDN changes.
+    extra_hosts:
+      - "huggingface.co:${HUGGINGFACE_EXTRA_HOST:-13.35.202.34}"
     environment:
       - DEBUG=False
       - HOST=0.0.0.0
@@ -607,11 +613,12 @@ services:
         max_attempts: 3
       resources:
         limits:
-          cpus: '1'
-          memory: 1536M
+          cpus: '1.5'
+          # RAG (embedding + optional reranker) on same infra node as DBs easily exceeds 1.5G → exit 137 (OOM).
+          memory: 3072M
         reservations:
           cpus: '0.25'
-          memory: 512M
+          memory: 768M
 
   # ══════════════════════════════════════════════════════════════════════════
   # AUTO-SCALER — chạy trên Manager, query Prometheus → docker service scale
