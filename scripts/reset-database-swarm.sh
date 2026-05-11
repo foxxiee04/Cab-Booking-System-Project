@@ -95,7 +95,7 @@ migrate_one() {
 
   if [[ -n "$cid" ]]; then
     echo "  → $svc (manager/local $cid)"
-    docker exec "$cid" npx prisma migrate deploy
+    docker exec "$cid" npx prisma db push --accept-data-loss
     return 0
   fi
 
@@ -120,7 +120,7 @@ migrate_one() {
     if [[ -n "$cid" ]]; then
       echo "  → $svc trên $addr ($cid)"
       ssh -i "$key_path" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-        "${user}@${addr}" "docker exec $cid npx prisma migrate deploy"
+        "${user}@${addr}" "docker exec $cid npx prisma db push --accept-data-loss"
       return 0
     fi
   done

@@ -315,6 +315,7 @@ services:
     env_file:
       - ./env/payment.env
     networks:
+      - frontend
       - backend
     deploy:
       replicas: 1
