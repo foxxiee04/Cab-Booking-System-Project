@@ -31,6 +31,7 @@ export interface Driver {
   vehicleColor: string;
   vehicleYear?: number;
   vehicleImageUrl?: string;
+  cccdImageUrl?: string;
   licensePlate: string;
   licenseClass?: LicenseClass;
   licenseNumber: string;
@@ -62,6 +63,7 @@ export interface DriverRegistration {
   licenseClass: LicenseClass;
   licenseNumber: string;
   licenseExpiryDate: string;
+  cccdImageUrl?: string;
 }
 
 // Location Types

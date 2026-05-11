@@ -442,6 +442,12 @@ jobs:
                 "docker image prune -af 2>/dev/null || true; docker builder prune -af 2>/dev/null || true" 2>/dev/null || true
             done
 
+            echo "▶ Setting node labels on Primary Manager..."
+            SELF_ID=$(docker info --format '{{.Swarm.NodeID}}')
+            docker node update --label-add infra=true  "$SELF_ID" 2>/dev/null || true
+            docker node update --label-add nginx=true  "$SELF_ID" 2>/dev/null || true
+            echo "  Manager $SELF_ID labelled (infra=true, nginx=true)"
+
             echo "▶ Deploying stack (tag=$IMAGE_TAG)..."
             docker stack deploy \
               -c docker-stack.thesis.yml \

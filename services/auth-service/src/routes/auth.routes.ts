@@ -54,5 +54,8 @@ export const createAuthRouter = (authService: AuthService): Router => {
   // Admin: change user role
   router.patch('/users/:userId/role', authenticate, authorize('ADMIN'), controller.updateUserRole);
 
+  // Admin: change user status (ACTIVE / INACTIVE / SUSPENDED)
+  router.patch('/users/:userId/status', authenticate, authorize('ADMIN'), controller.updateUserStatus);
+
   return router;
 };

@@ -24,6 +24,7 @@ interface RegisterDriverInput {
     number: string;
     expiryDate: Date;
   };
+  cccdImageUrl?: string;
 }
 
 interface GeoPoint {
@@ -103,6 +104,7 @@ export class DriverService {
         licenseNumber: input.license.number,
         licenseExpiryDate: input.license.expiryDate,
         licenseVerified: false,
+        cccdImageUrl: input.cccdImageUrl,
       },
     });
 
@@ -252,6 +254,7 @@ export class DriverService {
       vehicleColor: driver.vehicleColor || '',
       vehicleYear: driver.vehicleYear || undefined,
       vehicleImageUrl: driver.vehicleImageUrl || undefined,
+      cccdImageUrl: driver.cccdImageUrl || undefined,
       licensePlate: driver.vehiclePlate || '',
       rating: driver.ratingAverage ?? 5,
       reviewCount: driver.ratingCount ?? 0,
@@ -418,6 +421,23 @@ export class DriverService {
     return driver;
   }
 
+  async suspendDriver(driverId: string): Promise<any> {
+    const driver = await prisma.driver.update({
+      where: { id: driverId },
+      data: { status: DriverStatus.SUSPENDED, availabilityStatus: AvailabilityStatus.OFFLINE },
+    });
+    await this.redis.zrem(GEO_KEY, driverId);
+    return driver;
+  }
+
+  async unsuspendDriver(driverId: string): Promise<any> {
+    const driver = await prisma.driver.update({
+      where: { id: driverId },
+      data: { status: DriverStatus.APPROVED },
+    });
+    return driver;
+  }
+
   async updateRating(driverId: string, newRating: number): Promise<void> {
     const driver = await prisma.driver.findUnique({
       where: { id: driverId },
@@ -505,6 +525,10 @@ export class DriverService {
     }
     if (data.vehicleImageUrl !== undefined) {
       updateData.vehicleImageUrl = data.vehicleImageUrl;
+      shouldResetAvailability = true;
+    }
+    if (data.cccdImageUrl !== undefined) {
+      updateData.cccdImageUrl = data.cccdImageUrl;
       shouldResetAvailability = true;
     }
     if (data.licenseClass !== undefined) {

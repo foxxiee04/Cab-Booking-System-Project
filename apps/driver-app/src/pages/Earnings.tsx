@@ -85,13 +85,18 @@ const Earnings: React.FC = () => {
   const periodTrips = useMemo(() => {
     const trips = earnings?.recentTrips ?? [];
     if (!trips.length) return [];
-    const now = new Date();
+    // Vietnam-time boundaries so the user's browser timezone doesn't shift the buckets.
+    const VN_OFFSET_MS = 7 * 3600 * 1000;
+    const nowVn = new Date(Date.now() + VN_OFFSET_MS);
+    const y = nowVn.getUTCFullYear();
+    const m = nowVn.getUTCMonth();
+    const d = nowVn.getUTCDate();
     const boundaries = {
-      today: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-      week: new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000),
-      month: new Date(now.getFullYear(), now.getMonth(), 1),
-    };
-    return trips.filter((t) => new Date(t.completedAt) >= boundaries[period]);
+      today: Date.UTC(y, m, d) - VN_OFFSET_MS,
+      week: Date.UTC(y, m, d - 6) - VN_OFFSET_MS,
+      month: Date.UTC(y, m, 1) - VN_OFFSET_MS,
+    } as const;
+    return trips.filter((t) => new Date(t.completedAt).getTime() >= boundaries[period]);
   }, [earnings, period]);
 
   const weekTrips = useMemo(() => earnings?.daily?.reduce((s, d) => s + d.rides, 0) ?? 0, [earnings]);

@@ -1365,6 +1365,44 @@ export class PaymentService {
     };
   }
 
+  async getRevenueAnalytics(days = 30): Promise<any> {
+    const from = new Date();
+    from.setDate(from.getDate() - days + 1);
+    from.setHours(0, 0, 0, 0);
+
+    const payments = await this.prisma.payment.findMany({
+      where: { status: PaymentStatus.COMPLETED, createdAt: { gte: from } },
+      select: { amount: true, createdAt: true, method: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Fill all days with zeros so chart shows continuous line
+    const byDay = new Map<string, { revenue: number; trips: number }>();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      byDay.set(d.toISOString().split('T')[0], { revenue: 0, trips: 0 });
+    }
+
+    const methodBreakdown: Record<string, number> = {};
+    payments.forEach((p) => {
+      const day = p.createdAt.toISOString().split('T')[0];
+      const bucket = byDay.get(day);
+      if (bucket) {
+        bucket.revenue += p.amount;
+        bucket.trips += 1;
+      }
+      methodBreakdown[p.method] = (methodBreakdown[p.method] || 0) + p.amount;
+    });
+
+    return {
+      dailyRevenue: Array.from(byDay.entries()).map(([date, data]) => ({ date, ...data })),
+      methodBreakdown,
+      totalRevenue: payments.reduce((sum, p) => sum + p.amount, 0),
+      totalTrips: payments.length,
+    };
+  }
+
   private calculateFare(
     distanceKm: number,
     durationSeconds: number,

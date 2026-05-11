@@ -29,6 +29,22 @@ const normalizeDurationFromDriver = (durationSeconds: unknown, etaMinutes: unkno
   return undefined;
 };
 
+// Mirror the customer-app normalization so trip duration coming back from
+// ride-service is always stored in seconds regardless of whether the producer
+// sent a legacy minutes value (≤30 → treated as minutes) or a modern seconds
+// value (>30 → kept as seconds). Without this, the driver app interpreted a
+// legacy "25" as 25 seconds while the customer app saw 25 minutes — that's
+// the source of the "lệch lệch" the user noticed between the two screens.
+const normalizeTripDurationSeconds = (duration: unknown, estimatedDuration: unknown): number | undefined => {
+  const raw = typeof duration === 'number' && duration > 0
+    ? duration
+    : typeof estimatedDuration === 'number' && estimatedDuration > 0
+      ? estimatedDuration
+      : undefined;
+  if (raw == null) return undefined;
+  return raw <= 30 ? Math.round(raw * 60) : Math.round(raw);
+};
+
 const normalizeRide = (ride: any): Ride => ({
   ...ride,
   pickupLocation: ride.pickupLocation || ride.pickup || {
@@ -42,7 +58,8 @@ const normalizeRide = (ride: any): Ride => ({
     address: ride.dropoffAddress,
   },
   distance: normalizeDistance(ride.distance),
-  duration: typeof ride.duration === 'number' ? ride.duration : ride.estimatedDuration,
+  duration: normalizeTripDurationSeconds(ride.duration, ride.estimatedDuration),
+  estimatedDuration: normalizeTripDurationSeconds(ride.estimatedDuration, ride.duration),
   distanceFromDriverMeters: normalizeDistanceFromDriver(ride.distanceFromDriverMeters ?? ride.distanceFromDriver),
   durationFromDriverSeconds: normalizeDurationFromDriver(ride.durationFromDriverSeconds, ride.etaMinutes),
   etaMinutes: typeof ride.etaMinutes === 'number' && ride.etaMinutes > 0 ? ride.etaMinutes : undefined,

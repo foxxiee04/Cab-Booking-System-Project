@@ -418,11 +418,6 @@ const MerchantWallet: React.FC = () => {
             <Typography variant="h5" fontWeight={800}>Ví nền tảng</Typography>
             <Typography variant="body2" sx={{ opacity: 0.7 }}>Quản lý tài chính và đối soát sổ cái hệ thống</Typography>
           </Box>
-          <Tooltip title="Làm mới tất cả">
-            <IconButton onClick={() => { fetchBalance(); fetchLedger(); fetchRecon(); fetchWallets(); fetchBankAccounts(); fetchBankTxns(); }} sx={{ color: '#93c5fd', bgcolor: 'rgba(255,255,255,0.08)', '&:hover': { bgcolor: 'rgba(255,255,255,0.15)' } }}>
-              <Refresh />
-            </IconButton>
-          </Tooltip>
         </Stack>
       </Box>
 
@@ -824,7 +819,7 @@ const MerchantWallet: React.FC = () => {
               <span>Tài khoản ngân hàng liên kết</span>
             </Stack>
           }
-          subheader="Tài khoản đại diện mô phỏng dòng tiền — không kết nối ngân hàng thật"
+
           action={bankAccountsLoading ? <CircularProgress size={20} sx={{ mt: 1, mr: 1 }} /> : null}
         />
         <CardContent>
@@ -890,7 +885,7 @@ const MerchantWallet: React.FC = () => {
               <span>Giao dịch ngân hàng</span>
             </Stack>
           }
-          subheader={`${bankTxnsTotal.toLocaleString()} giao dịch — Dòng tiền mô phỏng giữa các tài khoản hệ thống (Techcombank demo), bản ghi “bank tx” đối chiếu với ledger.`}
+          subheader={`${bankTxnsTotal.toLocaleString()} giao dịch — Dòng tiền mô phỏng giữa các tài khoản hệ thống (Techcombank demo), đối chiếu với ledger.`}
           action={
             <Stack direction="row" spacing={1} alignItems="center">
               <FormControl size="small" sx={{ minWidth: 160 }}>

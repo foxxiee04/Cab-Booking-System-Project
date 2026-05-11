@@ -1,4 +1,5 @@
 import { format, formatDistanceToNow } from 'date-fns';
+import { vi as viLocale } from 'date-fns/locale';
 import { VehicleType, PaymentMethod, RideStatus } from '../types';
 import i18n from '../i18n';
 
@@ -15,9 +16,9 @@ export const formatDate = (date: string | Date): string => {
   return format(new Date(date), 'dd/MM/yyyy HH:mm');
 };
 
-// Format time ago
+// Format time ago (Vietnamese)
 export const formatTimeAgo = (date: string | Date): string => {
-  return formatDistanceToNow(new Date(date), { addSuffix: true });
+  return formatDistanceToNow(new Date(date), { addSuffix: true, locale: viLocale });
 };
 
 // Format phone number
@@ -31,15 +32,34 @@ export const formatPhoneNumber = (phone: string): string => {
 //   Car  (1 letter): 50A-123.45  (2 digits + 1 letter + dash + 3 digits + dot + 2 digits)
 //   Moto (2 letters): 50AC-123.45 (2 digits + 2 letters + dash + 3 digits + dot + 2 digits)
 //   Legacy (no dot): 50A-12345 / 50AC-12345
-const LICENSE_PLATE_REGEX = /^\d{2}[A-Z]{1,2}-(\d{3}\.\d{2}|\d{5})$/;
+const LICENSE_PLATE_REGEX_GENERIC = /^\d{2}[A-Z]{1,2}-(\d{3}\.\d{2}|\d{5})$/;
+const LICENSE_PLATE_REGEX_CAR = /^\d{2}[A-Z]{1}-(\d{3}\.\d{2}|\d{5})$/;
+const LICENSE_PLATE_REGEX_MOTO = /^\d{2}[A-Z]{2}-(\d{3}\.\d{2}|\d{5})$/;
 
 export const sanitizeLicensePlateInput = (licensePlate: string): string => {
   const normalized = licensePlate.toUpperCase().replace(/\s+/g, '');
   return normalized.replace(/[^0-9A-Z.-]/g, '').slice(0, 11);
 };
 
-export const isValidLicensePlate = (licensePlate: string): boolean => {
-  return LICENSE_PLATE_REGEX.test(licensePlate.trim().toUpperCase());
+export const isValidLicensePlate = (licensePlate: string, vehicleType?: VehicleType): boolean => {
+  const value = licensePlate.trim().toUpperCase();
+  if (vehicleType === 'CAR_4' || vehicleType === 'CAR_7') {
+    return LICENSE_PLATE_REGEX_CAR.test(value);
+  }
+  if (vehicleType === 'MOTORBIKE' || vehicleType === 'SCOOTER') {
+    return LICENSE_PLATE_REGEX_MOTO.test(value);
+  }
+  return LICENSE_PLATE_REGEX_GENERIC.test(value);
+};
+
+export const getLicensePlateHint = (vehicleType?: VehicleType): string => {
+  if (vehicleType === 'CAR_4' || vehicleType === 'CAR_7') {
+    return 'Ô tô: 50A-123.45 (2 số + 1 chữ + 5 số)';
+  }
+  if (vehicleType === 'MOTORBIKE' || vehicleType === 'SCOOTER') {
+    return 'Xe máy/ga: 50AC-123.45 (2 số + 2 chữ + 5 số)';
+  }
+  return 'Ô tô: 50A-123.45 · Xe máy/ga: 50AC-123.45';
 };
 
 export const normalizeLicensePlate = (licensePlate: string): string => {

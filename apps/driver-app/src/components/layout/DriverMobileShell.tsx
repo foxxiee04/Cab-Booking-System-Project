@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   AppBar,
-  Avatar,
   Badge,
   BottomNavigation,
   BottomNavigationAction,
@@ -57,6 +56,7 @@ import { driverSocketService } from '../../socket/driver.socket';
 import { WalletBalance } from '../../api/wallet.api';
 import { formatCurrency } from '../../utils/format.utils';
 import RideRequestModal from '../ride-request/RideRequestModal';
+import { DriverPortraitAvatar } from '../common/DriverPortraitFrame';
 import { Ride } from '../../types';
 
 interface DriverMobileShellProps {
@@ -541,9 +541,11 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
           </IconButton>
 
           <IconButton onClick={(event) => setProfileAnchorEl(event.currentTarget)}>
-            <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
-              {user?.firstName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase()}
-            </Avatar>
+            <DriverPortraitAvatar
+              src={user?.avatar}
+              initials={(user?.firstName?.[0] || user?.email?.[0] || 'T').toUpperCase()}
+              size={40}
+            />
           </IconButton>
         </Toolbar>
       </AppBar>
@@ -679,6 +681,7 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
               value={tab.value}
               icon={tab.icon}
               label={t(tab.labelKey, tab.fallback)}
+              sx={{ minWidth: 0, px: 0.5 }}
             />
           ))}
         </BottomNavigation>

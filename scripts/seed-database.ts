@@ -24,6 +24,7 @@
  *  11. Tạo 12 ride: 8 CASH completed, 2 MOMO completed (mock webhook),
  *      2 CANCELLED — KHÔNG có ride đang diễn ra hay FINDING_DRIVER.
  *  12. Sau khi ride xong, đặt TẤT CẢ driver OFFLINE để DB sạch.
+ * 12b. Bring 20 driver online theo cụm (HEATMAP_DRIVER_INDICES) để test heatmap trên admin dashboard.
  *  13. Generate docs/seed-accounts-reference.md từ GET API thật
  *
  * Lý do không seed ride FINDING_DRIVER / IN_PROGRESS:
@@ -36,6 +37,8 @@
  *
  * Yêu cầu:
  *   - Toàn bộ backend đang chạy (Docker Compose hoặc Swarm: api-gateway + auth + …)
+ *   - Stack đã chạy ổn định (Compose/Swarm). Sau `compose up` có thể cần chờ auth — seed probe ngắn (mặc định ~25s).
+ *   - Không muốn chờ: `SEED_SKIP_AUTH_PROXY_WAIT=1`. Máy chậm: `SEED_AUTH_PROXY_WAIT_ATTEMPTS=60`.
  *   - DB đã reset + schema (Compose: reset-database.*; Swarm: PHASE 15–15b trong deploy/SWARM-SETUP.md)
  *   - Sau reset cần restart wallet-service (Compose: docker compose restart wallet-service;
  *     Swarm: script reset-database-swarm.sh đã có bước service update --force)
@@ -45,8 +48,22 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { Client as PgClient } from 'pg';
+import { MongoClient } from 'mongodb';
+import bcrypt from 'bcryptjs';
 
 import { ADMIN, SEED_PASSWORD, bootstrapAdmin } from './bootstrap-admin';
+
+// ─── Second admin (sub-admin) ────────────────────────────────────────────────
+// Created via direct insert into auth_db (same pattern as bootstrapAdmin).
+// Phone/email distinct from primary admin so both can log in independently.
+const ADMIN_2 = {
+  phone: '0900000002',
+  email: 'admin2@cabbooking.com',
+  firstName: 'Sub',
+  lastName: 'Admin',
+};
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -228,6 +245,36 @@ async function loginAdmin(): Promise<string> {
   return token;
 }
 
+// Second admin uses the same direct-insert pattern as bootstrapAdmin.
+// Kept inline here (not in bootstrap-admin.ts) so the primary bootstrap script
+// remains a single-admin tool; the seed creates an additional admin for tests.
+async function bootstrapSecondAdmin(): Promise<void> {
+  const clientModulePath = path.resolve(
+    process.cwd(), 'services', 'auth-service', 'src', 'generated', 'prisma-client',
+  );
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { PrismaClient } = require(clientModulePath);
+  const url = `postgresql://${POSTGRES_USER}:${encodeURIComponent(POSTGRES_PASSWORD)}@${POSTGRES_HOST}:${POSTGRES_PORT}/auth_db`;
+  const prisma = new PrismaClient({ datasources: { db: { url } } });
+  try {
+    const passwordHash = bcrypt.hashSync(SEED_PASSWORD, 10);
+    await prisma.user.upsert({
+      where: { phone: ADMIN_2.phone },
+      update: {
+        email: ADMIN_2.email, role: 'ADMIN', status: 'ACTIVE',
+        firstName: ADMIN_2.firstName, lastName: ADMIN_2.lastName, passwordHash,
+      },
+      create: {
+        phone: ADMIN_2.phone, email: ADMIN_2.email, role: 'ADMIN', status: 'ACTIVE',
+        firstName: ADMIN_2.firstName, lastName: ADMIN_2.lastName, passwordHash,
+      },
+    });
+    console.log(`  [auth] second admin upserted — phone=${ADMIN_2.phone}`);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 // ─── Voucher seed ────────────────────────────────────────────────────────────
 
 const VOUCHER_SEEDS = [
@@ -358,11 +405,40 @@ type RegisteredUser = {
   email?: string | null;
 };
 
+/**
+ * Build a deterministic seed email so every seeded account has a unique,
+ * predictable login email. Pattern: `${role}.${phoneWithoutLeadingZero}@cabbooking.test`
+ * e.g. driver.911234561@cabbooking.test / customer.901234561@cabbooking.test.
+ */
+function deriveSeedEmail(phone: string, role: 'CUSTOMER' | 'DRIVER'): string {
+  const normalized = phone.replace(/^0/, '');
+  return `${role.toLowerCase()}.${normalized}@cabbooking.test`;
+}
+
+// Write email directly to auth_db — registration flow does not accept email,
+// so we bypass the API and update the row after creation.
+async function writeEmailToAuthDb(userId: string, email: string): Promise<void> {
+  const client = new PgClient({
+    host: POSTGRES_HOST,
+    port: parseInt(POSTGRES_PORT, 10),
+    user: POSTGRES_USER,
+    password: POSTGRES_PASSWORD,
+    database: 'auth_db',
+  });
+  await client.connect();
+  try {
+    await client.query('UPDATE users SET email = $1 WHERE id = $2', [email, userId]);
+  } finally {
+    await client.end();
+  }
+}
+
 async function registerUser(
   phone: string,
   firstName: string,
   lastName: string,
   role: 'CUSTOMER' | 'DRIVER',
+  emailOverride?: string,
 ): Promise<RegisteredUser> {
   // Proactively clear rate-limit keys so seed is deterministic regardless of
   // OTP_RATE_MAX_PER_IP env config (default 10 / 60s).
@@ -383,7 +459,8 @@ async function registerUser(
     body: { phone, otp },
   });
 
-  // Step 4: complete registration with profile + password → returns tokens
+  // Step 4: complete registration — email not part of registration flow, set via DB below
+  const email = emailOverride || deriveSeedEmail(phone, role);
   const completeRes = await http<any>('/api/auth/register-phone/complete', {
     method: 'POST',
     body: { phone, password: SEED_PASSWORD, firstName, lastName, role },
@@ -397,6 +474,9 @@ async function registerUser(
     throw new Error(`Registration response malformed for ${phone}: ${JSON.stringify(completeRes)}`);
   }
 
+  // Write email directly to auth_db since registration flow doesn't accept it
+  await writeEmailToAuthDb(user.id, email);
+
   return {
     userId: user.id,
     accessToken: tokens.accessToken,
@@ -404,30 +484,117 @@ async function registerUser(
     phone: user.phone,
     firstName: user.firstName || firstName,
     lastName: user.lastName || lastName,
-    email: user.email,
+    email,
   };
 }
 
 // ─── Customer seed list ──────────────────────────────────────────────────────
 
 const CUSTOMERS = [
-  { phone: '0901234561', firstName: 'Nguyen', lastName: 'Van A' },
-  { phone: '0901234562', firstName: 'Tran', lastName: 'Thi B' },
-  { phone: '0901234563', firstName: 'Le', lastName: 'Van C' },
-  { phone: '0901234564', firstName: 'Pham', lastName: 'Minh D' },
-  { phone: '0901234565', firstName: 'Hoang', lastName: 'Van E' },
-  { phone: '0901234566', firstName: 'Dang', lastName: 'Thi F' },
-  { phone: '0901234567', firstName: 'Vu', lastName: 'Minh G' },
-  { phone: '0901234568', firstName: 'Bui', lastName: 'Thi H' },
-  { phone: '0901234569', firstName: 'Ngo', lastName: 'Van I' },
-  { phone: '0901234570', firstName: 'Dinh', lastName: 'Thi J' },
-  // Demo customer tại khu vực Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp
+  // ── Core customers (original 15) ─────────────────────────────────────────
+  { phone: '0901234561', firstName: 'Nguyen', lastName: 'Van An' },
+  { phone: '0901234562', firstName: 'Tran', lastName: 'Thi Bao' },
+  { phone: '0901234563', firstName: 'Le', lastName: 'Van Cuong' },
+  { phone: '0901234564', firstName: 'Pham', lastName: 'Minh Duc' },
+  { phone: '0901234565', firstName: 'Hoang', lastName: 'Van Em' },
+  { phone: '0901234566', firstName: 'Dang', lastName: 'Thi Phuong' },
+  { phone: '0901234567', firstName: 'Vu', lastName: 'Minh Giang' },
+  { phone: '0901234568', firstName: 'Bui', lastName: 'Thi Ha' },
+  { phone: '0901234569', firstName: 'Ngo', lastName: 'Van Hung' },
+  { phone: '0901234570', firstName: 'Dinh', lastName: 'Thi Lan' },
+  // Index 10 = customer demo dùng trong docs/test-scenarios.md (DO NOT REORDER)
   { phone: '0901234571', firstName: 'Nguyen', lastName: 'Thi Demo' },
-  // Khách hàng demo cho multi-user test scenarios (3C-1D, payment, AI)
-  { phone: '0901999001', firstName: 'Phuong',  lastName: 'Nguyen Test' },
-  { phone: '0901999002', firstName: 'Khoa',    lastName: 'Tran Test'   },
-  { phone: '0901999003', firstName: 'Linh',    lastName: 'Le Test'     },
-  { phone: '0901999004', firstName: 'Minh',    lastName: 'Pham Test'   },
+  { phone: '0901999001', firstName: 'Phuong', lastName: 'Nguyen Mai' },
+  { phone: '0901999002', firstName: 'Khoa', lastName: 'Tran Nam' },
+  { phone: '0901999003', firstName: 'Linh', lastName: 'Le Oanh' },
+  { phone: '0901999004', firstName: 'Minh', lastName: 'Pham Phat' },
+  // ── Extended customers for richer analytics ───────────────────────────────
+  { phone: '0902111001', firstName: 'Hoa', lastName: 'Nguyen Quynh' },
+  { phone: '0902111002', firstName: 'Thanh', lastName: 'Tran Rong' },
+  { phone: '0902111003', firstName: 'Hieu', lastName: 'Le Sang' },
+  { phone: '0902111004', firstName: 'Tuan', lastName: 'Pham Tam' },
+  { phone: '0902111005', firstName: 'Kim', lastName: 'Hoang Uyen' },
+  { phone: '0902111006', firstName: 'Hung', lastName: 'Dang Van' },
+  { phone: '0902111007', firstName: 'Thu', lastName: 'Vu Xuan' },
+  { phone: '0902111008', firstName: 'Long', lastName: 'Bui Yen' },
+  { phone: '0902111009', firstName: 'Mai', lastName: 'Ngo Anh' },
+  { phone: '0902111010', firstName: 'Huy', lastName: 'Dinh Bac' },
+  { phone: '0902222001', firstName: 'Linh', lastName: 'Cao Cam' },
+  { phone: '0902222002', firstName: 'Nam', lastName: 'Mai Dan' },
+  { phone: '0902222003', firstName: 'Yen', lastName: 'Ly Em' },
+  { phone: '0902222004', firstName: 'Son', lastName: 'Do Gam' },
+  { phone: '0902222005', firstName: 'Ha', lastName: 'Trang Hoa' },
+  { phone: '0902222006', firstName: 'Kien', lastName: 'Nhat Huong' },
+  { phone: '0902222007', firstName: 'Van', lastName: 'Quoc Khoi' },
+  { phone: '0902222008', firstName: 'Lan', lastName: 'Bich Linh' },
+  { phone: '0902222009', firstName: 'Duc', lastName: 'Hai Minh' },
+  { phone: '0902222010', firstName: 'Quynh', lastName: 'Anh Ngoc' },
+  // ── Bulk customers (35 → 100) — phục vụ Top Customers chart + analytics ─────
+  { phone: '0903100001', firstName: 'An',    lastName: 'Tran Phuc' },
+  { phone: '0903100002', firstName: 'Bao',   lastName: 'Le Hoang' },
+  { phone: '0903100003', firstName: 'Cuong', lastName: 'Nguyen Tien' },
+  { phone: '0903100004', firstName: 'Dat',   lastName: 'Pham Cong' },
+  { phone: '0903100005', firstName: 'Em',    lastName: 'Hoang Lan' },
+  { phone: '0903100006', firstName: 'Phong', lastName: 'Vu Tan' },
+  { phone: '0903100007', firstName: 'Giang', lastName: 'Bui Truc' },
+  { phone: '0903100008', firstName: 'Hoa',   lastName: 'Dang My' },
+  { phone: '0903100009', firstName: 'Hieu',  lastName: 'Vo Quang' },
+  { phone: '0903100010', firstName: 'Khanh', lastName: 'Le Thanh' },
+  { phone: '0903100011', firstName: 'Linh',  lastName: 'Pham Thuy' },
+  { phone: '0903100012', firstName: 'Mai',   lastName: 'Tran Phuong' },
+  { phone: '0903100013', firstName: 'Nam',   lastName: 'Nguyen Quoc' },
+  { phone: '0903100014', firstName: 'Oanh',  lastName: 'Le Bich' },
+  { phone: '0903100015', firstName: 'Phat',  lastName: 'Hoang Minh' },
+  { phone: '0903100016', firstName: 'Quan',  lastName: 'Vu Bao' },
+  { phone: '0903100017', firstName: 'Rang',  lastName: 'Bui Quynh' },
+  { phone: '0903100018', firstName: 'Son',   lastName: 'Dinh Cong' },
+  { phone: '0903100019', firstName: 'Tam',   lastName: 'Pham Hieu' },
+  { phone: '0903100020', firstName: 'Uyen',  lastName: 'Tran Kim' },
+  { phone: '0903200001', firstName: 'Vinh',  lastName: 'Le Quang' },
+  { phone: '0903200002', firstName: 'Xuan',  lastName: 'Nguyen Tu' },
+  { phone: '0903200003', firstName: 'Yen',   lastName: 'Hoang Bich' },
+  { phone: '0903200004', firstName: 'Anh',   lastName: 'Bui Tuan' },
+  { phone: '0903200005', firstName: 'Binh',  lastName: 'Vu Thanh' },
+  { phone: '0903200006', firstName: 'Cam',   lastName: 'Tran Ngoc' },
+  { phone: '0903200007', firstName: 'Diep',  lastName: 'Le Anh' },
+  { phone: '0903200008', firstName: 'Phuoc', lastName: 'Pham Van' },
+  { phone: '0903200009', firstName: 'Gia',   lastName: 'Nguyen Han' },
+  { phone: '0903200010', firstName: 'Huong', lastName: 'Hoang Mai' },
+  { phone: '0903200011', firstName: 'Khang', lastName: 'Vu Cuong' },
+  { phone: '0903200012', firstName: 'Linh',  lastName: 'Tran Tu' },
+  { phone: '0903200013', firstName: 'Minh',  lastName: 'Le Dinh' },
+  { phone: '0903200014', firstName: 'Ngan',  lastName: 'Pham Hoa' },
+  { phone: '0903200015', firstName: 'Phu',   lastName: 'Bui Quoc' },
+  { phone: '0903200016', firstName: 'Quy',   lastName: 'Dinh Lan' },
+  { phone: '0903200017', firstName: 'Rieng', lastName: 'Hoang Diep' },
+  { phone: '0903200018', firstName: 'Sang',  lastName: 'Vo Hoang' },
+  { phone: '0903200019', firstName: 'Tu',    lastName: 'Le Phuong' },
+  { phone: '0903200020', firstName: 'Vu',    lastName: 'Pham Bao' },
+  { phone: '0903300001', firstName: 'Y',     lastName: 'Tran Linh' },
+  { phone: '0903300002', firstName: 'Tien',  lastName: 'Nguyen Bao' },
+  { phone: '0903300003', firstName: 'Huy',   lastName: 'Vu Quoc' },
+  { phone: '0903300004', firstName: 'Loc',   lastName: 'Bui Phuc' },
+  { phone: '0903300005', firstName: 'Khoa',  lastName: 'Le Van' },
+  { phone: '0903300006', firstName: 'Trung', lastName: 'Hoang Anh' },
+  { phone: '0903300007', firstName: 'Hau',   lastName: 'Pham Tien' },
+  { phone: '0903300008', firstName: 'Kien',  lastName: 'Vo Cong' },
+  { phone: '0903300009', firstName: 'Kha',   lastName: 'Tran Bich' },
+  { phone: '0903300010', firstName: 'Loi',   lastName: 'Nguyen Phuc' },
+  { phone: '0903300011', firstName: 'Trang', lastName: 'Le Mai' },
+  { phone: '0903300012', firstName: 'Bich',  lastName: 'Pham Linh' },
+  { phone: '0903300013', firstName: 'Cuong', lastName: 'Hoang Bao' },
+  { phone: '0903300014', firstName: 'Tan',   lastName: 'Vu Long' },
+  { phone: '0903300015', firstName: 'Hai',   lastName: 'Bui Yen' },
+  { phone: '0903300016', firstName: 'Hung',  lastName: 'Tran Manh' },
+  { phone: '0903300017', firstName: 'Hai',   lastName: 'Le Quynh' },
+  { phone: '0903300018', firstName: 'Trinh', lastName: 'Pham My' },
+  { phone: '0903300019', firstName: 'Hieu',  lastName: 'Nguyen Anh' },
+  { phone: '0903300020', firstName: 'Tu',    lastName: 'Hoang Linh' },
+  { phone: '0903400001', firstName: 'Trung', lastName: 'Vu Bao' },
+  { phone: '0903400002', firstName: 'Long',  lastName: 'Bui Hieu' },
+  { phone: '0903400003', firstName: 'Diep',  lastName: 'Tran Hoang' },
+  { phone: '0903400004', firstName: 'Tinh',  lastName: 'Le Nam' },
+  { phone: '0903400005', firstName: 'Ha',    lastName: 'Pham Quynh' },
 ];
 
 async function registerCustomers(): Promise<RegisteredUser[]> {
@@ -573,6 +740,148 @@ const DRIVERS = [
     location: { lat: 10.8222, lng: 106.6615 },
     vehicle: { type: 'SCOOTER', brand: 'Honda', model: 'Vision', plate: '59XA-100.50', color: 'Red', year: 2024 },
     license: { class: 'A1', number: '100000000027', expiryYear: 2029 },
+  },
+  // ── Extended approved drivers ─────────────────────────────────────────────
+  {
+    phone: '0912100001', firstName: 'Nguyen', lastName: 'Thanh Long',
+    cluster: 'Quận 3',
+    location: { lat: 10.7780, lng: 106.6930 },
+    vehicle: { type: 'CAR_4', brand: 'Kia', model: 'Seltos', plate: '51A-301.11', color: 'White', year: 2023 },
+    license: { class: 'B', number: '200000000001', expiryYear: 2028 },
+  },
+  {
+    phone: '0912100002', firstName: 'Tran', lastName: 'Van Khoa',
+    cluster: 'Quận 7',
+    location: { lat: 10.7320, lng: 106.7200 },
+    vehicle: { type: 'SCOOTER', brand: 'Yamaha', model: 'Grande', plate: '59XA-302.22', color: 'Blue', year: 2024 },
+    license: { class: 'A1', number: '200000000002', expiryYear: 2029 },
+  },
+  {
+    phone: '0912100003', firstName: 'Le', lastName: 'Thi Thuy',
+    cluster: 'Bình Thạnh',
+    location: { lat: 10.7950, lng: 106.7210 },
+    vehicle: { type: 'CAR_4', brand: 'Honda', model: 'City', plate: '51B-303.33', color: 'Silver', year: 2022 },
+    license: { class: 'B', number: '200000000003', expiryYear: 2028 },
+  },
+  {
+    phone: '0912100004', firstName: 'Pham', lastName: 'Quoc Bao',
+    cluster: 'Tân Bình',
+    location: { lat: 10.8030, lng: 106.6510 },
+    vehicle: { type: 'MOTORBIKE', brand: 'Honda', model: 'Blade', plate: '59AC-304.44', color: 'Red', year: 2023 },
+    license: { class: 'A1', number: '200000000004', expiryYear: 2029 },
+  },
+  {
+    phone: '0912100005', firstName: 'Hoang', lastName: 'Minh Tri',
+    cluster: 'Quận 10',
+    location: { lat: 10.7730, lng: 106.6600 },
+    vehicle: { type: 'CAR_4', brand: 'Toyota', model: 'Corolla Altis', plate: '51C-305.55', color: 'Black', year: 2021 },
+    license: { class: 'B', number: '200000000005', expiryYear: 2027 },
+  },
+  {
+    phone: '0912100006', firstName: 'Dang', lastName: 'Van Hau',
+    cluster: 'Quận 5',
+    location: { lat: 10.7550, lng: 106.6680 },
+    vehicle: { type: 'CAR_7', brand: 'Mitsubishi', model: 'Xpander', plate: '51D-306.66', color: 'Gray', year: 2023 },
+    license: { class: 'D2', number: '200000000006', expiryYear: 2028 },
+  },
+  {
+    phone: '0912100007', firstName: 'Vu', lastName: 'Thi Kim',
+    cluster: 'Bình Tân',
+    location: { lat: 10.7510, lng: 106.6140 },
+    vehicle: { type: 'SCOOTER', brand: 'Honda', model: 'Air Blade', plate: '59XB-307.77', color: 'White', year: 2024 },
+    license: { class: 'A1', number: '200000000007', expiryYear: 2029 },
+  },
+  {
+    phone: '0912100008', firstName: 'Bui', lastName: 'Xuan Hai',
+    cluster: 'Thủ Đức',
+    location: { lat: 10.8500, lng: 106.7730 },
+    vehicle: { type: 'CAR_4', brand: 'Mazda', model: 'Mazda3', plate: '51E-308.88', color: 'Blue', year: 2023 },
+    license: { class: 'B', number: '200000000008', expiryYear: 2029 },
+  },
+  // ── Bulk approved drivers (28 → 37) — phục vụ Top Drivers + heatmap ────────
+  {
+    phone: '0913100001', firstName: 'Tran', lastName: 'Quoc Tien',
+    cluster: 'Quận 4',
+    location: { lat: 10.7585, lng: 106.7050 },
+    vehicle: { type: 'MOTORBIKE', brand: 'Yamaha', model: 'Sirius', plate: '59AC-401.11', color: 'Red', year: 2023 },
+    license: { class: 'A1', number: '300000000001', expiryYear: 2029 },
+  },
+  {
+    phone: '0913100002', firstName: 'Le', lastName: 'Hoang Anh',
+    cluster: 'Quận 8',
+    location: { lat: 10.7440, lng: 106.6840 },
+    vehicle: { type: 'CAR_4', brand: 'Hyundai', model: 'Accent', plate: '51F-402.22', color: 'White', year: 2024 },
+    license: { class: 'B', number: '300000000002', expiryYear: 2029 },
+  },
+  {
+    phone: '0913100003', firstName: 'Pham', lastName: 'Trung Hieu',
+    cluster: 'Bình Thạnh',
+    location: { lat: 10.8035, lng: 106.7095 },
+    vehicle: { type: 'SCOOTER', brand: 'Honda', model: 'SH Mode', plate: '59XB-403.33', color: 'Silver', year: 2024 },
+    license: { class: 'A1', number: '300000000003', expiryYear: 2029 },
+  },
+  {
+    phone: '0913100004', firstName: 'Nguyen', lastName: 'Thi Hong',
+    cluster: 'Phú Nhuận',
+    location: { lat: 10.7990, lng: 106.6810 },
+    vehicle: { type: 'CAR_4', brand: 'Toyota', model: 'Vios', plate: '51G-404.44', color: 'Black', year: 2022 },
+    license: { class: 'B', number: '300000000004', expiryYear: 2028 },
+  },
+  {
+    phone: '0913100005', firstName: 'Hoang', lastName: 'Van Quy',
+    cluster: 'Gò Vấp',
+    location: { lat: 10.8385, lng: 106.6720 },
+    vehicle: { type: 'MOTORBIKE', brand: 'Honda', model: 'Future', plate: '59AC-405.55', color: 'Blue', year: 2023 },
+    license: { class: 'A1', number: '300000000005', expiryYear: 2029 },
+  },
+  {
+    phone: '0913100006', firstName: 'Vu', lastName: 'Thi Hanh',
+    cluster: 'Quận 6',
+    location: { lat: 10.7470, lng: 106.6360 },
+    vehicle: { type: 'CAR_7', brand: 'Toyota', model: 'Innova', plate: '51H-406.66', color: 'Gray', year: 2023 },
+    license: { class: 'D2', number: '300000000006', expiryYear: 2028 },
+  },
+  {
+    phone: '0913100007', firstName: 'Bui', lastName: 'Quoc Trung',
+    cluster: 'Quận 12',
+    location: { lat: 10.8650, lng: 106.6510 },
+    vehicle: { type: 'CAR_4', brand: 'Kia', model: 'Cerato', plate: '51K-407.77', color: 'White', year: 2023 },
+    license: { class: 'B', number: '300000000007', expiryYear: 2029 },
+  },
+  {
+    phone: '0913100008', firstName: 'Dang', lastName: 'Minh Hoang',
+    cluster: 'Quận 11',
+    location: { lat: 10.7635, lng: 106.6530 },
+    vehicle: { type: 'SCOOTER', brand: 'Yamaha', model: 'Janus', plate: '59XB-408.88', color: 'Black', year: 2024 },
+    license: { class: 'A1', number: '300000000008', expiryYear: 2029 },
+  },
+  {
+    phone: '0913100009', firstName: 'Cao', lastName: 'Thi Bich',
+    cluster: 'Tân Phú',
+    location: { lat: 10.7900, lng: 106.6280 },
+    vehicle: { type: 'MOTORBIKE', brand: 'Honda', model: 'Wave RSX', plate: '59AC-409.99', color: 'Red', year: 2023 },
+    license: { class: 'A1', number: '300000000009', expiryYear: 2029 },
+  },
+  {
+    phone: '0913100010', firstName: 'Mai', lastName: 'Quoc Phong',
+    cluster: 'Bình Tân',
+    location: { lat: 10.7480, lng: 106.6120 },
+    vehicle: { type: 'CAR_4', brand: 'Honda', model: 'City', plate: '51L-410.10', color: 'Silver', year: 2023 },
+    license: { class: 'B', number: '300000000010', expiryYear: 2029 },
+  },
+  {
+    phone: '0913100011', firstName: 'Vo', lastName: 'Thanh Hung',
+    cluster: 'Quận 9',
+    location: { lat: 10.8420, lng: 106.7960 },
+    vehicle: { type: 'SCOOTER', brand: 'Honda', model: 'Lead', plate: '59XB-411.11', color: 'White', year: 2024 },
+    license: { class: 'A1', number: '300000000011', expiryYear: 2029 },
+  },
+  {
+    phone: '0913100012', firstName: 'Phan', lastName: 'Thi Loan',
+    cluster: 'Quận 2',
+    location: { lat: 10.7920, lng: 106.7480 },
+    vehicle: { type: 'CAR_7', brand: 'Toyota', model: 'Fortuner', plate: '51M-412.12', color: 'Black', year: 2022 },
+    license: { class: 'D2', number: '300000000012', expiryYear: 2028 },
   },
   // 3 PENDING drivers for admin approval test
   {
@@ -773,6 +1082,19 @@ async function setApprovedDriversOnline(profiles: DriverProfile[], driverUsers: 
   }
 }
 
+// 20 driver indices to keep ONLINE after seed — spread across clusters for heatmap testing.
+// Selected to give clear hotspot clusters when viewed on the heatmap (admin dashboard).
+const HEATMAP_DRIVER_INDICES = [
+  0, 1, 2, 10,   // Bến Thành / Q1  (4 drivers — hottest zone)
+  3, 4, 5,        // Tân Sơn Nhất   (3)
+  12, 13, 16,     // Gò Vấp / Hạnh Thông (3)
+  6, 18,          // Phú Mỹ Hưng / Q7    (2)
+  8, 35,          // Thủ Đức / Quận 9    (2)
+  19, 27,         // Bình Thạnh          (2)
+  17, 28,         // Quận 3 / Phú Nhuận  (2)
+  22, 23,         // Quận 5 + Bình Tân   (2)
+];
+
 async function setApprovedDriversOffline(profiles: DriverProfile[], driverUsers: RegisteredUser[]) {
   // After rides are seeded, put all drivers OFFLINE so DB is clean.
   // Without this, drivers would appear ONLINE on next login with no active rides,
@@ -795,6 +1117,18 @@ async function setApprovedDriversOffline(profiles: DriverProfile[], driverUsers:
     }
   }
   console.log(`    → ${count} driver(s) set OFFLINE`);
+}
+
+async function bringHeatmapDriversOnline(profiles: DriverProfile[], driverUsers: RegisteredUser[]) {
+  console.log(`  [heatmap] bringing ${HEATMAP_DRIVER_INDICES.length} drivers online across clusters...`);
+  for (const idx of HEATMAP_DRIVER_INDICES) {
+    if (!profiles[idx] || profiles[idx].pending) continue;
+    const user = driverUsers[idx];
+    const meta = DRIVERS[idx];
+    await setDriverOnline(user.accessToken, meta.location.lat, meta.location.lng);
+    console.log(`    + ${user.phone} online @ (${meta.location.lat}, ${meta.location.lng}) — ${meta.cluster}`);
+  }
+  console.log(`    → ${HEATMAP_DRIVER_INDICES.length} heatmap drivers ONLINE`);
 }
 
 // ─── Ride seed plans ─────────────────────────────────────────────────────────
@@ -1045,13 +1379,18 @@ const RIDE_PLANS: RideSeedPlan[] = [
   },
   {
     customerIndex: 12, status: 'CANCELLED',
-    vehicleType: 'MOMO', paymentMethod: 'CASH',
+    vehicleType: 'MOTORBIKE', paymentMethod: 'CASH',
     pickup: { address: 'Lotte Mart Gò Vấp, 242 Nguyễn Văn Lượng', lat: 10.8330, lng: 106.6645 },
     dropoff: { address: '295 Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp', lat: 10.8158, lng: 106.6636 },
     cancelReason: 'Thay đổi kế hoạch',
-    vehicleType: 'MOTORBIKE',
   },
 ];
+
+// Auto-generated ride plan pool was removed: with hybrid seeding (live API ~30
+// + DB historical ~370 = ~400 total), the historical pass is the source of
+// data richness. Live API rides are limited to RIDE_PLANS (handcrafted demo
+// flows for docs/test-scenarios.md) so the seed runs in ~3 min instead of
+// ~30 min. Historical rides reuse HIST_PICKUP_ADDRS below.
 
 // ─── Ride lifecycle helpers ──────────────────────────────────────────────────
 
@@ -1116,6 +1455,7 @@ async function payRideOnlineMock(customer: RegisteredUser, rideId: string, amoun
         vnp_TransactionStatus: '00',
         vnp_TransactionNo: `SEED-VNPAY-${Date.now()}`,
         vnp_OrderInfo: `PAY_RIDE_${rideId}`,
+        vnp_Amount: String(amount * 100), // VNPay sends amount × 100; required for amount check
         orderId: rideId,
       },
       expectedStatuses: [200, 201],
@@ -1225,18 +1565,20 @@ async function seedRides(
   customers: RegisteredUser[],
   drivers: RegisteredUser[],
   driverProfiles: DriverProfile[],
+  extraPlans: RideSeedPlan[] = [],
 ): Promise<SeededRide[]> {
-  console.log(`  [rides] orchestrating ${RIDE_PLANS.length} rides via API lifecycle...`);
+  const allPlans = [...RIDE_PLANS, ...extraPlans];
+  console.log(`  [rides] orchestrating ${allPlans.length} rides (${RIDE_PLANS.length} core + ${extraPlans.length} auto) via API lifecycle...`);
   const rides: SeededRide[] = [];
 
-  for (let i = 0; i < RIDE_PLANS.length; i += 1) {
-    const plan = RIDE_PLANS[i];
+  for (let i = 0; i < allPlans.length; i += 1) {
+    const plan = allPlans[i];
     const customer = customers[plan.customerIndex];
     const driverUser = plan.driverIndex !== undefined ? drivers[plan.driverIndex] : undefined;
     const driverProfile = plan.driverIndex !== undefined ? driverProfiles[plan.driverIndex] : undefined;
     const driverMeta = plan.driverIndex !== undefined ? DRIVERS[plan.driverIndex] : undefined;
 
-    console.log(`    [ride ${i + 1}/${RIDE_PLANS.length}] ${plan.status} ${plan.vehicleType} ${plan.paymentMethod}` +
+    console.log(`    [ride ${i + 1}/${allPlans.length}] ${plan.status} ${plan.vehicleType} ${plan.paymentMethod}` +
       `${plan.voucherCode ? ` voucher=${plan.voucherCode}` : ''}` +
       ` customer=${customer.phone}${driverUser ? ` driver=${driverUser.phone}` : ''}`);
 
@@ -1426,14 +1768,15 @@ async function generateSeedReference(
   lines.push('## Admin');
   lines.push('');
   lines.push(`- Phone: \`${ADMIN.phone}\` — Email: \`${ADMIN.email}\` — Họ tên: \`${ADMIN.firstName} ${ADMIN.lastName}\``);
+  lines.push(`- Phone: \`${ADMIN_2.phone}\` — Email: \`${ADMIN_2.email}\` — Họ tên: \`${ADMIN_2.firstName} ${ADMIN_2.lastName}\``);
   lines.push('');
 
   lines.push('## Customers');
   lines.push('');
-  lines.push('| # | Phone | Họ tên | UserId |');
-  lines.push('|---|-------|--------|--------|');
+  lines.push('| # | Phone | Email | Họ tên | UserId |');
+  lines.push('|---|-------|-------|--------|--------|');
   customers.forEach((c, i) => {
-    lines.push(`| ${i + 1} | \`${c.phone}\` | ${c.firstName} ${c.lastName} | \`${c.userId}\` |`);
+    lines.push(`| ${i + 1} | \`${c.phone}\` | \`${c.email || ''}\` | ${c.firstName} ${c.lastName} | \`${c.userId}\` |`);
   });
   lines.push('');
 
@@ -1441,15 +1784,15 @@ async function generateSeedReference(
   lines.push('');
   lines.push('Cluster + vehicle + license + vị trí seed. Ví kích hoạt 300.000đ (trừ commission sau ride). Tất cả OFFLINE sau seed — cần bật Online thủ công khi test.');
   lines.push('');
-  lines.push('| # | Phone | Họ tên | Cluster | Vehicle | Plate | License | Status | Wallet (đ) | DriverId |');
-  lines.push('|---|-------|--------|---------|---------|-------|---------|--------|-----------|----------|');
+  lines.push('| # | Phone | Email | Họ tên | Cluster | Vehicle | Plate | License | Status | Wallet (đ) | DriverId |');
+  lines.push('|---|-------|-------|--------|---------|---------|-------|---------|--------|-----------|----------|');
   drivers.forEach((u, i) => {
     const meta = DRIVERS[i];
     const profile = driverProfiles[i];
     const live = driverByDriverId.get(profile.driverId);
     const status = profile.pending ? 'PENDING' : (live?.status || 'APPROVED');
     const wallet = driverWallets.get(u.userId) || 0;
-    lines.push(`| ${i + 1} | \`${u.phone}\` | ${u.firstName} ${u.lastName} | ${meta.cluster} | ${meta.vehicle.brand} ${meta.vehicle.model} (${meta.vehicle.type}) | \`${meta.vehicle.plate}\` | ${meta.license.class} ${meta.license.number} | ${status} | ${wallet.toLocaleString('vi-VN')} | \`${profile.driverId}\` |`);
+    lines.push(`| ${i + 1} | \`${u.phone}\` | \`${u.email || ''}\` | ${u.firstName} ${u.lastName} | ${meta.cluster} | ${meta.vehicle.brand} ${meta.vehicle.model} (${meta.vehicle.type}) | \`${meta.vehicle.plate}\` | ${meta.license.class} ${meta.license.number} | ${status} | ${wallet.toLocaleString('vi-VN')} | \`${profile.driverId}\` |`);
   });
   lines.push('');
 
@@ -1539,7 +1882,597 @@ async function generateSeedReference(
   console.log(`  [report] written: ${SEED_REFERENCE_OUTPUT}`);
 }
 
+// ─── Historical wallet earnings seed (direct wallet_db only) ─────────────────
+// Only inserts WalletTransaction records into wallet_db (wallet-service).
+// Does NOT touch ride_db or payment_db — those data must go through the API flow.
+// This gives the driver earnings dashboard meaningful weekly chart data.
+
+function pgConnect(database: string): PgClient {
+  return new PgClient({
+    host: POSTGRES_HOST,
+    port: parseInt(POSTGRES_PORT, 10),
+    user: POSTGRES_USER,
+    password: POSTGRES_PASSWORD,
+    database,
+  });
+}
+
+const HIST_PICKUP_ADDRS = [
+  { address: 'Chợ Bến Thành, Quận 1, TP.HCM',              lat: 10.7726, lng: 106.6980 },
+  { address: 'Phố đi bộ Nguyễn Huệ, Quận 1, TP.HCM',       lat: 10.7745, lng: 106.7024 },
+  { address: 'Landmark 81, Bình Thạnh, TP.HCM',             lat: 10.7949, lng: 106.7219 },
+  { address: 'Sân bay Tân Sơn Nhất, Tân Bình, TP.HCM',      lat: 10.8185, lng: 106.6588 },
+  { address: 'Đại học Bách Khoa, Quận 10, TP.HCM',          lat: 10.7726, lng: 106.6594 },
+  { address: 'Phú Mỹ Hưng, Quận 7, TP.HCM',                lat: 10.7328, lng: 106.7218 },
+  { address: 'Giga Mall, Thủ Đức, TP.HCM',                  lat: 10.8495, lng: 106.7718 },
+  { address: 'AEON Mall Bình Tân, TP.HCM',                  lat: 10.7523, lng: 106.6135 },
+  { address: 'Nguyễn Văn Bảo, Hạnh Thông Tây, Gò Vấp',     lat: 10.8180, lng: 106.6635 },
+  { address: 'Vincom Gò Vấp, Quang Trung, Gò Vấp',          lat: 10.8340, lng: 106.6648 },
+  { address: 'Lotte Mart Gò Vấp, TP.HCM',                   lat: 10.8378, lng: 106.6697 },
+  { address: 'Vinhomes Grand Park, Quận 9, TP.HCM',         lat: 10.8145, lng: 106.8302 },
+  { address: 'Royal City, Quận 3, TP.HCM',                  lat: 10.7784, lng: 106.6928 },
+];
+
+const HIST_PAYMENT_METHODS_WEIGHTED = [
+  'CASH', 'CASH', 'CASH', 'CASH',  // 40%
+  'MOMO', 'MOMO',                  // 20%
+  'VNPAY', 'VNPAY',                // 20%
+  'WALLET', 'CARD',                // 20%
+];
+
+const HIST_VEHICLE_TYPES_WEIGHTED = [
+  'MOTORBIKE', 'MOTORBIKE', 'MOTORBIKE',
+  'SCOOTER', 'SCOOTER',
+  'CAR_4', 'CAR_4',
+  'CAR_7',
+];
+
+const HIST_FARE_BY_TYPE: Record<string, number[]> = {
+  MOTORBIKE: [25_000, 30_000, 35_000, 40_000, 50_000, 60_000, 70_000, 80_000],
+  SCOOTER:   [28_000, 35_000, 42_000, 50_000, 60_000, 75_000, 90_000],
+  CAR_4:     [60_000, 75_000, 90_000, 110_000, 130_000, 150_000, 180_000],
+  CAR_7:     [80_000, 100_000, 120_000, 150_000, 180_000, 220_000, 250_000],
+};
+
+const COMMISSION_BY_TYPE: Record<string, number> = {
+  MOTORBIKE: 0.20, SCOOTER: 0.20, CAR_4: 0.18, CAR_7: 0.15,
+};
+
+function histPick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/**
+ * Comprehensive historical data seed: inserts ~370 historical completed rides
+ * across 30 days, FULLY consistent with what an end-to-end API flow would
+ * produce. Writes to ALL the same tables an API-driven ride lifecycle touches:
+ *
+ *   ride_db     · "Ride"
+ *   payment_db  · "Payment", "DriverEarnings"
+ *   wallet_db   · wallet_transactions (EARN credit + COMMISSION debit for cash),
+ *                 driver_wallets (balance/availableBalance),
+ *                 merchant_ledger (PAYMENT / COMMISSION / PAYOUT entries),
+ *                 merchant_balance (singleton totals)
+ *   review_db   · reviews (Mongo, both directions ~85% of rides)
+ *   driver_db   · drivers.rating_average, drivers.rating_count
+ *
+ * Key IDs used across all stores (auth userId throughout):
+ *   - ride_db "Ride"."driverId"         = driver auth userId
+ *   - payment_db "Payment"."driverId"   = driver auth userId
+ *   - payment_db "DriverEarnings"."driverId" = driver auth userId
+ *   - wallet_db  "driverId"             = driver auth userId
+ *   - review_db  reviewerId/revieweeId  = userId (driver: auth userId; customer: userId)
+ *   - driver_db.driver.userId           = driver auth userId (rating updated by userId)
+ *
+ * Distribution: ~40% of rides in last 7 days (denser, for driver weekly chart),
+ * ~60% spread across days 8–30 (for admin Reports 30-day chart). Demo drivers
+ * (indices 12–16, Hạnh Thông area used in test-scenarios.md) get a 1.5x boost
+ * so their personal dashboard has meaningful chart data.
+ *
+ * All inserts use ON CONFLICT DO NOTHING — safe to re-run.
+ */
+
+/** Daily ride multiplier by day-of-week (0=Sun … 6=Sat). Thu/Fri/Sat peak. */
+const DOW_MULTIPLIER = [1.0, 0.65, 0.75, 0.9, 1.15, 1.4, 1.35];
+
+const HIST_TOTAL_TARGET = 370;
+const HIST_7DAY_PORTION = 0.4;  // 40% concentrated in last 7 days
+const HIST_DAYS = 30;
+const DEMO_DRIVER_INDICES = new Set([12, 13, 14, 15, 16]); // Hạnh Thông (test-scenarios)
+
+function driverActivityTier(idx: number): 'high' | 'mid' | 'low' {
+  const pct = idx % 3;
+  return pct === 0 ? 'high' : pct === 1 ? 'mid' : 'low';
+}
+
+function tierWeight(tier: 'high' | 'mid' | 'low'): number {
+  if (tier === 'high') return 1.5;
+  if (tier === 'mid')  return 1.0;
+  return 0.55;
+}
+
+/**
+ * Plan how many rides each driver gets in (a) last 7 days and (b) days 8–30.
+ * Returns target counts that sum to ~HIST_TOTAL_TARGET.
+ */
+function planRideCounts(driverCount: number): {
+  per7d: number[]; per30d: number[]; total: number;
+} {
+  // Compute weights per driver (tier × demo boost)
+  const weights = Array.from({ length: driverCount }, (_, i) => {
+    const tier = driverActivityTier(i);
+    const w = tierWeight(tier);
+    return DEMO_DRIVER_INDICES.has(i) ? w * 1.5 : w;
+  });
+  const wSum = weights.reduce((s, w) => s + w, 0) || 1;
+
+  const target7d = Math.round(HIST_TOTAL_TARGET * HIST_7DAY_PORTION);
+  const target30d = HIST_TOTAL_TARGET - target7d;
+
+  // Floor 7d at 7 so every driver has at least one ride on each of the last 7
+  // days — guarantees the driver weekly chart shows non-zero bars every day
+  // and prevents the "biểu đồ chỉ hiển thị hôm nay" symptom on lightly-active
+  // seeded drivers.
+  const per7d = weights.map((w) => Math.max(7, Math.round((w / wSum) * target7d)));
+  const per30d = weights.map((w) => Math.max(1, Math.round((w / wSum) * target30d)));
+  const total = per7d.reduce((s, n) => s + n, 0) + per30d.reduce((s, n) => s + n, 0);
+  return { per7d, per30d, total };
+}
+
+/** Pick a daysAgo offset weighted by DOW multiplier. */
+function pickDayWithDOW(maxDaysAgo: number, minDaysAgo = 0): number {
+  // Sample up to 6 candidates, pick the one whose DOW multiplier wins a draw.
+  let best = minDaysAgo + Math.floor(Math.random() * (maxDaysAgo - minDaysAgo));
+  let bestScore = 0;
+  for (let k = 0; k < 5; k++) {
+    const candidate = minDaysAgo + Math.floor(Math.random() * (maxDaysAgo - minDaysAgo));
+    const d = new Date();
+    d.setDate(d.getDate() - candidate);
+    const score = DOW_MULTIPLIER[d.getDay()] * (0.7 + Math.random() * 0.6);
+    if (score > bestScore) { best = candidate; bestScore = score; }
+  }
+  return best;
+}
+
+/** Bias rating toward the higher end (4-5 ★ ~70%, 3 ★ ~20%, 1-2 ★ ~10%). */
+function pickHistoricalRating(): number {
+  const r = Math.random();
+  if (r < 0.55) return 5;
+  if (r < 0.78) return 4;
+  if (r < 0.92) return 3;
+  if (r < 0.97) return 2;
+  return 1;
+}
+
+const HIST_REVIEW_COMMENTS: Record<number, string[]> = {
+  5: ['Tài xế chuyên nghiệp, đúng giờ.', 'Xe sạch sẽ, lái êm.', 'Thái độ vui vẻ, an toàn.', 'Rất hài lòng với chuyến đi.'],
+  4: ['Chuyến đi ổn, tài xế thân thiện.', 'Tốt, sẽ ủng hộ tiếp.', 'Đến điểm đón nhanh.'],
+  3: ['Bình thường, không có gì đặc biệt.', 'Lái xe trung bình.'],
+  2: ['Tài xế đến hơi chậm.', 'Phục vụ chưa tốt lắm.'],
+  1: ['Trải nghiệm chưa hài lòng.', 'Mong cải thiện thái độ.'],
+};
+function pickReviewComment(rating: number): string {
+  const arr = HIST_REVIEW_COMMENTS[rating] || HIST_REVIEW_COMMENTS[5];
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+const MONGO_HOST = process.env.MONGO_HOST || 'localhost';
+const MONGO_PORT = process.env.MONGO_PORT || '27017';
+const MONGO_USER = process.env.MONGO_USER || 'mongo';
+const MONGO_PASSWORD = process.env.MONGO_PASSWORD || 'mongo';
+function reviewMongoUri(): string {
+  return `mongodb://${MONGO_USER}:${encodeURIComponent(MONGO_PASSWORD)}@${MONGO_HOST}:${MONGO_PORT}/review_db?authSource=admin`;
+}
+
+async function seedWalletEarningsHistory(
+  customers: RegisteredUser[],
+  driverProfiles: Array<{ driverId: string; userId: string; pending: boolean }>,
+  driverUsers: RegisteredUser[],
+): Promise<void> {
+  const approved = driverProfiles
+    .map((p, i) => ({ p, i }))
+    .filter(({ p }) => !p.pending);
+  if (approved.length === 0 || customers.length === 0) {
+    console.log('  [hist] No approved drivers or customers — skipped.');
+    return;
+  }
+
+  const plan = planRideCounts(approved.length);
+  console.log(`  [hist] Target ~${HIST_TOTAL_TARGET} rides over ${HIST_DAYS} days for ${approved.length} drivers ` +
+    `(plan: 7d=${plan.per7d.reduce((s, n) => s + n, 0)}, 8-30d=${plan.per30d.reduce((s, n) => s + n, 0)}, sum=${plan.total})`);
+
+  const rideDb = pgConnect('ride_db');
+  const payDb  = pgConnect('payment_db');
+  const walDb  = pgConnect('wallet_db');
+  const drvDb  = pgConnect('driver_db');
+  await Promise.all([rideDb.connect(), payDb.connect(), walDb.connect(), drvDb.connect()]);
+
+  let mongoClient: MongoClient | null = null;
+  let reviewCol: any = null;
+  try {
+    mongoClient = await MongoClient.connect(reviewMongoUri(), { serverSelectionTimeoutMS: 5_000 });
+    reviewCol = mongoClient.db('review_db').collection('reviews');
+    // Ensure unique compound index (idempotent)
+    await reviewCol.createIndex({ rideId: 1, reviewerId: 1 }, { unique: true });
+  } catch (err: any) {
+    console.log(`  [hist] ! Mongo connect failed (${err.message?.slice(0, 80)}) — reviews will be SKIPPED`);
+    reviewCol = null;
+  }
+
+  // Cache current wallet balance per driver (auth userId key)
+  const walletBalances = new Map<string, number>();
+  for (const { p } of approved) {
+    const r = await walDb.query<{ balance: number }>(
+      `SELECT balance FROM driver_wallets WHERE "driverId" = $1`, [p.userId]
+    );
+    walletBalances.set(p.userId, Number(r.rows[0]?.balance ?? 0));
+  }
+
+  // Per-driver rating accumulator → drivers.rating_average / rating_count
+  const ratingSum = new Map<string, number>();   // sum of ratings received
+  const ratingCount = new Map<string, number>();
+  for (const { p } of approved) {
+    ratingSum.set(p.userId, 0);
+    ratingCount.set(p.userId, 0);
+  }
+
+  // Merchant balance accumulator
+  let merchantTotalIn = 0;
+  let merchantTotalOut = 0;
+
+  let totalRides = 0;
+  let totalGMV = 0;
+
+  // ── Generate ride events ─────────────────────────────────────────────────
+  // Build a flat list (driverIdx, daysAgo) so we can sort chronologically
+  // and update wallet balances in correct time order.
+  type RideEvent = { driverIdx: number; daysAgo: number };
+  const events: RideEvent[] = [];
+  approved.forEach(({ i: _idx }, slotIdx) => {
+    // For the last-7-days bucket, deal rides round-robin across all 7 days so
+    // the driver weekly chart always has at least one bar per day. With per7d
+    // floored to 7 (see planRideCounts), every day [0..6] gets >= 1 ride.
+    const count7 = plan.per7d[slotIdx];
+    const dayOrder = Array.from({ length: 7 }, (_, i) => i);
+    // Fisher-Yates shuffle so the day with the most rides is random per driver.
+    for (let i = dayOrder.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [dayOrder[i], dayOrder[j]] = [dayOrder[j], dayOrder[i]];
+    }
+    for (let r = 0; r < count7; r++) {
+      events.push({ driverIdx: slotIdx, daysAgo: dayOrder[r % 7] });
+    }
+    for (let r = 0; r < plan.per30d[slotIdx]; r++) {
+      events.push({ driverIdx: slotIdx, daysAgo: pickDayWithDOW(HIST_DAYS, 7) });
+    }
+  });
+  // Sort oldest → newest so balanceAfter increments monotonically per driver
+  events.sort((a, b) => b.daysAgo - a.daysAgo);
+
+  for (let evIdx = 0; evIdx < events.length; evIdx++) {
+    const ev = events[evIdx];
+    const { p: profile, i: globalDriverIdx } = approved[ev.driverIdx];
+    const driverUserId = profile.userId;        // auth userId — used for wallet_db
+    const driverProfileId = profile.driverId;   // driver-service UUID — used for ride_db / payment_db
+    const driverMeta = DRIVERS[globalDriverIdx];
+
+    const dayDate = new Date();
+    dayDate.setDate(dayDate.getDate() - ev.daysAgo);
+    dayDate.setHours(0, 0, 0, 0);
+
+    const customer = histPick(customers);
+    const customerName = `${customer.firstName} ${customer.lastName}`.trim();
+    const driverName = driverMeta ? `${driverMeta.firstName} ${driverMeta.lastName}`.trim() : 'Tài xế';
+
+    // Vehicle type matches the driver's actual vehicle (not random)
+    const vehicleType = (driverMeta?.vehicle?.type || histPick(HIST_VEHICLE_TYPES_WEIGHTED)) as string;
+    const paymentMethod = histPick(HIST_PAYMENT_METHODS_WEIGHTED);
+    const pickup  = histPick(HIST_PICKUP_ADDRS);
+    const dropoff = histPick(HIST_PICKUP_ADDRS.filter((l) => l !== pickup));
+
+    const fares = HIST_FARE_BY_TYPE[vehicleType] ?? HIST_FARE_BY_TYPE.MOTORBIKE;
+    const baseHour = 6 + Math.floor(Math.random() * 17);
+    const isPeak = (baseHour >= 7 && baseHour <= 9) || (baseHour >= 17 && baseHour <= 20);
+    const baseFare = histPick(fares);
+    const grossFare = isPeak ? Math.round(baseFare * (1 + Math.random() * 0.5)) : baseFare;
+    const commRate  = COMMISSION_BY_TYPE[vehicleType] ?? 0.20;
+    const platformFee = Math.round(grossFare * commRate);
+    const netEarnings = grossFare - platformFee;
+
+    const distKm = Math.round((1.5 + Math.random() * 14) * 100) / 100;
+    const durSec = Math.round(distKm * (3 + Math.random() * 3) * 60);
+
+    const rideAt = new Date(dayDate);
+    rideAt.setHours(baseHour, Math.floor(Math.random() * 60), 0, 0);
+    const doneAt = new Date(rideAt.getTime() + durSec * 1000);
+    const isCash = paymentMethod === 'CASH';
+
+    const rideId = randomUUID();
+    const payId  = randomUUID();
+    const earnId = randomUUID();
+    const ikey   = `hd${globalDriverIdx}-e${evIdx}`;
+
+    // ── 1. Ride ──────────────────────────────────────────────────────────
+    try {
+      await rideDb.query(
+        `INSERT INTO "Ride" (
+          id, "customerId", "driverId", status,
+          "vehicleType", "paymentMethod",
+          "pickupAddress", "pickupLat", "pickupLng",
+          "dropoffAddress", "dropoffLat", "dropoffLng",
+          distance, duration, fare, "surgeMultiplier",
+          "suggestedDriverIds", "offeredDriverIds", "rejectedDriverIds", "reassignAttempts",
+          "requestedAt", "acceptedAt", "startedAt", "completedAt",
+          "createdAt", "updatedAt"
+        ) VALUES (
+          $1,$2,$3,'COMPLETED',
+          $4,$5,
+          $6,$7,$8,
+          $9,$10,$11,
+          $12,$13,$14,${isPeak ? '1.3' : '1.0'},
+          ARRAY[]::TEXT[],ARRAY[]::TEXT[],ARRAY[]::TEXT[],1,
+          $15,$15,$15,$16,
+          $15,$16
+        ) ON CONFLICT (id) DO NOTHING`,
+        [
+          rideId, customer.userId, driverProfileId, vehicleType, paymentMethod,
+          pickup.address, pickup.lat, pickup.lng,
+          dropoff.address, dropoff.lat, dropoff.lng,
+          distKm, durSec, grossFare,
+          rideAt.toISOString(), doneAt.toISOString(),
+        ]
+      );
+    } catch { /* skip */ }
+
+    // ── 2. Payment ───────────────────────────────────────────────────────
+    try {
+      await payDb.query(
+        `INSERT INTO "Payment" (
+          id, "rideId", "customerId", "driverId",
+          amount, currency, method, provider, status,
+          "transactionId", "idempotencyKey",
+          "initiatedAt", "completedAt", "createdAt", "updatedAt"
+        ) VALUES (
+          $1,$2,$3,$4,
+          $5,'VND',
+          $6::"PaymentMethod",'MOCK'::"PaymentProvider",'COMPLETED'::"PaymentStatus",
+          $7,$7,
+          $8,$9,$8,$9
+        ) ON CONFLICT ("rideId") DO NOTHING`,
+        [
+          payId, rideId, customer.userId, driverProfileId,
+          grossFare, paymentMethod,
+          `hist-pay-${rideId}`,
+          rideAt.toISOString(), doneAt.toISOString(),
+        ]
+      );
+    } catch { /* skip */ }
+
+    // ── 3. DriverEarnings ────────────────────────────────────────────────
+    try {
+      await payDb.query(
+        `INSERT INTO "DriverEarnings" (
+          id, "rideId", "driverId",
+          "grossFare", "commissionRate", "platformFee",
+          bonus, penalty, "netEarnings",
+          "paymentMethod", "driverCollected", "cashDebt",
+          "isPaid", "createdAt", "updatedAt"
+        ) VALUES (
+          $1,$2,$3,
+          $4,$5,$6,
+          0,0,$7,
+          $8,$9,$10,
+          true,$11,$11
+        ) ON CONFLICT ("rideId") DO NOTHING`,
+        [
+          earnId, rideId, driverProfileId,
+          grossFare, commRate, platformFee,
+          netEarnings,
+          paymentMethod, isCash, isCash ? platformFee : 0,
+          doneAt.toISOString(),
+        ]
+      );
+    } catch { /* skip */ }
+
+    // ── 4. Wallet (EARN credit + COMMISSION debit for cash) ──────────────
+    let prevBal = walletBalances.get(driverUserId) ?? 0;
+    if (isCash) {
+      // Cash flow: driver "earns" gross via off-app collection, then platform
+      // debits commission from wallet (creates negative if low balance — same
+      // as production). Net wallet impact = -platformFee (commission only).
+      const afterCommission = prevBal - platformFee;
+      walletBalances.set(driverUserId, afterCommission);
+      try {
+        await walDb.query(
+          `INSERT INTO wallet_transactions
+             (id, "driverId", type, direction, amount, "balanceAfter",
+              description, "referenceId", "idempotencyKey", "createdAt")
+           VALUES
+             ($1,$2,'COMMISSION'::"TransactionType",'DEBIT'::"TransactionDirection",
+              $3,$4,$5,$6,$7,$8)
+           ON CONFLICT ("idempotencyKey") DO NOTHING`,
+          [
+            randomUUID(), driverUserId,
+            platformFee, afterCommission,
+            'Hoa hồng chuyến tiền mặt (lịch sử)', rideId, `${ikey}-comm`,
+            doneAt.toISOString(),
+          ]
+        );
+      } catch { /* skip */ }
+      prevBal = afterCommission;
+    } else {
+      // Online flow: driver receives net earnings credited to wallet.
+      const afterEarn = prevBal + netEarnings;
+      walletBalances.set(driverUserId, afterEarn);
+      try {
+        await walDb.query(
+          `INSERT INTO wallet_transactions
+             (id, "driverId", type, direction, amount, "balanceAfter",
+              description, "referenceId", "idempotencyKey", "createdAt")
+           VALUES
+             ($1,$2,'EARN'::"TransactionType",'CREDIT'::"TransactionDirection",
+              $3,$4,$5,$6,$7,$8)
+           ON CONFLICT ("idempotencyKey") DO NOTHING`,
+          [
+            randomUUID(), driverUserId,
+            netEarnings, afterEarn,
+            'Thu nhập chuyến (lịch sử)', rideId, `${ikey}-earn`,
+            doneAt.toISOString(),
+          ]
+        );
+      } catch { /* skip */ }
+      prevBal = afterEarn;
+    }
+
+    // ── 5. Merchant ledger entries ───────────────────────────────────────
+    if (isCash) {
+      // Platform recognises commission inflow. Cash itself never touches
+      // the merchant account so PAYMENT entry is intentionally omitted.
+      try {
+        await walDb.query(
+          `INSERT INTO merchant_ledger (id, type, category, amount, "referenceId", description, "idempotencyKey", "createdAt")
+           VALUES ($1, 'IN'::"MerchantLedgerType", 'COMMISSION'::"MerchantLedgerCategory", $2, $3, $4, $5, $6)
+           ON CONFLICT ("idempotencyKey") DO NOTHING`,
+          [randomUUID(), platformFee, rideId, 'Hoa hồng tiền mặt (lịch sử)', `${ikey}-mlcomm`, doneAt.toISOString()],
+        );
+        merchantTotalIn += platformFee;
+      } catch { /* skip */ }
+    } else {
+      // Online: PAYMENT IN (gross) + PAYOUT OUT (net to driver) → net profit = commission
+      try {
+        await walDb.query(
+          `INSERT INTO merchant_ledger (id, type, category, amount, "referenceId", description, "idempotencyKey", "createdAt")
+           VALUES ($1, 'IN'::"MerchantLedgerType", 'PAYMENT'::"MerchantLedgerCategory", $2, $3, $4, $5, $6)
+           ON CONFLICT ("idempotencyKey") DO NOTHING`,
+          [randomUUID(), grossFare, rideId, `Tiền khách thanh toán (${paymentMethod})`, `${ikey}-mlpay`, doneAt.toISOString()],
+        );
+        merchantTotalIn += grossFare;
+      } catch { /* skip */ }
+      try {
+        await walDb.query(
+          `INSERT INTO merchant_ledger (id, type, category, amount, "referenceId", description, "idempotencyKey", "createdAt")
+           VALUES ($1, 'OUT'::"MerchantLedgerType", 'PAYOUT'::"MerchantLedgerCategory", $2, $3, $4, $5, $6)
+           ON CONFLICT ("idempotencyKey") DO NOTHING`,
+          [randomUUID(), netEarnings, rideId, 'Trả thu nhập tài xế (lịch sử)', `${ikey}-mlpayout`, doneAt.toISOString()],
+        );
+        merchantTotalOut += netEarnings;
+      } catch { /* skip */ }
+    }
+
+    // ── 6. Reviews (Mongo, ~85% of rides have both directions) ───────────
+    const hasReview = Math.random() < 0.85;
+    if (hasReview && reviewCol) {
+      const customerRating = pickHistoricalRating();
+      // Driver-to-customer rating skews higher (driver tends to give 5★)
+      const driverRating = Math.random() < 0.85 ? 5 : 4;
+      try {
+        await reviewCol.insertOne({
+          rideId,
+          bookingId: rideId, // historical seed has no separate booking; reuse rideId
+          type: 'CUSTOMER_TO_DRIVER',
+          reviewerId: customer.userId,
+          reviewerName: customerName,
+          revieweeId: driverUserId,
+          revieweeName: driverName,
+          rating: customerRating,
+          comment: pickReviewComment(customerRating),
+          createdAt: doneAt,
+          updatedAt: doneAt,
+        });
+        ratingSum.set(driverUserId, (ratingSum.get(driverUserId) || 0) + customerRating);
+        ratingCount.set(driverUserId, (ratingCount.get(driverUserId) || 0) + 1);
+      } catch { /* duplicate or transient — skip */ }
+      try {
+        await reviewCol.insertOne({
+          rideId,
+          bookingId: rideId,
+          type: 'DRIVER_TO_CUSTOMER',
+          reviewerId: driverUserId,
+          reviewerName: driverName,
+          revieweeId: customer.userId,
+          revieweeName: customerName,
+          rating: driverRating,
+          comment: 'Khách hàng lịch sự, đúng giờ.',
+          createdAt: doneAt,
+          updatedAt: doneAt,
+        });
+      } catch { /* skip */ }
+    }
+
+    totalRides++;
+    totalGMV += grossFare;
+  }
+
+  // ── Final updates ────────────────────────────────────────────────────────
+  console.log('  [hist] Updating driver_wallets balances + drivers ratings + merchant_balance...');
+
+  // 1) driver_wallets balance + availableBalance
+  for (const [driverUserId, balance] of walletBalances) {
+    try {
+      await walDb.query(
+        `UPDATE driver_wallets
+            SET balance = $1, "availableBalance" = GREATEST($1, 0), "updatedAt" = NOW()
+          WHERE "driverId" = $2`,
+        [balance, driverUserId],
+      );
+    } catch { /* skip */ }
+  }
+
+  // 2) driver_db rating_average + rating_count (only drivers who got reviews)
+  let driversWithRating = 0;
+  for (const [driverUserId, count] of ratingCount) {
+    if (count === 0) continue;
+    const sum = ratingSum.get(driverUserId) || 0;
+    const avg = sum / count;
+    try {
+      await drvDb.query(
+        `UPDATE drivers SET rating_average = $1, rating_count = $2, updated_at = NOW() WHERE user_id = $3`,
+        [Number(avg.toFixed(2)), count, driverUserId],
+      );
+      driversWithRating++;
+    } catch { /* skip */ }
+  }
+
+  // 3) merchant_balance singleton (id=1)
+  try {
+    await walDb.query(
+      `INSERT INTO merchant_balance (id, "totalIn", "totalOut", balance, "updatedAt")
+       VALUES (1, $1, $2, $3, NOW())
+       ON CONFLICT (id) DO UPDATE SET
+         "totalIn" = merchant_balance."totalIn" + EXCLUDED."totalIn",
+         "totalOut" = merchant_balance."totalOut" + EXCLUDED."totalOut",
+         balance = merchant_balance.balance + (EXCLUDED."totalIn" - EXCLUDED."totalOut"),
+         "updatedAt" = NOW()`,
+      [merchantTotalIn, merchantTotalOut, merchantTotalIn - merchantTotalOut],
+    );
+  } catch (err: any) {
+    console.log(`    ! merchant_balance update failed: ${err.message?.slice(0, 80)}`);
+  }
+
+  // ── Cleanup ──────────────────────────────────────────────────────────────
+  await Promise.all([rideDb.end(), payDb.end(), walDb.end(), drvDb.end()]);
+  if (mongoClient) await mongoClient.close();
+
+  // Suppress unused-param lint: driverUsers is reserved for future review name
+  // resolution (currently we use DRIVERS metadata directly).
+  void driverUsers;
+
+  console.log(`  [hist] ✓ ${totalRides} rides • GMV ${(totalGMV / 1_000_000).toFixed(1)}M VND`);
+  console.log(`  [hist]   ride_db ✓ · payment_db ✓ · wallet_db (transactions+ledger+balance) ✓`);
+  console.log(`  [hist]   review_db ${reviewCol ? '✓' : '✗'} · driver ratings updated for ${driversWithRating} drivers`);
+  console.log(`  [hist]   merchant_balance: IN=${merchantTotalIn.toLocaleString('vi-VN')}đ OUT=${merchantTotalOut.toLocaleString('vi-VN')}đ`);
+}
+
 // ─── Wait for services healthy ───────────────────────────────────────────────
+
+/** Max seconds (1 probe/giây) chờ gateway → auth không còn 502. Mặc định ngắn — dev bình thường auth đã up ngay lần 1. */
+const AUTH_PROXY_WAIT_ATTEMPTS = Number(process.env.SEED_AUTH_PROXY_WAIT_ATTEMPTS || '25');
+const AUTH_PROXY_PROBE_TIMEOUT_MS = Number(process.env.SEED_AUTH_PROBE_TIMEOUT_MS || '8000');
+
+function shouldSkipAuthProxyWait(): boolean {
+  const v = (process.env.SEED_SKIP_AUTH_PROXY_WAIT || '').trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+}
 
 async function waitForGateway() {
   for (let i = 0; i < 30; i += 1) {
@@ -1550,6 +2483,56 @@ async function waitForGateway() {
     await sleep(1000);
   }
   throw new Error(`Gateway ${GATEWAY_BASE} not responding`);
+}
+
+/**
+ * Gateway /health chỉ báo API Gateway sống; auth có thể chưa listen → POST login 502.
+ * Mặc định chờ ngắn + có progress log. Bỏ hẳn: SEED_SKIP_AUTH_PROXY_WAIT=1.
+ */
+async function waitForAuthThroughGateway() {
+  if (shouldSkipAuthProxyWait()) {
+    console.log('  [pre-flight] bỏ qua chờ auth proxy (SEED_SKIP_AUTH_PROXY_WAIT=1)');
+    return;
+  }
+
+  const probeUrl = `${GATEWAY_BASE}/api/auth/login`;
+  const body = JSON.stringify({ phone: '0900000000', password: 'SeedProbe1!' });
+
+  for (let i = 0; i < AUTH_PROXY_WAIT_ATTEMPTS; i += 1) {
+    try {
+      const res = await fetch(probeUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body,
+        signal: AbortSignal.timeout(AUTH_PROXY_PROBE_TIMEOUT_MS),
+      });
+      if (res.status !== 502) {
+        console.log(
+          i === 0
+            ? '  [pre-flight] auth-service OK qua gateway'
+            : `  [pre-flight] auth OK sau ${i + 1} lần thử`,
+        );
+        return;
+      }
+    } catch {
+      /* timeout / ECONNREFUSED / gateway chưa sẵn sàng */
+    }
+
+    if (i === 0) {
+      console.log(
+        `  [pre-flight] auth chưa phản hồi qua gateway — chờ tối đa ~${AUTH_PROXY_WAIT_ATTEMPTS}s (bỏ qua: SEED_SKIP_AUTH_PROXY_WAIT=1)`,
+      );
+    } else if ((i + 1) % 5 === 0) {
+      console.log(`  [pre-flight] … vẫn chờ (${i + 1}/${AUTH_PROXY_WAIT_ATTEMPTS})`);
+    }
+
+    await sleep(1000);
+  }
+  throw new Error(
+    `[seed] Sau ~${AUTH_PROXY_WAIT_ATTEMPTS}s POST ${probeUrl} vẫn 502 / không kết nối được — gateway không gọi được auth-service. ` +
+      'Kiểm tra auth-service và AUTH_SERVICE_URL trên api-gateway; hoặc chạy lại sau khi stack ổn định. ' +
+      'Tạm bỏ bước chờ: SEED_SKIP_AUTH_PROXY_WAIT=1',
+  );
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
@@ -1565,8 +2548,11 @@ async function main() {
   await waitForGateway();
   console.log('  [pre-flight] gateway healthy');
 
-  // Step 1 — admin DB bootstrap (the ONLY DB-direct write)
+  await waitForAuthThroughGateway();
+
+  // Step 1 — admin DB bootstrap (the ONLY DB-direct writes for users)
   await bootstrapAdmin();
+  await bootstrapSecondAdmin();
 
   // Step 2 — admin login via API
   const adminToken = await loginAdmin();
@@ -1595,14 +2581,26 @@ async function main() {
   // Step 10 — drivers go online + set location
   await setApprovedDriversOnline(driverProfiles, driverUsers);
 
-  // Step 11 — orchestrate 12 rides via API (COMPLETED + CANCELLED only)
-  const rides = await seedRides(customers, driverUsers, driverProfiles);
+  // Step 11 — orchestrate rides via API (COMPLETED + CANCELLED only)
+  //   Live rides target ~30 (RIDE_PLANS only); the remaining ~370 are seeded
+  //   directly into ride_db / payment_db / wallet_db / review_db / merchant
+  //   ledger by seedWalletEarningsHistory below for fast historical backfill.
+  const rides = await seedRides(customers, driverUsers, driverProfiles, []);
 
   // Step 12 — set all drivers OFFLINE so DB is clean after seed
   await setApprovedDriversOffline(driverProfiles, driverUsers);
 
+  // Step 12b — bring 20 heatmap drivers back online across clusters (for heatmap UI testing)
+  await bringHeatmapDriversOnline(driverProfiles, driverUsers);
+
   // Step 13 — generate seed-accounts-reference.md
   await generateSeedReference(adminToken, customers, driverUsers, driverProfiles, rides);
+
+  // Step 14 — backfill ~370 historical rides across 30 days, FULLY consistent
+  // across ride_db, payment_db, wallet_db (transactions+ledger+balance),
+  // review_db, and driver_db ratings. This is what makes admin Reports +
+  // driver Earnings dashboards have meaningful chart data.
+  await seedWalletEarningsHistory(customers, driverProfiles, driverUsers);
 
   const elapsed = Math.round((Date.now() - startTime) / 1000);
 
@@ -1613,18 +2611,24 @@ async function main() {
   console.log(`  Elapsed: ${elapsed}s`);
   const completed = rides.filter(r => r.status === 'COMPLETED').length;
   const cancelled = rides.filter(r => r.status === 'CANCELLED').length;
-  console.log(`  Customers:    ${customers.length}`);
-  console.log(`  Drivers:      ${driverUsers.length} (${driverProfiles.filter(p => !p.pending).length} approved OFFLINE + ${driverProfiles.filter(p => p.pending).length} pending)`);
-  console.log(`  Rides:        ${rides.length} (${completed} COMPLETED, ${cancelled} CANCELLED — no active rides)`);
+  console.log(`  Admins:       2 (${ADMIN.phone}, ${ADMIN_2.phone})`);
+  console.log(`  Customers:    ${customers.length} (accounts)`);
+  console.log(`  Drivers:      ${driverUsers.length} (${driverProfiles.filter(p => !p.pending).length} approved + ${driverProfiles.filter(p => p.pending).length} pending, ${HEATMAP_DRIVER_INDICES.length} online for heatmap)`);
+  console.log(`  Live rides:   ${rides.length} (${completed} COMPLETED, ${cancelled} CANCELLED — via API gateway)`);
+  console.log(`  Hist rides:   ~${HIST_TOTAL_TARGET} backfilled (40% in last 7 days, 60% in days 8-30)`);
+  console.log(`  Total rides:  ~${rides.length + HIST_TOTAL_TARGET}`);
   console.log(`  Vouchers:     ${VOUCHER_SEEDS.length}`);
   console.log(`  IncentiveRules:${INCENTIVE_RULES.length}`);
   console.log(`  Report:       ${SEED_REFERENCE_OUTPUT}`);
   console.log('');
   console.log('  Test credentials:');
   console.log(`    Password: ${SEED_PASSWORD}`);
-  console.log(`    Admin: ${ADMIN.phone}`);
-  console.log(`    Customer 1: ${customers[0]?.phone}`);
-  console.log(`    Driver 1: ${driverUsers[0]?.phone}`);
+  console.log(`    Admin 1:  ${ADMIN.phone}  (System Admin)`);
+  console.log(`    Admin 2:  ${ADMIN_2.phone}  (Sub Admin)`);
+  console.log(`    Customer demo (test-scenarios): 0901234571`);
+  console.log(`    Driver A demo  (test-scenarios): 0911234583  (Pham Van Bao)`);
+  console.log(`    Driver B demo  (test-scenarios): 0911234585  (Le Thi Mai)`);
+  console.log(`    Driver C demo  (test-scenarios): 0911234573  (Le Minh N)`);
   console.log('');
 }
 

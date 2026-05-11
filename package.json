@@ -76,6 +76,7 @@
   "author": "KLTN2025",
   "license": "MIT",
   "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.14.0",
     "@playwright/test": "^1.59.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^25.2.2",

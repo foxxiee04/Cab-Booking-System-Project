@@ -226,11 +226,19 @@ router.get('/drivers', async (req: Request, res: Response) => {
           lastName: user.lastName || '',
           email: user.email || '',
           phoneNumber: user.phone || user.phoneNumber || '',
+          avatar: typeof user.avatar === 'string' ? user.avatar : null,
         },
       ])
     );
 
-    const drivers = rawDrivers.map((driver: any) => ({
+    const drivers = rawDrivers.map((driver: any) => {
+      const mergedUser = usersById.get(driver.userId) || null;
+      const avatarUrl =
+        typeof mergedUser?.avatar === 'string' && mergedUser.avatar.trim() !== ''
+          ? mergedUser.avatar
+          : undefined;
+
+      return {
       id: driver.id,
       userId: driver.userId,
       status: driver.status,
@@ -240,6 +248,8 @@ router.get('/drivers', async (req: Request, res: Response) => {
       vehicleColor: driver.vehicleColor,
       vehicleYear: driver.vehicleYear,
       vehicleImageUrl: driver.vehicleImageUrl,
+      cccdImageUrl: driver.cccdImageUrl,
+      avatarUrl,
       licensePlate: driver.vehiclePlate,
       licenseClass: driver.licenseClass,
       licenseNumber: driver.licenseNumber,
@@ -253,10 +263,19 @@ router.get('/drivers', async (req: Request, res: Response) => {
         driver.lastLocationLat != null && driver.lastLocationLng != null
           ? { lat: driver.lastLocationLat, lng: driver.lastLocationLng }
           : null,
-      user: usersById.get(driver.userId) || null,
+      user: mergedUser
+        ? {
+            firstName: mergedUser.firstName,
+            lastName: mergedUser.lastName,
+            email: mergedUser.email,
+            phoneNumber: mergedUser.phoneNumber,
+            avatar: mergedUser.avatar,
+          }
+        : null,
       createdAt: driver.createdAt,
       updatedAt: driver.updatedAt,
-    }));
+    };
+    });
 
     const total = payload.total ?? driverResponse?.meta?.total ?? drivers.length;
 
@@ -317,6 +336,7 @@ router.get('/customers', async (req: Request, res: Response) => {
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         phoneNumber: user.phone || user.phoneNumber || '',
+        status: user.status || 'ACTIVE',
         totalRides: customerRideCounts[user.id] ?? 0,
         rating: 0,
         createdAt: user.createdAt,
@@ -417,5 +437,149 @@ const handleStats = async (req: Request, res: Response) => {
 // Both endpoints use the same handler
 router.get('/stats', handleStats);
 router.get('/statistics', handleStats);
+
+// ── User status management ──────────────────────────────────────────────────
+router.patch('/users/:userId/status', async (req: Request, res: Response) => {
+  try {
+    const response = await callHttpServiceWithBody<any>('auth', req, `/api/auth/users/${req.params.userId}/status`, 'PATCH', {
+      status: req.body?.status,
+    });
+    res.json({ success: true, data: unwrapPayload<any>(response) });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      error: { code: 'ADMIN_USER_STATUS_FAILED', message: 'Không thể cập nhật trạng thái người dùng' },
+    });
+  }
+});
+
+// ── Driver suspend / unsuspend ──────────────────────────────────────────────
+router.patch('/drivers/:driverId/suspend', async (req: Request, res: Response) => {
+  try {
+    const response = await callHttpServiceWithBody<any>('driver', req, `/api/drivers/${req.params.driverId}/suspend`, 'PATCH', {
+      suspend: req.body?.suspend,
+    });
+    res.json({ success: true, data: unwrapPayload<any>(response) });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      error: { code: 'ADMIN_DRIVER_SUSPEND_FAILED', message: 'Không thể cập nhật trạng thái tài xế' },
+    });
+  }
+});
+
+// ── Revenue analytics ───────────────────────────────────────────────────────
+router.get('/analytics/revenue', async (req: Request, res: Response) => {
+  try {
+    const days = req.query.days as string | undefined;
+    const response = await callHttpService<any>('payment', req, '/api/payments/admin/analytics', { days });
+    res.json({ success: true, data: unwrapPayload<any>(response) });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      error: { code: 'ADMIN_ANALYTICS_FAILED', message: 'Failed to load analytics' },
+    });
+  }
+});
+
+// ── Vehicle breakdown analytics (rides + revenue per vehicle type) ─────────
+router.get('/analytics/vehicles', async (req: Request, res: Response) => {
+  try {
+    const days = req.query.days as string | undefined;
+    const response = await callHttpService<any>('ride', req, '/api/rides/admin/vehicle-breakdown', { days });
+    res.json({ success: true, data: unwrapPayload<any>(response) });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      error: { code: 'ADMIN_VEHICLE_BREAKDOWN_FAILED', message: 'Failed to load vehicle breakdown' },
+    });
+  }
+});
+
+// ── Top drivers (by totalRides + rating + earnings) ─────────────────────────
+router.get('/analytics/top-drivers', async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
+    const response = await callHttpService<any>('driver', req, '/api/drivers', { page: 1, limit: 500 });
+    const drivers = unwrapPayload<any>(response)?.drivers || [];
+    const userResponse = await callHttpService<any>('auth', req, '/api/auth/users', { page: 1, limit: 1000, role: 'DRIVER' });
+    const users = unwrapPayload<any>(userResponse)?.users || [];
+    const usersById = new Map(users.map((u: any) => [u.id, u]));
+    const driverActorIds = drivers.flatMap((d: any) => [d.id, d.userId].filter(Boolean));
+
+    // Parallel: rides count (ride-service) + earnings sum (payment-service).
+    // The Drivers admin page uses earnings to rank top earners.
+    const [statsResponse, earningsResponse] = await Promise.all([
+      driverActorIds.length > 0
+        ? callInternalHttpService<any>('ride', '/internal/drivers/stats', { ids: driverActorIds.join(',') })
+        : Promise.resolve(null),
+      driverActorIds.length > 0
+        ? callInternalHttpService<any>('payment', '/internal/drivers/earnings', { ids: driverActorIds.join(',') }).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+    const rideCounts = statsResponse ? unwrapPayload<any>(statsResponse)?.counts || {} : {};
+    const earningsMap = earningsResponse ? unwrapPayload<any>(earningsResponse)?.earnings || {} : {};
+
+    const enriched = drivers.map((d: any) => {
+      const u = usersById.get(d.userId) as any;
+      const totalRides = (rideCounts[d.id] ?? 0) + (d.userId ? rideCounts[d.userId] ?? 0 : 0);
+      const totalEarnings = Number(earningsMap[d.userId] ?? earningsMap[d.id] ?? 0);
+      return {
+        id: d.id,
+        name: u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : 'N/A',
+        rating: d.ratingAverage ?? d.rating ?? 0,
+        reviewCount: d.ratingCount ?? d.reviewCount ?? 0,
+        totalRides,
+        totalEarnings,
+        vehicleType: d.vehicleType,
+        status: d.status,
+      };
+    });
+
+    const top = enriched
+      .sort((a: any, b: any) => b.totalRides - a.totalRides)
+      .slice(0, limit);
+
+    res.json({ success: true, data: { drivers: top } });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      error: { code: 'ADMIN_TOP_DRIVERS_FAILED', message: 'Failed to load top drivers' },
+    });
+  }
+});
+
+// ── Top customers (by totalRides) ───────────────────────────────────────────
+router.get('/analytics/top-customers', async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
+    const response = await callHttpService<any>('auth', req, '/api/auth/users', { page: 1, limit: 500, role: 'CUSTOMER' });
+    const users = unwrapPayload<any>(response)?.users || [];
+    const customerIds = users.map((u: any) => u.id).filter(Boolean);
+    const statsResponse = customerIds.length > 0
+      ? await callInternalHttpService<any>('ride', '/internal/customers/stats', { ids: customerIds.join(',') })
+      : null;
+    const rideCounts = statsResponse ? unwrapPayload<any>(statsResponse)?.counts || {} : {};
+
+    const enriched = users.map((u: any) => ({
+      id: u.id,
+      name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'N/A',
+      email: u.email || '',
+      totalRides: rideCounts[u.id] ?? 0,
+      status: u.status,
+    }));
+
+    const top = enriched
+      .sort((a: any, b: any) => b.totalRides - a.totalRides)
+      .slice(0, limit);
+
+    res.json({ success: true, data: { customers: top } });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      error: { code: 'ADMIN_TOP_CUSTOMERS_FAILED', message: 'Failed to load top customers' },
+    });
+  }
+});
 
 export default router;

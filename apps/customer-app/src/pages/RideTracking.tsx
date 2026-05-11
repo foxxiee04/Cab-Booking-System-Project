@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
-  Avatar,
   CircularProgress,
   Box,
   Button,
@@ -29,6 +28,7 @@ import { ArrowBack, AutorenewRounded, Cancel, CheckCircleRounded, HourglassTopRo
 import { useTranslation } from 'react-i18next';
 import { BookingMap, useSocket } from '../features/booking';
 import ContactBox from '../components/ContactBox';
+import { DriverPortraitFrame } from '../components/common/DriverPortraitFrame';
 import { paymentApi } from '../api/payment.api';
 import { reviewApi, RideReview } from '../api/review.api';
 import { rideApi } from '../api/ride.api';
@@ -38,6 +38,23 @@ import { clearRide, setCurrentRide, setDriver, updateRideStatus } from '../store
 import { Payment } from '../types';
 import { formatCurrency, formatDate, getPaymentMethodLabel, getVehicleTypeLabel } from '../utils/format.utils';
 import { calculateDistance, formatDistance as formatMapDistance, formatDuration as formatMapDuration } from '../utils/map.utils';
+import { normalizeGatewayOriginUrl } from '../utils/gateway-base-url';
+
+const GATEWAY_ORIGIN = normalizeGatewayOriginUrl(process.env.REACT_APP_API_URL);
+
+/** Ảnh avatar/xe từ API có thể là data URL, URL đầy đủ, hoặc path `/...` cần nối origin gateway */
+const resolveDriverMediaUrl = (raw?: string | null): string => {
+  if (!raw || typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (/^data:image\//i.test(trimmed) || /^blob:/i.test(trimmed) || /^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('/')) {
+    return `${GATEWAY_ORIGIN}${trimmed}`;
+  }
+  return `${GATEWAY_ORIGIN}/${trimmed}`;
+};
 
 const STATUS_META: Record<string, { label: string; description: string; color: string; allowCancel: boolean }> = {
   CREATED: {
@@ -688,6 +705,15 @@ const RideTracking: React.FC = () => {
   const driverPhoneNumber = ((displayedDriver as any)?.phoneNumber as string | undefined) || '';
   const showDriverCard = Boolean(currentRide?.driverId) && status !== 'NO_DRIVER_AVAILABLE';
   const isChatReadOnly = ['COMPLETED', 'CANCELLED'].includes(status);
+  const driverAvatarResolved = useMemo(
+    () => resolveDriverMediaUrl(displayedDriver?.avatar),
+    [displayedDriver?.avatar],
+  );
+  const driverVehicleImageResolved = useMemo(
+    () => resolveDriverMediaUrl(displayedDriver?.vehicleImageUrl),
+    [displayedDriver?.vehicleImageUrl],
+  );
+
   const driverDisplayName = useMemo(() => {
     if (!displayedDriver) {
       return 'Đang tải thông tin tài xế';
@@ -890,10 +916,16 @@ const RideTracking: React.FC = () => {
           {showDriverCard && (
             <Card sx={{ borderRadius: 4, mb: 2.5, bgcolor: '#f8fafc' }}>
               <CardContent>
-                <Stack direction="row" spacing={2} alignItems="flex-start">
-                  <Avatar sx={{ width: 56, height: 56, bgcolor: '#1d4ed8' }} src={displayedDriver?.avatar}>
-                    {displayedDriver?.firstName?.[0] || 'D'}
-                  </Avatar>
+                <Stack spacing={2}>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                  <DriverPortraitFrame
+                    src={driverAvatarResolved || undefined}
+                    initials={
+                      `${displayedDriver?.firstName?.[0] || ''}${displayedDriver?.lastName?.[0] || ''}`.trim().toUpperCase() || 'D'
+                    }
+                    width={72}
+                    alt={driverDisplayName}
+                  />
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="subtitle1" fontWeight={800}>{driverDisplayName}</Typography>
                     <Typography variant="body2" color="text.secondary">
@@ -935,49 +967,51 @@ const RideTracking: React.FC = () => {
                     <Chip icon={<StarRate sx={{ color: '#f59e0b !important' }} />} label={((displayedDriver?.rating || 5)).toFixed(1)} variant="outlined" />
                     {/* floating FAB rendered below */}
                   </Stack>
+                  </Stack>
+
+                  {driverVehicleImageResolved ? (
+                    <Stack spacing={1} sx={{ width: '100%', pt: 0.25 }}>
+                      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 0.25 }}>
+                        <Box sx={{ width: 3, height: 14, borderRadius: 1, bgcolor: 'primary.main', flexShrink: 0 }} />
+                        <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ letterSpacing: 0.03 }}>
+                          Ảnh phương tiện
+                        </Typography>
+                      </Stack>
+                      <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                        <Box
+                          sx={{
+                            display: 'inline-flex',
+                            maxWidth: '100%',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: 3,
+                            border: '1px solid rgba(148,163,184,0.28)',
+                            bgcolor: 'rgba(241,245,249,0.9)',
+                            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.75)',
+                            p: 0.75,
+                          }}
+                        >
+                          <Box
+                            component="img"
+                            src={driverVehicleImageResolved}
+                            alt={`Xe ${driverVehicleLabel || ''}`}
+                            sx={{
+                              display: 'block',
+                              maxWidth: 'min(100%, 400px)',
+                              width: 'auto',
+                              height: 'auto',
+                              maxHeight: { xs: 176, sm: 200 },
+                              objectFit: 'contain',
+                              borderRadius: 1,
+                            }}
+                          />
+                        </Box>
+                      </Box>
+                    </Stack>
+                  ) : null}
                 </Stack>
                 {/* Live tracking info panel — only show when real data is available */}
-                {!isChatReadOnly && status !== 'IN_PROGRESS' && (estimatedPickupEtaMinutes != null || pickupDistanceKmToDriver != null || trackingSpeedText || status === 'PICKING_UP') && (
-                  <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#f0f9ff', borderRadius: 3, border: '1px solid #bae6fd' }}>
-                    <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 1 }}>
-                      <FiberManualRecord sx={{ fontSize: 10, color: effectiveDriverLocation ? '#16a34a' : '#f59e0b' }} />
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                        {effectiveDriverLocation ? 'Đang theo dõi vị trí tài xế' : 'Đang xác định vị trí...'}
-                      </Typography>
-                    </Stack>
-                    <Stack direction="row" spacing={1} justifyContent="center">
-                      {(estimatedPickupEtaMinutes != null || status === 'PICKING_UP') && (
-                        <Box sx={{ flex: 1, textAlign: 'center', py: 0.5 }}>
-                          <AccessTime sx={{ fontSize: 22, color: '#0284c7', mb: 0.25 }} />
-                          <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.2, mb: 0.25 }}>ETA đón</Typography>
-                          <Typography variant="body2" fontWeight={800} color="#0284c7">
-                            {trackingEtaText.replace('ETA đón: ', '') || '—'}
-                          </Typography>
-                        </Box>
-                      )}
-                      {estimatedPickupEtaMinutes != null && pickupDistanceKmToDriver != null && (
-                        <Divider orientation="vertical" flexItem />
-                      )}
-                      {pickupDistanceKmToDriver != null && (
-                        <Box sx={{ flex: 1, textAlign: 'center', py: 0.5 }}>
-                          <Route sx={{ fontSize: 22, color: '#0284c7', mb: 0.25 }} />
-                          <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.2, mb: 0.25 }}>Khoảng cách</Typography>
-                          <Typography variant="body2" fontWeight={800} color="#0284c7">
-                            {trackingDistanceText.replace('Khoảng cách tới bạn: ', '') || '—'}
-                          </Typography>
-                        </Box>
-                      )}
-                      {trackingSpeedText ? (<>
-                        <Divider orientation="vertical" flexItem />
-                        <Box sx={{ flex: 1, textAlign: 'center', py: 0.5 }}>
-                          <Speed sx={{ fontSize: 22, color: '#0284c7', mb: 0.25 }} />
-                          <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.2, mb: 0.25 }}>Vận tốc</Typography>
-                          <Typography variant="body2" fontWeight={800} color="#0284c7">{trackingSpeedText}</Typography>
-                        </Box>
-                      </>) : null}
-                    </Stack>
-                  </Box>
-                )}
+
               </CardContent>
             </Card>
           )}

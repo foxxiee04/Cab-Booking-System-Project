@@ -188,6 +188,26 @@ export class RideController {
     }
   };
 
+  getVehicleBreakdown = async (req: AuthRequest, res: Response) => {
+    try {
+      if (req.user!.role !== UserRole.ADMIN) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Admin access required' },
+        });
+      }
+      const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 1), 730);
+      const data = await this.rideService.getVehicleBreakdown(days);
+      res.json({ success: true, data });
+    } catch (err) {
+      logger.error('Get vehicle breakdown error:', err);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get vehicle breakdown' },
+      });
+    }
+  };
+
   getAvailableRides = async (req: AuthRequest, res: Response) => {
     try {
       if (req.user!.role !== UserRole.DRIVER) {

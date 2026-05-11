@@ -1,15 +1,20 @@
 """
 RAG (Retrieval-Augmented Generation) Service for FoxGo Customer Support.
 
-Pipeline:
-  1. Knowledge base documents are chunked (Q&A-aware) and embedded at startup.
+Pipeline (upgraded):
+  1. Knowledge base documents are chunked (Q&A-aware) and embedded at startup
+     with a Vietnamese-tuned bi-encoder.
   2. Embeddings stored in a FAISS in-memory index; BM25 index built in parallel.
-  3. On each chat request:
-     a. Enrich the query with recent conversation history.
-     b. Embed the enriched query + BM25 tokenize.
-     c. Hybrid search: FAISS (semantic) + BM25 (keyword) → Reciprocal Rank Fusion.
-     d. Build a prompt with context + full history.
-     e. Generate a natural, human-like answer via LLM (Claude → Groq → Gemini → OpenAI → template).
+  3. A cross-encoder reranker (BGE) is lazy-loaded for top-K precision boost.
+  4. On each chat request:
+     a. Optionally LLM-rewrite ambiguous/short queries for better retrieval.
+     b. Enrich with recent conversation history + Vietnamese keyword boosts.
+     c. Embed the query + BM25 tokenize.
+     d. Hybrid search: FAISS (semantic) + BM25 (keyword) → Reciprocal Rank Fusion.
+     e. Cross-encoder reranking on the top-N pool → final top-K context.
+     f. Build a prompt with context + history + few-shot Mia persona.
+     g. Generate a natural, human-like answer via LLM
+        (Claude → Groq → Gemini → OpenAI → friendly template).
 """
 
 import logging
@@ -30,12 +35,13 @@ logger = logging.getLogger(__name__)
 _np = None
 _faiss = None
 _SentenceTransformer = None
+_CrossEncoder = None
 _httpx = None
 _BM25Okapi = None
 
 
 def _ensure_imports():
-    global _np, _faiss, _SentenceTransformer, _httpx, _BM25Okapi
+    global _np, _faiss, _SentenceTransformer, _CrossEncoder, _httpx, _BM25Okapi
     if _np is None:
         import numpy as np
         _np = np
@@ -48,6 +54,12 @@ def _ensure_imports():
     if _SentenceTransformer is None:
         from sentence_transformers import SentenceTransformer
         _SentenceTransformer = SentenceTransformer
+    if _CrossEncoder is None:
+        try:
+            from sentence_transformers import CrossEncoder
+            _CrossEncoder = CrossEncoder
+        except ImportError:
+            logger.warning("CrossEncoder not available — reranking disabled")
     if _httpx is None:
         import httpx
         _httpx = httpx
@@ -62,9 +74,12 @@ def _ensure_imports():
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuration
 # ─────────────────────────────────────────────────────────────────────────────
+# Vietnamese-tuned bi-encoder (PhoBERT-based) — markedly better recall on
+# Vietnamese than the old MiniLM. Override with RAG_EMBEDDING_MODEL to switch
+# (e.g. `intfloat/multilingual-e5-base` — will auto-add "query:"/"passage:" prefixes).
 EMBEDDING_MODEL_NAME = os.getenv(
     "RAG_EMBEDDING_MODEL",
-    "paraphrase-multilingual-MiniLM-L12-v2",
+    "bkai-foundation-models/vietnamese-bi-encoder",
 )
 KNOWLEDGE_DIR = Path(__file__).resolve().parents[1] / "data" / "knowledge"
 CHUNK_SIZE = 450
@@ -78,6 +93,16 @@ MAX_CONTEXT_CHARS = int(os.getenv("RAG_MAX_CONTEXT_CHARS", "6400"))
 RAG_COSINE_ABSENT = float(os.getenv("RAG_COSINE_ABSENT", "0.22"))  # below → no relevant KB hit
 RAG_COSINE_LLM = float(os.getenv("RAG_COSINE_LLM", "0.30"))  # at/above → allow LLM synthesis
 
+# Cross-encoder reranker — biggest single accuracy lever after retrieval.
+# bge-reranker-v2-m3 (568 MB) is multilingual and excellent for Vietnamese.
+RERANKER_ENABLED = os.getenv("RAG_RERANKER_ENABLED", "true").lower() in ("true", "1", "yes")
+RERANKER_MODEL = os.getenv("RAG_RERANKER_MODEL", "BAAI/bge-reranker-v2-m3")
+RERANK_POOL = int(os.getenv("RAG_RERANK_POOL", "20"))  # candidates fed to reranker (top-N → top-K)
+
+# LLM-based query rewriting (uses Gemini Flash). Trades 1 extra API call for
+# better recall on short/ambiguous queries ("vậy thì sao", "ơi", "nó"…).
+QUERY_REWRITE_ENABLED = os.getenv("RAG_QUERY_REWRITE_ENABLED", "true").lower() in ("true", "1", "yes")
+
 # LLM provider priority: claude → groq → gemini → openai → template
 LLM_PROVIDER = os.getenv("RAG_LLM_PROVIDER", "auto")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
@@ -85,40 +110,89 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 LLM_MODEL_CLAUDE = os.getenv("RAG_LLM_MODEL_CLAUDE", "claude-haiku-4-5-20251001")
-LLM_MODEL_GROQ = os.getenv("RAG_LLM_MODEL", "llama3-8b-8192")
-LLM_MODEL_OPENAI = os.getenv("RAG_LLM_MODEL_OPENAI", "gpt-3.5-turbo")
-LLM_MODEL_GEMINI = os.getenv("RAG_LLM_MODEL_GEMINI", "gemini-2.0-flash")
-LLM_TIMEOUT_S = float(os.getenv("RAG_LLM_TIMEOUT_S", "14"))
-LLM_MAX_TOKENS = int(os.getenv("RAG_LLM_MAX_TOKENS", "768"))
-LLM_TEMPERATURE = float(os.getenv("RAG_LLM_TEMPERATURE", "0.22"))
+LLM_MODEL_GROQ = os.getenv("RAG_LLM_MODEL", "llama-3.3-70b-versatile")
+LLM_MODEL_OPENAI = os.getenv("RAG_LLM_MODEL_OPENAI", "gpt-4o-mini")
+LLM_MODEL_GEMINI = os.getenv("RAG_LLM_MODEL_GEMINI", "gemini-2.5-flash")
+# Lighter Gemini model just for query rewriting (cheap + fast).
+LLM_MODEL_GEMINI_REWRITE = os.getenv("RAG_LLM_MODEL_GEMINI_REWRITE", "gemini-2.5-flash")
+LLM_TIMEOUT_S = float(os.getenv("RAG_LLM_TIMEOUT_S", "20"))
+LLM_REWRITE_TIMEOUT_S = float(os.getenv("RAG_LLM_REWRITE_TIMEOUT_S", "6"))
+LLM_MAX_TOKENS = int(os.getenv("RAG_LLM_MAX_TOKENS", "900"))
+LLM_TEMPERATURE = float(os.getenv("RAG_LLM_TEMPERATURE", "0.25"))
 MAX_HISTORY_TURNS = 8
 
-# ─────────────────────────────────────────────────────────────────────────────
-# System prompt — Mia persona (accuracy-first)
-# ─────────────────────────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """Bạn là Mia — trợ lý FoxGo trong app gọi xe. Nói ngắn gọn, tự nhiên như nhắn tin: rõ ràng, có nhịp, không khô như tài liệu nội bộ.
+# E5-family models require "query: "/"passage: " prefixes for best results.
+_USE_E5_PREFIX = "e5" in EMBEDDING_MODEL_NAME.lower()
 
-ĐỊNH DẠNG (bắt buộc):
-- Chỉ văn bản thuần cho người xem trên điện thoại: không Markdown, không dùng **, không # hay ##, không backtick.
-- Gạch đầu dòng • hoặc - được phép khi liệt kê bước; không dán nguyên khối “Hỏi: … Đáp: …” từ tài liệu.
 
-BÁM SÁT CÂU HỎI (bắt buộc):
-- Câu đầu phải trả lời thẳng vào đúng “CÂU HỎI HIỆN TẠI”. Không lạc sang chủ đề chỉ liên quan lỏng lẻo.
-- Ngữ cảnh có nhiều mục: chỉ dùng phần khớp nhất, bỏ phần còn lại. Không liệt kê nhiều chủ đề chỉ vì cùng xuất hiện trong tài liệu.
+def _embed_passage(text: str) -> str:
+    return f"passage: {text}" if _USE_E5_PREFIX else text
+
+
+def _embed_query(text: str) -> str:
+    return f"query: {text}" if _USE_E5_PREFIX else text
+
+# ─────────────────────────────────────────────────────────────────────────────
+# System prompt — Mia persona (accuracy-first, warm tone, few-shot anchored)
+# ─────────────────────────────────────────────────────────────────────────────
+SYSTEM_PROMPT = """Bạn là Mia — trợ lý chat của FoxGo, ứng dụng gọi xe ở Việt Nam. Bạn nói chuyện như một nhân viên CSKH trẻ, dễ gần, rõ ràng và quan tâm. Mục tiêu là vừa giúp người dùng nhanh, vừa khiến họ cảm thấy được lắng nghe.
+
+PHONG CÁCH NÓI CHUYỆN:
+- Xưng "mình", gọi "bạn" (mặc định). Câu chữ tự nhiên, có nhịp, đôi khi thêm 1 câu xác nhận cảm xúc ngắn khi người dùng đang bực hoặc lo (ví dụ: "Mình hiểu rồi, để check giúp bạn nhé.").
+- Tối đa 1 emoji mỗi câu trả lời, chỉ dùng khi thật hợp (😊 chào, 🙏 xin lỗi, 👍 xác nhận). Không lạm dụng.
+- Câu đầu phải trả lời thẳng vào câu hỏi hiện tại, không vòng vo, không lặp lại câu hỏi.
+- Khi cần liệt kê: dùng "•" hoặc "-", mỗi ý 1 dòng ngắn, tối đa 5 bước. Tránh đánh số dài lê thê.
+
+ĐỊNH DẠNG (bắt buộc cho mobile chat):
+- Văn bản thuần. Tuyệt đối KHÔNG Markdown: không **, không # hay ##, không backtick, không bảng.
+- Không dán nguyên khối "Hỏi: ... Đáp: ..." hay "TIÊU ĐỀ:" từ tài liệu — luôn diễn đạt lại bằng giọng Mia.
+- Trả lời gọn: 1–4 ý chính. Cần nhiều bước thì ~220 từ là trần. Tránh lặp ý.
+
+ĐỘ CHÍNH XÁC (quan trọng nhất):
+- Chỉ dựa vào "NGỮ CẢNH TÌM ĐƯỢC" được hệ thống gắn vào. Không tự bịa, không đoán giá/phí/chính sách/giờ giấc.
+- Khi ngữ cảnh có vài đoạn, dùng đoạn KHỚP NHẤT với câu hỏi hiện tại. Bỏ qua đoạn chỉ liên quan lỏng lẻo.
+- Khi các đoạn mâu thuẫn, tin đoạn cụ thể nhất với câu hỏi của user.
+- Khi ngữ cảnh thiếu/không đủ: nói thẳng phần nào chưa có ("Phần này mình chưa thấy trong tài liệu FoxGo…"), sau đó gợi liên hệ hotline 1900-1234 (8h–22h) hoặc email phù hợp.
 
 VAI TRÒ NGƯỜI DÙNG:
-- Rõ khách vs tài xế: khách → đặt xe, thanh toán, support@foxgo.vn; tài xế → nhận cuốc, ví, hoa hồng, driver-support@foxgo.vn.
-- Câu chung thì trả lời trung tính, không ép một phía.
+- Khách hàng: hỏi về đặt xe, thanh toán, voucher, hủy chuyến, quên đồ → support@foxgo.vn.
+- Tài xế: hỏi về nhận cuốc, ví, hoa hồng, rút tiền, online/offline → driver-support@foxgo.vn.
+- Đoán vai trò qua từ khóa: "tôi chạy", "không nhận được cuốc", "ví của em" → tài xế. "đặt xe", "voucher", "tài xế đến chưa" → khách. Không rõ thì hỏi ngắn gọn hoặc trả lời trung tính.
 
-NGUỒN:
-- Chỉ “NGỮ CẢNH TÌM ĐƯỢC”. Không bịa; không tra ngoài. Số liệu, giá, chính sách chỉ khi có trong ngữ cảnh.
+XỬ LÝ CẢM XÚC NGƯỜI DÙNG:
+- Bực bội/khiếu nại: bắt đầu bằng 1 câu thông cảm ngắn (KHÔNG xin lỗi máy móc), rồi đi thẳng vào hướng xử lý.
+- Bối rối/người mới: ngắn gọn, dễ hiểu, từng bước. Hỏi lại 1 câu nếu thông tin còn mơ hồ.
+- Vội/khẩn cấp (mất đồ, sự cố an toàn): đưa hotline 1900-1234 hoặc gợi liên hệ tài xế qua lịch sử chuyến trước.
 
-KHI ĐỦ Ý: diễn đạt lại mượt, 1–4 ý; có thể ~220 từ nếu nhiều bước; tránh lặp.
-KHI THIẾU: nói thẳng phần nào chưa có; gợi hotline 1900-1234 (8h–22h) hoặc email phù hợp nếu có trong ngữ cảnh.
+VÍ DỤ TRẢ LỜI (tham khảo phong cách):
 
-TUYỆT ĐỐI KHÔNG: giả tra mạng; hứa thay người dùng thao tác app; cào bê nguyên nhiều Q&A.
+User: hủy chuyến mất tiền không
+Mia: Phí hủy tùy lúc nào bạn hủy nhé:
+• Trong 5 phút đầu sau khi ghép tài xế: miễn phí.
+• Sau 5 phút hoặc khi tài xế đã đến điểm đón: 10.000–15.000đ tùy loại xe.
+Nếu bạn cần kiểm tra chuyến cụ thể, cho mình biết hủy lúc nào để mình check kỹ hơn.
 
-Giọng: xưng “mình”, gọi “bạn”; tối đa 1 emoji, chỉ khi hợp."""
+User: voucher
+Mia: Bạn xem voucher trong app ở mục "Voucher & ưu đãi" trên màn hình chính nhé 😊 Mỗi voucher có điều kiện riêng (quãng đường tối thiểu, loại xe, khung giờ). Bạn đang tìm voucher cho chuyến nào, mình gợi ý cụ thể hơn?
+
+User: tôi chạy mãi không có cuốc đêm nay luôn á
+Mia: Mình hiểu, đêm khô cuốc dễ nản lắm. Vài thứ nên check trước:
+• Vị trí: khu bạn đang đứng có thể ít khách — thử dịch ra trục đường chính hoặc gần điểm hot (bệnh viện, bến xe).
+• Trạng thái online: kiểm tra góc phải Dashboard, đôi khi bị tự ngắt khi app chạy nền lâu.
+• Điểm uy tín: nếu gần đây hủy nhiều hoặc rating thấp, vòng phân cuốc sẽ ưu tiên tài xế khác.
+Bạn đang ở khu nào với điểm uy tín hiện tại bao nhiêu, mình check tiếp giúp.
+
+User: thanh toán momo bị lỗi mà tiền vẫn trừ
+Mia: Bực vụ này thật sự. Bạn yên tâm, MoMo có quy trình hoàn tiền tự động nếu giao dịch không khớp với chuyến — thường về ví MoMo trong 1–3 ngày làm việc. Bạn check giúp mình:
+• Mã giao dịch MoMo và mã chuyến (trong Lịch sử).
+• Tiền trừ là đúng số tiền chuyến hay khác?
+Nếu sau 3 ngày chưa hoàn, bạn gửi support@foxgo.vn kèm 2 mã trên, đội mình xử lý trong ngày.
+
+TUYỆT ĐỐI KHÔNG:
+- Không hứa thay người dùng thao tác app ("mình sẽ hủy giúp", "mình đặt giúp"). Bạn chỉ hướng dẫn.
+- Không tra mạng, không chế số liệu/giá ngoài ngữ cảnh.
+- Không nhồi nhiều chủ đề cùng lúc khi user chỉ hỏi 1 thứ.
+- Không sao chép thô khối Q&A — luôn diễn đạt lại bằng câu của Mia."""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -489,6 +563,33 @@ class VectorIndex:
             out.append((float(rrf[i]), cos, self.chunks[i]))
         return out
 
+    def rerank(
+        self,
+        query: str,
+        candidates: List[Tuple[float, float, Chunk]],
+        reranker,
+        top_k: int,
+    ) -> List[Tuple[float, float, Chunk]]:
+        """
+        Cross-encoder reranking on hybrid candidates. Returns the top-K
+        re-ordered tuples (keeping original rrf/cosine fields for downstream
+        confidence gating — only the **order** changes).
+
+        Reranker scores are logits; we keep cosine for the existing thresholds
+        instead of rewriting the gating logic.
+        """
+        if not candidates or reranker is None or len(candidates) <= 1:
+            return candidates[:top_k]
+        try:
+            pairs = [[query, c[2].text] for c in candidates]
+            scores = reranker.predict(pairs, show_progress_bar=False)
+            zipped = list(zip(scores, candidates))
+            zipped.sort(key=lambda x: -float(x[0]))
+            return [c for _, c in zipped[:top_k]]
+        except Exception as exc:
+            logger.warning("Reranker prediction failed (%s) — using hybrid order", exc)
+            return candidates[:top_k]
+
     def search(self, query_embedding, top_k: int = TOP_K) -> List[Tuple[float, Chunk]]:
         """Pure semantic search (kept for compatibility)."""
         _ensure_imports()
@@ -836,13 +937,21 @@ async def _call_llm_openai(messages: List[dict]) -> Optional[str]:
 
 
 def _template_answer(query: str, retrieved: List[Tuple[float, Chunk]]) -> str:
-    """Last-resort answer when all LLMs fail — clean excerpt from best chunk."""
+    """Last-resort answer when all LLMs fail — friendly Mia-voice excerpt.
+
+    Strategy:
+      1. Strip raw "Hỏi:/Đáp:/TIÊU ĐỀ:" markers and bullet headers.
+      2. Pull the most informative paragraph from the best chunk.
+      3. Wrap with a brief Mia-style intro/outro so it doesn't look like a doc dump.
+    """
     if not retrieved:
         return (
-            "Mình chưa tìm thấy thông tin về câu hỏi này trong cơ sở dữ liệu 😅\n\n"
-            "Bạn thử hỏi lại theo cách khác xem sao, hoặc liên hệ mình qua:\n"
+            "Mình chưa tìm thấy thông tin liên quan trong tài liệu FoxGo bạn ơi 😅\n"
+            "Bạn thử hỏi lại theo từ khóa cụ thể hơn (vd: hủy chuyến, voucher, "
+            "MoMo, rút tiền tài xế) hoặc liên hệ:\n"
             "• Hotline: 1900-1234 (8h–22h)\n"
-            "• Email: support@foxgo.vn"
+            "• Email khách: support@foxgo.vn\n"
+            "• Email tài xế: driver-support@foxgo.vn"
         )
 
     def clean(text: str) -> str:
@@ -859,7 +968,7 @@ def _template_answer(query: str, retrieved: List[Tuple[float, Chunk]]) -> str:
                 lines.append(s)
         return "\n".join(lines)
 
-    def trim(text: str, max_chars: int = 500) -> str:
+    def trim(text: str, max_chars: int = 480) -> str:
         if len(text) <= max_chars:
             return text
         for delim in (".\n", ".\n\n", ". ", "\n"):
@@ -869,6 +978,14 @@ def _template_answer(query: str, retrieved: List[Tuple[float, Chunk]]) -> str:
         return text[:max_chars].strip() + "…"
 
     main = trim(clean(retrieved[0][1].text))
+
+    # Tone wrapper — gives the fallback a Mia voice instead of dumping raw text.
+    intro_options = (
+        "Mình tóm tắt nhanh phần liên quan trong tài liệu FoxGo nhé:",
+        "Theo thông tin FoxGo mình tra được:",
+        "Mình thấy phần này khớp với câu hỏi của bạn:",
+    )
+    intro = random.choice(intro_options)
 
     extras = []
     seen = {retrieved[0][1].source}
@@ -880,8 +997,111 @@ def _template_answer(query: str, retrieved: List[Tuple[float, Chunk]]) -> str:
             seen.add(chunk.source)
             break
 
-    parts = [main] + extras
-    return "\n\n".join(parts)
+    body_parts = [main] + extras
+    body = "\n\n".join(body_parts)
+
+    outro = (
+        "\n\nNếu cần mình làm rõ thêm bước nào, bạn nhắn lại nhé. "
+        "Hoặc gọi 1900-1234 (8h–22h) để được hỗ trợ trực tiếp."
+    )
+    return f"{intro}\n\n{body}{outro}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LLM query rewriting (optional pre-retrieval step)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_REWRITE_SYSTEM = (
+    "Bạn là bộ rewriter cho hệ thống tìm kiếm RAG của FoxGo (ứng dụng gọi xe Việt Nam). "
+    "Nhiệm vụ: viết lại câu hỏi của người dùng thành 1 câu tìm kiếm tối ưu nhất bằng tiếng Việt, "
+    "giải quyết đại từ chỉ định (nó, vậy, đó, ấy, thế thì…) bằng cách nhìn vào lịch sử hội thoại, "
+    "mở rộng viết tắt, thêm từ khóa kỹ thuật khi suy ra được (vd: 'momo' → 'thanh toán MoMo'). "
+    "Giữ ngôn ngữ tự nhiên, KHÔNG thêm câu trả lời, chỉ trả về MỘT dòng duy nhất là câu hỏi đã viết lại. "
+    "Nếu câu hỏi đã rõ ràng, trả lại nguyên văn. Không thêm dấu ngoặc kép, không tiền tố."
+)
+
+
+def _should_rewrite(query: str) -> bool:
+    """Only rewrite when it likely helps: short, has follow-up pronouns, or very long."""
+    words = query.split()
+    if len(words) <= 6:
+        return True
+    if _FOLLOWUP_PATTERN.search(query):
+        return True
+    if len(words) >= 28:
+        return True  # condense rambling questions into a clean search query
+    return False
+
+
+async def _maybe_rewrite_query(
+    query: str, history: Optional[List[dict]]
+) -> Optional[str]:
+    """Returns a rewritten query string, or None to skip rewriting."""
+    if not QUERY_REWRITE_ENABLED or not GEMINI_API_KEY:
+        return None
+    if not _should_rewrite(query):
+        return None
+    try:
+        _ensure_imports()
+        # Build a compact history context
+        recent: List[str] = []
+        if history:
+            for h in history[-6:]:
+                role = h.get("role", "")
+                content = (h.get("content") or "").strip()
+                if not content:
+                    continue
+                tag = "User" if role == "user" else "Mia"
+                recent.append(f"{tag}: {content[:240]}")
+        history_block = ("\n".join(recent) + "\n") if recent else ""
+
+        user_msg = (
+            f"{history_block}"
+            f"Câu hỏi hiện tại: {query}\n\n"
+            "Viết lại câu hỏi thành 1 câu tìm kiếm tối ưu (chỉ 1 dòng, tiếng Việt)."
+        )
+
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{LLM_MODEL_GEMINI_REWRITE}:generateContent"
+        )
+        gen_config: dict = {"maxOutputTokens": 120, "temperature": 0.1}
+        if "2.5" in LLM_MODEL_GEMINI_REWRITE:
+            gen_config["thinkingConfig"] = {"thinkingBudget": 0}
+
+        payload = {
+            "systemInstruction": {"parts": [{"text": _REWRITE_SYSTEM}]},
+            "contents": [{"role": "user", "parts": [{"text": user_msg}]}],
+            "generationConfig": gen_config,
+        }
+        async with _httpx.AsyncClient(timeout=LLM_REWRITE_TIMEOUT_S) as client:
+            resp = await client.post(
+                url,
+                params={"key": GEMINI_API_KEY},
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        cands = data.get("candidates") or []
+        if not cands:
+            return None
+        parts = cands[0].get("content", {}).get("parts") or []
+        out = "".join(p.get("text", "") for p in parts).strip()
+        # Clean up — Gemini sometimes wraps in quotes or adds "Câu hỏi:"
+        out = out.strip().strip('"').strip("'")
+        for prefix in ("Câu hỏi:", "Query:", "Tìm kiếm:", "Rewrite:"):
+            if out.lower().startswith(prefix.lower()):
+                out = out[len(prefix):].strip()
+        # Sanity: don't accept multi-line or absurdly long rewrites
+        first_line = out.split("\n")[0].strip()
+        if not first_line or len(first_line) > 280:
+            return None
+        return first_line
+    except Exception as exc:
+        logger.info(f"Query rewrite skipped ({exc})")
+        return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -952,10 +1172,29 @@ class RagService:
     def __init__(self):
         self._ready = False
         self._model = None
+        self._reranker = None
+        self._reranker_load_attempted = False
         self._index: Optional[VectorIndex] = None
         self._chunks: List[Chunk] = []
         self._init_error: Optional[str] = None
         self._rag_lock = threading.RLock()
+
+    def _maybe_load_reranker(self) -> None:
+        """Lazy-load BGE cross-encoder. Failures degrade gracefully to hybrid-only."""
+        if self._reranker_load_attempted or not RERANKER_ENABLED:
+            return
+        self._reranker_load_attempted = True
+        if _CrossEncoder is None:
+            logger.info("CrossEncoder class not available — reranker disabled")
+            return
+        try:
+            t0 = time.time()
+            logger.info(f"Loading reranker: {RERANKER_MODEL}")
+            self._reranker = _CrossEncoder(RERANKER_MODEL, max_length=512)
+            logger.info(f"Reranker loaded in {time.time() - t0:.2f}s")
+        except Exception as exc:
+            logger.warning(f"Reranker load failed ({exc}) — hybrid order only")
+            self._reranker = None
 
     def _initialize_locked(self) -> bool:
         """Assume `_rag_lock` is held. First-time load of embedder + index."""
@@ -974,11 +1213,14 @@ class RagService:
 
             if self._chunks:
                 logger.info(f"Encoding {len(self._chunks)} chunks...")
-                texts = [c.text for c in self._chunks]
+                texts = [_embed_passage(c.text) for c in self._chunks]
                 embeddings = self._model.encode(
                     texts, batch_size=32, show_progress_bar=False, normalize_embeddings=True
                 )
                 self._index = VectorIndex(self._chunks, embeddings)
+
+            # Reranker loads in the background — don't block readiness if it fails.
+            self._maybe_load_reranker()
 
             logger.info(f"RAG ready in {time.time() - t0:.2f}s")
             self._ready = True
@@ -1026,7 +1268,7 @@ class RagService:
                 return {"ok": True, "chunks": 0, "action": "reload"}
 
             model = self._model
-            texts = [c.text for c in chunks]
+            texts = [_embed_passage(c.text) for c in chunks]
             embeddings = model.encode(
                 texts, batch_size=32, show_progress_bar=False, normalize_embeddings=True
             )
@@ -1056,6 +1298,8 @@ class RagService:
                 "chunks": len(self._chunks),
                 "vector_index": self._index is not None,
                 "init_error": self._init_error,
+                "reranker_active": self._reranker is not None,
+                "embedding_model": EMBEDDING_MODEL_NAME,
             }
 
     async def chat(
@@ -1084,20 +1328,43 @@ class RagService:
         with self._rag_lock:
             model = self._model
             index = self._index
+            reranker = self._reranker
 
         raw_hits: List[Tuple[float, float, Chunk]] = []
+        rewrite_used: Optional[str] = None
         if index is not None and stripped and model is not None:
             retrieval_query = _expand_quick_menu_label(stripped)
-            enriched_query = _enrich_query(retrieval_query, history)
-            embed_text = _query_embedding_text(enriched_query)
+
+            # Step 1 — optional LLM rewrite (resolves "vậy", "thì sao", "nó"…)
+            rewritten = await _maybe_rewrite_query(retrieval_query, history)
+            if rewritten and rewritten.strip() and rewritten.strip().lower() != retrieval_query.strip().lower():
+                rewrite_used = rewritten
+                enriched_query = rewritten
+            else:
+                enriched_query = _enrich_query(retrieval_query, history)
+
+            # Step 2 — embed + hybrid retrieval (wider pool when reranker active)
+            embed_text = _embed_query(_query_embedding_text(enriched_query))
             query_emb = model.encode([embed_text], normalize_embeddings=True)
-            raw_hits = index.search_hybrid(query_emb[0], enriched_query, top_k=top_k)
+            pool_k = max(top_k, RERANK_POOL) if reranker is not None else top_k
+            raw_hits = index.search_hybrid(query_emb[0], enriched_query, top_k=pool_k)
+
+            # Step 3 — cross-encoder rerank → keep top_k
+            if reranker is not None and len(raw_hits) > 1:
+                raw_hits = index.rerank(stripped, raw_hits, reranker, top_k=top_k)
+            else:
+                raw_hits = raw_hits[:top_k]
 
         if not raw_hits:
             return _apply_answer_polish({
                 "answer": (
-                    "Mình chưa thấy nội dung nào trong hệ thống FoxGo khớp câu hỏi này.\n"
-                    "Bạn gọi hotline 1900-1234 (8h–22h) hoặc mail support@foxgo.vn nhé — họ xử lý trực tiếp cho bạn."
+                    "Mình chưa thấy thông tin về câu này trong tài liệu FoxGo bạn ơi. "
+                    "Bạn thử mô tả cụ thể hơn xem nhé — ví dụ:\n"
+                    "• \"Hủy chuyến mất phí không\"\n"
+                    "• \"Thanh toán MoMo bị lỗi\"\n"
+                    "• \"Tài xế rút tiền ra sao\"\n"
+                    "Nếu vẫn không khớp, bạn gọi hotline 1900-1234 (8h–22h) "
+                    "hoặc mail support@foxgo.vn để được hỗ trợ trực tiếp."
                 ),
                 "sources": [],
                 "retrieval_count": 0,
@@ -1108,11 +1375,24 @@ class RagService:
 
         score_max = max(h[1] for h in raw_hits)
         if score_max < RAG_COSINE_ABSENT:
+            # Surface top candidate sources as hints — helps the user reframe.
+            hint_titles = []
+            for _, _, ch in raw_hits[:3]:
+                if ch.title and ch.title not in hint_titles:
+                    hint_titles.append(ch.title)
+            hint_str = ""
+            if hint_titles:
+                hint_str = (
+                    "\n\nCâu của bạn hơi gần với mấy chủ đề: "
+                    + ", ".join(hint_titles[:3])
+                    + ". Nếu trúng cái nào, bạn hỏi lại cụ thể hơn giúp mình nhé."
+                )
             return _apply_answer_polish({
                 "answer": (
-                    "Mình chưa tìm được đoạn tài liệu FoxGo khớp đủ với câu hỏi, nên không muốn đoán bừa.\n\n"
-                    "Bạn thử thêm vài từ khóa (ví dụ: đặt xe, MoMo, hủy chuyến, ví tài xế), "
-                    "hoặc liên hệ 1900-1234 / support@foxgo.vn / driver-support@foxgo.vn nhé."
+                    "Mình chưa tìm được đoạn tài liệu FoxGo khớp đủ với câu hỏi, "
+                    "nên không muốn đoán bừa kẻo sai bạn ạ."
+                    + hint_str
+                    + "\n\nHoặc liên hệ 1900-1234 / support@foxgo.vn / driver-support@foxgo.vn."
                 ),
                 "sources": [],
                 "retrieval_count": len(raw_hits),
@@ -1139,6 +1419,8 @@ class RagService:
             })
 
         answer, mode = await _generate_answer(stripped, retrieved, history=history)
+        if rewrite_used:
+            mode = f"{mode}+rewrite"
 
         return _apply_answer_polish({
             "answer": answer,

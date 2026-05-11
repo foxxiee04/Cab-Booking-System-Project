@@ -43,7 +43,6 @@ import { useTranslation } from 'react-i18next';
 import DriverTripMap from '../features/trip/components/DriverTripMap';
 import { driverSocketService } from '../socket/driver.socket';
 import { watchPosition, clearWatch, getDemoFallbackLocation } from '../utils/map.utils';
-import ContactBox from '../components/ContactBox';
 
 const getOptimisticCompletedRidesKey = (userId?: string) => `driver:completedRidesCount:${userId || 'anonymous'}`;
 
@@ -593,20 +592,6 @@ const ActiveRide: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* ── Messenger-style floating chat FAB ───────────────────── */}
-      {['ASSIGNED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS'].includes(status) && (
-        <ContactBox
-          token={accessToken}
-          rideId={currentRide?.id}
-          myUserId={user?.id}
-          contactName={customerName}
-          contactPhone={customerPhoneNumber || undefined}
-          role="DRIVER"
-          triggerMode="floating"
-          panelMode="floating"
-          triggerLabel="Chat"
-        />
-      )}
     </Box>
   );
 };

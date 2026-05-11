@@ -66,6 +66,10 @@ model Driver {
   licenseNumber      String             @map("license_number") @db.VarChar(50)
   licenseExpiryDate  DateTime           @map("license_expiry_date")
   licenseVerified    Boolean            @default(false) @map("license_verified")
+  // Combined CCCD (national ID) / GPLX scan, uploaded during onboarding so
+  // admin can verify identity. Stored as data URL or remote URL — same
+  // pattern as vehicleImageUrl.
+  cccdImageUrl       String?            @map("cccd_image_url") @db.Text
   
   // Rating
   ratingAverage      Float              @default(5.0) @map("rating_average") @db.DoublePrecision

@@ -98,7 +98,7 @@ const vehicleOptions: VehicleOption[] = [
     type: 'MOTORBIKE',
     name: 'Xe máy',
     imageSrc: motorbikeImage,
-    description: 'Nhanh, linh hoạt',
+    description: 'Tiết kiệm, di chuyển linh hoạt trong nội đô — 1 hành khách',
     capacity: 1,
     priceMultiplier: 1.0,
   },
@@ -106,7 +106,7 @@ const vehicleOptions: VehicleOption[] = [
     type: 'SCOOTER',
     name: 'Xe ga',
     imageSrc: scooterImage,
-    description: 'Êm và thoải mái',
+    description: 'Êm ái, thoải mái, phù hợp di chuyển ngắn và trung — 1 hành khách',
     capacity: 1,
     priceMultiplier: 1.15,
   },
@@ -114,7 +114,7 @@ const vehicleOptions: VehicleOption[] = [
     type: 'CAR_4',
     name: 'Xe 4 chỗ',
     imageSrc: car4Image,
-    description: 'Phổ thông, nhóm nhỏ',
+    description: 'Ô tô phổ thông, có điều hòa, phù hợp nhóm đến 4 người',
     capacity: 4,
     priceMultiplier: 1.7,
   },
@@ -122,7 +122,7 @@ const vehicleOptions: VehicleOption[] = [
     type: 'CAR_7',
     name: 'Xe 7 chỗ',
     imageSrc: car7Image,
-    description: 'Rộng rãi cho nhóm đông',
+    description: 'Ô tô rộng rãi, có điều hòa, lý tưởng cho nhóm đông đến 7 người',
     capacity: 7,
     priceMultiplier: 2.2,
   },
@@ -248,7 +248,9 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
   const [collectingVoucherCode, setCollectingVoucherCode] = useState<string | null>(null);
   const [priceEstimates, setPriceEstimates] = useState<Record<string, PriceEstimate>>({});
   const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
+  // loadingMore was previously used for an "Đang tải giá còn lại…" banner that
+  // caused layout-shift flicker. Per-card "Đang tính giá…" placeholder now
+  // covers the loading state, so the banner is gone and this state is unused.
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   const confirmInFlightRef = useRef(false);
@@ -449,7 +451,6 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
     estimateRequestIdRef.current = requestId;
 
     setLoading(true);
-    setLoadingMore(false);
     setError('');
     setPriceEstimates({});
 
@@ -466,7 +467,6 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
       setActiveStep(0); // Start at vehicle selection step
       setLoading(false);
 
-      setLoadingMore(true);
       const remainingVehicles = VEHICLE_FETCH_ORDER.filter((vehicleType) => vehicleType !== primaryVehicle);
 
       await Promise.allSettled(
@@ -481,7 +481,19 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
             return;
           }
 
-          setPriceEstimates((prev) => enforceVehiclePriceOrder({ ...prev, [vehicleType]: estimate }));
+          setPriceEstimates((prev) => {
+            const next = enforceVehiclePriceOrder({ ...prev, [vehicleType]: estimate });
+            // Normalize duration: two-wheel and four-wheel each share one route profile.
+            // Prevents visible inconsistency when pricing-service or AI returns
+            // slightly different durations for same vehicle class.
+            if (next.MOTORBIKE && next.SCOOTER) {
+              next.SCOOTER = { ...next.SCOOTER, duration: next.MOTORBIKE.duration };
+            }
+            if (next.CAR_4 && next.CAR_7) {
+              next.CAR_7 = { ...next.CAR_7, duration: next.CAR_4.duration };
+            }
+            return next;
+          });
         })
       );
     } catch (err: any) {
@@ -491,7 +503,6 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
     } finally {
       if (estimateRequestIdRef.current === requestId) {
         setLoading(false);
-        setLoadingMore(false);
       }
     }
   }, [fetchEstimate]);
@@ -611,10 +622,25 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
             <Typography variant="h6" gutterBottom fontWeight={800}>
               Chọn loại xe
             </Typography>
-            {loadingMore && (
-              <Alert severity="info" icon={false} sx={{ mb: 1.5, py: 0.5, borderRadius: 3, fontSize: '0.82rem' }}>
-                Đang tải giá các loại xe còn lại...
-              </Alert>
+            {Object.values(priceEstimates).some((e) => e.surgeMultiplier >= 1.01) && (
+              <Box
+                sx={{
+                  mb: 1.5,
+                  px: 1.5,
+                  py: 0.75,
+                  borderRadius: 2,
+                  bgcolor: '#fffbeb',
+                  border: '1px solid #fde68a',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                }}
+              >
+                <Chip size="small" label="Giờ cao điểm" color="warning" sx={{ fontWeight: 700, fontSize: '0.68rem' }} />
+                <Typography variant="caption" color="warning.main" sx={{ lineHeight: 1.4 }}>
+                  Giá có thể cao hơn bình thường do nhu cầu tăng. Cước thực tế xác nhận khi kết thúc chuyến.
+                </Typography>
+              </Box>
             )}
             <Stack spacing={1.2}>
               {vehicleOptions.map((vehicle) => {
@@ -665,44 +691,30 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
                             </Typography>
                             <Box textAlign="right" flexShrink={0} ml={1}>
                               {estimate ? (
-                                <>
-                                  <Typography variant="subtitle1" color="primary" fontWeight={700} lineHeight={1.2}>
-                                    {formatCurrency(estimate.fare)}
-                                  </Typography>
-                                  {estimate.surgeMultiplier >= 1.01 && (
-                                    <Tooltip
-                                      title={
-                                        <>
-                                          Giá ước tính do <strong>Pricing</strong> tính: quãng đường (OSRM), giá theo loại xe, và hệ số theo khung giờ / cấu hình (Redis) cùng gợi ý từ <strong>ai-service</strong>.
-                                          Hệ số hiện tại khoảng ×{Number(estimate.surgeMultiplier).toFixed(2)} (tham khảo).
-                                        </>
-                                      }
-                                      arrow
-                                      placement="top"
-                                    >
-                                      <Chip
-                                        size="small"
-                                        label="Giá có thể khác theo thời điểm"
-                                        color="warning"
-                                        variant="outlined"
-                                        sx={{ height: 18, fontSize: '0.62rem', mt: 0.25, maxWidth: '100%' }}
-                                      />
-                                    </Tooltip>
-                                  )}
-                                </>
+                                <Typography variant="subtitle1" color="primary" fontWeight={700} lineHeight={1.2}>
+                                  {formatCurrency(estimate.fare)}
+                                </Typography>
                               ) : (
                                 <CircularProgress size={16} />
                               )}
                             </Box>
                           </Box>
                           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.3 }}>
-                            {vehicle.description} • {vehicle.capacity} chỗ
+                            {vehicle.description}
                           </Typography>
-                          {estimate && (
-                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.2 }}>
-                              {formatEstimateDistance(estimate.distance)} · {formatEstimateDuration(estimate.duration)}
-                            </Typography>
-                          )}
+                          {/* Reserve a fixed-height row for the metric line so cards
+                              don't jump when prices arrive — fixes the "giật giật"
+                              flicker the user reported when prices recalculate. */}
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                            sx={{ mt: 0.2, minHeight: 16 }}
+                          >
+                            {estimate
+                              ? `${formatEstimateDistance(estimate.distance)} · ${formatEstimateDuration(estimate.duration)}`
+                              : 'Đang tính giá…'}
+                          </Typography>
                         </Box>
                       </Box>
                     </CardContent>
@@ -711,7 +723,7 @@ const RideBookingFlow: React.FC<RideBookingFlowProps> = ({
               })}
             </Stack>
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5, textAlign: 'center', lineHeight: 1.45 }}>
-              Ô tô 4 chỗ và 7 chỗ dùng chung quãng đường / thời gian ước lượng (ô tô); xe máy và xe ga dùng chung ước lượng riêng (hai bánh). Giá do <strong>Pricing</strong> tính; hệ số cao điểm theo giờ, Redis và AI. Cước thực tế có thể khác khi kết thúc chuyến.
+              Giá ước tính theo tuyến đường và loại xe. Cước thực tế xác nhận khi hoàn tất chuyến đi.
             </Typography>
           </Box>
         );

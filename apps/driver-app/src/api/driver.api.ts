@@ -67,6 +67,7 @@ const normalizeDriver = (driver: any): Driver => {
     vehicleColor: driver.vehicleColor || '',
     vehicleYear: driver.vehicleYear || undefined,
     vehicleImageUrl: driver.vehicleImageUrl || undefined,
+    cccdImageUrl: driver.cccdImageUrl || undefined,
     licensePlate: driver.licensePlate || driver.vehiclePlate || '',
     licenseClass: driver.licenseClass || undefined,
     licenseNumber: driver.licenseNumber || '',
@@ -109,6 +110,7 @@ export const driverApi = {
         number: data.licenseNumber,
         expiryDate: data.licenseExpiryDate,
       },
+      cccdImageUrl: data.cccdImageUrl,
     };
     const response = await axiosInstance.post('/drivers/register', payload);
     return response.data;
@@ -135,6 +137,7 @@ export const driverApi = {
       vehicleColor: data.vehicleColor,
       vehicleYear: data.vehicleYear,
       vehicleImageUrl: data.vehicleImageUrl,
+      cccdImageUrl: data.cccdImageUrl,
       licensePlate: data.licensePlate,
       licenseClass: data.licenseClass,
       licenseNumber: data.licenseNumber,
@@ -221,15 +224,32 @@ export const driverApi = {
         // If rides endpoint fails, we still have earnings data
       }
 
+      // All date math uses Vietnam timezone (UTC+7) explicitly so the chart works
+      // regardless of the user's browser timezone.
+      const VN_OFFSET_MS = 7 * 3600 * 1000;
+      const vnDateParts = (d: Date) => {
+        const shifted = new Date(d.getTime() + VN_OFFSET_MS);
+        return {
+          year: shifted.getUTCFullYear(),
+          month: shifted.getUTCMonth(), // 0-indexed
+          day: shifted.getUTCDate(),
+        };
+      };
+      const vnDayKey = (d: Date) => {
+        const p = vnDateParts(d);
+        return `${p.year}-${String(p.month + 1).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+      };
+      // Returns the UTC millisecond timestamp of midnight in Vietnam for the given VN day offset
+      // (offset 0 = today midnight VN, offset -1 = yesterday midnight VN).
+      const vnMidnightUtcMs = (year: number, monthIdx: number, day: number) =>
+        Date.UTC(year, monthIdx, day) - VN_OFFSET_MS;
+
       const now = new Date();
-      const startOfToday = new Date(now);
-      startOfToday.setHours(0, 0, 0, 0);
+      const today = vnDateParts(now);
 
-      const startOfWeek = new Date(now);
-      startOfWeek.setDate(now.getDate() - 6);
-      startOfWeek.setHours(0, 0, 0, 0);
-
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfTodayMs = vnMidnightUtcMs(today.year, today.month, today.day);
+      const startOfWeekMs = vnMidnightUtcMs(today.year, today.month, today.day - 6);
+      const startOfMonthMs = vnMidnightUtcMs(today.year, today.month, 1);
 
       // Map earnings rows to trip breakdowns
       const recentTrips: EarningsTripBreakdown[] = (earningsRows || []).map((row: any) => {
@@ -255,30 +275,38 @@ export const driverApi = {
       });
 
       // Calculate period totals from rows
-      const filterByDate = (boundary: Date) =>
-        recentTrips.filter((t) => new Date(t.completedAt) >= boundary);
-      const todayTrips = filterByDate(startOfToday);
-      const weekTrips = filterByDate(startOfWeek);
-      const monthTrips = filterByDate(startOfMonth);
+      const filterByMs = (boundaryMs: number) =>
+        recentTrips.filter((t) => new Date(t.completedAt).getTime() >= boundaryMs);
+      const todayTrips = filterByMs(startOfTodayMs);
+      const weekTrips = filterByMs(startOfWeekMs);
+      const monthTrips = filterByMs(startOfMonthMs);
 
       const sumNet = (trips: EarningsTripBreakdown[]) =>
         trips.reduce((s, t) => s + t.net, 0);
 
-      // Build daily breakdown
-      const buildDayLabel = (date: Date) =>
-        `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+      // Bucketize all trips by Vietnam date key (YYYY-MM-DD)
+      const tripsByDay = new Map<string, EarningsTripBreakdown[]>();
+      for (const t of recentTrips) {
+        const key = vnDayKey(new Date(t.completedAt));
+        const bucket = tripsByDay.get(key);
+        if (bucket) bucket.push(t);
+        else tripsByDay.set(key, [t]);
+      }
 
+      // Build last 7 days using VN day keys
       const daily: EarningsDailyPoint[] = Array.from({ length: EARNINGS_DAYS }, (_, index) => {
-        const date = new Date(startOfWeek);
-        date.setDate(startOfWeek.getDate() + index);
-
-        const dayTrips = recentTrips.filter((t) => {
-          const tripDate = new Date(t.completedAt);
-          return tripDate.toDateString() === date.toDateString();
-        });
+        const offset = EARNINGS_DAYS - 1 - index; // 6,5,4,3,2,1,0 → oldest first
+        // Use Date.UTC normalization to handle month/year rollovers cleanly.
+        const target = new Date(Date.UTC(today.year, today.month, today.day - offset));
+        const y = target.getUTCFullYear();
+        const m = target.getUTCMonth();
+        const dayN = target.getUTCDate();
+        const key = `${y}-${String(m + 1).padStart(2, '0')}-${String(dayN).padStart(2, '0')}`;
+        const label = `${String(dayN).padStart(2, '0')}/${String(m + 1).padStart(2, '0')}`;
+        const dayTrips = tripsByDay.get(key) || [];
 
         return {
-          label: buildDayLabel(date),
+          label,
           gross: dayTrips.reduce((s, t) => s + t.gross, 0),
           commission: dayTrips.reduce((s, t) => s + t.commission, 0),
           bonus: dayTrips.reduce((s, t) => s + t.bonus, 0),

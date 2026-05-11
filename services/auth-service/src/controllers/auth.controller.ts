@@ -16,7 +16,7 @@ import {
   registerCompleteSchema,
 } from '../validators/auth.validator';
 import { updateProfileSchema } from '../dto/auth.dto';
-import { UserRole } from '../generated/prisma-client';
+import { UserRole, UserStatus } from '../generated/prisma-client';
 import { logger } from '../utils/logger';
 
 export class AuthController {
@@ -110,6 +110,7 @@ export class AuthController {
         role: value.role,
         firstName: value.firstName,
         lastName: value.lastName,
+        email: value.email,
         deviceInfo: req.headers['user-agent'],
         ipAddress: req.ip,
       });
@@ -494,6 +495,26 @@ export class AuthController {
         success: false,
         error: { code: 'INTERNAL_ERROR', message: 'Failed to get users' },
       });
+    }
+  };
+
+  updateUserStatus = async (req: Request, res: Response) => {
+    try {
+      const { status } = req.body;
+      if (!['ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_STATUS', message: 'Status must be ACTIVE, INACTIVE, or SUSPENDED' },
+        });
+      }
+      const user = await this.authService.updateUserStatus(req.params.userId, status as UserStatus);
+      if (!user) {
+        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+      }
+      res.json({ success: true, data: { user } });
+    } catch (err) {
+      logger.error('Update user status error:', err);
+      res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to update user status' } });
     }
   };
 

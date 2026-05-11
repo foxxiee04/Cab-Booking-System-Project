@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Card,
@@ -34,6 +33,7 @@ import { driverApi } from '../api/driver.api';
 import { updateUser } from '../store/auth.slice';
 import { setOnlineStatus, setProfile } from '../store/driver.slice';
 import { walletApi } from '../api/wallet.api';
+import { DriverPortraitFrame } from '../components/common/DriverPortraitFrame';
 import { formatCurrency, getVehicleTypeLabel } from '../utils/format.utils';
 
 const APPROVAL_META: Record<string, { label: string; color: 'success' | 'warning' | 'error' | 'default' }> = {
@@ -216,11 +216,15 @@ const Account: React.FC = () => {
         {error && <Alert severity="error">{error}</Alert>}
 
         <Card sx={{ borderRadius: 5, overflow: 'hidden' }}>
-          <Box sx={{ p: 2.5, background: 'linear-gradient(135deg, #0f172a, #1d4ed8)', color: '#fff' }}>
+          <Box sx={{ p: 2.5, background: (theme) => `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`, color: '#fff' }}>
             <Stack direction="row" spacing={2} alignItems="center">
-              <Avatar src={user?.avatar} sx={{ width: 64, height: 64, bgcolor: 'rgba(255,255,255,0.18)' }}>
-                {user?.firstName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'T'}
-              </Avatar>
+              <DriverPortraitFrame
+                src={user?.avatar}
+                initials={`${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.trim().toUpperCase() || (user?.email?.[0]?.toUpperCase() ?? 'T')}
+                width={72}
+                borderRadius={2}
+                bordered={false}
+              />
               <Box sx={{ minWidth: 0, flex: 1 }}>
                 <Typography variant="h6" fontWeight={800}>
                   {fullName}
@@ -396,19 +400,15 @@ secondary={profile?.licensePlate ? `Biển số ${profile.licensePlate}` : 'Bổ
                   Đổi mật khẩu đăng nhập và thu hồi các phiên cũ để bảo vệ tài khoản.
                 </Typography>
               </Box>
-<Stack direction="row" justifyContent="center">
-  <Button
-    variant="contained"
-    sx={{ borderRadius: 3, minWidth: 220 }}
-    onClick={() => {
-      setPasswordEditing(true);
-      setError('');
-      setSuccess('');
-    }}
-  >
-    Đổi mật khẩu
-  </Button>
-</Stack>
+              <Stack direction="row" justifyContent="center">
+                <Button
+                  variant="contained"
+                  sx={{ borderRadius: 3, minWidth: 220 }}
+                  onClick={() => { setPasswordEditing(true); setError(''); setSuccess(''); }}
+                >
+                  Đổi mật khẩu
+                </Button>
+              </Stack>
             </Stack>
 
             {passwordEditing && (

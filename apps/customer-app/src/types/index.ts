@@ -87,6 +87,8 @@ export interface Driver {
   lastName: string;
   phoneNumber?: string;
   avatar?: string;
+  /** Ảnh xe đăng ký (URL/data URL/tương đối) — public profile */
+  vehicleImageUrl?: string;
   vehicleMake: string;
   vehicleModel: string;
   vehicleColor: string;

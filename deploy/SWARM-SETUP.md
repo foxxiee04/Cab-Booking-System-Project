@@ -275,6 +275,34 @@ To add a manager to this swarm, run 'docker swarm join-token manager' and follow
 
 ---
 
+## PHASE 8b — Gán Node Labels cho Primary Manager
+
+> Vẫn trên **Primary Manager** — phải làm TRƯỚC khi deploy stack
+
+Stack file dùng constraints để quyết định service chạy trên node nào:
+- `node.labels.infra == true` → postgres, mongodb, redis, rabbitmq, ai-service, monitoring
+- `node.labels.nginx == true` → api-gateway (public entry point, cần IP cố định)
+- `node.role == worker` → tất cả microservices còn lại
+
+**Nếu thiếu labels, các service bị stuck ở `0/1` — KHÔNG BAO GIỜ start.**
+
+```bash
+# Lấy node ID của chính manager này
+SELF_ID=$(docker info --format '{{.Swarm.NodeID}}')
+
+# Gán labels
+docker node update --label-add infra=true  "$SELF_ID"
+docker node update --label-add nginx=true  "$SELF_ID"
+
+# Xác nhận
+docker node inspect "$SELF_ID" --format '{{json .Spec.Labels}}'
+# Output: {"infra":"true","nginx":"true"}
+```
+
+> Secondary Manager và Workers **KHÔNG cần labels** — microservices dùng `node.role == worker` để tự spread sang tất cả workers.
+
+---
+
 ## PHASE 9 — Tạo Docker Secrets
 
 > Vẫn trên **Primary Manager**

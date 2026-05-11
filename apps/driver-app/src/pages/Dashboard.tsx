@@ -36,6 +36,7 @@ import { driverSocketService } from '../socket/driver.socket';
 import { watchPosition, clearWatch, calculateDistance, formatDistance, formatDuration, getDemoFallbackLocation } from '../utils/map.utils';
 import { formatCurrency, getVehicleTypeLabel } from '../utils/format.utils';
 import DriverTripMap from '../features/trip/components/DriverTripMap';
+import { DriverPortraitAvatar } from '../components/common/DriverPortraitFrame';
 import { Ride } from '../types';
 
 const getOptimisticCompletedRidesKey = (userId?: string) => `driver:completedRidesCount:${userId || 'anonymous'}`;
@@ -423,9 +424,11 @@ const Dashboard: React.FC = () => {
         }}
       >
         <Stack direction="row" spacing={1.5} alignItems="center">
-          <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48 }}>
-            {user?.firstName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase()}
-          </Avatar>
+          <DriverPortraitAvatar
+            src={user?.avatar}
+            initials={(user?.firstName?.[0] || user?.email?.[0] || 'T').toUpperCase()}
+            size={48}
+          />
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="body2" color="text.secondary">
               {t('dashboard.welcome', { name: user?.firstName || 'tài xế' })}
@@ -661,15 +664,17 @@ const Dashboard: React.FC = () => {
                           </Box>
                         </Stack>
 
-                        {/* Row 5: Stats chips */}
+                        {/* Row 5: Stats chips — labels make the numbers self-explanatory */}
                         <Stack direction="row" spacing={0.6} useFlexGap flexWrap="wrap">
                           {metrics.distanceMeters && (
                             <Chip size="small" icon={<RouteRounded sx={{ fontSize: '13px !important' }} />}
-                              label={formatDistance(metrics.distanceMeters)} sx={{ fontSize: '0.7rem' }} />
+                              label={`Quãng đường dự kiến ${formatDistance(metrics.distanceMeters)}`}
+                              sx={{ fontSize: '0.7rem' }} />
                           )}
                           {metrics.durationSeconds && (
                             <Chip size="small" icon={<AccessTimeRounded sx={{ fontSize: '13px !important' }} />}
-                              label={formatDuration(metrics.durationSeconds)} sx={{ fontSize: '0.7rem' }} />
+                              label={`Thời gian dự kiến ${formatDuration(metrics.durationSeconds)}`}
+                              sx={{ fontSize: '0.7rem' }} />
                           )}
                           {(distanceFromDriver != null || etaMins != null) && (
                             <Chip size="small" icon={<LocationOnRounded sx={{ fontSize: '13px !important' }} />}

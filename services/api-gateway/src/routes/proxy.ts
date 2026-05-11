@@ -110,27 +110,38 @@ async function forwardOverHttp(
     }
   });
 
-  const response = await fetch(url.toString(), {
-    method: req.method,
-    headers: getForwardHeaders(req),
-    body: ['GET', 'HEAD'].includes(req.method.toUpperCase())
-      ? undefined
-      : JSON.stringify(normalizeAddressPayloadDeep(req.body || {})),
-  });
+  let upstream: Awaited<ReturnType<typeof fetch>>;
+  try {
+    upstream = await fetch(url.toString(), {
+      method: req.method,
+      headers: getForwardHeaders(req),
+      body: ['GET', 'HEAD'].includes(req.method.toUpperCase())
+        ? undefined
+        : JSON.stringify(normalizeAddressPayloadDeep(req.body || {})),
+    });
+  } catch (error) {
+    logger.error('HTTP proxy upstream unreachable', {
+      service,
+      method: req.method,
+      url: url.toString(),
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 
-  const text = await response.text();
+  const text = await upstream.text();
 
   try {
     const parsed = text ? JSON.parse(text) : {};
-    res.status(response.status).json(normalizeAddressPayloadDeep(parsed));
+    res.status(upstream.status).json(normalizeAddressPayloadDeep(parsed));
   } catch {
-    res.status(response.status).send(text);
+    res.status(upstream.status).send(text);
   }
 }
 
 async function forward(service: keyof typeof import('../config').config.services, req: Request, res: Response) {
+  const normalizedPath = normalizeProxyPath(service, req.originalUrl);
   try {
-    const normalizedPath = normalizeProxyPath(service, req.originalUrl);
     const normalizedQuery = normalizeForwardQuery(service, normalizedPath, req.query);
 
     if (shouldForwardOverHttp(service, normalizedPath)) {
@@ -150,10 +161,12 @@ async function forward(service: keyof typeof import('../config').config.services
     const response = await grpcBridgeClient.forward(service as keyof typeof import('../config').config.grpcServices, forwardedRequest, normalizedPath);
     res.status(response.statusCode).json(normalizeAddressPayloadDeep(response.body));
   } catch (error) {
-    logger.error('gRPC proxy error', {
+    const viaHttp = shouldForwardOverHttp(service, normalizedPath);
+    logger.error(viaHttp ? 'HTTP proxy error (upstream fail)' : 'gRPC proxy error', {
       service,
       method: req.method,
-      path: normalizeProxyPath(service, req.originalUrl),
+      path: normalizedPath,
+      viaHttp,
       error: error instanceof Error ? error.message : String(error),
     });
 

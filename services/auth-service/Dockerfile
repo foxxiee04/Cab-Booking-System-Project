@@ -21,4 +21,6 @@ RUN npm run build
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "if [ -d prisma/migrations ] && [ \"$(ls -A prisma/migrations 2>/dev/null)\" ]; then npx prisma migrate deploy; else echo 'No prisma/migrations found; running prisma db push for dev startup' && npx prisma db push; fi && npx prisma generate && rm -rf dist/generated && cp -r src/generated dist/generated && node dist/index.js"]
+# migrate deploy chỉ khi có migration/*/migration.sql — không kích hoạt chỉ vì có migration_lock.toml.
+# Dev Compose thường dùng db push; migrate một phần (vd. chỉ ALTER) trên DB trống sẽ làm container thoát.
+CMD ["sh", "-c", "set -e; if find prisma/migrations -mindepth 2 -maxdepth 2 -name migration.sql -print -quit 2>/dev/null | grep -q .; then echo '[auth-service] prisma migrate deploy'; npx prisma migrate deploy; else echo '[auth-service] prisma db push (no numbered migrations)'; npx prisma db push; fi && npx prisma generate && rm -rf dist/generated && cp -r src/generated dist/generated && exec node dist/index.js"]

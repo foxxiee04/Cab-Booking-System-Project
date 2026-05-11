@@ -122,4 +122,60 @@ export const adminApi = {
     const response = await axiosInstance.get('/admin/logs', { params });
     return response.data;
   },
+
+  // Revenue analytics (time-series for charts)
+  getRevenueAnalytics: async (days = 30): Promise<ApiResponse<{
+    dailyRevenue: Array<{ date: string; revenue: number; trips: number }>;
+    methodBreakdown: Record<string, number>;
+    totalRevenue: number;
+    totalTrips: number;
+  }>> => {
+    const response = await axiosInstance.get('/admin/analytics/revenue', { params: { days } });
+    return response.data;
+  },
+
+  // Top drivers by ride count (also includes rating + earnings for sortable charts)
+  getTopDrivers: async (limit = 10): Promise<ApiResponse<{
+    drivers: Array<{
+      id: string;
+      name: string;
+      totalRides: number;
+      rating: number;
+      reviewCount?: number;
+      totalEarnings?: number;
+      vehicleType: string;
+    }>;
+  }>> => {
+    const response = await axiosInstance.get('/admin/analytics/top-drivers', { params: { limit } });
+    return response.data;
+  },
+
+  // Vehicle breakdown for revenue reports (rides + revenue per vehicle type)
+  getVehicleBreakdown: async (days = 30): Promise<ApiResponse<{
+    breakdown: Array<{ vehicleType: string; count: number; revenue: number }>;
+    total: number;
+  }>> => {
+    const response = await axiosInstance.get('/admin/analytics/vehicles', { params: { days } });
+    return response.data;
+  },
+
+  // Top customers by ride count
+  getTopCustomers: async (limit = 10): Promise<ApiResponse<{
+    customers: Array<{ id: string; name: string; email: string; totalRides: number }>;
+  }>> => {
+    const response = await axiosInstance.get('/admin/analytics/top-customers', { params: { limit } });
+    return response.data;
+  },
+
+  // Toggle user status (ACTIVE / INACTIVE / SUSPENDED)
+  updateUserStatus: async (userId: string, status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED'): Promise<ApiResponse<any>> => {
+    const response = await axiosInstance.patch(`/admin/users/${userId}/status`, { status });
+    return response.data;
+  },
+
+  // Suspend / unsuspend driver
+  suspendDriver: async (driverId: string, suspend: boolean): Promise<ApiResponse<any>> => {
+    const response = await axiosInstance.patch(`/admin/drivers/${driverId}/suspend`, { suspend });
+    return response.data;
+  },
 };

@@ -74,6 +74,12 @@ cmd_init() {
   create_secret mongo_user        "mongo"
   create_secret mongo_password    "${MONGO_PASS}"
 
+  info "Labelling this manager node (infra=true, nginx=true)..."
+  SELF_ID="$(docker info --format '{{.Swarm.NodeID}}')"
+  docker node update --label-add infra=true "${SELF_ID}" >/dev/null
+  docker node update --label-add nginx=true "${SELF_ID}" >/dev/null
+  info "Manager ${SELF_ID} labelled."
+
   info "Done. Run '$0 join-worker' to get the token for worker nodes."
   info "Then run '$0 deploy' to deploy the stack."
 }

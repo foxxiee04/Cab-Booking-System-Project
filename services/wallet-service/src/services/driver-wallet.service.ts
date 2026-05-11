@@ -629,6 +629,7 @@ export class DriverWalletService {
     if (amount <= 0) return { activated: false };
 
     let activated = false;
+    let alreadyProcessed = false;
 
     await this.prisma.$transaction(async (tx: PrismaAny) => {
       // Mark top-up order as completed
@@ -655,7 +656,10 @@ export class DriverWalletService {
         idempotencyKey: `topup_${orderId}`,
       });
 
-      if (deltaResult.alreadyExisted) return;
+      if (deltaResult.alreadyExisted) {
+        alreadyProcessed = true;
+        return;
+      }
 
       activated = !(beforeWallet?.initialActivationCompleted ?? false) && Boolean(deltaResult.wallet.initialActivationCompleted);
       if (activated) {
@@ -683,6 +687,11 @@ export class DriverWalletService {
 
       await this.upsertMerchantBalance(tx, amount, 0);
     });
+
+    if (alreadyProcessed) {
+      logger.debug(`creditTopUp: orderId=${orderId} already processed — skipping bank simulation`);
+      return { activated: false };
+    }
 
     // Bank simulation: <PROVIDER> → MAIN_ACCOUNT (fire-and-forget)
     await this.bankSim.recordTopUp(orderId, driverId, amount, { provider, gatewayTxnId });

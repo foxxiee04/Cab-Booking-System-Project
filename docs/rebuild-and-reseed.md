@@ -52,7 +52,7 @@ scripts\reset-database.bat
 
 ```bash
 npm run db:seed
-```
+``` 
 
 - Reset: drop PG/Mongo + `prisma db push`, script có bước restart service sau push (wallet cần re-seed `SystemBankAccount`).
 - Seed: `scripts/seed-database.ts` — pure API Gateway (ngoại lệ 1 admin bootstrap DB). Kết quả: `docs/seed-accounts-reference.md`.

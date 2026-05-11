@@ -33,6 +33,7 @@ import {
   FactCheck,
   Notifications as NotificationsIcon,
   AccountBalanceWallet,
+  Assessment,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector, useAppDispatch } from './store/hooks';
@@ -49,6 +50,7 @@ import Pricing from './pages/Pricing';
 import Profile from './pages/Profile';
 import Vouchers from './pages/Vouchers';
 import MerchantWallet from './pages/MerchantWallet';
+import Reports from './pages/Reports';
 const DRAWER_WIDTH = 260;
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -133,6 +135,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       path: '/driver-approvals',
     },
     { text: t('menu.customers'), icon: <People />, path: '/customers' },
+    { text: 'Báo cáo', icon: <Assessment />, path: '/reports' },
     { text: 'Khuyến mãi', icon: <LocalOffer />, path: '/vouchers' },
     { text: 'Giá cước', icon: <TrendingUp />, path: '/pricing' },
     { text: 'Tài chính', icon: <AccountBalanceWallet />, path: '/merchant-wallet' },
@@ -170,6 +173,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             onClose={() => setNotifAnchorEl(null)}
             anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
             transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            keepMounted
+            disableScrollLock
             PaperProps={{ sx: { width: 360, maxHeight: 480, borderRadius: 2 } }}
           >
             <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
@@ -386,6 +391,16 @@ const App: React.FC = () => {
             <ProtectedRoute>
               <Layout>
                 <Customers />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Reports />
               </Layout>
             </ProtectedRoute>
           }

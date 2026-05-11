@@ -69,11 +69,14 @@ export interface UpdateProfileDto {
   email?: string;
 }
 
+/** Avatar: URL https hoặc data URL ảnh (base64). DB dùng TEXT — giới hạn mềm ~8MB. */
+const AVATAR_MAX = 8 * 1024 * 1024;
+
 export const updateProfileSchema = Joi.object<UpdateProfileDto>({
   profile: Joi.object({
     firstName: Joi.string().min(1).max(50).optional(),
     lastName: Joi.string().min(1).max(50).optional(),
-    avatar: Joi.string().uri().optional(),
+    avatar: Joi.string().max(AVATAR_MAX).optional().allow('', null),
   }).optional(),
   email: Joi.string().email().optional().messages({
     'string.email': 'Email không hợp lệ',

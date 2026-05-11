@@ -450,14 +450,6 @@ export default function WalletPage() {
                 size="small"
                 sx={{ bgcolor: chip.bg, color: '#fff', fontWeight: 700, fontSize: '0.68rem', border: '1px solid rgba(255,255,255,0.2)' }}
               />
-              <Chip
-                icon={<RefreshRounded sx={{ fontSize: '14px !important', color: '#fff !important' }} />}
-                label={balanceLoading ? '...' : 'Làm mới'}
-                size="small"
-                onClick={() => { loadBalance(); loadDebtRecords(); loadTransactions(0); }}
-                disabled={balanceLoading}
-                sx={{ bgcolor: 'rgba(255,255,255,0.15)', color: '#fff', fontWeight: 700, fontSize: '0.68rem', border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer' }}
-              />
             </Stack>
           </Stack>
 

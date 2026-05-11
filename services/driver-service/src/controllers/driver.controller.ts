@@ -13,7 +13,7 @@ export class DriverController {
 
   registerDriver = async (req: AuthRequest, res: Response) => {
     try {
-      const { vehicle, license } = req.body;
+      const { vehicle, license, cccdImageUrl } = req.body;
 
       const driver = await this.driverService.registerDriver({
         userId: req.user!.userId,
@@ -23,6 +23,7 @@ export class DriverController {
           class: license.class,
           expiryDate: new Date(license.expiryDate),
         },
+        cccdImageUrl,
       });
 
       res.status(201).json({ success: true, data: { driver } });
@@ -343,6 +344,20 @@ export class DriverController {
         success: false,
         error: { code: 'DRIVER_REJECTION_FAILED', message },
       });
+    }
+  };
+
+  suspendDriver = async (req: Request, res: Response) => {
+    try {
+      const { suspend } = req.body;
+      const driver = suspend
+        ? await this.driverService.suspendDriver(req.params.driverId)
+        : await this.driverService.unsuspendDriver(req.params.driverId);
+      res.json({ success: true, data: { driver } });
+    } catch (err) {
+      logger.error('Suspend driver error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to update driver status';
+      res.status(500).json({ success: false, error: { code: 'SUSPEND_FAILED', message } });
     }
   };
 

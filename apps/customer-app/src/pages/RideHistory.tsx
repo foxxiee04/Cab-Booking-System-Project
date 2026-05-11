@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Avatar,
   Box,
   Card,
   CardContent,
@@ -53,7 +52,9 @@ import {
 } from '../utils/format.utils';
 import { useTranslation } from 'react-i18next';
 import ContactBox from '../components/ContactBox';
+import { DriverPortraitAvatar } from '../components/common/DriverPortraitFrame';
 import { useAppSelector } from '../store/hooks';
+import { QRCodeSVG } from 'qrcode.react';
 
 const PAGE_SIZE = 10;
 
@@ -162,9 +163,13 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ open, ride, onClose, onSubmit
         <Stack spacing={2.5} sx={{ pt: 1 }}>
           {/* Driver info */}
           <Stack direction="row" spacing={1.5} alignItems="center" sx={{ bgcolor: '#eff6ff', borderRadius: 3, p: 1.5 }}>
-            <Avatar src={ride.driver?.avatar} sx={{ bgcolor: '#1d4ed8', width: 44, height: 44 }}>
-              {ride.driver?.firstName?.[0] || 'T'}
-            </Avatar>
+            <DriverPortraitAvatar
+              src={ride.driver?.avatar}
+              initials={
+                `${ride.driver?.firstName?.[0] || ''}${ride.driver?.lastName?.[0] || ''}`.trim().toUpperCase() || 'T'
+              }
+              size={44}
+            />
             <Box>
               <Typography variant="subtitle2" fontWeight={800}>{driverName}</Typography>
               <Typography variant="caption" color="text.secondary">{ride.driver?.licensePlate || 'Biển số đang cập nhật'}</Typography>
@@ -650,9 +655,13 @@ const RideHistory: React.FC = () => {
 
                 {ride.driverId && (
                   <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 1.25 }}>
-                    <Avatar src={ride.driver?.avatar} sx={{ width: 36, height: 36, bgcolor: '#1d4ed8' }}>
-                      {ride.driver?.firstName?.[0] || 'T'}
-                    </Avatar>
+                    <DriverPortraitAvatar
+                      src={ride.driver?.avatar}
+                      initials={
+                        `${ride.driver?.firstName?.[0] || ''}${ride.driver?.lastName?.[0] || ''}`.trim().toUpperCase() || 'T'
+                      }
+                      size={36}
+                    />
                     <Box sx={{ minWidth: 0 }}>
                       <Typography variant="body2" fontWeight={800} noWrap>
                         {getDriverName(ride)}
@@ -787,9 +796,13 @@ const RideHistory: React.FC = () => {
                 {selectedRide.driverId && (
                   <Box sx={{ bgcolor: '#eff6ff', borderRadius: 3, p: 1.5, border: '1px solid rgba(59,130,246,0.14)' }}>
                     <Stack direction="row" spacing={1.25} alignItems="center">
-                      <Avatar src={selectedRide.driver?.avatar} sx={{ width: 44, height: 44, bgcolor: '#1d4ed8' }}>
-                        {selectedRide.driver?.firstName?.[0] || 'T'}
-                      </Avatar>
+                      <DriverPortraitAvatar
+                        src={selectedRide.driver?.avatar}
+                        initials={
+                          `${selectedRide.driver?.firstName?.[0] || ''}${selectedRide.driver?.lastName?.[0] || ''}`.trim().toUpperCase() || 'T'
+                        }
+                        size={44}
+                      />
                       <Box sx={{ flex: 1 }}>
                         <Typography variant="subtitle2" fontWeight={800}>{getDriverName(selectedRide)}</Typography>
                         <Typography variant="body2" color="text.secondary">
@@ -900,6 +913,32 @@ const RideHistory: React.FC = () => {
                       </Stack>
                     )}
                   </Stack>
+                </Box>
+
+                {/* Hóa đơn QR — quét để mở lại chi tiết hóa đơn / chuyến đi.
+                    Encode an absolute deeplink so it works whether scanned from
+                    another device or copied to clipboard. */}
+                <Divider />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, bgcolor: '#f8fafc', borderRadius: 3, p: 1.5, border: '1px solid rgba(148,163,184,0.18)' }}>
+                  <Box sx={{ p: 0.75, bgcolor: '#fff', borderRadius: 2, border: '1px solid #e2e8f0', flexShrink: 0 }}>
+                    <QRCodeSVG
+                      value={`${window.location.origin}/ride/${selectedRide.id}`}
+                      size={96}
+                      level="M"
+                      includeMargin={false}
+                    />
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ letterSpacing: '0.08em' }}>
+                      QR HÓA ĐƠN
+                    </Typography>
+                    <Typography variant="body2" fontWeight={700} sx={{ mt: 0.25 }}>
+                      Quét mã để mở lại chi tiết chuyến đi
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25, wordBreak: 'break-all', fontFamily: 'monospace' }}>
+                      Mã chuyến: {selectedRide.id.slice(0, 8).toUpperCase()}
+                    </Typography>
+                  </Box>
                 </Box>
 
                 {selectedRide.driverId && canReviewRideConversation(selectedRide) && (

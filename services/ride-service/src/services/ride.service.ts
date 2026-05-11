@@ -936,6 +936,38 @@ export class RideService {
     return { total, today, pending, active, completed, cancelled };
   }
 
+  /**
+   * Returns ride counts grouped by vehicleType for the past `days` days
+   * (completed rides only, since cancelled rides distort revenue analysis).
+   * Used by the admin Báo cáo doanh số page.
+   */
+  async getVehicleBreakdown(days: number): Promise<{
+    breakdown: Array<{ vehicleType: string; count: number; revenue: number }>;
+    total: number;
+  }> {
+    const from = new Date();
+    from.setDate(from.getDate() - days + 1);
+    from.setHours(0, 0, 0, 0);
+
+    const rows = await this.prisma.ride.groupBy({
+      by: ['vehicleType'],
+      where: {
+        status: RideStatus.COMPLETED,
+        completedAt: { gte: from },
+      },
+      _count: { _all: true },
+      _sum: { fare: true },
+    });
+
+    const breakdown = rows.map((r) => ({
+      vehicleType: String(r.vehicleType),
+      count: r._count._all,
+      revenue: Number(r._sum.fare || 0),
+    }));
+    const total = breakdown.reduce((s, b) => s + b.count, 0);
+    return { breakdown, total };
+  }
+
   async getActiveRideForCustomer(customerId: string): Promise<Ride | null> {
     const ride = await this.prisma.ride.findFirst({
       where: {

@@ -54,6 +54,9 @@ export const createDriverRouter = (driverService: DriverService): Router => {
   // Admin: Verify driver
   router.patch('/:driverId/verify', authorize('ADMIN'), controller.verifyDriver);
 
+  // Admin: Suspend / unsuspend driver
+  router.patch('/:driverId/suspend', authorize('ADMIN'), controller.suspendDriver);
+
   // Get driver profile by userId (for internal service call)
   router.get('/user/:userId', controller.getDriverByUserId);
 

@@ -289,9 +289,11 @@ const HomeMap: React.FC = () => {
       return [] as Array<{ icon: React.ReactElement; label: string }>;
     }
 
+    // Labelled chips so users immediately see what each number means —
+    // matches the wording on the Confirmation step of the booking flow.
     return [
-      { icon: <RouteRounded />, label: routeSummary.distanceText },
-      { icon: <AccessTimeRounded />, label: routeSummary.durationText },
+      { icon: <RouteRounded />, label: `Quãng đường: ${routeSummary.distanceText}` },
+      { icon: <AccessTimeRounded />, label: `Thời gian dự kiến: ${routeSummary.durationText}` },
     ];
   }, [routeSummary]);
 

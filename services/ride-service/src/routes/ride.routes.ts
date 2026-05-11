@@ -22,6 +22,9 @@ export const createRideRouter = (rideService: RideService): Router => {
   // Admin: Ride stats
   router.get('/admin/stats', authorize(UserRole.ADMIN), controller.getRideStats);
 
+  // Admin: Vehicle breakdown for revenue reports
+  router.get('/admin/vehicle-breakdown', authorize(UserRole.ADMIN), controller.getVehicleBreakdown);
+
   // Admin: Get all rides
   router.get('/admin', authorize(UserRole.ADMIN), controller.getAllRides);
 

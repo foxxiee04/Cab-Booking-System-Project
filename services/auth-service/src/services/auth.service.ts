@@ -16,6 +16,7 @@ interface RegisterInput {
   role?: UserRole;
   firstName?: string;
   lastName?: string;
+  email?: string;
 }
 
 interface LoginInput {
@@ -176,6 +177,14 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(input.password, 10);
 
+    const normalizedEmail = input.email ? input.email.trim().toLowerCase() : undefined;
+    if (normalizedEmail) {
+      const existingEmail = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+      if (existingEmail) {
+        throw new Error('Email này đã được sử dụng.');
+      }
+    }
+
     const user = await prisma.user.create({
       data: {
         phone: input.phone,
@@ -184,6 +193,7 @@ export class AuthService {
         status: UserStatus.ACTIVE,
         firstName: input.firstName,
         lastName: input.lastName,
+        email: normalizedEmail,
       },
     });
 
@@ -632,6 +642,14 @@ export class AuthService {
       users: users.map(u => this.toUserResponse(u)),
       total,
     };
+  }
+
+  async updateUserStatus(userId: string, status: UserStatus): Promise<UserResponse | null> {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { status },
+    });
+    return user ? this.toUserResponse(user) : null;
   }
 
   async updateUserRole(userId: string, role: UserRole): Promise<UserResponse | null> {

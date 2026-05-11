@@ -46,6 +46,36 @@ export function createApp({ prisma, eventPublisher, getReadiness }: PaymentAppOp
   app.use('/api/wallet', createWalletRoutes(prisma, eventPublisher));
   app.use('/api/voucher', createVoucherRoutes(prisma));
 
+  // Internal: aggregate driver earnings (used by api-gateway top-drivers)
+  app.get('/internal/drivers/earnings', async (req, res) => {
+    try {
+      const idsParam = String(req.query.ids || '').trim();
+      if (!idsParam) {
+        return res.json({ success: true, data: { earnings: {} } });
+      }
+      const ids = idsParam.split(',').map((s) => s.trim()).filter(Boolean);
+      if (ids.length === 0) {
+        return res.json({ success: true, data: { earnings: {} } });
+      }
+      const rows = await prisma.driverEarnings.groupBy({
+        by: ['driverId'],
+        where: { driverId: { in: ids } },
+        _sum: { netEarnings: true },
+      });
+      const earnings: Record<string, number> = {};
+      rows.forEach((r) => {
+        earnings[r.driverId] = Number(r._sum.netEarnings || 0);
+      });
+      res.json({ success: true, data: { earnings } });
+    } catch (err) {
+      logger.error('internal/drivers/earnings failed:', err);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to aggregate driver earnings' },
+      });
+    }
+  });
+
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     logger.error('Unhandled error:', err);
     res.status(500).json({

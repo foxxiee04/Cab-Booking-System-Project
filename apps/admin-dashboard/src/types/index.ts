@@ -110,6 +110,8 @@ export interface Driver {
   vehicleColor: string;
   vehicleYear?: number;
   vehicleImageUrl?: string;
+  cccdImageUrl?: string;
+  avatarUrl?: string;
   licensePlate: string;
   licenseClass?: 'A1' | 'A' | 'B' | 'C1' | 'C' | 'D1' | 'D2' | 'D' | 'BE' | 'C1E' | 'CE' | 'D1E' | 'D2E' | 'DE';
   licenseNumber: string;
@@ -127,6 +129,7 @@ export interface Driver {
     lastName: string;
     email: string;
     phoneNumber?: string;
+    avatar?: string | null;
   };
 }
 
@@ -137,6 +140,7 @@ export interface Customer {
   firstName: string;
   lastName: string;
   phoneNumber?: string;
+  status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   totalRides: number;
   rating: number;
   createdAt: string;

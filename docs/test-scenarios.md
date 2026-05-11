@@ -15,7 +15,7 @@ npx tsx scripts/seed-database.ts
 npm run dev:frontends
 ```
 
-> `seed-database.ts` tạo: tất cả tài khoản, 5 vouchers, 30 lịch sử rides, ratings tài xế. Thời gian ~2 phút.
+> `seed-database.ts` tạo: 2 admin, 100 khách hàng, 40 tài xế (37 approved + 3 PENDING), 5 vouchers, 4 incentive rules, ~30 live API rides + ~370 historical rides (tổng ~400) đồng bộ qua **TẤT CẢ** stores: ride_db ↔ payment_db ↔ wallet_db (transactions + ledger + balance) ↔ review_db (Mongo) ↔ driver ratings. Thời gian ~3-5 phút.
 
 ---
 
@@ -27,7 +27,8 @@ npm run dev:frontends
 | **Tài xế A** | `0911234583` | Pham Van Bao | http://localhost:4001 | CAR_4 · ⭐ 4.8 |
 | **Tài xế B** | `0911234585` | Le Thi Mai | http://localhost:4001 (Incognito) | CAR_4 · ⭐ 3.5 |
 | **Tài xế C** | `0911234573` | Le Minh N | http://localhost:4001 (Firefox) | CAR_4 · ⭐ 4.2 |
-| **Admin** | `0900000001` | System Admin | http://localhost:4002 | — |
+| **Admin 1** | `0900000001` | System Admin | http://localhost:4002 | — |
+| **Admin 2** | `0900000002` | Sub Admin | http://localhost:4002 | Sub-admin (test multi-admin) |
 
 ### GPS Tài xế — Tự động (không cần DevTools)
 

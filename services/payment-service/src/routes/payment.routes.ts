@@ -64,6 +64,7 @@ export const createPaymentRoutes = (paymentService: PaymentService) => {
   // ─── Admin ────────────────────────────────────────────────────────────────
   router.get('/admin', authMiddleware, controller.getAllPayments);
   router.get('/admin/stats', authMiddleware, controller.getAdminStats);
+  router.get('/admin/analytics', authMiddleware, controller.getRevenueAnalytics);
   router.post('/ride/:rideId/refund', authMiddleware, validateRefund, controller.refundPayment);
 
   // Query payment by paymentId (must be last to avoid route shadowing)

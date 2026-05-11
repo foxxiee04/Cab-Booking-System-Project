@@ -198,174 +198,97 @@ const Profile: React.FC = () => {
         {success && <Alert severity="success" onClose={() => setSuccess('')}>{success}</Alert>}
         {error && <Alert severity="error">{error}</Alert>}
 
-<Card sx={{ borderRadius: 5, overflow: 'hidden' }}>
-  {/* HEADER */}
-  <Box
-    sx={{
-      p: 2.5,
-      background: (theme) => `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
-      color: '#fff',
-      position: 'relative'
-    }}
-  >
-    {/* NÚT EDIT GÓC PHẢI */}
-<Box
-  onClick={() => {
-    setEditing((prev) => !prev);
-    setSuccess('');
-  }}
-  sx={{
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 0.75,
-    px: 1.5,
-    py: 0.5,
-    borderRadius: 3,
-    bgcolor: 'rgba(255,255,255,0.15)',
-    cursor: 'pointer',
-    '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' }
-  }}
->
-  {editing ? <CloseIcon fontSize="small" /> : <EditIcon fontSize="small" />}
-  <Typography variant="body2" fontWeight={600}>
-    {editing ? 'Đóng' : 'Chỉnh sửa'}
-  </Typography>
-</Box>
-
-    <Stack direction="row" spacing={2} alignItems="center">
-      <Avatar
-        src={user?.avatar}
-        sx={{ width: 64, height: 64, bgcolor: 'rgba(255,255,255,0.18)' }}
-      >
-        {user?.firstName?.[0]?.toUpperCase() ||
-          user?.email?.[0]?.toUpperCase()}
-      </Avatar>
-
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="h6" fontWeight={800}>
-          {fullName || t('profile.guest', 'Khách hàng')}
-        </Typography>
-
-        <Typography variant="body2" sx={{ opacity: 0.84 }}>
-          {user?.email}
-        </Typography>
-
-        <Stack direction="row" spacing={1} sx={{ mt: 1.25 }}>
-          <Chip
-            size="small"
-            label={t('profile.memberTier', 'Thành viên tiêu chuẩn')}
-            sx={{ bgcolor: 'rgba(255,255,255,0.18)', color: '#fff' }}
-          />
-          <Chip
-            size="small"
-            label={
-              user?.phoneNumber ||
-              t('profile.noPhone', 'Chưa có SĐT')
-            }
-            sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: '#fff' }}
-          />
-        </Stack>
-      </Box>
-    </Stack>
-  </Box>
-
-  {/* CONTENT */}
-  <CardContent sx={{ pt: 2 }}>
-    {loading ? (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-        <CircularProgress size={28} />
-      </Box>
-    ) : (
-      <>
-        {/* EDIT FORM */}
-        {editing && (
-          <Card
-            variant="outlined"
-            sx={{ mt: 0, borderRadius: 4 }}
+        <Card sx={{ borderRadius: 5, overflow: 'hidden' }}>
+          <Box
+            sx={{
+              p: 2.5,
+              background: (theme) => `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
+              color: '#fff',
+              position: 'relative',
+            }}
           >
-            <CardContent>
-              <Typography
-                variant="subtitle1"
-                fontWeight={800}
-                sx={{ mb: 2 }}
-              >
-                {t('profile.editSection', 'Thông tin cá nhân')}
-              </Typography>
+            <Box
+              onClick={() => { setEditing((prev) => !prev); setSuccess(''); }}
+              sx={{
+                position: 'absolute', top: 12, right: 12,
+                display: 'flex', alignItems: 'center', gap: 0.75,
+                px: 1.5, py: 0.5, borderRadius: 3,
+                bgcolor: 'rgba(255,255,255,0.15)', cursor: 'pointer',
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
+              }}
+            >
+              {editing ? <CloseIcon fontSize="small" /> : <EditIcon fontSize="small" />}
+              <Typography variant="body2" fontWeight={600}>{editing ? 'Đóng' : 'Chỉnh sửa'}</Typography>
+            </Box>
 
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label={t('register.firstName')}
-                    value={formData.firstName}
-                    disabled
-                    helperText="Không thể thay đổi họ tên."
-                  />
-                </Grid>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Avatar src={user?.avatar} sx={{ width: 64, height: 64, bgcolor: 'rgba(255,255,255,0.18)' }}>
+                {user?.firstName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase()}
+              </Avatar>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="h6" fontWeight={800}>
+                  {fullName || t('profile.guest', 'Khách hàng')}
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.84 }}>{user?.email}</Typography>
+                <Stack direction="row" spacing={1} sx={{ mt: 1.25 }}>
+                  <Chip size="small" label={t('profile.memberTier', 'Thành viên')} sx={{ bgcolor: 'rgba(255,255,255,0.18)', color: '#fff' }} />
+                  <Chip size="small" label={user?.phoneNumber || t('profile.noPhone', 'Chưa có SĐT')} sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: '#fff' }} />
+                </Stack>
+              </Box>
+            </Stack>
+          </Box>
 
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label={t('register.lastName')}
-                    value={formData.lastName}
-                    disabled
-                    helperText="Không thể thay đổi họ tên."
-                  />
-                </Grid>
+          <CardContent sx={{ pt: 2 }}>
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}><CircularProgress size={28} /></Box>
+            ) : (
+              <>
+                {editing && (
+                  <Card variant="outlined" sx={{ mt: 0, borderRadius: 4 }}>
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 2 }}>
+                        {t('profile.editSection', 'Thông tin tài khoản')}
+                      </Typography>
 
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label={t('profile.email', 'Email')}
-                    value={formData.email}
-                    onChange={handleChange('email')}
-                    placeholder="name@example.com"
-                    helperText="Bạn có thể thêm hoặc cập nhật email."
-                  />
-                </Grid>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12}>
+                          <TextField
+                            fullWidth
+                            label={t('profile.email', 'Email')}
+                            value={formData.email}
+                            onChange={handleChange('email')}
+                            placeholder="name@example.com"
+                            helperText="Email để nhận thông báo đặt xe và liên hệ hỗ trợ."
+                          />
+                        </Grid>
+                        <Grid item xs={12}>
+                          <TextField
+                            fullWidth
+                            label={t('profile.phone', 'Số điện thoại')}
+                            value={formData.phoneNumber}
+                            disabled
+                            helperText="Số điện thoại gắn với tài khoản đăng ký, không thể thay đổi."
+                          />
+                        </Grid>
+                      </Grid>
 
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label={t('profile.phone', 'Điện thoại')}
-                    value={formData.phoneNumber}
-                    disabled
-                    helperText={t(
-                      'profile.phoneManagedByAccount',
-                      'Số điện thoại được quản lý theo tài khoản đăng ký.'
-                    )}
-                  />
-                </Grid>
-              </Grid>
-
-              <Stack
-                direction="row"
-                justifyContent="center"
-                sx={{ mt: 2.5 }}
-              >
-                <Button
-                  variant="contained"
-                  onClick={handleSaveProfile}
-                  disabled={saving}
-                  sx={{ borderRadius: 3, px: 3, fontWeight: 600 }}
-                >
-                  {saving ? (
-                    <CircularProgress size={20} />
-                  ) : (
-                    t('profile.saveProfile', 'Lưu thay đổi')
-                  )}
-                </Button>
-              </Stack>
-            </CardContent>
-          </Card>
-        )}
-      </>
-    )}
-  </CardContent>
-</Card>
+                      <Stack direction="row" justifyContent="center" sx={{ mt: 2.5 }}>
+                        <Button
+                          variant="contained"
+                          onClick={handleSaveProfile}
+                          disabled={saving}
+                          sx={{ borderRadius: 3, px: 3, fontWeight: 600 }}
+                        >
+                          {saving ? <CircularProgress size={20} /> : t('profile.saveProfile', 'Lưu thay đổi')}
+                        </Button>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
 
         <Card sx={{ borderRadius: 5 }}>
           <CardContent>

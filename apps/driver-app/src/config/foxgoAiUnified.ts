@@ -115,15 +115,11 @@ export const FOXGO_QUICK_PATTERNS: FoxgoQuickPattern[] = [
 ];
 
 export const FOXGO_QUICK_REPLIES: string[] = [
-  'Bảng giá & cước',
-  'Cách đặt xe (khách)',
-  'Thanh toán MoMo/VNPay',
-  'Voucher & ưu đãi',
-  'Hủy chuyến / phí',
-  'Đăng ký tài xế',
   'Hoa hồng & ví tài xế',
   'Rút tiền / ký quỹ',
-  'Quên đồ trên xe',
+  'Hủy cuốc / từ chối',
+  'Quy định vận hành',
+  'Đánh giá tài xế',
   'Liên hệ hỗ trợ',
 ];
 

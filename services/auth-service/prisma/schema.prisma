@@ -34,7 +34,7 @@ model User {
   status        UserStatus    @default(ACTIVE)
   firstName     String?       @map("first_name") @db.VarChar(100)
   lastName      String?       @map("last_name") @db.VarChar(100)
-  avatar        String?       @db.VarChar(500)
+  avatar        String?       @db.Text
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
   refreshTokens RefreshToken[]

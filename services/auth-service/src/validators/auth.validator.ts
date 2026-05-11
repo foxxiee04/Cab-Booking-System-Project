@@ -71,6 +71,9 @@ export const registerCompleteSchema = Joi.object({
   role: Joi.string().valid('CUSTOMER', 'DRIVER').optional(),
   firstName: Joi.string().min(1).max(50).optional(),
   lastName: Joi.string().min(1).max(50).optional(),
+  email: Joi.string().email().max(255).optional().messages({
+    'string.email': 'Email không hợp lệ',
+  }),
 });
 
 export const verifyOtpSchema = Joi.object({

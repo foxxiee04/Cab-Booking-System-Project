@@ -23,7 +23,25 @@ const isFutureDate = (value: string) => {
 };
 
 // Vietnamese plate: 50A-123.45 (car/1 letter) or 50AC-123.45 (moto/2 letters) or legacy 50A-12345
-const isValidVehiclePlate = (value: string) => /^\d{2}[A-Z]{1,2}-(\d{3}\.\d{2}|\d{5})$/i.test(value.trim());
+const isValidVehiclePlate = (value: string, vehicleType?: string) => {
+  const v = value.trim();
+  if (vehicleType === 'CAR_4' || vehicleType === 'CAR_7') {
+    return /^\d{2}[A-Z]{1}-(\d{3}\.\d{2}|\d{5})$/i.test(v);
+  }
+  if (vehicleType === 'MOTORBIKE' || vehicleType === 'SCOOTER') {
+    return /^\d{2}[A-Z]{2}-(\d{3}\.\d{2}|\d{5})$/i.test(v);
+  }
+  return /^\d{2}[A-Z]{1,2}-(\d{3}\.\d{2}|\d{5})$/i.test(v);
+};
+const plateMessageForType = (vehicleType?: string) => {
+  if (vehicleType === 'CAR_4' || vehicleType === 'CAR_7') {
+    return 'Biển số ô tô phải có đúng 1 chữ cái (VD: 50A-123.45)';
+  }
+  if (vehicleType === 'MOTORBIKE' || vehicleType === 'SCOOTER') {
+    return 'Biển số xe máy/ga phải có đúng 2 chữ cái (VD: 50AC-123.45)';
+  }
+  return 'Vehicle plate format is invalid';
+};
 // Vietnamese GPLX is exactly 12 digits
 const isValidLicenseNumber = (value: string) => /^\d{12}$/.test(value.trim());
 const isValidVehicleImageUrl = (value: string) => {
@@ -127,10 +145,10 @@ export const validateDriverRegistration = (req: Request, res: Response, next: Ne
     });
   }
 
-  if (!isValidVehiclePlate(String(vehicle.plate))) {
+  if (!isValidVehiclePlate(String(vehicle.plate), String(vehicle.type))) {
     return res.status(400).json({
       success: false,
-      error: { code: 'VALIDATION_ERROR', message: 'Vehicle plate format is invalid' },
+      error: { code: 'VALIDATION_ERROR', message: plateMessageForType(String(vehicle.type)) },
     });
   }
 
@@ -138,6 +156,13 @@ export const validateDriverRegistration = (req: Request, res: Response, next: Ne
     return res.status(400).json({
       success: false,
       error: { code: 'VALIDATION_ERROR', message: 'Vehicle image format is invalid' },
+    });
+  }
+
+  if (req.body.cccdImageUrl !== undefined && !isValidVehicleImageUrl(String(req.body.cccdImageUrl))) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'CCCD image format is invalid' },
     });
   }
 
@@ -225,6 +250,7 @@ export const validateDriverProfileUpdate = (req: Request, res: Response, next: N
     licensePlate,
     licenseClass,
     vehicleImageUrl,
+    cccdImageUrl,
     licenseNumber,
     licenseExpiryDate,
   } = req.body;
@@ -238,6 +264,7 @@ export const validateDriverProfileUpdate = (req: Request, res: Response, next: N
     licensePlate,
     licenseClass,
     vehicleImageUrl,
+    cccdImageUrl,
     licenseNumber,
     licenseExpiryDate,
   ].some((value) => value !== undefined);
@@ -284,10 +311,11 @@ export const validateDriverProfileUpdate = (req: Request, res: Response, next: N
     });
   }
 
-  if (licensePlate !== undefined && !isValidVehiclePlate(String(licensePlate))) {
+  // For profile updates, prefer the new vehicleType (if updating both); otherwise use generic check.
+  if (licensePlate !== undefined && !isValidVehiclePlate(String(licensePlate), vehicleType ? String(vehicleType) : undefined)) {
     return res.status(400).json({
       success: false,
-      error: { code: 'VALIDATION_ERROR', message: 'Vehicle plate format is invalid' },
+      error: { code: 'VALIDATION_ERROR', message: plateMessageForType(vehicleType ? String(vehicleType) : undefined) },
     });
   }
 
@@ -324,6 +352,13 @@ export const validateDriverProfileUpdate = (req: Request, res: Response, next: N
     return res.status(400).json({
       success: false,
       error: { code: 'VALIDATION_ERROR', message: 'Vehicle image format is invalid' },
+    });
+  }
+
+  if (cccdImageUrl !== undefined && !isValidVehicleImageUrl(String(cccdImageUrl))) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'CCCD image format is invalid' },
     });
   }
 
