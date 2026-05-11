@@ -240,6 +240,7 @@ graph TB
 
 ---
 
+
 ## 3. Kiến trúc tổng thể
 
 ### 3.1 Lớp kiến trúc
