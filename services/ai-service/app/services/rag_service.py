@@ -1219,8 +1219,13 @@ class RagService:
                 )
                 self._index = VectorIndex(self._chunks, embeddings)
 
-            # Reranker loads in the background — don't block readiness if it fails.
-            self._maybe_load_reranker()
+            # Reranker may call Hugging Face; load in a daemon thread so init does not
+            # block on long retries / OOM spike while hybrid RAG is already usable.
+            threading.Thread(
+                target=self._maybe_load_reranker,
+                daemon=True,
+                name="rag-reranker-load",
+            ).start()
 
             logger.info(f"RAG ready in {time.time() - t0:.2f}s")
             self._ready = True

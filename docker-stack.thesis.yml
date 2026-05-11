@@ -556,11 +556,9 @@ services:
     dns:
       - ${AI_SERVICE_DNS_1:-8.8.8.8}
       - ${AI_SERVICE_DNS_2:-8.8.4.4}
-    # When 127.0.0.11 still returns -3 for huggingface.co, pin IPv4 from VPC DNS:
-    #   HUGGINGFACE_EXTRA_HOST=$(dig +short huggingface.co @172.31.0.2 | head -1)
-    # Put HUGGINGFACE_EXTRA_HOST=that-ip in ~/cab-booking/.env before deploy. Update if CDN changes.
-    extra_hosts:
-      - "huggingface.co:${HUGGINGFACE_EXTRA_HOST:-13.35.202.34}"
+    # Do not set extra_hosts for huggingface.co here: a pinned CDN IP often yields
+    # Errno 101 "Network is unreachable" inside Swarm overlay while host/docker0 works.
+    # If you only ever see DNS -3 (not 101), temporarily: docker service update --host-add "huggingface.co:<dig-ip>" cab-booking_ai-service
     environment:
       - DEBUG=False
       - HOST=0.0.0.0
@@ -592,8 +590,8 @@ services:
       - AI_INTERNAL_TOKEN=${AI_INTERNAL_TOKEN:-}
       - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
       - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
-      # When HF offline + no image cache, reranker download fails → set RAG_RERANKER_ENABLED=false in .env or enable HF below.
-      - RAG_RERANKER_ENABLED=${RAG_RERANKER_ENABLED:-true}
+      # Thesis / small nodes: default off (no HF pull for ~568MB model). Override RAG_RERANKER_ENABLED=true in .env when workers have egress + RAM.
+      - RAG_RERANKER_ENABLED=${RAG_RERANKER_ENABLED:-false}
       - RAG_RERANKER_MODEL=${RAG_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
     # Swarm: image HEALTHCHECK start_period=60s can be too short on small CPUs (RAG + reranker load).
     networks:

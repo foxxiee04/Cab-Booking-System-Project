@@ -488,12 +488,26 @@ jobs:
             echo "  Manager $SELF_ID labelled (infra=true, nginx=true)"
 
             echo "▶ Deploying stack (tag=$IMAGE_TAG)..."
-            docker stack deploy \
-              -c docker-stack.thesis.yml \
-              --with-registry-auth \
-              --resolve-image always \
-              --prune \
-              cab-booking
+            # Swarm may return "update out of sequence" under concurrent updates — retry.
+            deploy_ok=0
+            for attempt in 1 2 3 4 5; do
+              if docker stack deploy \
+                -c docker-stack.thesis.yml \
+                --with-registry-auth \
+                --resolve-image always \
+                --prune \
+                --detach \
+                cab-booking; then
+                deploy_ok=1
+                break
+              fi
+              echo "  stack deploy failed (attempt ${attempt}/5), sleeping 20s before retry..."
+              sleep 20
+            done
+            if [ "$deploy_ok" != 1 ]; then
+              echo "::error::docker stack deploy failed after 5 attempts (e.g. rpc update out of sequence)"
+              exit 1
+            fi
 
             echo "▶ Waiting for postgres to be ready..."
             PGID=""
