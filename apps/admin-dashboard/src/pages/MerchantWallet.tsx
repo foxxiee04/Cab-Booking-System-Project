@@ -41,7 +41,6 @@ import {
   AccountBalance,
   ArrowUpward,
   ArrowDownward,
-  Refresh,
   ContentCopy,
   AccountBalanceWallet,
   SwapHoriz,

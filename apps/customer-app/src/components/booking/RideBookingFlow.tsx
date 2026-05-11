@@ -25,7 +25,6 @@ import {
   StepLabel,
   Stepper,
   TextField,
-  Tooltip,
   Typography,
   useMediaQuery,
 } from '@mui/material';

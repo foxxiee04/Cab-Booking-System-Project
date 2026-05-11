@@ -42,7 +42,7 @@ import { adminSocketService } from '../socket/admin.socket';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { setStats } from '../store/admin.slice';
 import { Driver, Payment, Ride } from '../types';
-import { formatCurrency, formatDate, formatNumber } from '../utils/format.utils';
+import { formatCurrency, formatNumber } from '../utils/format.utils';
 
 const mapLibraries: ('visualization')[] = ['visualization'];
 const defaultCenter = { lat: 10.7769, lng: 106.7009 };

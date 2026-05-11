@@ -38,7 +38,6 @@ import {
   InfoOutlined,
   LocalFireDepartmentRounded,
   LockRounded,
-  RefreshRounded,
   RouteRounded,
   ScheduleRounded,
   TwoWheelerRounded,

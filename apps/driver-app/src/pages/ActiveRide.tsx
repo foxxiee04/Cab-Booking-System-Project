@@ -101,7 +101,6 @@ const ActiveRide: React.FC = () => {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const { user } = useAppSelector((state) => state.auth);
-  const { accessToken } = useAppSelector((state) => state.auth);
 
   const { currentLocation, isOnline } = useAppSelector((state) => state.driver);
   const { currentRide } = useAppSelector((state) => state.ride);

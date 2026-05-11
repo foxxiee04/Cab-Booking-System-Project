@@ -24,7 +24,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { ArrowBack, AutorenewRounded, Cancel, CheckCircleRounded, HourglassTopRounded, PaymentRounded, StarRate, AccessTime, Route, Speed, FiberManualRecord } from '@mui/icons-material';
+import { ArrowBack, AutorenewRounded, Cancel, CheckCircleRounded, HourglassTopRounded, PaymentRounded, StarRate } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { BookingMap, useSocket } from '../features/booking';
 import ContactBox from '../components/ContactBox';

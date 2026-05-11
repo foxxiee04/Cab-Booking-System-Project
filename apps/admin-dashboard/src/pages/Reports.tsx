@@ -271,7 +271,8 @@ const Reports: React.FC = () => {
   const reportRef = useRef<HTMLDivElement | null>(null);
 
   const days = PERIOD_DAYS[period];
-  const generatedAt = useMemo(() => new Date(), [period, revenue]); // refreshes per fetch
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const generatedAt = useMemo(() => new Date(), [period, revenue]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
