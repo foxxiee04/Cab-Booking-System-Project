@@ -34,7 +34,7 @@
     "dev:review": "npm -w services/review-service run dev",
     "dev:gateway": "npm -w services/api-gateway run dev",
     "test": "npm run test --workspaces --if-present",
-    "test:unit": "npm run test --workspaces --if-present -- --runInBand --testPathIgnorePatterns=/__tests__/contracts/",
+    "test:unit": "npm run test --workspaces --if-present -- --runInBand --forceExit --testPathIgnorePatterns=/__tests__/contracts/",
     "test:contract": "npm -w services/driver-service run test -- --runInBand src/__tests__/contracts/internal-driver-response.contract.test.ts && npm -w services/ride-service run test -- --runInBand src/__tests__/contracts/driver-service.contract.test.ts",
     "simulate:gps": "tsx scripts/simulate-driver-gps.ts",
     "test:integration": "tsx scripts/test-backend.ts",

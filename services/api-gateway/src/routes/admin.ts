@@ -217,7 +217,14 @@ router.get('/drivers', async (req: Request, res: Response) => {
       : null;
     const driverRideCounts = driverStatsResponse ? unwrapPayload<any>(driverStatsResponse)?.counts || {} : {};
 
-    const usersById = new Map(
+    const usersById = new Map<string, {
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      phoneNumber: string;
+      avatar: string | null;
+    }>(
       users.map((user: any) => [
         user.id,
         {
