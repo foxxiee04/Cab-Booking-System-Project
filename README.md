@@ -209,6 +209,7 @@ graph TB
 | Notification | Notification | PushToken | — | SmsDispatcher |
 | Review | Review | — | Rating (1–5) | — |
 
+
 ### 2.3 Domain Events
 
 | Event | Publisher | Subscribers | Mô tả |
@@ -224,6 +225,7 @@ graph TB
 | `user.registered` | auth-service | user-service | Tạo UserProfile |
 | `driver.approved` | driver-service | wallet, notification | Tạo ví + thông báo |
 | `driver.rating_updated` | review-service | driver-service | Cập nhật rating |
+
 
 ### 2.4 Invariants và Business Rules
 
