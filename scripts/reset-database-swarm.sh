@@ -5,14 +5,14 @@
 # Dùng thay scripts/reset-database.sh khi deploy bằng:
 #   docker stack deploy -c docker-stack.thesis.yml cab-booking
 #
-# Yêu cầu (trên Primary Manager):
-# - Repo ~/cab-booking (hoặc bất kỳ), đã npm install tại root
-# - Docker Swarm đã deploy stack cab-booking, postgres có map 5433:5432 (thesis stack)
+# Yêu cầu (trên Primary Manager — node có Postgres publish 5433:5432):
+# - Repo ~/cab-booking (hoặc bất kỳ); seed dùng cab-bootstrap-runner nếu host không có npx
+# - Docker Swarm đã deploy stack cab-booking (thesis stack)
 # - File .env + key SSH để tới worker: SWARM_SSH_KEY hoặc ~/.ssh/swarm_key (migrate chạy trong
 #   task trên worker; Manager không thấy container qua docker ps).
 #
-# Workflow: drop PG + Mongo trong container → migrate deploy trong từng service
-# task → restart services → prisma generate auth trên host → npm run db:seed
+# Workflow: drop PG + Mongo trong container → prisma db push từng service (exec / SSH / docker run)
+# → restart services → prisma generate auth + seed (host npx hoặc bootstrap-runner image)
 #
 # Xem chi tiết: deploy/SWARM-SETUP.md (PHASE sau Init Databases)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -87,8 +87,81 @@ resolve_swarm_ssh_key() {
   return 1
 }
 
+# Chờ mọi service trong stack có số task chạy = desired (ví dụ 1/1, 2/2 — không chấp nhận 0/1).
+wait_for_stack_replicas_ready() {
+  local max_sec="${SWARM_STACK_READY_TIMEOUT_SEC:-360}"
+  local interval="${SWARM_STACK_READY_POLL_SEC:-5}"
+  local elapsed=0
+  local banner="${1:-${STACK_NAME}}"
+
+  while [[ "$elapsed" -lt "$max_sec" ]]; do
+    local bad_lines=()
+    local svc_count=0
+    local line=""
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      svc_count=$((svc_count + 1))
+      local name="${line%% *}"
+      local rep_raw="${line#* }"
+      [[ -z "$rep_raw" ]] && continue
+      local rep_word="${rep_raw%% *}"
+      local cur="${rep_word%/*}"
+      local des="${rep_word#*/}"
+      if [[ "$cur" != "$des" ]] || [[ "${cur:-0}" == "0" ]]; then
+        bad_lines+=("$name ($rep_word)")
+      fi
+    done < <(docker stack services "${STACK_NAME}" --format '{{.Name}} {{.Replicas}}' 2>/dev/null)
+
+    if [[ "$svc_count" -eq 0 ]]; then
+      echo "  ⚠ [$banner] Chưa đọc được service nào (stack ${STACK_NAME}?) — thử lại… (${elapsed}s)"
+      sleep "$interval"
+      elapsed=$((elapsed + interval))
+      continue
+    fi
+
+    if [[ ${#bad_lines[@]} -eq 0 ]]; then
+      echo "  ✓ [$banner] Mọi service: replica đã khớp (${elapsed}s)"
+      return 0
+    fi
+
+    if [[ $elapsed -eq 0 ]] || [[ $((elapsed % 30)) -eq 0 ]]; then
+      echo "  … [$banner] Chờ task (${elapsed}s / ${max_sec}s) — chưa đủ:"
+      printf '    %s\n' "${bad_lines[@]}"
+    fi
+    sleep "$interval"
+    elapsed=$((elapsed + interval))
+  done
+
+  echo "❌ [$banner] Sau ${max_sec}s vẫn có service chưa đạt đủ replica."
+  printf '  %s\n' "${bad_lines[@]}"
+  docker stack services "${STACK_NAME}" || true
+  return 1
+}
+
+wait_for_gateway_http() {
+  local max_sec="${SWARM_GATEWAY_HTTP_TIMEOUT_SEC:-180}"
+  local interval=3
+  local elapsed=0
+  local url="${GATEWAY_HEALTH_URL:-http://127.0.0.1:3000/health}"
+
+  while [[ "$elapsed" -lt "$max_sec" ]]; do
+    if curl -sf "$url" >/dev/null 2>&1; then
+      echo "  ✓ Gateway OK: $url (${elapsed}s)"
+      return 0
+    fi
+    if [[ $elapsed -eq 0 ]] || [[ $((elapsed % 30)) -eq 0 ]]; then
+      echo "  … Chờ gateway ($url) — ${elapsed}s / ${max_sec}s"
+    fi
+    sleep "$interval"
+    elapsed=$((elapsed + interval))
+  done
+  echo "❌ Gateway không phản hồi sau ${max_sec}s: $url"
+  return 1
+}
+
 migrate_one() {
   local svc="$1"
+  local db="$2"
   local nf="${STACK_NAME}_${svc}"
   local cid=""
   cid="$(docker ps -q -f name="$nf" | head -1)"
@@ -99,39 +172,46 @@ migrate_one() {
     return 0
   fi
 
-  # Task thường chạy trên worker → docker daemon Manager không list được — SSH vào từng node.
+  # Task chạy trên worker → thử SSH vào từng node nếu có key.
   local key_path=""
   local user="${SWARM_NODES_SSH_USER:-ubuntu}"
-  if ! key_path="$(resolve_swarm_ssh_key)"; then
-    echo "  ❌ Không thấy $nf trên node này và không có SSH key (đặt SWARM_SSH_KEY hoặc ~/.ssh/swarm_key) để tìm container trên worker."
-    exit 1
+  if key_path="$(resolve_swarm_ssh_key 2>/dev/null)"; then
+    echo "  → $nf: đang SSH swarm nodes (user=$user key=${key_path})..."
+    local nid=""
+    for nid in $(docker node ls -q 2>/dev/null); do
+      [[ -z "$nid" ]] && continue
+      local addr
+      addr="$(docker node inspect "$nid" -f '{{.Status.Addr}}' 2>/dev/null)"
+      [[ -z "$addr" ]] && continue
+      cid=""
+      cid="$(ssh -i "$key_path" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+        "${user}@${addr}" "docker ps -q -f name=$nf" 2>/dev/null | head -1 || true)"
+      if [[ -n "$cid" ]]; then
+        echo "  → $svc trên $addr ($cid)"
+        ssh -i "$key_path" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+          "${user}@${addr}" "docker exec $cid npx prisma db push --accept-data-loss"
+        return 0
+      fi
+    done
   fi
 
-  echo "  → $nf: đang SSH swarm nodes (user=$user key=${key_path})..."
-  local nid=""
-  for nid in $(docker node ls -q 2>/dev/null); do
-    [[ -z "$nid" ]] && continue
-    local addr
-    addr="$(docker node inspect "$nid" -f '{{.Status.Addr}}' 2>/dev/null)"
-    [[ -z "$addr" ]] && continue
-    cid=""
-    cid="$(ssh -i "$key_path" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-      "${user}@${addr}" "docker ps -q -f name=$nf" 2>/dev/null | head -1 || true)"
-    if [[ -n "$cid" ]]; then
-      echo "  → $svc trên $addr ($cid)"
-      ssh -i "$key_path" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-        "${user}@${addr}" "docker exec $cid npx prisma db push --accept-data-loss"
-      return 0
-    fi
-  done
-
-  echo "  ❌ Không thấy task $nf trên bất kỳ node nào (manager + swarm SSH)."
-  exit 1
+  # Fallback: docker run với image từ registry (không cần container đang chạy).
+  # Overlay `backend` trong stack thesis là internal + không attachable → không gắn được từ
+  # docker run bên ngoài. Postgres đã publish 5433:5432 trên Manager → dùng --network host.
+  local img="${DOCKERHUB_USERNAME:-foxxiee04}/cab-${svc}:${IMAGE_TAG:-latest}"
+  echo "  → $svc: fallback docker run --network host ($img → $db @127.0.0.1:5433)"
+  docker run --rm --network host \
+    -e DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5433/${db}" \
+    "$img" npx prisma db push --accept-data-loss
 }
 
-for svc in auth-service booking-service driver-service payment-service ride-service user-service wallet-service; do
-  migrate_one "$svc"
-done
+migrate_one "auth-service"     "auth_db"
+migrate_one "booking-service"  "booking_db"
+migrate_one "driver-service"   "driver_db"
+migrate_one "payment-service"  "payment_db"
+migrate_one "ride-service"     "ride_db"
+migrate_one "user-service"     "user_db"
+migrate_one "wallet-service"   "wallet_db"
 
 echo ""
 echo "[4/5] Restart các service (wallet re-seed SystemBankAccount)..."
@@ -146,29 +226,40 @@ restart_svc() {
   fi
 }
 
+STAGGER="${SWARM_SERVICE_RESTART_STAGGER_SEC:-3}"
 restart_svc wallet-service
+sleep "$STAGGER"
 restart_svc auth-service
+sleep "$STAGGER"
 restart_svc user-service
+sleep "$STAGGER"
 restart_svc driver-service
+sleep "$STAGGER"
 restart_svc ride-service
+sleep "$STAGGER"
 restart_svc payment-service
+sleep "$STAGGER"
 restart_svc booking-service
+sleep "$STAGGER"
 restart_svc notification-service
+sleep "$STAGGER"
 restart_svc review-service
+sleep "$STAGGER"
 restart_svc pricing-service
+sleep "$STAGGER"
 restart_svc api-gateway
 
 echo ""
-echo "  Đợi 20s để các service và wallet bootstrap..."
-sleep 20
+echo "  Chờ mọi task trong stack về trạng thái bình thường (không 0/1)..."
+wait_for_stack_replicas_ready "sau restart" || exit 1
 
 echo ""
-echo "[5/5] Prisma generate (auth-service, trên Manager) + seed qua Gateway..."
+echo "  Chờ API Gateway phản hồi /health..."
+export GATEWAY_BASE_URL="${GATEWAY_BASE_URL:-http://127.0.0.1:3000}"
+wait_for_gateway_http || exit 1
 
-if ! curl -sf "http://127.0.0.1:3000/health" >/dev/null; then
-  echo "❌ Gateway http://127.0.0.1:3000/health không phản hồi — kiểm tra stack trước khi seed."
-  exit 1
-fi
+echo ""
+echo "[5/5] Prisma generate (auth-service) + seed qua Gateway..."
 
 if ! timeout 2 bash -c 'exec 3<>/dev/tcp/127.0.0.1/5433' 2>/dev/null; then
   echo "❌ Không kết nối được Postgres tại 127.0.0.1:5433."
@@ -176,19 +267,60 @@ if ! timeout 2 bash -c 'exec 3<>/dev/tcp/127.0.0.1/5433' 2>/dev/null; then
   exit 1
 fi
 
-(
-  cd "$PROJECT_DIR/services/auth-service"
-  npx prisma generate
-)
-
-export GATEWAY_BASE_URL="${GATEWAY_BASE_URL:-http://127.0.0.1:3000}"
 export AUTH_INTERNAL_URL="${AUTH_INTERNAL_URL:-$GATEWAY_BASE_URL}"
 export POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}"
 export POSTGRES_PORT="${POSTGRES_PORT:-5433}"
 export REDIS_PASSWORD
 
+# Sau rolling restart + auto-scaler, auth qua gateway có thể cần >25s — tăng mặc định khi chạy từ script này.
+export SEED_AUTH_PROXY_WAIT_ATTEMPTS="${SEED_AUTH_PROXY_WAIT_ATTEMPTS:-90}"
+
+run_seed_on_host() {
+  (
+    cd "$PROJECT_DIR/services/auth-service"
+    npx prisma generate
+  )
+  cd "$PROJECT_DIR"
+  npx tsx scripts/seed-database.ts
+}
+
+run_seed_bootstrap_runner() {
+  local br="${DOCKERHUB_USERNAME:-foxxiee04}/cab-bootstrap-runner:${IMAGE_TAG:-latest}"
+  echo "  → Seed qua $br (Node trong image, không cần npx trên máy chủ)..."
+  local -a dr=(
+    run --rm --network host
+    -v /var/run/docker.sock:/var/run/docker.sock
+    -v "$PROJECT_DIR:/workspace:rw"
+    -v cab-booking-bootstrap-node-modules:/workspace/node_modules
+    --env-file "$PROJECT_DIR/.env"
+    -e "GATEWAY_BASE_URL=$GATEWAY_BASE_URL"
+    -e "AUTH_INTERNAL_URL=$AUTH_INTERNAL_URL"
+    -e "POSTGRES_HOST=$POSTGRES_HOST"
+    -e "POSTGRES_PORT=$POSTGRES_PORT"
+    -w /workspace
+  )
+  if [[ -n "${REDIS_PASSWORD:-}" ]]; then
+    dr+=( -e "REDIS_PASSWORD=$REDIS_PASSWORD" )
+  fi
+  dr+=( -e "SEED_AUTH_PROXY_WAIT_ATTEMPTS=$SEED_AUTH_PROXY_WAIT_ATTEMPTS" )
+  if [[ -f "${HOME}/.ssh/swarm_key" ]]; then
+    dr+=( -v "$HOME/.ssh/swarm_key:/workspace/.secrets/swarm_key:ro" -e SWARM_SSH_KEY=/workspace/.secrets/swarm_key )
+  fi
+  docker "${dr[@]}" "$br" \
+    bash -lc 'set -e; cd services/auth-service && npx prisma generate && cd /workspace && npx tsx scripts/seed-database.ts'
+}
+
 cd "$PROJECT_DIR"
-npx tsx scripts/seed-database.ts
+if [[ "${USE_BOOTSTRAP_RUNNER_FOR_SEED:-}" == "1" ]] || ! command -v npx >/dev/null 2>&1; then
+  run_seed_bootstrap_runner
+else
+  run_seed_on_host
+fi
+
+echo ""
+echo "[verify] Kiểm tra lại replica + gateway sau seed..."
+wait_for_stack_replicas_ready "sau seed" || exit 1
+wait_for_gateway_http || exit 1
 
 echo ""
 echo "============================================"

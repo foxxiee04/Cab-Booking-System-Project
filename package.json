@@ -15,6 +15,7 @@
     "system:bootstrap": "bash scripts/bootstrap-system.sh",
     "docker:bootstrap": "docker compose --profile tools run --rm bootstrap-runner",
     "db:reset:swarm": "bash scripts/reset-database-swarm.sh",
+    "db:reset:seed": "bash reset-and-seed.sh",
     "seed:flows": "npx tsx scripts/seed-flows.ts",
     "drivers:online": "node scripts/set-drivers-online.mjs",
     "db:migrate:driver-license-2026": "tsx scripts/migrate-driver-license-classes-2026.ts",

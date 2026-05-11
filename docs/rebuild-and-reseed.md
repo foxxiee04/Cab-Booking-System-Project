@@ -25,31 +25,69 @@ docker compose up -d --build api-gateway
 
 ## Production — Docker Swarm (EC2)
 
+Hướng dẫn triển khai đầy đủ (node, secrets, monitoring, auto-scaler): [`deploy/SWARM-SETUP.md`](../deploy/SWARM-SETUP.md).  
+Phần reset/seed trên Swarm tương ứng **PHASE 15b** trong file đó.
+
 ### Yêu cầu trước khi reset
 
-Phải SSH vào **Primary Manager** (18.136.250.236):
+Phải SSH vào **Primary Manager** (IP Elastic `18.136.250.236` trong tài liệu Swarm) — đây là node thường có task **postgres** và cổng **`5433:5432`** publish ra localhost; reset/seed dựa vào điều đó:
 
 ```bash
 ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@18.136.250.236
 ```
 
-### Lệnh reset + seed 1 lần (script có sẵn trên server)
+### Lệnh reset + seed 1 lần (trong repo + trên server sau CI)
+
+File tại **root repo** (CI copy lên `~/cab-booking/reset-and-seed.sh`):
 
 ```bash
 bash ~/cab-booking/reset-and-seed.sh
+# hoặc trong repo: bash reset-and-seed.sh   (gọi scripts/reset-database-swarm.sh)
 ```
 
-Script này tự động làm:
-1. Drop + recreate tất cả PostgreSQL databases (auth_db, booking_db, driver_db, payment_db, ride_db, user_db, wallet_db)
+Trên server, có thể giữ wrapper tay tại `~/cab-booking/reset-and-seed.sh` — nên **đồng bộ với repo** sau `git pull` hoặc dùng bản do CI deploy.
+
+Script swarm (`scripts/reset-database-swarm.sh`) sau khi restart service sẽ:
+
+- **Chờ** tới khi `docker stack services` không còn dạng **0/1** (và mọi dòng dạng **X/X** khớp) — tối đa mặc định **360s** (`SWARM_STACK_READY_TIMEOUT_SEC`).
+- **Chờ** `/health` gateway — mặc định **180s** (`SWARM_GATEWAY_HTTP_TIMEOUT_SEC`).
+- Trước seed đặt **`SEED_AUTH_PROXY_WAIT_ATTEMPTS=90`** (chờ auth sẵn sàng qua gateway, tránh seed xong mà UI/API vẫn lỗi tải lúc đầu).
+- **Sau seed** kiểm tra lại replica + gateway; nếu vẫn có service chưa lên, script **thoát lỗi** để CI/người chạy biết.
+
+Biến tùy chọn (trên Manager khi chạy script):
+
+| Biến | Mặc định | Ý nghĩa |
+|------|----------|---------|
+| `SWARM_STACK_READY_TIMEOUT_SEC` | 360 | Tối đa chờ mọi task về X/X |
+| `SWARM_STACK_READY_POLL_SEC` | 5 | Chu kỳ poll |
+| `SWARM_GATEWAY_HTTP_TIMEOUT_SEC` | 180 | Chờ `curl` /health |
+| `SWARM_SERVICE_RESTART_STAGGER_SEC` | 3 | Nghỉ giữa các `service update --force` |
+| `SEED_AUTH_PROXY_WAIT_ATTEMPTS` | 90 (khi qua script này) | Seed chờ auth không còn 502 |
+
+**Toàn bộ bước trong script:**
+
+1. Drop + recreate tất cả PostgreSQL logical DB (auth_db, booking_db, driver_db, payment_db, ride_db, user_db, wallet_db)
 2. Drop MongoDB databases (notification_db, review_db)
-3. Chạy `prisma db push` trong từng service container (SSH tới worker nodes)
-4. Flush Redis (xóa rate-limit keys)
-5. Restart wallet-service (re-seed SystemBankAccount)
-6. Chạy `seed-database.ts` qua bootstrap-runner container
+3. `prisma db push` cho từng service: `docker exec` nếu task nằm trên Manager → nếu không thì **SSH** sang worker theo `~/.ssh/swarm_key` → nếu vẫn không được thì **`docker run --network host`** với image `foxxiee04/cab-<service>:latest` và `DATABASE_URL` tới **`127.0.0.1:5433`** (mạng overlay `backend` trong stack là **internal**, **không attachable**, nên không được `docker run --network cab-booking_backend`)
+4. `docker service update --force` các service liên quan (cách nhau vài giây), rồi **chờ replica + gateway** như bảng trên
+5. `prisma generate` (auth-service) + `seed-database.ts`: trên host nếu có `npx`, không thì **`cab-bootstrap-runner`**
+6. **Verify** lại replica + gateway
+
+> **Lưu ý UI “không thể tải” ngay sau seed:** thường do task vẫn rolling hoặc auth chưa ổn định qua gateway — script mới chờ tới khi **X/X** và `/health` OK mới seed, và kiểm tra lại sau seed. Nếu front vẫn cache trang cũ, thử hard refresh (Ctrl+F5).
+
+> **Auto-scaler (PHASE 18 trong SWARM-SETUP):** chỉ tăng replica stateless; postgres vẫn trên Manager. Nếu sau khi bật auto-scaler mà reset báo thiếu bảng / không thấy container auth trên Manager, nguyên nhân thường là **bước 3** (migrate) không chạy đủ trên worker — dùng script repo ở trên thay vì chỉ `docker exec` local.
 
 ### Nếu script chưa có hoặc cần tạo lại
 
-Chạy lần lượt các bước sau trên **Primary Manager**:
+**Khuyến nghị:** từ repo đã `git pull`:
+
+```bash
+cd ~/cab-booking
+chmod +x scripts/reset-database-swarm.sh
+bash scripts/reset-database-swarm.sh
+```
+
+Nếu không dùng được script, có thể chạy lần lượt các bước thủ công sau trên **Primary Manager**:
 
 ```bash
 cd ~/cab-booking
@@ -85,7 +123,7 @@ docker exec "$redis_cid" redis-cli -a redis123 FLUSHALL 2>/dev/null && echo "✓
 docker service update --force cab-booking_wallet-service
 echo "Đợi wallet (25s)..." && sleep 25
 
-# Bước 6 — Seed qua bootstrap-runner
+# Bước 6 — Seed qua bootstrap-runner (có prisma generate cho auth-service)
 docker run --rm --network host \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$PWD:/workspace:rw" \
@@ -94,11 +132,12 @@ docker run --rm --network host \
   --env-file "$PWD/.env" \
   -e SWARM_SSH_KEY=/workspace/.secrets/swarm_key \
   -e GATEWAY_BASE_URL=http://127.0.0.1:3000 \
+  -e AUTH_INTERNAL_URL=http://127.0.0.1:3000 \
   -e POSTGRES_HOST=127.0.0.1 \
   -e POSTGRES_PORT=5433 \
   -w /workspace \
   foxxiee04/cab-bootstrap-runner:latest \
-  npx tsx scripts/seed-database.ts
+  bash -lc 'set -e; cd services/auth-service && npx prisma generate && cd /workspace && npx tsx scripts/seed-database.ts'
 ```
 
 ### Sau khi reset — kiểm tra nhanh

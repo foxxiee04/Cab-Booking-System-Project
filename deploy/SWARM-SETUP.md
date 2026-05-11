@@ -609,6 +609,12 @@ docker exec $(docker ps -q -f name=cab-booking_ride-service) \
 
 > Dùng khi bạn muốn dữ liệu giống môi trường local (tương đương `scripts/reset-database.*` + `npm run db:seed`), nhưng stack đang chạy bằng **Docker Swarm** (`docker-stack.thesis.yml`, tên stack `cab-booking`).
 
+**Tóm tắt lệnh (đồng bộ với `docs/rebuild-and-reseed.md`):**
+- Trên server thường dùng: `bash ~/cab-booking/reset-and-seed.sh` (file root repo; CI/CD scp lên cùng `scripts/`).
+- **Nguồn trong repo:** `bash scripts/reset-database-swarm.sh` (drop DB → `prisma db push` qua exec / SSH / `docker run --network host` + `127.0.0.1:5433` → restart service (stagger) → **chờ replica X/X + /health** → seed qua host `npx` hoặc **`cab-bootstrap-runner`** → **verify** lại).
+
+> **Sau PHASE 18 (auto-scaler):** replica của gateway/auth/… có thể >1 trên worker; **postgres vẫn trên Primary Manager**. Reset/seed **luôn** chạy trên Manager. Lỗi kiểu `users` không tồn tại (P2021) thường do `prisma db push` chưa chạy cho **auth_db** / **user_db** vì task service nằm trên worker — script `reset-database-swarm.sh` mới xử lý SSH + fallback image, **không** dùng `docker run --network <stack>_backend` (overlay `backend` trong `docker-stack.thesis.yml` là **`internal: true`**, không attachable → Docker từ chối gắn mạng đó cho container one-off).
+
 ### Điều kiện
 
 - PHASE 14 đã deploy xong; `curl http://127.0.0.1:3000/health` trên Manager trả OK.
@@ -618,7 +624,7 @@ docker exec $(docker ps -q -f name=cab-booking_ride-service) \
 
 **(Gợi ý bảo mật)** Trong AWS Security Group, không mở **5433** ra `0.0.0.0/0` trừ khi cần; tốt nhất chỉ IP của bạn hoặc giữ không public và chỉ làm seed qua SSH trên Manager.
 
-- Migrate Prisma **trên swarm**: task microservice có thể chạy trên **worker** — không xuất hiện trong `docker ps` trên Manager. **`reset-database-swarm.sh`** **SSH** tới từng node (`ubuntu@<private IP>`) và `docker exec` đúng task; cần key **`SWARM_SSH_KEY`** hoặc **`~/.ssh/swarm_key`** (deploy CI đã tạo ở `~/.ssh/swarm_key` trên Manager; nếu thiếu, copy PEM deploy và `chmod 600`). **`SWARM_NODES_SSH_USER`** mặc định `ubuntu`.
+- Migrate Prisma **trên swarm**: task microservice có thể chạy trên **worker** — không xuất hiện trong `docker ps` trên Manager. **`reset-database-swarm.sh`** **SSH** tới từng node (`ubuntu@<private IP>`) và `docker exec` đúng task; nếu không SSH được, fallback **`docker run --rm --network host`** với `DATABASE_URL=...@127.0.0.1:5433/...` (postgres đã publish trên Manager). Cần key **`SWARM_SSH_KEY`** hoặc **`~/.ssh/swarm_key`** (deploy CI đã tạo ở `~/.ssh/swarm_key` trên Manager; nếu thiếu, copy PEM deploy và `chmod 600`). **`SWARM_NODES_SSH_USER`** mặc định `ubuntu`.
 
 ### Bootstrap **không cần npm trên EC2** (Docker — khuyến nghị)
 
@@ -727,6 +733,8 @@ curl http://18.136.250.236:3000/health
 ## PHASE 18 — Auto-Scaler (Prometheus → docker service scale)
 
 Auto-scaler chạy như 1 Swarm service trên Manager, query CPU từ Prometheus mỗi 30s, tự scale các stateless services.
+
+> **Reset DB / seed sau khi bật auto-scaler:** việc scale replica **không** đổi chỗ postgres hay cách publish `5433`. Vẫn SSH vào **Primary Manager** và dùng `scripts/reset-database-swarm.sh` (hoặc `~/cab-booking/reset-and-seed.sh`) như **PHASE 15b** — tránh script cũ chỉ `docker exec` trên Manager cho `auth-service` / `user-service` khi task đang chạy trên worker.
 
 > CI/CD đã build + push image `foxxiee04/cab-autoscaler:latest` và stack file đã khai báo service `autoscaler`. Sau khi deploy stack, auto-scaler chạy tự động.
 
