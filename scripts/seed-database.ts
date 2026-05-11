@@ -379,16 +379,33 @@ const INCENTIVE_RULES = [
 
 async function seedIncentiveRules(adminToken: string) {
   console.log('  [incentive-rules] creating via /api/admin/wallet/incentive-rules...');
+  const maxAttempts = Number(process.env.SEED_INCENTIVE_RULE_ATTEMPTS || '20');
+  const pauseMs = Number(process.env.SEED_INCENTIVE_RULE_RETRY_MS || '2000');
+
   for (const rule of INCENTIVE_RULES) {
-    try {
-      await http('/api/admin/wallet/incentive-rules', {
-        method: 'POST',
-        token: adminToken,
-        body: rule,
-      });
-      console.log(`    + ${rule.type} (${rule.conditionValue}) → ${rule.rewardAmount}đ`);
-    } catch (err: any) {
-      console.log(`    ! incentive rule ${rule.type} skipped: ${err.message?.slice(0, 80)}`);
+    let ok = false;
+    for (let attempt = 1; attempt <= maxAttempts && !ok; attempt += 1) {
+      try {
+        await http('/api/admin/wallet/incentive-rules', {
+          method: 'POST',
+          token: adminToken,
+          body: rule,
+        });
+        console.log(`    + ${rule.type} (${rule.conditionValue}) → ${rule.rewardAmount}đ`);
+        ok = true;
+      } catch (err: any) {
+        const st = err?.status;
+        const retryable = st === 502 || st === 503 || st === 504;
+        if (retryable && attempt < maxAttempts) {
+          if (attempt === 1) {
+            console.log(`    … ${rule.type}: gateway/upstream ${st}, chờ wallet-service (${maxAttempts} lần tối đa)…`);
+          }
+          await sleep(pauseMs);
+          continue;
+        }
+        console.log(`    ! incentive rule ${rule.type} skipped: ${err.message?.slice(0, 120)}`);
+        break;
+      }
     }
   }
 }

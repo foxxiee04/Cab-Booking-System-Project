@@ -30,7 +30,7 @@ Phần reset/seed trên Swarm tương ứng **PHASE 15b** trong file đó.
 
 ### Yêu cầu trước khi reset
 
-Phải SSH vào **Primary Manager** (IP Elastic `18.136.250.236` trong tài liệu Swarm) — đây là node thường có task **postgres** và cổng **`5433:5432`** publish ra localhost; reset/seed dựa vào điều đó:
+Phải SSH vào **Primary Manager** (IP Elastic `18.136.250.236` trong tài liệu Swarm) — đây là node thường có task **postgres** và cổng **`5433:5432`** publish ra localhost; reset/seed dựa vào điều đó. Stack **thesis** cũng cần **MongoDB `27017:27017`** publish trên Manager để bước **lịch sử + review** trong `seed-database.ts` chạy được từ `cab-bootstrap-runner` (`--network host`). Nếu stack deploy cũ chưa có map 27017: redeploy stack từ `docker-stack.thesis.yml` mới rồi mới reset/seed.
 
 ```bash
 ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@18.136.250.236
@@ -63,6 +63,7 @@ Biến tùy chọn (trên Manager khi chạy script):
 | `SWARM_GATEWAY_HTTP_TIMEOUT_SEC` | 180 | Chờ `curl` /health |
 | `SWARM_SERVICE_RESTART_STAGGER_SEC` | 3 | Nghỉ giữa các `service update --force` |
 | `SEED_AUTH_PROXY_WAIT_ATTEMPTS` | 90 (khi qua script này) | Seed chờ auth không còn 502 |
+| `SEED_MONGO_HOST` / `SEED_MONGO_PORT` | 127.0.0.1 / 27017 | Ghi đè host Mongo cho bước hist (script bootstrap-runner) |
 
 **Toàn bộ bước trong script:**
 

@@ -96,6 +96,10 @@ services:
       - mongo_data:/data/db
     networks:
       - backend
+    ports:
+      # Host seed (scripts/seed-database.ts hist + reviews): bootstrap-runner --network host cần Mongo tại localhost.
+      # Giới hạn SG: không mở 27017 ra 0.0.0.0/0 nếu không cần; chỉ SSH vào Manager là đủ cho seed.
+      - "27017:27017"
     secrets:
       - mongo_user
       - mongo_password

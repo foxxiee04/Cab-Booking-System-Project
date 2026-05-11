@@ -618,7 +618,7 @@ docker exec $(docker ps -q -f name=cab-booking_ride-service) \
 ### Điều kiện
 
 - PHASE 14 đã deploy xong; `curl http://127.0.0.1:3000/health` trên Manager trả OK.
-- Trong **`docker-stack.thesis.yml`**, service **postgres** phải publish **`5433:5432`** (đã có trong repo) để máy Manager gọi Prisma INSERT bootstrap admin khi seed. Nếu stack cũ chưa có map này: deploy lại stack (PHASE 14).
+- Trong **`docker-stack.thesis.yml`**, service **postgres** phải publish **`5433:5432`** (đã có trong repo) để máy Manager gọi Prisma INSERT bootstrap admin khi seed. **MongoDB** phải publish **`27017:27017`** (đã có trong repo) để `seed-database.ts` phần lịch sử + **review_db** kết nối được từ host (`bootstrap-runner --network host`). Nếu stack cũ thiếu map này: deploy lại stack (PHASE 14).
 - **`REDIS_PASSWORD`** trong `.env` khớp với giá trị dùng khi deploy (biến `${REDIS_PASSWORD}` trong stack) — seed dùng khi xóa key rate-limit OTP qua `docker exec` vào Redis.
 - **`POSTGRES_USER` / `POSTGRES_PASSWORD` / `MONGO_USER` / `MONGO_PASSWORD`** trong **`.env`** khớp Docker secrets và `env/*.env` (PHASE 9–11).
 

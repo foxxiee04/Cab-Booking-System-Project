@@ -418,10 +418,10 @@ jobs:
             # Requires DOCKERHUB_TOKEN in ~/cab-booking/.env on the server.
             echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin 2>/dev/null || true
 
-            echo "▶ Cleaning up disk BEFORE pulling (prune old images)..."
+            echo "▶ Cleaning up disk BEFORE pulling (unused images older than 6h, all nodes)..."
             for node_ip in $(docker node inspect $(docker node ls -q) --format '{{.Status.Addr}}' 2>/dev/null); do
               ssh -i ~/.ssh/swarm_key -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$node_ip \
-                "docker image prune -af --filter 'until=1h' 2>/dev/null || true; docker builder prune -af 2>/dev/null || true" 2>/dev/null || true
+                "docker image prune -af --filter 'until=6h' 2>/dev/null || true; docker builder prune -af 2>/dev/null || true" 2>/dev/null || true
             done
 
             echo "▶ Pre-pulling service images on manager..."
@@ -483,8 +483,11 @@ jobs:
               echo "⚠ postgres not reachable after 180s — run manually: docker exec <postgres-id> psql -U postgres -f /docker-entrypoint-initdb.d/init.sql"
             fi
 
-            echo "▶ Removing dangling images on manager..."
-            docker image prune -f --filter "until=48h"
+            echo "▶ Post-deploy prune (all Swarm nodes): stopped containers + unused images/networks; KHÔNG xóa volume (--volumes không bật)..."
+            for node_ip in $(docker node inspect $(docker node ls -q) --format '{{.Status.Addr}}' 2>/dev/null); do
+              ssh -i ~/.ssh/swarm_key -o StrictHostKeyChecking=no -o ConnectTimeout=12 ubuntu@$node_ip \
+                "docker system prune -af 2>/dev/null || true; df -h / | tail -1" 2>/dev/null || true
+            done
 
             echo "✅ Swarm deployment complete"
 

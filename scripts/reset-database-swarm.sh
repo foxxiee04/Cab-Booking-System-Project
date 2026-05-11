@@ -297,6 +297,10 @@ run_seed_bootstrap_runner() {
     -e "AUTH_INTERNAL_URL=$AUTH_INTERNAL_URL"
     -e "POSTGRES_HOST=$POSTGRES_HOST"
     -e "POSTGRES_PORT=$POSTGRES_PORT"
+    # Hist + reviews: seed kết nối Mongo từ host stack (must publish 27017, docker-stack.thesis.yml).
+    # Ghi đè MONGO_HOST trong .env (thường là `mongodb`) vì --network host không resolve tên service Swarm.
+    -e "MONGO_HOST=${SEED_MONGO_HOST:-127.0.0.1}"
+    -e "MONGO_PORT=${SEED_MONGO_PORT:-27017}"
     -w /workspace
   )
   if [[ -n "${REDIS_PASSWORD:-}" ]]; then
