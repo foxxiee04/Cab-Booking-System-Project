@@ -312,6 +312,7 @@ services:
       - NODE_ENV=production
       - PORT=3004
       - GRPC_PORT=50056
+      - ALLOW_SANDBOX_ENDPOINT=true
     env_file:
       - ./env/payment.env
     networks:

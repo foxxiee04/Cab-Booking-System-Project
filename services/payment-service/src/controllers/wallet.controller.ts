@@ -588,7 +588,7 @@ export class WalletController {
    */
   sandboxConfirmTopUp = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      if (process.env.NODE_ENV === 'production') {
+      if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SANDBOX_ENDPOINT !== 'true') {
         return res.status(403).json({
           success: false,
           error: { code: 'FORBIDDEN', message: 'Sandbox endpoint not available in production' },
