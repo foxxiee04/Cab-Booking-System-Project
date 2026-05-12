@@ -4,8 +4,8 @@
 #   Manager     (on-demand, t3.medium) : infra stateful (postgres, mongodb,
 #                                         redis, rabbitmq), api-gateway,
 #                                         monitoring (prometheus, grafana, loki)
-#   Worker-1..N (spot,      t3.medium) : all microservices + ai-service — Swarm
-#                                         spreads across workers (ai-service not on infra: RAM)
+#   Worker-1..N : microservices + ai-service on workers only (not infra). Balance across
+#   two workers with labels app.half=1 and app.half=2 (see MICROSERVICES section).
 #
 #   Global services (every node): promtail, cadvisor, node-exporter
 #
@@ -36,7 +36,9 @@
 #       docker stack deploy -c docker-stack.thesis.yml --with-registry-auth cab-booking
 #
 # ── Scale workers ──────────────────────────────────────────────────────────
-#   Add a spot instance → install Docker → join swarm → services auto-spread.
+#   Add a worker → join swarm → set labels (once):
+#     docker node update --label-add app.half=1 <NODE_ID_WORKER_A>
+#     docker node update --label-add app.half=2 <NODE_ID_WORKER_B>
 #
 # ── Spot instance handling ─────────────────────────────────────────────────
 #   stop_grace_period: 30s lets containers flush state before termination.
@@ -201,9 +203,9 @@ services:
           memory: 128M
 
   # ══════════════════════════════════════════════════════════════════════════
-  # MICROSERVICES — Spot Workers
-  # Swarm auto-spreads across all available worker nodes.
-  # When a spot instance is terminated, Swarm reschedules on remaining workers.
+  # MICROSERVICES — Workers, split across two halves (replicas unchanged: 1 each)
+  # Prerequisites: exactly two workers labelled app.half=1 and app.half=2.
+  # (~5 services on half 1, ~6 on half 2 incl. ai-service + pricing→AI same half OK)
   # ══════════════════════════════════════════════════════════════════════════
 
   auth-service:
@@ -223,8 +225,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-        preferences:
-          - spread: node.id
+          - node.labels.app.half == 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -257,8 +258,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-        preferences:
-          - spread: node.id
+          - node.labels.app.half == 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -291,8 +291,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-        preferences:
-          - spread: node.id
+          - node.labels.app.half == 2
       update_config:
         parallelism: 1
         delay: 10s
@@ -327,8 +326,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-        preferences:
-          - spread: node.id
+          - node.labels.app.half == 2
       update_config:
         parallelism: 1
         delay: 10s
@@ -360,8 +358,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-        preferences:
-          - spread: node.id
+          - node.labels.app.half == 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -394,8 +391,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-        preferences:
-          - spread: node.id
+          - node.labels.app.half == 2
       update_config:
         parallelism: 1
         delay: 10s
@@ -428,8 +424,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-        preferences:
-          - spread: node.id
+          - node.labels.app.half == 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -463,8 +458,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-        preferences:
-          - spread: node.id
+          - node.labels.app.half == 2
       update_config:
         parallelism: 1
         delay: 10s
@@ -496,8 +490,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-        preferences:
-          - spread: node.id
+          - node.labels.app.half == 2
       update_config:
         parallelism: 1
         delay: 10s
@@ -529,8 +522,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-        preferences:
-          - spread: node.id
+          - node.labels.app.half == 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -611,11 +603,10 @@ services:
     deploy:
       replicas: 1
       placement:
-        # Ghim infra thường đè AI lên cùng máy DB/nginx (RAM nhỏ → 137). Worker + spread giống các API stateless.
+        # Same worker half as pricing-service (app.half==2) — heavy AI off infra; requires node label.
         constraints:
           - node.role == worker
-        preferences:
-          - spread: node.id
+          - node.labels.app.half == 2
       update_config:
         parallelism: 1
         delay: 10s

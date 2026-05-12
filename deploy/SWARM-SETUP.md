@@ -282,7 +282,7 @@ To add a manager to this swarm, run 'docker swarm join-token manager' and follow
 Stack file dùng constraints để quyết định service chạy trên node nào:
 - `node.labels.infra == true` → postgres, mongodb, redis, rabbitmq, monitoring (Prometheus/Grafana/Loki), autoscaler, … — **không** gồm `ai-service` (file thesis: AI chạy trên `node.role == worker` để tránh tranh RAM với DB)
 - `node.labels.nginx == true` → api-gateway (public entry point, cần IP cố định)
-- `node.role == worker` → tất cả microservices còn lại
+- `node.role == worker` + `node.labels.app.half == 1|2` → **`docker-stack.thesis.yml`**: chia microservices + `ai-service` (**5 + 6** task) lên **hai worker** có label tương ứng (`spread` một mình không đảm bảo đều)
 
 **Nếu thiếu labels, các service bị stuck ở `0/1` — KHÔNG BAO GIỜ start.**
 
@@ -299,7 +299,16 @@ docker node inspect "$SELF_ID" --format '{{json .Spec.Labels}}'
 # Output: {"infra":"true","nginx":"true"}
 ```
 
-> Secondary Manager và Workers **KHÔNG cần labels** — microservices dùng `node.role == worker` để tự spread sang tất cả workers.
+**Thesis — cân hai worker (bắt buộc trước `stack deploy`):** mỗi worker một nhóm `app.half` (đặt `1` trên worker ít dùng trước đây nếu muốn đảo vai trò).
+
+```bash
+docker node ls
+# Gán mỗi worker một nửa (thay <ID> bằng cột ID từ docker node ls)
+docker node update --label-add app.half=1 <WORKER_NODE_ID_FOR_HALF_1>
+docker node update --label-add app.half=2 <WORKER_NODE_ID_FOR_HALF_2>
+```
+
+> Manager **không** gán `app.half`. Chỉ hai worker có label này thì stack thesis mới schedule đủ.
 
 ---
 
