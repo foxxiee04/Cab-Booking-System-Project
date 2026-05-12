@@ -99,10 +99,23 @@ cmd_deploy() {
   [[ ! -f "${PROJECT_DIR}/${STACK_FILE}" ]] && \
     error "Stack file not found: ${PROJECT_DIR}/${STACK_FILE}"
 
+  cd "${PROJECT_DIR}"
+
+  if [[ -f ".env" ]]; then
+    info "Loading environment variables from ${PROJECT_DIR}/.env..."
+    set -a
+    # shellcheck disable=SC1091
+    source ".env"
+    set +a
+  else
+    warn "No .env found at ${PROJECT_DIR}/.env — stack variables will use shell/default values."
+  fi
+
+  DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-foxxiee04}"
+  IMAGE_TAG="${IMAGE_TAG:-latest}"
+
   info "Pulling latest images..."
   docker pull "${DOCKERHUB_USERNAME}/cab-api-gateway:${IMAGE_TAG}" || true
-
-  cd "${PROJECT_DIR}"
 
   info "Deploying stack '${STACK_NAME}'..."
   DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME}" \

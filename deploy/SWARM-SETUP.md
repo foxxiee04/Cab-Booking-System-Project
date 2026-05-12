@@ -388,9 +388,18 @@ INTERNAL_SERVICE_TOKEN=<chạy: openssl rand -hex 16>
 GRAFANA_ADMIN_USER=admin
 GRAFANA_ADMIN_PASSWORD=FoxGo@Grafana2025!
 
-# LLM (nếu có key Claude)
-ANTHROPIC_API_KEY=sk-ant-...
-RAG_LLM_PROVIDER=claude
+# AI chatbot / Mia — giống local hiện tại: GPT/OpenAI là provider chính.
+RAG_LLM_PROVIDER=openai
+OPENAI_API_KEY=<openai-api-key>
+RAG_LLM_MODEL_OPENAI=gpt-4o-mini
+RAG_LLM_TIMEOUT_S=30
+RAG_COSINE_LLM=0.25
+# Tắt reranker nặng trên thesis/worker nhỏ để tránh kẹt tải model lớn khi restart.
+RAG_RERANKER_ENABLED=false
+
+# Gemini giữ làm dự phòng / query rewrite nếu có key.
+GEMINI_API_KEY=<google-ai-studio-key>
+RAG_LLM_MODEL_GEMINI=gemini-2.5-flash
 
 # App
 NODE_ENV=production
@@ -536,9 +545,10 @@ docker node ls
 ```bash
 cd ~/cab-booking
 
-# Set biến môi trường (hoặc source .env)
-export DOCKERHUB_USERNAME=foxxiee04
-export IMAGE_TAG=latest
+# Nạp .env để docker stack deploy thay đúng ${...}
+set -a
+source .env
+set +a
 
 # Login Docker Hub (để pull private images nếu có)
 docker login -u foxxiee04
@@ -624,6 +634,7 @@ docker exec $(docker ps -q -f name=cab-booking_ride-service) \
 > Dùng khi bạn muốn dữ liệu giống môi trường local (tương đương `scripts/reset-database.*` + `npm run db:seed`), nhưng stack đang chạy bằng **Docker Swarm** (`docker-stack.thesis.yml`, tên stack `cab-booking`).
 
 **Tóm tắt lệnh (đồng bộ với `docs/rebuild-and-reseed.md`):**
+- CI/CD **không reset/seed** khi deploy. Deploy xong, nếu cần dữ liệu sạch thì SSH vào **Primary Manager** và chạy thủ công.
 - Trên server thường dùng: `bash ~/cab-booking/reset-and-seed.sh` (file root repo; CI/CD scp lên cùng `scripts/`).
 - **Nguồn trong repo:** `bash scripts/reset-database-swarm.sh` (drop DB → `prisma db push` qua exec / SSH / `docker run --network host` + `127.0.0.1:5433` → restart service (stagger) → **chờ replica X/X + /health** → seed qua host `npx` hoặc **`cab-bootstrap-runner`** → **verify** lại).
 

@@ -477,6 +477,7 @@ services:
       - RAG_LLM_MODEL_OPENAI=${RAG_LLM_MODEL_OPENAI:-gpt-4o-mini}
       - RAG_LLM_TIMEOUT_S=${RAG_LLM_TIMEOUT_S:-20}
       - RAG_EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-bkai-foundation-models/vietnamese-bi-encoder}
+      - RAG_RERANKER_ENABLED=${RAG_RERANKER_ENABLED:-true}
       # Periodic maintenance (0 = off): RAG re-index from app/data/knowledge/*.txt
       - AI_AUTO_RELOAD_RAG_SEC=${AI_AUTO_RELOAD_RAG_SEC:-0}
       # ML retrain: heavy CPU; enable AI_AUTO_RETRAIN_ENABLED=true and interval > 0

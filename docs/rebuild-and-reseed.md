@@ -28,6 +28,8 @@ docker compose up -d --build api-gateway
 Hướng dẫn triển khai đầy đủ (node, secrets, monitoring, auto-scaler): [`deploy/SWARM-SETUP.md`](../deploy/SWARM-SETUP.md).  
 Phần reset/seed trên Swarm tương ứng **PHASE 15b** trong file đó.
 
+CI/CD chỉ build/push image và `docker stack deploy`. Không chạy reset/seed trong pipeline. Sau khi CI/CD deploy xong, muốn làm sạch dữ liệu demo thì SSH vào **Primary Manager** rồi chạy lệnh reset/seed thủ công bên dưới.
+
 ### Yêu cầu trước khi reset
 
 Phải SSH vào **Primary Manager** (IP Elastic `18.136.250.236` trong tài liệu Swarm) — đây là node thường có task **postgres** và cổng **`5433:5432`** publish ra localhost; reset/seed dựa vào điều đó. Stack **thesis** cũng cần **MongoDB `27017:27017`** publish trên Manager để bước **lịch sử + review** trong `seed-database.ts` chạy được từ `cab-bootstrap-runner` (`--network host`). Nếu stack deploy cũ chưa có map 27017: redeploy stack từ `docker-stack.thesis.yml` mới rồi mới reset/seed.
