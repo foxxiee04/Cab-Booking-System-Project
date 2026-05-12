@@ -568,23 +568,37 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - RAG_LLM_MODEL_CLAUDE=${RAG_LLM_MODEL_CLAUDE:-claude-haiku-4-5-20251001}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - RAG_LLM_MODEL=${RAG_LLM_MODEL:-llama3-8b-8192}
+      # Defaults aligned with services/ai-service/.env.example + rag_service.py (same as sensible local dev).
+      - RAG_LLM_MODEL=${RAG_LLM_MODEL:-llama-3.3-70b-versatile}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - RAG_LLM_MODEL_GEMINI=${RAG_LLM_MODEL_GEMINI:-gemini-2.5-flash}
+      - RAG_LLM_MODEL_GEMINI_REWRITE=${RAG_LLM_MODEL_GEMINI_REWRITE:-gemini-2.5-flash}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - RAG_LLM_MODEL_OPENAI=${RAG_LLM_MODEL_OPENAI:-gpt-3.5-turbo}
+      - RAG_LLM_MODEL_OPENAI=${RAG_LLM_MODEL_OPENAI:-gpt-4o-mini}
       - RAG_LLM_TIMEOUT_S=${RAG_LLM_TIMEOUT_S:-20}
-      - RAG_EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-paraphrase-multilingual-MiniLM-L12-v2}
+      - RAG_LLM_REWRITE_TIMEOUT_S=${RAG_LLM_REWRITE_TIMEOUT_S:-6}
+      - RAG_LLM_MAX_TOKENS=${RAG_LLM_MAX_TOKENS:-900}
+      - RAG_LLM_TEMPERATURE=${RAG_LLM_TEMPERATURE:-0.25}
+      - RAG_EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-bkai-foundation-models/vietnamese-bi-encoder}
+      - RAG_TOP_K=${RAG_TOP_K:-8}
+      - RAG_MIN_SEMANTIC=${RAG_MIN_SEMANTIC:-0.35}
+      - RAG_FAISS_PREFILTER=${RAG_FAISS_PREFILTER:-0.16}
+      - RAG_MAX_CONTEXT_CHARS=${RAG_MAX_CONTEXT_CHARS:-6400}
+      - RAG_COSINE_ABSENT=${RAG_COSINE_ABSENT:-0.22}
+      - RAG_COSINE_LLM=${RAG_COSINE_LLM:-0.30}
+      # Air-gap / weak workers: set RAG_RERANKER_ENABLED=false and a smaller RAG_EMBEDDING_MODEL in .env.
+      - RAG_RERANKER_ENABLED=${RAG_RERANKER_ENABLED:-true}
+      - RAG_RERANKER_MODEL=${RAG_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
+      - RAG_RERANK_POOL=${RAG_RERANK_POOL:-20}
+      - RAG_QUERY_REWRITE_ENABLED=${RAG_QUERY_REWRITE_ENABLED:-true}
       # Prod Swarm: thường 86400 (24h) hoặc 0 — đặt trong .env trước khi deploy stack
       - AI_AUTO_RELOAD_RAG_SEC=${AI_AUTO_RELOAD_RAG_SEC:-0}
       - AI_AUTO_RETRAIN_SEC=${AI_AUTO_RETRAIN_SEC:-0}
       - AI_AUTO_RETRAIN_ENABLED=${AI_AUTO_RETRAIN_ENABLED:-false}
       - AI_INTERNAL_TOKEN=${AI_INTERNAL_TOKEN:-}
-      - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
-      - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
-      # Thesis / small nodes: default off (no HF pull for ~568MB model). Override RAG_RERANKER_ENABLED=true in .env when workers have egress + RAM.
-      - RAG_RERANKER_ENABLED=${RAG_RERANKER_ENABLED:-false}
-      - RAG_RERANKER_MODEL=${RAG_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
+      # Match local: allow HF hub unless overridden (thesis air-gap: HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1).
+      - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0}
+      - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-0}
     # Swarm: image HEALTHCHECK start_period=60s can be too short on small CPUs (RAG + reranker load).
     networks:
       - backend

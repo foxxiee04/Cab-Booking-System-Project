@@ -396,8 +396,12 @@ RAG_LLM_PROVIDER=claude
 NODE_ENV=production
 CORS_ORIGIN=http://18.136.250.236:3000
 # ← dùng IP tạm, cập nhật domain sau
+# AI giống máy dev: đặt cùng key + (tuỳ chỉnh) RAG_* như services/ai-service/.env; trên EC2 thêm:
+# AI_SERVICE_DNS_1=172.31.0.2
+# AI_SERVICE_DNS_2=8.8.8.8
 ```
 
+**Ghi chú (AI parity):** `docker-stack.thesis.yml` căn mặc định `ai-service` với `services/ai-service/.env.example` (Groq 70B, embedding Việt, reranker bật, HF online). Đồng bộ `~/cab-booking/.env` với máy local cho API key và mọi `RAG_*` bạn đã chỉnh; air-gap / worker yếu: `HF_HUB_OFFLINE=1`, `RAG_RERANKER_ENABLED=false`.
 **Tạo random secrets ngay trong terminal:**
 ```bash
 echo "JWT_SECRET=$(openssl rand -hex 32)"
