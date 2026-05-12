@@ -26,10 +26,9 @@ cd "$PROJECT_DIR"
 STACK_NAME="${STACK_NAME:-cab-booking}"
 
 if [[ -f .env ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source .env
-  set +a
+  # shellcheck source=scripts/load-dotenv.sh
+  source "$SCRIPT_DIR/load-dotenv.sh"
+  load_dotenv .env
 fi
 
 POSTGRES_USER="${POSTGRES_USER:-postgres}"

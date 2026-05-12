@@ -546,9 +546,9 @@ docker node ls
 cd ~/cab-booking
 
 # Nạp .env để docker stack deploy thay đúng ${...}
-set -a
-source .env
-set +a
+# Dùng loader này thay vì `source .env` để value chứa <, >, &, khoảng trắng không làm Bash lỗi.
+source scripts/load-dotenv.sh
+load_dotenv .env
 
 # Login Docker Hub (để pull private images nếu có)
 docker login -u foxxiee04

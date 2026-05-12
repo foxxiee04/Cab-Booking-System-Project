@@ -445,9 +445,10 @@ jobs:
             export IMAGE_TAG=latest
             export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
 
-            set -o allexport
-            [ -f .env ] && source .env
-            set +o allexport
+            if [ -f .env ]; then
+              . scripts/load-dotenv.sh
+              load_dotenv .env
+            fi
 
             # Authenticate to Docker Hub (prevents anonymous pull rate-limits).
             # Requires DOCKERHUB_TOKEN in ~/cab-booking/.env on the server.

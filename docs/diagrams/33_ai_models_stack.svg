@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1050" viewBox="0 0 1800 1050">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#1f2937"/>
+    </marker>
+    <style>
+      .bg { fill:#f7fbfd; }
+      .title { font-family:Arial, Helvetica, sans-serif; font-size:32px; font-weight:800; fill:#0f172a; text-anchor:middle; }
+      .subtitle { font-family:Arial, Helvetica, sans-serif; font-size:17px; fill:#334155; text-anchor:middle; }
+      .section { fill:#e0f2fe; stroke:#0369a1; stroke-width:2; rx:12; }
+      .section2 { fill:#ecfdf5; stroke:#047857; stroke-width:2; rx:12; }
+      .section3 { fill:#fff7ed; stroke:#c2410c; stroke-width:2; rx:12; }
+      .card { fill:white; stroke:#1f2937; stroke-width:1.6; rx:10; }
+      .model { fill:#dbeafe; stroke:#1d4ed8; stroke-width:1.8; rx:10; }
+      .data { fill:#fef9c3; stroke:#a16207; stroke-width:1.6; rx:10; }
+      .out { fill:#dcfce7; stroke:#15803d; stroke-width:1.6; rx:10; }
+      .warn { fill:#fee2e2; stroke:#b91c1c; stroke-width:1.6; rx:10; }
+      .h { font-family:Arial, Helvetica, sans-serif; font-size:20px; font-weight:800; fill:#0f172a; text-anchor:middle; dominant-baseline:middle; }
+      .t { font-family:Arial, Helvetica, sans-serif; font-size:16px; fill:#111827; text-anchor:middle; dominant-baseline:middle; }
+      .s { font-family:Arial, Helvetica, sans-serif; font-size:13px; fill:#374151; text-anchor:middle; dominant-baseline:middle; }
+      .section-label { font-family:Arial, Helvetica, sans-serif; font-size:20px; font-weight:800; fill:#0f172a; }
+      .flow { stroke:#1f2937; stroke-width:2.2; fill:none; marker-end:url(#arrow); }
+      .flow2 { stroke:#047857; stroke-width:2; fill:none; marker-end:url(#arrow); }
+      .dash { stroke:#475569; stroke-width:1.7; fill:none; stroke-dasharray:8 6; marker-end:url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1800" height="1050" class="bg"/>
+  <text x="900" y="48" class="title">FoxGo / Cab Booking — AI Models Overview</text>
+  <text x="900" y="80" class="subtitle">AI Service dùng RAG chatbot + các mô hình ML dự báo để hỗ trợ đặt xe, điều phối và vận hành</text>
+
+  <!-- Section backgrounds -->
+  <rect x="70" y="120" width="1660" height="310" class="section"/>
+  <text x="95" y="153" class="section-label">1. Mia AI Chatbot — RAG + GPT</text>
+
+  <rect x="70" y="470" width="1660" height="285" class="section2"/>
+  <text x="95" y="503" class="section-label">2. Prediction Models — hỗ trợ giá, matching và vận hành chuyến</text>
+
+  <rect x="70" y="795" width="1660" height="190" class="section3"/>
+  <text x="95" y="828" class="section-label">3. Runtime &amp; Ops</text>
+
+  <!-- RAG pipeline -->
+  <rect x="110" y="185" width="210" height="92" class="data"/>
+  <text x="215" y="218" class="h">Knowledge Base</text>
+  <text x="215" y="245" class="s">app/data/knowledge/*.txt</text>
+
+  <rect x="390" y="185" width="220" height="92" class="model"/>
+  <text x="500" y="212" class="h">Embedding Model</text>
+  <text x="500" y="240" class="s">bkai-foundation-models</text>
+  <text x="500" y="258" class="s">vietnamese-bi-encoder</text>
+
+  <rect x="680" y="185" width="215" height="92" class="card"/>
+  <text x="787" y="212" class="h">Hybrid Search</text>
+  <text x="787" y="240" class="s">FAISS cosine</text>
+  <text x="787" y="258" class="s">+ BM25 Vietnamese</text>
+
+  <rect x="965" y="185" width="215" height="92" class="card"/>
+  <text x="1072" y="212" class="h">RAG Context</text>
+  <text x="1072" y="240" class="s">top_k chunks</text>
+  <text x="1072" y="258" class="s">cosine confidence gate</text>
+
+  <rect x="1250" y="185" width="220" height="92" class="model"/>
+  <text x="1360" y="212" class="h">GPT / OpenAI</text>
+  <text x="1360" y="240" class="s">RAG_LLM_PROVIDER=openai</text>
+  <text x="1360" y="258" class="s">gpt-4o-mini</text>
+
+  <rect x="1510" y="185" width="175" height="92" class="out"/>
+  <text x="1597" y="218" class="h">Mia Answer</text>
+  <text x="1597" y="245" class="s">grounded support reply</text>
+
+  <path d="M320 231 H390" class="flow"/>
+  <path d="M610 231 H680" class="flow"/>
+  <path d="M895 231 H965" class="flow"/>
+  <path d="M1180 231 H1250" class="flow"/>
+  <path d="M1470 231 H1510" class="flow"/>
+
+  <rect x="390" y="320" width="220" height="64" class="card"/>
+  <text x="500" y="344" class="h">Optional Rewrite</text>
+  <text x="500" y="368" class="s">Gemini Flash for short queries</text>
+
+  <rect x="1250" y="320" width="220" height="64" class="warn"/>
+  <text x="1360" y="344" class="h">Local / thesis setting</text>
+  <text x="1360" y="368" class="s">RAG_RERANKER_ENABLED=false</text>
+
+  <path d="M500 320 V285 H680" class="dash"/>
+  <path d="M1250 352 H1180 V277" class="dash"/>
+
+  <!-- Prediction models -->
+  <rect x="110" y="545" width="225" height="92" class="data"/>
+  <text x="222" y="574" class="h">Ride Features</text>
+  <text x="222" y="602" class="s">distance, duration, demand</text>
+  <text x="222" y="620" class="s">weather/time/location</text>
+
+  <rect x="420" y="525" width="230" height="120" class="model"/>
+  <text x="535" y="554" class="h">ETA + Surge Model</text>
+  <text x="535" y="584" class="s">eta_price_model.joblib</text>
+  <text x="535" y="605" class="s">predicts ETA, price multiplier</text>
+  <text x="535" y="626" class="s">used by Pricing Service</text>
+
+  <rect x="765" y="525" width="230" height="120" class="model"/>
+  <text x="880" y="554" class="h">Accept Probability</text>
+  <text x="880" y="584" class="s">accept_model.joblib</text>
+  <text x="880" y="605" class="s">driver accept likelihood</text>
+  <text x="880" y="626" class="s">used by matching logic</text>
+
+  <rect x="1110" y="525" width="230" height="120" class="model"/>
+  <text x="1225" y="554" class="h">Wait Time Model</text>
+  <text x="1225" y="584" class="s">wait_model.joblib</text>
+  <text x="1225" y="605" class="s">expected pickup wait time</text>
+  <text x="1225" y="626" class="s">customer + ops visibility</text>
+
+  <rect x="1455" y="545" width="225" height="92" class="out"/>
+  <text x="1567" y="574" class="h">AI Suggestions</text>
+  <text x="1567" y="602" class="s">surge, radius, wait time</text>
+  <text x="1567" y="620" class="s">better driver ranking</text>
+
+  <path d="M335 591 H420" class="flow2"/>
+  <path d="M650 585 H765" class="flow2"/>
+  <path d="M995 585 H1110" class="flow2"/>
+  <path d="M1340 591 H1455" class="flow2"/>
+
+  <rect x="420" y="675" width="230" height="48" class="card"/>
+  <text x="535" y="699" class="s">training/train_model.py</text>
+  <rect x="765" y="675" width="230" height="48" class="card"/>
+  <text x="880" y="699" class="s">training/train_accept_model.py</text>
+  <rect x="1110" y="675" width="230" height="48" class="card"/>
+  <text x="1225" y="699" class="s">training/train_wait_model.py</text>
+
+  <path d="M535 675 V645" class="dash"/>
+  <path d="M880 675 V645" class="dash"/>
+  <path d="M1225 675 V645" class="dash"/>
+
+  <!-- Runtime ops -->
+  <rect x="130" y="865" width="260" height="70" class="card"/>
+  <text x="260" y="890" class="h">AI Service</text>
+  <text x="260" y="914" class="s">FastAPI :8000, /api/health, /api/chat</text>
+
+  <rect x="480" y="865" width="260" height="70" class="card"/>
+  <text x="610" y="890" class="h">API Gateway</text>
+  <text x="610" y="914" class="s">proxy /api/ai/* to ai-service</text>
+
+  <rect x="830" y="865" width="260" height="70" class="card"/>
+  <text x="960" y="890" class="h">Frontend Widgets</text>
+  <text x="960" y="914" class="s">Customer AIChat + Driver AIAssist</text>
+
+  <rect x="1180" y="865" width="260" height="70" class="card"/>
+  <text x="1310" y="890" class="h">Config via .env</text>
+  <text x="1310" y="914" class="s">OPENAI_API_KEY, RAG_*, model paths</text>
+
+  <rect x="1530" y="865" width="150" height="70" class="out"/>
+  <text x="1605" y="890" class="h">Monitoring</text>
+  <text x="1605" y="914" class="s">logs + health flags</text>
+
+  <path d="M390 900 H480" class="flow"/>
+  <path d="M740 900 H830" class="flow"/>
+  <path d="M1090 900 H1180" class="flow"/>
+  <path d="M1440 900 H1530" class="flow"/>
+</svg>

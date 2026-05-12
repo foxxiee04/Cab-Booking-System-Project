@@ -1,0 +1,307 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1300" viewBox="0 0 1800 1300">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,4 L0,8 Z" fill="none" stroke="#111" stroke-width="1.25"/>
+    </marker>
+    <style>
+      .system { fill:#7ccbed; stroke:#111; stroke-width:1.6; }
+      .group { fill:rgba(255,255,255,.10); stroke:#111; stroke-width:1; stroke-dasharray:6 6; opacity:.55; }
+      .uc { fill:#7ccbed; stroke:#111; stroke-width:1.45; }
+      .shared { fill:#b7e4f8; stroke:#111; stroke-width:1.55; }
+      .actor-line { stroke:#111; stroke-width:1.5; fill:none; }
+      .actor-head { fill:#7ccbed; stroke:#111; stroke-width:1.4; }
+      .assoc { stroke:#111; stroke-width:1.35; fill:none; }
+      .rel { stroke:#111; stroke-width:1.2; fill:none; stroke-dasharray:7 5; marker-end:url(#arrow); }
+      .title { font-family:Arial, Helvetica, sans-serif; fill:#111; font-size:18px; font-weight:700; text-anchor:middle; }
+      .group-title { font-family:Arial, Helvetica, sans-serif; fill:#111; font-size:15px; font-weight:700; text-anchor:start; opacity:.78; }
+      .label { font-family:Arial, Helvetica, sans-serif; fill:#111; font-size:15px; text-anchor:middle; dominant-baseline:middle; }
+      .small { font-family:Arial, Helvetica, sans-serif; fill:#111; font-size:13px; text-anchor:middle; dominant-baseline:middle; }
+      .tiny { font-family:Arial, Helvetica, sans-serif; fill:#111; font-size:12px; text-anchor:middle; dominant-baseline:middle; }
+      .note { font-family:Arial, Helvetica, sans-serif; fill:#111; font-size:12px; text-anchor:middle; dominant-baseline:middle; }
+      .actor-text { font-family:Arial, Helvetica, sans-serif; fill:#111; font-size:15px; text-anchor:middle; }
+    </style>
+  </defs>
+
+  <text x="900" y="32" class="title">cab_booking</text>
+  <rect x="145" y="56" width="1510" height="1185" class="system"/>
+
+  <!-- Visual zones, kept subtle so the diagram still reads as one UML system boundary. -->
+  <rect x="190" y="90" width="555" height="650" class="group"/>
+  <rect x="775" y="90" width="250" height="650" class="group"/>
+  <rect x="1055" y="90" width="555" height="780" class="group"/>
+  <rect x="190" y="900" width="1420" height="295" class="group"/>
+  <text x="210" y="118" class="group-title">Customer use cases</text>
+  <text x="795" y="118" class="group-title">Shared core</text>
+  <text x="1075" y="118" class="group-title">Driver use cases</text>
+  <text x="210" y="928" class="group-title">Admin dashboard use cases</text>
+
+  <!-- Actors -->
+  <g id="actor-customer">
+    <circle cx="65" cy="270" r="11" class="actor-head"/>
+    <line x1="65" y1="281" x2="65" y2="330" class="actor-line"/>
+    <line x1="38" y1="300" x2="92" y2="300" class="actor-line"/>
+    <line x1="65" y1="330" x2="41" y2="370" class="actor-line"/>
+    <line x1="65" y1="330" x2="89" y2="370" class="actor-line"/>
+    <text x="65" y="397" class="actor-text">Customer</text>
+  </g>
+
+  <g id="actor-admin">
+    <circle cx="65" cy="1050" r="11" class="actor-head"/>
+    <line x1="65" y1="1061" x2="65" y2="1110" class="actor-line"/>
+    <line x1="38" y1="1080" x2="92" y2="1080" class="actor-line"/>
+    <line x1="65" y1="1110" x2="41" y2="1150" class="actor-line"/>
+    <line x1="65" y1="1110" x2="89" y2="1150" class="actor-line"/>
+    <text x="65" y="1177" class="actor-text">Admin</text>
+  </g>
+
+  <g id="actor-driver">
+    <circle cx="1735" cy="500" r="11" class="actor-head"/>
+    <line x1="1735" y1="511" x2="1735" y2="560" class="actor-line"/>
+    <line x1="1708" y1="530" x2="1762" y2="530" class="actor-line"/>
+    <line x1="1735" y1="560" x2="1711" y2="600" class="actor-line"/>
+    <line x1="1735" y1="560" x2="1759" y2="600" class="actor-line"/>
+    <text x="1735" y="627" class="actor-text">Driver</text>
+  </g>
+
+  <!-- Shared core in the middle: repeated/shared behavior lives here. -->
+  <ellipse cx="900" cy="170" rx="100" ry="34" class="shared"/>
+  <text x="900" y="170" class="label">Đăng nhập</text>
+
+  <ellipse cx="900" cy="270" rx="100" ry="34" class="shared"/>
+  <text x="900" y="270" class="label">Đăng ký</text>
+
+  <ellipse cx="900" cy="370" rx="112" ry="34" class="shared"/>
+  <text x="900" y="370" class="label">Quản lý hồ sơ</text>
+
+  <ellipse cx="900" cy="470" rx="112" ry="34" class="shared"/>
+  <text x="900" y="462" class="small">Chat với Mia</text>
+  <text x="900" y="480" class="small">AI hỗ trợ</text>
+
+  <ellipse cx="900" cy="570" rx="112" ry="34" class="shared"/>
+  <text x="900" y="562" class="small">Nhận thông báo</text>
+  <text x="900" y="580" class="small">realtime</text>
+
+  <text x="900" y="655" class="note">Các chức năng có dữ liệu cá nhân / giao dịch đều yêu cầu đăng nhập.</text>
+
+  <!-- Customer use cases -->
+  <ellipse cx="330" cy="165" rx="110" ry="34" class="uc"/>
+  <text x="330" y="157" class="small">Nhập điểm đón</text>
+  <text x="330" y="175" class="small">và điểm đến</text>
+
+  <ellipse cx="600" cy="165" rx="120" ry="34" class="uc"/>
+  <text x="600" y="157" class="small">Chọn loại xe</text>
+  <text x="600" y="175" class="small">và xem báo giá</text>
+
+  <ellipse cx="465" cy="285" rx="145" ry="42" class="uc"/>
+  <text x="465" y="277" class="label">Đặt xe</text>
+  <text x="465" y="310" class="small" font-weight="700">extension points</text>
+
+  <ellipse cx="330" cy="410" rx="95" ry="30" class="uc"/>
+  <text x="330" y="410" class="small">Dùng voucher</text>
+
+  <ellipse cx="600" cy="410" rx="95" ry="30" class="uc"/>
+  <text x="600" y="410" class="small">Hủy chuyến</text>
+
+  <ellipse cx="330" cy="535" rx="112" ry="34" class="uc"/>
+  <text x="330" y="527" class="small">Theo dõi chuyến</text>
+  <text x="330" y="545" class="small">realtime map</text>
+
+  <ellipse cx="600" cy="535" rx="116" ry="34" class="uc"/>
+  <text x="600" y="527" class="small">Thanh toán</text>
+  <text x="600" y="545" class="small">MoMo / VNPay / cash</text>
+
+  <ellipse cx="330" cy="660" rx="110" ry="34" class="uc"/>
+  <text x="330" y="652" class="small">Đánh giá</text>
+  <text x="330" y="670" class="small">tài xế</text>
+
+  <ellipse cx="600" cy="660" rx="112" ry="34" class="uc"/>
+  <text x="600" y="652" class="small">Báo cáo</text>
+  <text x="600" y="670" class="small">chuyến đi</text>
+
+  <!-- Driver use cases -->
+  <ellipse cx="1200" cy="165" rx="120" ry="34" class="uc"/>
+  <text x="1200" y="157" class="small">Đăng ký tài xế</text>
+  <text x="1200" y="175" class="small">upload giấy tờ</text>
+
+  <ellipse cx="1470" cy="165" rx="118" ry="34" class="uc"/>
+  <text x="1470" y="157" class="small">Bật / tắt</text>
+  <text x="1470" y="175" class="small">trạng thái online</text>
+
+  <ellipse cx="1200" cy="285" rx="120" ry="34" class="uc"/>
+  <text x="1200" y="277" class="small">Xem yêu cầu</text>
+  <text x="1200" y="295" class="small">chuyến đi</text>
+
+  <ellipse cx="1470" cy="285" rx="128" ry="34" class="uc"/>
+  <text x="1470" y="277" class="small">Tiếp nhận / từ chối</text>
+  <text x="1470" y="295" class="small">yêu cầu chuyến</text>
+
+  <ellipse cx="1335" cy="430" rx="155" ry="44" class="uc"/>
+  <text x="1335" y="421" class="label">Quản lý chuyến đi</text>
+  <text x="1335" y="456" class="small" font-weight="700">extension points</text>
+
+  <ellipse cx="1125" cy="560" rx="112" ry="34" class="uc"/>
+  <text x="1125" y="552" class="small">Điều hướng</text>
+  <text x="1125" y="570" class="small">điểm đón / đến</text>
+
+  <ellipse cx="1335" cy="560" rx="118" ry="34" class="uc"/>
+  <text x="1335" y="552" class="small">Cập nhật trạng thái</text>
+  <text x="1335" y="570" class="small">chuyến đi</text>
+
+  <ellipse cx="1545" cy="560" rx="100" ry="30" class="uc"/>
+  <text x="1545" y="560" class="small">Cập nhật GPS</text>
+
+  <ellipse cx="1125" cy="685" rx="100" ry="30" class="uc"/>
+  <text x="1125" y="685" class="small">Hủy chuyến</text>
+
+  <ellipse cx="1335" cy="685" rx="108" ry="34" class="uc"/>
+  <text x="1335" y="677" class="small">Chat / gọi</text>
+  <text x="1335" y="695" class="small">với khách</text>
+
+  <ellipse cx="1490" cy="795" rx="126" ry="42" class="uc"/>
+  <text x="1490" y="786" class="label">Quản lý ví tài xế</text>
+  <text x="1490" y="821" class="small" font-weight="700">extension points</text>
+
+  <ellipse cx="1220" cy="795" rx="86" ry="30" class="uc"/>
+  <text x="1220" y="795" class="small">Xem số dư</text>
+
+  <ellipse cx="1355" cy="795" rx="78" ry="30" class="uc"/>
+  <text x="1355" y="795" class="small">Rút tiền</text>
+
+  <ellipse cx="1490" cy="710" rx="108" ry="34" class="uc"/>
+  <text x="1490" y="702" class="small">Xem lịch sử</text>
+  <text x="1490" y="720" class="small">thu nhập</text>
+
+  <!-- Admin use cases -->
+  <ellipse cx="310" cy="990" rx="116" ry="34" class="uc"/>
+  <text x="310" y="982" class="small">Quản lý tài khoản</text>
+  <text x="310" y="1000" class="small">người dùng</text>
+
+  <ellipse cx="555" cy="990" rx="118" ry="34" class="uc"/>
+  <text x="555" y="982" class="small">Duyệt / từ chối</text>
+  <text x="555" y="1000" class="small">hồ sơ tài xế</text>
+
+  <ellipse cx="800" cy="990" rx="108" ry="30" class="uc"/>
+  <text x="800" y="990" class="small">Quản lý tài xế</text>
+
+  <ellipse cx="1045" cy="990" rx="108" ry="30" class="uc"/>
+  <text x="1045" y="990" class="small">Quản lý chuyến</text>
+
+  <ellipse cx="1290" cy="990" rx="112" ry="34" class="uc"/>
+  <text x="1290" y="982" class="small">Xử lý báo cáo</text>
+  <text x="1290" y="1000" class="small">khiếu nại</text>
+
+  <ellipse cx="1535" cy="990" rx="112" ry="34" class="uc"/>
+  <text x="1535" y="982" class="small">Quản lý thanh toán</text>
+  <text x="1535" y="1000" class="small">và hoàn tiền</text>
+
+  <ellipse cx="310" cy="1135" rx="108" ry="30" class="uc"/>
+  <text x="310" y="1135" class="small">Quản lý voucher</text>
+
+  <ellipse cx="555" cy="1135" rx="110" ry="34" class="uc"/>
+  <text x="555" y="1127" class="small">Quản lý ví</text>
+  <text x="555" y="1145" class="small">merchant</text>
+
+  <ellipse cx="800" cy="1135" rx="104" ry="30" class="uc"/>
+  <text x="800" y="1135" class="small">Xem thống kê</text>
+
+  <ellipse cx="1045" cy="1135" rx="108" ry="30" class="uc"/>
+  <text x="1045" y="1135" class="small">Xem logs hệ thống</text>
+
+  <ellipse cx="1290" cy="1135" rx="110" ry="34" class="uc"/>
+  <text x="1290" y="1127" class="small">Cấu hình giá</text>
+  <text x="1290" y="1145" class="small">và AI</text>
+
+  <!-- Actor associations: orthogonal and routed around text. -->
+  <path d="M92 300 H165 V285 H320" class="assoc"/>
+  <path d="M92 300 H165 V470 H788" class="assoc"/>
+  <path d="M92 300 H165 V660 H220" class="assoc"/>
+  <path d="M92 300 H165 V170 H800" class="assoc"/>
+  <path d="M92 300 H165 V370 H788" class="assoc"/>
+
+  <path d="M1708 530 H1635 V430 H1490" class="assoc"/>
+  <path d="M1708 530 H1635 V165 H1588" class="assoc"/>
+  <path d="M1708 530 H1635 V795 H1616" class="assoc"/>
+  <path d="M1708 530 H1635 V170 H1000" class="assoc"/>
+  <path d="M1708 530 H1635 V370 H1012" class="assoc"/>
+
+  <path d="M92 1080 H165 V990 H194" class="assoc"/>
+  <path d="M92 1080 H165 V990 H437" class="assoc"/>
+  <path d="M92 1080 H165 V1135 H202" class="assoc"/>
+  <path d="M92 1080 H165 V170 H800" class="assoc"/>
+
+  <!-- Customer include / extend relationships. Kept short to avoid unreadable crossings. -->
+  <path d="M465 243 V165 H440" class="rel"/>
+  <text x="438" y="202" class="tiny">&lt;&lt;include&gt;&gt;</text>
+
+  <path d="M465 243 V165 H480" class="rel"/>
+  <text x="540" y="202" class="tiny">&lt;&lt;include&gt;&gt;</text>
+
+  <path d="M610 285 H800 V170" class="rel"/>
+  <text x="720" y="262" class="tiny">&lt;&lt;include&gt;&gt;</text>
+
+  <path d="M395 321 V410 H425" class="rel"/>
+  <text x="382" y="374" class="tiny">&lt;&lt;extend&gt;&gt;</text>
+
+  <path d="M535 321 V410 H505" class="rel"/>
+  <text x="548" y="374" class="tiny">&lt;&lt;extend&gt;&gt;</text>
+
+  <path d="M465 327 V535 H442" class="rel"/>
+  <text x="420" y="480" class="tiny">&lt;&lt;extend&gt;&gt;</text>
+
+  <path d="M525 327 V535 H484" class="rel"/>
+  <text x="540" y="480" class="tiny">&lt;&lt;include&gt;&gt;</text>
+
+  <path d="M600 569 V660 H440" class="rel"/>
+  <text x="520" y="630" class="tiny">&lt;&lt;extend&gt;&gt;</text>
+
+  <!-- Shared core relation. -->
+  <path d="M900 304 V336" class="rel"/>
+  <text x="956" y="322" class="tiny">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- Driver include / extend relationships. -->
+  <path d="M1200 199 V270 H1000" class="rel"/>
+  <text x="1080" y="250" class="tiny">&lt;&lt;include&gt;&gt;</text>
+
+  <path d="M1470 199 V250 H1000 V170" class="rel"/>
+  <text x="1220" y="230" class="tiny">&lt;&lt;include&gt;&gt;</text>
+
+  <path d="M1200 319 V395 H1250" class="rel"/>
+  <text x="1226" y="360" class="tiny">&lt;&lt;include&gt;&gt;</text>
+
+  <path d="M1470 319 V395 H1420" class="rel"/>
+  <text x="1445" y="360" class="tiny">&lt;&lt;include&gt;&gt;</text>
+
+  <path d="M1255 464 V560 H1237" class="rel"/>
+  <text x="1200" y="520" class="tiny">&lt;&lt;extend&gt;&gt;</text>
+
+  <path d="M1335 474 V526" class="rel"/>
+  <text x="1394" y="510" class="tiny">&lt;&lt;extend&gt;&gt;</text>
+
+  <path d="M1415 464 V560 H1445" class="rel"/>
+  <text x="1475" y="520" class="tiny">&lt;&lt;extend&gt;&gt;</text>
+
+  <path d="M1280 474 V685 H1225" class="rel"/>
+  <text x="1210" y="620" class="tiny">&lt;&lt;extend&gt;&gt;</text>
+
+  <path d="M1390 474 V685 H1443" class="rel"/>
+  <text x="1438" y="620" class="tiny">&lt;&lt;extend&gt;&gt;</text>
+
+  <path d="M1490 753 V740" class="rel"/>
+  <text x="1550" y="748" class="tiny">&lt;&lt;extend&gt;&gt;</text>
+
+  <path d="M1490 837 V860 H1220 V825" class="rel"/>
+  <text x="1325" y="878" class="tiny">&lt;&lt;extend&gt;&gt;</text>
+
+  <path d="M1490 837 V860 H1355 V825" class="rel"/>
+  <text x="1422" y="878" class="tiny">&lt;&lt;extend&gt;&gt;</text>
+
+  <!-- Admin relationships. -->
+  <path d="M555 1024 V1072 H800 V1020" class="rel"/>
+  <text x="680" y="1062" class="tiny">&lt;&lt;include&gt;&gt;</text>
+
+  <path d="M1045 1020 V1062 H1290 V1024" class="rel"/>
+  <text x="1168" y="1054" class="tiny">&lt;&lt;extend&gt;&gt;</text>
+
+  <path d="M1290 1101 V1070 H900 V604" class="rel"/>
+  <text x="1085" y="1084" class="tiny">&lt;&lt;include&gt;&gt;</text>
+</svg>

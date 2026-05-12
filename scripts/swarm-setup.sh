@@ -16,6 +16,7 @@ warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERR]${NC}  $*"; exit 1; }
 
 # ── Config (edit before running) ────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STACK_NAME="cab-booking"
 STACK_FILE="docker-stack.thesis.yml"
 DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-foxxiee04}"
@@ -103,10 +104,9 @@ cmd_deploy() {
 
   if [[ -f ".env" ]]; then
     info "Loading environment variables from ${PROJECT_DIR}/.env..."
-    set -a
-    # shellcheck disable=SC1091
-    source ".env"
-    set +a
+    # shellcheck source=scripts/load-dotenv.sh
+    source "${SCRIPT_DIR}/load-dotenv.sh"
+    load_dotenv ".env"
   else
     warn "No .env found at ${PROJECT_DIR}/.env — stack variables will use shell/default values."
   fi
