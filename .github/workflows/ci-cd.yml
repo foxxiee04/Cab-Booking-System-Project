@@ -487,25 +487,29 @@ jobs:
             docker node update --label-add nginx=true  "$SELF_ID" 2>/dev/null || true
             echo "  Manager $SELF_ID labelled (infra=true, nginx=true)"
 
+            # Parallel pulls + immediate stack deploy can trigger transient "update out of sequence" on Raft.
+            echo "▶ Cool-down before stack deploy (45s)..."
+            sleep 45
+
             echo "▶ Deploying stack (tag=$IMAGE_TAG)..."
-            # Swarm may return "update out of sequence" under concurrent updates — retry.
+            # Swarm may return "update out of sequence" — retry with backoff.
             deploy_ok=0
-            for attempt in 1 2 3 4 5; do
+            for attempt in 1 2 3 4 5 6 7 8; do
               if docker stack deploy \
+                --detach \
                 -c docker-stack.thesis.yml \
                 --with-registry-auth \
                 --resolve-image always \
                 --prune \
-                --detach \
                 cab-booking; then
                 deploy_ok=1
                 break
               fi
-              echo "  stack deploy failed (attempt ${attempt}/5), sleeping 20s before retry..."
-              sleep 20
+              echo "  stack deploy failed (attempt ${attempt}/8), sleeping 30s before retry..."
+              sleep 30
             done
             if [ "$deploy_ok" != 1 ]; then
-              echo "::error::docker stack deploy failed after 5 attempts (e.g. rpc update out of sequence)"
+              echo "::error::docker stack deploy failed after 8 attempts (e.g. rpc update out of sequence)"
               exit 1
             fi
 
