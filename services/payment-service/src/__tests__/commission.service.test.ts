@@ -100,7 +100,7 @@ describe('CommissionService — dynamic rate modifier', () => {
 describe('CommissionService — netEarnings formula', () => {
   const svc = makeSvc();
 
-  it('netEarnings = grossFare − platformFee (no bonus, no penalty)', () => {
+  it('netEarnings = grossFare − platformFee when there is no penalty', () => {
     const gross = 150_000;
     const result = svc.calculateCommission(gross, ctx());
     expect(result.netEarnings).toBe(gross - result.platformFee);
@@ -116,7 +116,7 @@ describe('CommissionService — netEarnings formula', () => {
       },
     });
     const result = svc2.calculateCommission(50_000, ctx({
-      driverStats: { tripsCompletedToday: 5, acceptanceRate: 0.50 },
+      driverStats: { acceptanceRate: 0.50 },
     }));
     expect(result.netEarnings).toBeGreaterThanOrEqual(0);
   });
@@ -140,7 +140,7 @@ describe('CommissionService — cash accounting', () => {
   it('driverCollected=true and cashDebt>0 for CASH payment', () => {
     const result = svc.calculateCommission(100_000, ctx({ paymentMethod: 'CASH' }));
     expect(result.driverCollected).toBe(true);
-    // No bonuses/penalties → cashDebt = platformFee
+    // No penalties → cashDebt = platformFee
     expect(result.cashDebt).toBe(result.platformFee);
   });
 
@@ -156,80 +156,6 @@ describe('CommissionService — cash accounting', () => {
     expect(result.cashDebt).toBe(0);
   });
 
-  it('bonus reduces the cash debt the driver owes', () => {
-    const result = svc.calculateCommission(100_000, ctx({
-      paymentMethod: 'CASH',
-      completedAt: new Date('2025-03-17T14:00:00'),
-      driverStats: { tripsCompletedToday: 3, rating: 4.9 },
-    }));
-
-    expect(result.bonus).toBe(DEFAULT_COMMISSION_CONFIG.incentive.highRatingBonus);
-    // cashDebt should be reduced by the bonus
-    expect(result.cashDebt).toBe(Math.max(0, result.platformFee - result.bonus));
-  });
-});
-
-// ─── Incentive bonuses ────────────────────────────────────────────────────────
-
-describe('CommissionService — incentive bonuses', () => {
-  const svc = makeSvc();
-
-  it('no bonus when driverStats is absent', () => {
-    // Use off-peak time to avoid peakHour bonus
-    const offPeak = new Date();
-    offPeak.setHours(14);
-    const result = svc.calculateCommission(100_000, ctx({ completedAt: offPeak }));
-    expect(result.bonus).toBe(0);
-  });
-
-  it('trip milestone bonus on every 10th trip', () => {
-    const offPeak = new Date(); offPeak.setHours(14);
-    const result = svc.calculateCommission(100_000, ctx({
-      completedAt: offPeak,
-      driverStats: { tripsCompletedToday: 10 },
-    }));
-    expect(result.breakdown.bonuses.tripMilestone).toBeUndefined();
-  });
-
-  it('no milestone bonus on non-multiple trips', () => {
-    const offPeak = new Date(); offPeak.setHours(14);
-    const result = svc.calculateCommission(100_000, ctx({
-      completedAt: offPeak,
-      driverStats: { tripsCompletedToday: 7 },
-    }));
-    expect(result.breakdown.bonuses.tripMilestone).toBeUndefined();
-  });
-
-  it('high rating bonus when rating >= 4.8', () => {
-    const offPeak = new Date(); offPeak.setHours(14);
-    const result = svc.calculateCommission(100_000, ctx({
-      completedAt: offPeak,
-      driverStats: { tripsCompletedToday: 3, rating: 4.9 },
-    }));
-    expect(result.breakdown.bonuses.highRating).toBe(
-      DEFAULT_COMMISSION_CONFIG.incentive.highRatingBonus,
-    );
-  });
-
-  it('no high rating bonus when rating < 4.8', () => {
-    const offPeak = new Date(); offPeak.setHours(14);
-    const result = svc.calculateCommission(100_000, ctx({
-      completedAt: offPeak,
-      driverStats: { tripsCompletedToday: 1, rating: 4.5 },
-    }));
-    expect(result.breakdown.bonuses.highRating).toBeUndefined();
-  });
-
-  it('high acceptance bonus when acceptanceRate >= 0.95', () => {
-    const offPeak = new Date(); offPeak.setHours(14);
-    const result = svc.calculateCommission(100_000, ctx({
-      completedAt: offPeak,
-      driverStats: { tripsCompletedToday: 2, acceptanceRate: 1.0 },
-    }));
-    expect(result.breakdown.bonuses.highAcceptance).toBe(
-      DEFAULT_COMMISSION_CONFIG.incentive.highAcceptanceBonus,
-    );
-  });
 });
 
 // ─── Penalties ────────────────────────────────────────────────────────────────
@@ -241,7 +167,7 @@ describe('CommissionService — penalties', () => {
   it('no penalty for clean driver stats', () => {
     const result = svc.calculateCommission(100_000, ctx({
       completedAt: offPeak,
-      driverStats: { tripsCompletedToday: 5, cancelRate: 0.02, acceptanceRate: 0.98 },
+      driverStats: { cancelRate: 0.02, acceptanceRate: 0.98 },
     }));
     expect(result.penalty).toBe(0);
   });
@@ -250,7 +176,7 @@ describe('CommissionService — penalties', () => {
     const gross = 100_000;
     const result = svc.calculateCommission(gross, ctx({
       completedAt: offPeak,
-      driverStats: { tripsCompletedToday: 5, cancelRate: 0.15 },
+      driverStats: { cancelRate: 0.15 },
     }));
     expect(result.breakdown.penalties.highCancelRate).toBe(5_000); // 5 % × 100k
     expect(result.breakdown.penalties.veryHighCancelRate).toBeUndefined();
@@ -260,7 +186,7 @@ describe('CommissionService — penalties', () => {
     const gross = 100_000;
     const result = svc.calculateCommission(gross, ctx({
       completedAt: offPeak,
-      driverStats: { tripsCompletedToday: 5, cancelRate: 0.25 },
+      driverStats: { cancelRate: 0.25 },
     }));
     expect(result.breakdown.penalties.veryHighCancelRate).toBe(10_000);
     expect(result.breakdown.penalties.highCancelRate).toBeUndefined();
@@ -270,7 +196,7 @@ describe('CommissionService — penalties', () => {
     const gross = 100_000;
     const result = svc.calculateCommission(gross, ctx({
       completedAt: offPeak,
-      driverStats: { tripsCompletedToday: 5, acceptanceRate: 0.50 },
+      driverStats: { acceptanceRate: 0.50 },
     }));
     expect(result.breakdown.penalties.lowAcceptance).toBe(5_000);
   });
@@ -279,7 +205,7 @@ describe('CommissionService — penalties', () => {
 // ─── Full integration scenario ────────────────────────────────────────────────
 
 describe('CommissionService — end-to-end scenario', () => {
-  it('premium driver with strong profile, surge 1.5, MOMO payment', () => {
+  it('premium ride with surge 1.5 and MOMO payment', () => {
     const svc = makeSvc();
 
     const completedAt = new Date('2025-03-17T14:30:00');
@@ -290,8 +216,6 @@ describe('CommissionService — end-to-end scenario', () => {
       paymentMethod:  'MOMO',
       completedAt,
       driverStats: {
-        tripsCompletedToday: 10,
-        rating:         4.9,   // high rating
         acceptanceRate: 0.97,  // high acceptance
         cancelRate:     0.02,  // clean
       },
@@ -301,18 +225,11 @@ describe('CommissionService — end-to-end scenario', () => {
     expect(result.commissionRate).toBeCloseTo(0.20);
     expect(result.platformFee).toBe(Math.round(300_000 * 0.20));
 
-    // Bonuses: highRating + highAcceptance
-    const inc = DEFAULT_COMMISSION_CONFIG.incentive;
-    const expectedBonus =
-      inc.highRatingBonus +
-      inc.highAcceptanceBonus;
-    expect(result.bonus).toBe(expectedBonus);
-
     // No penalties
     expect(result.penalty).toBe(0);
 
     // Net earnings
-    const expected = 300_000 - result.platformFee + expectedBonus;
+    const expected = 300_000 - result.platformFee;
     expect(result.netEarnings).toBe(expected);
 
     // Electronic payment → no cash debt
@@ -330,7 +247,6 @@ describe('CommissionService — end-to-end scenario', () => {
       paymentMethod:  'CASH',
       completedAt:    offPeak,
       driverStats: {
-        tripsCompletedToday: 3,
         cancelRate:     0.25, // very high
         acceptanceRate: 0.55, // low
       },

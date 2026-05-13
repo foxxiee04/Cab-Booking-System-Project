@@ -27,7 +27,6 @@ from app.services.accept_service import accept_service
 from app.services.wait_service import wait_service
 from app.services.rag_service import (
     rag_service,
-    LLM_PROVIDER,
     ANTHROPIC_API_KEY,
     OPENAI_API_KEY,
     GROQ_API_KEY,
@@ -57,11 +56,31 @@ async def health_check():
             chunks=int(snap["chunks"]),
             vector_index=bool(snap["vector_index"]),
             init_error=snap["init_error"],
-            llm_provider=LLM_PROVIDER,
+            llm_provider=snap["llm_provider_configured"],
+            llm_provider_configured=snap["llm_provider_configured"],
+            llm_provider_order=snap["llm_provider_order"],
+            effective_llm_provider=snap["effective_llm_provider"],
+            effective_llm_model=snap["effective_llm_model"],
+            llm_models=snap["llm_models"],
             anthropic_key_configured=bool(ANTHROPIC_API_KEY),
             openai_key_configured=bool(OPENAI_API_KEY),
             groq_key_configured=bool(GROQ_API_KEY),
             gemini_key_configured=bool(GEMINI_API_KEY),
+            query_rewrite_enabled=bool(snap["query_rewrite_enabled"]),
+            query_rewrite_provider_configured=snap["query_rewrite_provider_configured"],
+            query_rewrite_provider_order=snap["query_rewrite_provider_order"],
+            effective_query_rewrite_provider=snap["effective_query_rewrite_provider"],
+            effective_query_rewrite_model=snap["effective_query_rewrite_model"],
+            reranker_enabled=bool(snap["reranker_enabled"]),
+            reranker_active=bool(snap["reranker_active"]),
+            reranker_load_attempted=bool(snap["reranker_load_attempted"]),
+            reranker_model=snap["reranker_model"],
+            embedding_model=snap["embedding_model"],
+            top_k_default=int(snap["top_k_default"]),
+            rerank_pool=int(snap["rerank_pool"]),
+            min_faiss_prefilter=float(snap["min_faiss_prefilter"]),
+            cosine_absent=float(snap["cosine_absent"]),
+            cosine_llm=float(snap["cosine_llm"]),
         ),
     )
 
@@ -207,11 +226,11 @@ async def chat(request: ChatRequest):
     RAG-powered customer support chatbot.
 
     Uses sentence-transformer embeddings + FAISS retrieval over a Vietnamese
-    knowledge base, with optional LLM generation (Groq / OpenAI).
+    knowledge base, with LLM generation prioritized as OpenAI → Gemini.
 
-    - Set RAG_LLM_PROVIDER=groq and GROQ_API_KEY for LLM-backed answers.
-    - Set RAG_LLM_PROVIDER=openai and OPENAI_API_KEY for OpenAI.
-    - Default (RAG_LLM_PROVIDER=none): pure retrieval-based answers.
+    - Default RAG_LLM_PROVIDER=auto tries OPENAI_API_KEY first, then GEMINI_API_KEY.
+    - If both providers fail or no keys are configured, the service falls back to rulebase/RAG templates.
+    - Set RAG_LLM_PROVIDER=none for pure retrieval-based answers.
     """
     try:
         result = await rag_service.chat(
@@ -227,11 +246,27 @@ async def chat(request: ChatRequest):
 @router.get("/chat/status", tags=["rag"])
 async def chat_status():
     """Return RAG service status and knowledge base statistics."""
+    snap = rag_service.get_health_snapshot()
     return {
-        "ready": rag_service.is_ready,
+        "ready": snap["ready"],
+        "vector_index": snap["vector_index"],
         "embedding_model": rag_service._model.__class__.__name__ if rag_service._model else None,
-        "chunks_indexed": len(rag_service._chunks),
-        "llm_provider": __import__("os").getenv("RAG_LLM_PROVIDER", "none"),
+        "embedding_model_name": snap["embedding_model"],
+        "chunks_indexed": snap["chunks"],
+        "llm_provider": snap["llm_provider_configured"],
+        "llm_provider_order": snap["llm_provider_order"],
+        "effective_llm_provider": snap["effective_llm_provider"],
+        "effective_llm_model": snap["effective_llm_model"],
+        "llm_models": snap["llm_models"],
+        "key_configured": snap["keys"],
+        "reranker_enabled": snap["reranker_enabled"],
+        "reranker_active": snap["reranker_active"],
+        "reranker_load_attempted": snap["reranker_load_attempted"],
+        "reranker_model": snap["reranker_model"],
+        "query_rewrite_enabled": snap["query_rewrite_enabled"],
+        "query_rewrite_provider_order": snap["query_rewrite_provider_order"],
+        "effective_query_rewrite_provider": snap["effective_query_rewrite_provider"],
+        "effective_query_rewrite_model": snap["effective_query_rewrite_model"],
     }
 
 

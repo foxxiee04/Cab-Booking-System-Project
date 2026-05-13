@@ -54,14 +54,6 @@ export const config = {
     rateEconomy: parseFloat(process.env.COMMISSION_RATE_ECONOMY || '0.20'),
     rateComfort:  parseFloat(process.env.COMMISSION_RATE_COMFORT  || '0.20'),
     ratePremium:  parseFloat(process.env.COMMISSION_RATE_PREMIUM  || '0.20'),
-    // Incentive bonuses (VND)
-    peakHourBonus:         parseInt(process.env.INCENTIVE_PEAK_HOUR_BONUS         || '15000', 10),
-    tripMilestoneBonus:    parseInt(process.env.INCENTIVE_TRIP_MILESTONE_BONUS    || '50000', 10),
-    tripMilestoneInterval: parseInt(process.env.INCENTIVE_TRIP_MILESTONE_INTERVAL || '10',    10),
-    highRatingBonus:       parseInt(process.env.INCENTIVE_HIGH_RATING_BONUS       || '10000', 10),
-    highRatingThreshold:   parseFloat(process.env.INCENTIVE_HIGH_RATING_THRESHOLD || '4.8'),
-    highAcceptanceBonus:   parseInt(process.env.INCENTIVE_HIGH_ACCEPTANCE_BONUS   || '5000',  10),
-    acceptanceThreshold:   parseFloat(process.env.INCENTIVE_ACCEPTANCE_THRESHOLD  || '0.95'),
     // Penalty rates (fraction of grossFare)
     highCancelThreshold:      parseFloat(process.env.PENALTY_HIGH_CANCEL_THRESHOLD      || '0.10'),
     highCancelPenalty:        parseFloat(process.env.PENALTY_HIGH_CANCEL_RATE            || '0.05'),

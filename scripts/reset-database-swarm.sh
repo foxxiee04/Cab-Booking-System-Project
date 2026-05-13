@@ -158,7 +158,7 @@ wait_for_gateway_http() {
   return 1
 }
 
-# Seed POST /api/admin/wallet/incentive-rules → gateway proxy HTTP tới WALLET_SERVICE_URL.
+# Seed/top-up flows call wallet-service through the gateway proxy.
 # Nếu thiếu biến này, gateway fallback http://localhost:3006 trong container → 502 "Service temporarily unavailable".
 wait_for_wallet_proxy_ready() {
   local max_sec="${SWARM_WALLET_WAIT_TIMEOUT_SEC:-120}"
@@ -298,7 +298,7 @@ export GATEWAY_BASE_URL="${GATEWAY_BASE_URL:-http://127.0.0.1:3000}"
 wait_for_gateway_http || exit 1
 
 echo ""
-echo "  Kiểm tra WALLET_SERVICE_URL trong api-gateway + gọi wallet /health (tránh 502 incentive-rules)..."
+echo "  Kiểm tra WALLET_SERVICE_URL trong api-gateway + gọi wallet /health..."
 wait_for_wallet_proxy_ready || exit 1
 
 echo ""
@@ -317,7 +317,6 @@ export REDIS_PASSWORD
 
 # Sau rolling restart + auto-scaler, auth qua gateway có thể cần >25s — tăng mặc định khi chạy từ script này.
 export SEED_AUTH_PROXY_WAIT_ATTEMPTS="${SEED_AUTH_PROXY_WAIT_ATTEMPTS:-90}"
-export SEED_INCENTIVE_RULE_ATTEMPTS="${SEED_INCENTIVE_RULE_ATTEMPTS:-30}"
 
 run_seed_on_host() {
   (
@@ -351,7 +350,6 @@ run_seed_bootstrap_runner() {
     dr+=( -e "REDIS_PASSWORD=$REDIS_PASSWORD" )
   fi
   dr+=( -e "SEED_AUTH_PROXY_WAIT_ATTEMPTS=$SEED_AUTH_PROXY_WAIT_ATTEMPTS" )
-  dr+=( -e "SEED_INCENTIVE_RULE_ATTEMPTS=$SEED_INCENTIVE_RULE_ATTEMPTS" )
   if [[ -f "${HOME}/.ssh/swarm_key" ]]; then
     dr+=( -v "$HOME/.ssh/swarm_key:/workspace/.secrets/swarm_key:ro" -e SWARM_SSH_KEY=/workspace/.secrets/swarm_key )
   fi

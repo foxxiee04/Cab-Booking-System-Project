@@ -17,8 +17,6 @@ export function createWalletRoutes(prisma: PrismaClient, eventPublisher: EventPu
   router.post('/deactivate',      controller.deactivate);
   router.get('/withdrawals',      controller.getWithdrawals);
   router.get('/can-accept-cash',  controller.canAcceptCash);
-  router.get('/daily-stats',      controller.getDailyStats);
-  router.get('/incentive-rules',  controller.getIncentiveRules);
   router.get('/debt-records',     controller.getDebtRecords);
 
   return router;

@@ -2,19 +2,14 @@ import { Response } from 'express';
 import { PrismaClient } from '../generated/prisma-client';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { DriverWalletService } from '../services/driver-wallet.service';
-import { BonusService } from '../services/bonus.service';
 import { EventPublisher } from '../events/publisher';
 import { logger } from '../utils/logger';
 
 export class WalletController {
   private walletService: DriverWalletService;
-  private bonusService:  BonusService;
 
   constructor(prisma: PrismaClient, eventPublisher: EventPublisher) {
-    const { MerchantLedgerService } = require('../services/merchant-ledger.service');
-    const ledger = new MerchantLedgerService(prisma);
     this.walletService = new DriverWalletService(prisma, eventPublisher);
-    this.bonusService  = new BonusService(prisma, this.walletService, ledger);
   }
 
   // GET /wallet/balance
@@ -129,29 +124,6 @@ export class WalletController {
     } catch (error) {
       logger.error('canAcceptCash error:', error);
       res.status(500).json({ success: false, message: 'Failed to check cash eligibility' });
-    }
-  };
-
-  // GET /wallet/daily-stats
-  getDailyStats = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    try {
-      const driverId = req.user!.userId;
-      const stats    = await this.bonusService.getDailyStats(driverId);
-      res.json({ success: true, data: stats ?? { tripsCompleted: 0, distanceKm: 0, peakTrips: 0, bonusAwarded: 0 } });
-    } catch (error) {
-      logger.error('getDailyStats error:', error);
-      res.status(500).json({ success: false, message: 'Failed to fetch daily stats' });
-    }
-  };
-
-  // GET /wallet/incentive-rules
-  getIncentiveRules = async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
-    try {
-      const rules = await this.bonusService.getIncentiveRules();
-      res.json({ success: true, data: rules });
-    } catch (error) {
-      logger.error('getIncentiveRules error:', error);
-      res.status(500).json({ success: false, message: 'Failed to fetch incentive rules' });
     }
   };
 

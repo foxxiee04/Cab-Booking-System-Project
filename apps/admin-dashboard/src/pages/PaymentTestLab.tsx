@@ -35,7 +35,6 @@ import {
   Refresh,
   BugReport,
   Payment,
-  MoneyOff,
   Savings,
   AdminPanelSettings,
 } from '@mui/icons-material';
@@ -216,7 +215,6 @@ const PaymentTestLab: React.FC = () => {
   const [loginError, setLoginError] = useState('');
 
   const [topUpAmount, setTopUpAmount] = useState('200000');
-  const [bonusAmount, setBonusAmount] = useState('50000');
   const [driverId, setDriverId] = useState('');
 
   // Scenario results
@@ -229,7 +227,6 @@ const PaymentTestLab: React.FC = () => {
     'tc-07': { tcId: 'TC-07', name: 'Driver nạp tiền thành công', status: 'idle' },
     'tc-09': { tcId: 'TC-09', name: 'Withdraw hợp lệ (rút 50.000 VND)', status: 'idle' },
     'tc-10': { tcId: 'TC-10', name: 'Withdraw vượt số dư → bị từ chối', status: 'idle' },
-    'tc-14': { tcId: 'TC-14', name: 'Admin credit bonus tài xế', status: 'idle' },
     'tc-19': { tcId: 'TC-19', name: 'Kiểm tra can-accept-cash', status: 'idle' },
     'tc-21': { tcId: 'TC-21', name: 'Admin xem merchant ledger (reconciliation)', status: 'idle' },
     'tc-25': { tcId: 'TC-25', name: 'Admin xem danh sách ví tài xế', status: 'idle' },
@@ -447,23 +444,6 @@ const PaymentTestLab: React.FC = () => {
     };
   });
 
-  const runTC14 = () => runWithTimer('tc-14', async () => {
-    if (!adminToken || !driverId) return { pass: false, message: 'Chưa đăng nhập admin hoặc chưa có driverId' };
-    const amount = Number(bonusAmount) || 50_000;
-    const r = await directFetch(
-      `${WAL}/api/admin/drivers/${driverId}/credit-bonus`,
-      'POST',
-      { amount, rideId: `bonus-ui-${Date.now()}`, reason: 'Test bonus from PaymentTestLab' },
-      adminToken,
-    );
-    const ok = r.status >= 200 && r.status < 300;
-    return {
-      pass: ok,
-      message: ok ? `Bonus ${amount.toLocaleString('vi-VN')} VND cộng thành công (${r.status})` : `Thất bại (${r.status})`,
-      detail: r.data,
-    };
-  });
-
   const runTC19 = () => runWithTimer('tc-19', async () => {
     if (!driverToken) return { pass: false, message: 'Chưa đăng nhập driver' };
     const r = await directFetch(`${WAL}/api/wallet/can-accept-cash`, 'GET', undefined, driverToken);
@@ -515,7 +495,6 @@ const PaymentTestLab: React.FC = () => {
     await runTC07();
     await runTC09();
     await runTC10();
-    await runTC14();
     await runTC19();
     await runTC21();
     await runTC25();
@@ -681,26 +660,6 @@ const PaymentTestLab: React.FC = () => {
                     Nạp tiền
                   </Button>
                 </Stack>
-                <Stack direction="row" spacing={1} alignItems="flex-end">
-                  <TextField
-                    label="Số tiền bonus (VND)"
-                    value={bonusAmount}
-                    onChange={(e) => setBonusAmount(e.target.value)}
-                    size="small"
-                    type="number"
-                    sx={{ flex: 1 }}
-                  />
-                  <Button
-                    variant="outlined"
-                    color="warning"
-                    size="small"
-                    disabled={!adminToken || !driverId}
-                    onClick={runTC14}
-                    startIcon={<MoneyOff />}
-                  >
-                    Credit Bonus
-                  </Button>
-                </Stack>
                 <TextField
                   label="Driver ID (tự động sau login)"
                   value={driverId}
@@ -772,11 +731,10 @@ const PaymentTestLab: React.FC = () => {
 
               <Divider sx={{ my: 2 }} />
 
-              {/* Nhóm VI — Bonus */}
+              {/* Nhóm VI — Kiểm soát nợ */}
               <Typography variant="overline" color="text.secondary" fontWeight={700} display="block" mb={1}>
-                Nhóm VI &amp; VIII — Bonus &amp; Kiểm soát nợ
+                Nhóm VI — Kiểm soát nợ
               </Typography>
-              <ScenarioCard result={results['tc-14']} onRun={runTC14} />
               <ScenarioCard result={results['tc-19']} onRun={runTC19} />
 
               <Divider sx={{ my: 2 }} />

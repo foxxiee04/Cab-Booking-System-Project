@@ -1,10 +1,16 @@
 """Knowledge base + RAG helper tests (không cần tải SentenceTransformer)."""
 
+import asyncio
+
+import app.services.rag_service as rag_module
+
 from app.services.rag_service import (
     KNOWLEDGE_DIR,
     _build_chunks,
+    _configured_llm_provider_order,
     _expand_quick_menu_label,
     _format_user_facing_answer,
+    _generate_answer,
     _load_documents,
     _query_embedding_text,
     _try_smalltalk,
@@ -61,3 +67,35 @@ def test_expand_quick_menu_voucher_label():
 def test_format_user_facing_strips_markdown_bold():
     assert _format_user_facing_answer("Gọi **1900-1234** nhé.") == "Gọi 1900-1234 nhé."
     assert "**" not in _format_user_facing_answer("A **B** C **D**")
+
+
+def test_auto_llm_provider_order_prefers_openai_then_gemini(monkeypatch):
+    monkeypatch.setattr(rag_module, "LLM_PROVIDER", "auto")
+    monkeypatch.setattr(rag_module, "OPENAI_API_KEY", "openai-key")
+    monkeypatch.setattr(rag_module, "GEMINI_API_KEY", "gemini-key")
+    monkeypatch.setattr(rag_module, "ANTHROPIC_API_KEY", "anthropic-key")
+    monkeypatch.setattr(rag_module, "GROQ_API_KEY", "groq-key")
+
+    assert _configured_llm_provider_order() == ["openai", "gemini"]
+
+
+def test_explicit_non_auto_provider_still_supported(monkeypatch):
+    monkeypatch.setattr(rag_module, "LLM_PROVIDER", "groq")
+    monkeypatch.setattr(rag_module, "GROQ_API_KEY", "groq-key")
+
+    assert _configured_llm_provider_order() == ["groq"]
+
+
+def test_generate_answer_can_defer_to_rulebase_fallback(monkeypatch):
+    monkeypatch.setattr(rag_module, "LLM_PROVIDER", "auto")
+    monkeypatch.setattr(rag_module, "OPENAI_API_KEY", "")
+    monkeypatch.setattr(rag_module, "GEMINI_API_KEY", "")
+
+    answer, mode, provider, model = asyncio.run(
+        _generate_answer("Voucher & ưu đãi", [], allow_template_fallback=False)
+    )
+
+    assert answer is None
+    assert mode == "llm_unavailable"
+    assert provider == "none"
+    assert model is None

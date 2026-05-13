@@ -66,17 +66,16 @@ Biến tùy chọn (trên Manager khi chạy script):
 | `SWARM_WALLET_WAIT_TIMEOUT_SEC` | 120 | Chờ gateway → wallet (sau khi fix `WALLET_SERVICE_URL`) |
 | `SWARM_SERVICE_RESTART_STAGGER_SEC` | 3 | Nghỉ giữa các `service update --force` |
 | `SEED_AUTH_PROXY_WAIT_ATTEMPTS` | 90 (khi qua script này) | Seed chờ auth không còn 502 |
-| `SEED_INCENTIVE_RULE_ATTEMPTS` | 30 | Retry tạo incentive rules khi wallet còn 502 tạm thời |
 | `SEED_MONGO_HOST` / `SEED_MONGO_PORT` | 127.0.0.1 / 27017 | Ghi đè host Mongo cho bước hist (script bootstrap-runner) |
 
-- **`env/gateway.env`** phải có **`WALLET_SERVICE_URL=http://wallet-service:3006`**. Thiếu dòng này → seed báo **502** tại bước incentive-rules (`/api/admin/wallet/...`) dù voucher vẫn tạo được. Script `reset-database-swarm.sh` giờ **kiểm tra biến này trong container api-gateway** trước khi seed.
+- **`env/gateway.env`** phải có **`WALLET_SERVICE_URL=http://wallet-service:3006`**. Thiếu dòng này → các luồng ví qua gateway có thể báo **502** dù service khác vẫn hoạt động. Script `reset-database-swarm.sh` kiểm tra biến này trong container api-gateway trước khi seed.
 
 **Toàn bộ bước trong script:**
 
 1. Drop + recreate tất cả PostgreSQL logical DB (auth_db, booking_db, driver_db, payment_db, ride_db, user_db, wallet_db)
 2. Drop MongoDB databases (notification_db, review_db)
 3. `prisma db push` cho từng service: `docker exec` nếu task nằm trên Manager → nếu không thì **SSH** sang worker theo `~/.ssh/swarm_key` → nếu vẫn không được thì **`docker run --network host`** với image `foxxiee04/cab-<service>:latest` và `DATABASE_URL` tới **`127.0.0.1:5433`** (mạng overlay `backend` trong stack là **internal**, **không attachable**, nên không được `docker run --network cab-booking_backend`)
-4. `docker service update --force` các service liên quan (cách nhau vài giây), rồi **chờ replica + gateway + kiểm tra `WALLET_SERVICE_URL` trong api-gateway và gọi được wallet `/health`** (tránh 502 incentive-rules)
+4. `docker service update --force` các service liên quan (cách nhau vài giây), rồi **chờ replica + gateway + kiểm tra `WALLET_SERVICE_URL` trong api-gateway và gọi được wallet `/health`**
 5. `prisma generate` (auth-service) + `seed-database.ts`: trên host nếu có `npx`, không thì **`cab-bootstrap-runner`**
 6. **Verify** lại replica + gateway
 

@@ -27,13 +27,6 @@ interface DebitCommissionInput {
   rideId: string;
 }
 
-interface CreditBonusInput {
-  driverId: string;
-  amount: number;
-  description: string;
-  rideId?: string;
-}
-
 interface CreditTopUpInput {
   driverId: string;
   amount: number;
@@ -400,7 +393,7 @@ export class DriverWalletService {
         // Online ride earnings go to pendingBalance (T+24h hold before available)
         state.pendingBalance += amount;
       } else {
-        // TOP_UP, BONUS: pay down debt first, rest to available
+        // TOP_UP: pay down debt first, rest to available
         this.applyDebtPaydown(state, amount);
       }
     } else {
@@ -845,49 +838,7 @@ export class DriverWalletService {
     logger.info(`Withdrawal ${withdrawalId} cancelled: ${reason}`);
   }
 
-  // ─── Case 6: Bonus Credit ────────────────────────────────────────────────
-
-  async creditBonus(input: CreditBonusInput): Promise<void> {
-    const { driverId, amount, description, rideId } = input;
-
-    if (amount <= 0) return;
-
-    const result = await this.prisma.$transaction(async (tx: PrismaAny) => {
-      const deltaResult = await this.applyDeltaInTx(tx, {
-        driverId,
-        delta:         amount,
-        type:          TransactionType.BONUS,
-        direction:     TransactionDirection.CREDIT,
-        description,
-        referenceId:   rideId,
-        idempotencyKey: rideId ? `bonus_${rideId}_${driverId}` : undefined,
-      });
-
-      if (deltaResult.alreadyExisted) return deltaResult;
-
-      await tx.merchantLedger.create({
-        data: {
-          type:          MerchantLedgerType.OUT,
-          category:      MerchantLedgerCategory.BONUS,
-          amount,
-          referenceId:   rideId,
-          description:   `Thưởng tài xế: ${description}`,
-          idempotencyKey: rideId ? `ledger_bonus_${rideId}_${driverId}` : undefined,
-        },
-      });
-
-      await this.upsertMerchantBalance(tx, 0, amount);
-      return deltaResult;
-    });
-
-    if (!result.alreadyExisted && result.newStatus === WalletStatus.BLOCKED) {
-      await this.eventPublisher.publish('driver.wallet.blocked', { driverId, balance: result.newBalance }).catch(() => {});
-    }
-
-    logger.info(`Credited bonus ${amount} VND to driver ${driverId}: ${description}`);
-  }
-
-  // ─── Case 7: Refund ──────────────────────────────────────────────────────
+  // ─── Case 6: Refund ──────────────────────────────────────────────────────
 
   /**
    * Process a refund reversal: debit back the previously credited net earnings

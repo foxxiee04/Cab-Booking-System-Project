@@ -1,5 +1,5 @@
 TIÊU ĐỀ: Thu nhập, hoa hồng và ví tiền tài xế FoxGo
-DANH MỤC: thu nhập tài xế, hoa hồng, commission, tiền mặt cuốc, chuyến online, ví tài xế, nạp ký quỹ, rút tiền, pending balance, thu nhập chờ duyệt, debt limit, nợ nền tảng, lịch sử thu nhập, báo cáo thu nhập, tài xế bị trừ tiền, không nhận được chuyến do ví, thu nhập trung bình, bonus, thưởng
+DANH MỤC: thu nhập tài xế, hoa hồng, commission, tiền mặt cuốc, chuyến online, ví tài xế, nạp ký quỹ, rút tiền, pending balance, thu nhập chờ duyệt, debt limit, nợ nền tảng, lịch sử thu nhập, báo cáo thu nhập, tài xế bị trừ tiền, không nhận được chuyến do ví, thu nhập trung bình
 
 Cơ chế thu nhập tài xế FoxGo hoạt động khác nhau tùy loại thanh toán của khách. Quan trọng nhất cần hiểu là: FoxGo thu hoa hồng từ mỗi chuyến, phần còn lại là của tài xế.
 
@@ -69,10 +69,6 @@ Hỏi: Nạp tiền vào ví FoxGo Driver như thế nào?
 ---
 Hỏi: Tôi chạy cuốc 50km thì được bao nhiêu tiền?
 Đáp: Mình cần biết loại xe và giá cước cụ thể để tính chính xác. Nhưng ví dụ: giả sử cuốc đó tính 200.000đ — nếu chạy xe máy thì bạn nhận 160.000đ (trừ 20% hoa hồng), ô tô 4 chỗ thì nhận 164.000đ (trừ 18%). Giá cuốc chính xác phụ thuộc lộ trình, thời điểm, và hệ số surge.
-
----
-Hỏi: FoxGo có chương trình thưởng hoặc bonus cho tài xế không?
-Đáp: Có bạn nhé! FoxGo có các chương trình thưởng theo số chuyến hoàn thành, thưởng giờ cao điểm, và thưởng khu vực thiếu tài xế. Thông tin chi tiết về chương trình thưởng hiện tại xem trong mục "Thưởng" hoặc "Khuyến mãi" trong app FoxGo Driver.
 
 ---
 Hỏi: Khách đánh giá 1 sao có ảnh hưởng thu nhập không?

@@ -18,6 +18,10 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+# Keep third-party HTTP clients from logging full request URLs. Gemini uses an
+# API key query param, so INFO logs from httpx/httpcore can leak secrets.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Create FastAPI app

@@ -51,7 +51,7 @@ export interface DebtRecord {
 export interface WalletTransaction {
   id: string;
   driverId: string;
-  type: 'EARN' | 'COMMISSION' | 'BONUS' | 'WITHDRAW' | 'REFUND' | 'TOP_UP';
+  type: 'EARN' | 'COMMISSION' | 'WITHDRAW' | 'REFUND' | 'TOP_UP' | string;
   amount: number;
   balanceAfter: number;
   description: string | null;
@@ -64,23 +64,6 @@ export interface WalletTransactionsResponse {
   total: number;
   limit: number;
   offset: number;
-}
-
-export interface IncentiveRule {
-  id: string;
-  type: 'TRIP_COUNT' | 'DISTANCE_KM' | 'PEAK_HOUR';
-  conditionValue: number;
-  rewardAmount: number;
-  isActive: boolean;
-  description: string | null;
-}
-
-export interface DailyStats {
-  date: string;
-  tripsCompleted: number;
-  distanceKm: number;
-  peakTrips: number;
-  bonusAwarded: number;
 }
 
 export interface WithdrawalResult {
@@ -184,12 +167,6 @@ export const walletApi = {
     axiosInstance.get<{ success: boolean; data: { allowed: boolean; balance: number } }>(
       `/wallet/can-accept-cash?commission=${commission}`,
     ),
-
-  getDailyStats: (days = 7) =>
-    axiosInstance.get<{ success: boolean; data: DailyStats | DailyStats[] }>(`/wallet/daily-stats?days=${days}`),
-
-  getIncentiveRules: () =>
-    axiosInstance.get<{ success: boolean; data: IncentiveRule[] }>('/wallet/incentive-rules'),
 
   getDebtRecords: () =>
     axiosInstance.get<{ success: boolean; data: DebtRecord[] }>('/wallet/debt-records'),

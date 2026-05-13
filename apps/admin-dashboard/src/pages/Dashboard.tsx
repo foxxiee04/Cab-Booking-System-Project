@@ -28,9 +28,8 @@ import {
   Warning,
 } from '@mui/icons-material';
 import { GoogleMap, HeatmapLayerF, MarkerF, useJsApiLoader } from '@react-google-maps/api';
-import L from 'leaflet';
-import 'leaflet.heat';
 import {
+  CircleMarker as LeafletCircleMarker,
   MapContainer as LeafletMapContainer,
   TileLayer as LeafletTileLayer,
   useMap,
@@ -89,47 +88,122 @@ function matchesRegion(driver: Driver, region: RegionFilter): boolean {
   return lat >= 10.74 && lat < 10.82 && lng >= 106.63 && lng <= 106.75;
 }
 
-// ── Leaflet.heat heatmap layer ──────────────────────────────────────────────
-// Uses the leaflet.heat plugin (https://github.com/Leaflet/Leaflet.heat) for a
-// proper zoom-aware gradient instead of a hand-rolled canvas. Points are
-// weighted by 1.0 (one per driver); blur/radius scale with the map's pixel
-// density via the plugin's built-in handling.
-const LeafletHeatLayer: React.FC<{ drivers: Driver[] }> = ({ drivers }) => {
+type DensityBucket = {
+  id: string;
+  lat: number;
+  lng: number;
+  count: number;
+};
+
+const getDensityColor = (count: number, maxCount: number) => {
+  const intensity = maxCount <= 1 ? 0.35 : count / maxCount;
+  if (intensity >= 0.75) return '#dc2626';
+  if (intensity >= 0.55) return '#f97316';
+  if (intensity >= 0.35) return '#facc15';
+  if (intensity >= 0.2) return '#22c55e';
+  return '#2563eb';
+};
+
+const LeafletDriverDensityLayer: React.FC<{ drivers: Driver[] }> = ({ drivers }) => {
+  const buckets = useMemo<DensityBucket[]>(() => {
+    const grid = new Map<string, { latSum: number; lngSum: number; count: number }>();
+
+    drivers.forEach((driver) => {
+      const location = driver.currentLocation;
+      if (!location) {
+        return;
+      }
+
+      const key = `${Math.round(location.lat / 0.006)}:${Math.round(location.lng / 0.006)}`;
+      const existing = grid.get(key) || { latSum: 0, lngSum: 0, count: 0 };
+      existing.latSum += location.lat;
+      existing.lngSum += location.lng;
+      existing.count += 1;
+      grid.set(key, existing);
+    });
+
+    return Array.from(grid.entries()).map(([id, bucket]) => ({
+      id,
+      lat: bucket.latSum / bucket.count,
+      lng: bucket.lngSum / bucket.count,
+      count: bucket.count,
+    }));
+  }, [drivers]);
+
+  const maxCount = useMemo(
+    () => Math.max(1, ...buckets.map((bucket) => bucket.count)),
+    [buckets],
+  );
+
+  return (
+    <>
+      {buckets.map((bucket) => {
+        const color = getDensityColor(bucket.count, maxCount);
+        const radius = Math.min(34, 12 + Math.sqrt(bucket.count) * 8);
+
+        return (
+          <LeafletCircleMarker
+            key={bucket.id}
+            center={[bucket.lat, bucket.lng]}
+            radius={radius}
+            pathOptions={{
+              color,
+              fillColor: color,
+              fillOpacity: 0.28,
+              opacity: 0.82,
+              weight: 2,
+            }}
+          />
+        );
+      })}
+    </>
+  );
+};
+
+const LeafletMapLayoutController: React.FC = () => {
   const map = useMap();
-  const layerRef = useRef<any>(null);
 
   useEffect(() => {
-    const points: Array<[number, number, number]> = drivers
-      .filter((d) => d.currentLocation)
-      .map((d) => [d.currentLocation!.lat, d.currentLocation!.lng, 1.0]);
+    const container = map.getContainer();
+    const parent = container.parentElement;
+    const cleanups: Array<() => void> = [];
 
-    if (!layerRef.current) {
-      layerRef.current = (L as any).heatLayer(points, {
-        radius: 28,
-        blur: 22,
-        maxZoom: 17,
-        max: 1.0,
-        minOpacity: 0.35,
-        gradient: {
-          0.0: '#2563eb',
-          0.25: '#06b6d4',
-          0.5:  '#22c55e',
-          0.7:  '#facc15',
-          0.85: '#f97316',
-          1.0:  '#dc2626',
-        },
-      }).addTo(map);
-    } else {
-      layerRef.current.setLatLngs(points);
+    const scheduleInvalidate = () => {
+      const frame = window.requestAnimationFrame(() => {
+        map.invalidateSize({ animate: false });
+      });
+      const timer = window.setTimeout(() => {
+        map.invalidateSize({ animate: false });
+      }, 180);
+
+      cleanups.push(() => {
+        window.cancelAnimationFrame(frame);
+        window.clearTimeout(timer);
+      });
+    };
+
+    scheduleInvalidate();
+
+    if (typeof window !== 'undefined' && window.ResizeObserver) {
+      const ro = new ResizeObserver((entries) => {
+        if (entries.some((entry) => entry.contentRect.width > 0 && entry.contentRect.height > 0)) {
+          scheduleInvalidate();
+        }
+      });
+      ro.observe(container);
+      if (parent) {
+        ro.observe(parent);
+      }
+      cleanups.push(() => ro.disconnect());
     }
 
+    window.addEventListener('resize', scheduleInvalidate);
+    cleanups.push(() => window.removeEventListener('resize', scheduleInvalidate));
+
     return () => {
-      if (layerRef.current) {
-        map.removeLayer(layerRef.current);
-        layerRef.current = null;
-      }
+      cleanups.forEach((cleanup) => cleanup());
     };
-  }, [map, drivers]);
+  }, [map]);
 
   return null;
 };
@@ -139,14 +213,21 @@ const LeafletHeatLayer: React.FC<{ drivers: Driver[] }> = ({ drivers }) => {
 // data points. ALL → falls back to centering on the driver swarm.
 const RegionBoundsController: React.FC<{ region: RegionFilter; fallbackCenter: { lat: number; lng: number } }> = ({ region, fallbackCenter }) => {
   const map = useMap();
+  const fallbackCenterRef = useRef(fallbackCenter);
+
+  useEffect(() => {
+    fallbackCenterRef.current = fallbackCenter;
+  }, [fallbackCenter]);
+
   useEffect(() => {
     if (region === 'ALL') {
-      map.setView([fallbackCenter.lat, fallbackCenter.lng], 12, { animate: true });
+      const center = fallbackCenterRef.current;
+      map.setView([center.lat, center.lng], 12, { animate: true });
       return;
     }
     const b = REGION_BOUNDS[region];
     map.fitBounds(b, { padding: [24, 24], animate: true, maxZoom: 14 });
-  }, [map, region, fallbackCenter.lat, fallbackCenter.lng]);
+  }, [map, region]);
   return null;
 };
 
@@ -433,7 +514,8 @@ const Dashboard: React.FC = () => {
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         maxZoom={20}
       />
-      <LeafletHeatLayer drivers={filteredDrivers} />
+      <LeafletMapLayoutController />
+      <LeafletDriverDensityLayer drivers={filteredDrivers} />
       <RegionBoundsController region={selectedRegion} fallbackCenter={mapCenter} />
     </LeafletMapContainer>
   );
@@ -543,7 +625,7 @@ const Dashboard: React.FC = () => {
             <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 20px 48px rgba(15,23,42,0.08)', overflow: 'hidden' }}>
               <Box sx={{ p: 2.5, pb: 1.5 }}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1.5}>
-                  <SectionHeader icon={<MyLocation />} title="Bản đồ nhiệt tài xế" subtitle="Màu đỏ = mật độ cao · Màu xanh = thưa" />
+                  <SectionHeader icon={<MyLocation />} title="Bản đồ mật độ tài xế theo khu vực" subtitle="Màu đỏ = mật độ cao · Màu xanh = thưa" />
                   <FormControl size="small" sx={{ minWidth: 160 }}>
                     <InputLabel>{t('dashboardExtras.region')}</InputLabel>
                     <Select

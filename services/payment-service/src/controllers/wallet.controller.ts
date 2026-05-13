@@ -1,9 +1,8 @@
 import axios from 'axios';
 import { Request, Response, NextFunction } from 'express';
 import { WalletService } from '../services/wallet.service';
-import { IncentiveService } from '../services/incentive.service';
 import { AuthenticatedRequest } from '../middleware/auth';
-import { IncentiveRuleType, TopUpStatus } from '../generated/prisma-client';
+import { TopUpStatus } from '../generated/prisma-client';
 import { momoGateway } from '../services/momo.gateway';
 import { vnpayGateway } from '../services/vnpay.gateway';
 import { logger } from '../utils/logger';
@@ -14,7 +13,6 @@ import { config } from '../config';
 export class WalletController {
   constructor(
     private readonly walletService: WalletService,
-    private readonly incentiveService: IncentiveService,
     private readonly eventPublisher?: EventPublisher,
   ) {}
 
@@ -238,21 +236,6 @@ export class WalletController {
 
       const result = await this.walletService.topUp(driverId, amount);
       res.json({ success: true, data: { newBalance: result.newBalance } });
-    } catch (err) {
-      next(err);
-    }
-  };
-
-  /**
-   * GET /api/wallet/daily-stats?days=7
-   * Returns incentive statistics for the last N days.
-   */
-  getDailyStats = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    try {
-      const driverId = await resolveDriverId(req.user!.userId);
-      const days = parseInt(String(req.query.days ?? '7'));
-      const data = await this.incentiveService.getDailyStats(driverId, days);
-      res.json({ success: true, data });
     } catch (err) {
       next(err);
     }
@@ -735,89 +718,6 @@ export class WalletController {
   };
 
   // ─── Admin endpoints ─────────────────────────────────────────────────────
-
-  /**
-   * GET /api/wallet/admin/rules
-   * List all incentive rules.
-   */
-  getRules = async (_req: Request, res: Response, next: NextFunction) => {
-    try {
-      const data = await this.incentiveService.getRules();
-      res.json({ success: true, data });
-    } catch (err) {
-      next(err);
-    }
-  };
-
-  /**
-   * POST /api/wallet/admin/incentive-rule
-   * Body: { type, conditionValue, rewardAmount, description?, isActive? }
-   * Creates a new incentive rule.
-   */
-  createRule = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { type, conditionValue, rewardAmount, description, isActive } = req.body ?? {};
-
-      if (!Object.values(IncentiveRuleType).includes(type)) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: `type phải là một trong: ${Object.values(IncentiveRuleType).join(', ')}`,
-          },
-        });
-      }
-      if (typeof conditionValue !== 'number' || typeof rewardAmount !== 'number') {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'conditionValue và rewardAmount phải là số' },
-        });
-      }
-
-      const data = await this.incentiveService.createRule({
-        type,
-        conditionValue,
-        rewardAmount,
-        description,
-        isActive: isActive !== false,
-      });
-      res.status(201).json({ success: true, data });
-    } catch (err) {
-      next(err);
-    }
-  };
-
-  /**
-   * PATCH /api/wallet/admin/incentive-rule/:id
-   * Body: { conditionValue?, rewardAmount?, description?, isActive? }
-   */
-  updateRule = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { id } = req.params;
-      const { conditionValue, rewardAmount, description, isActive } = req.body ?? {};
-      const data = await this.incentiveService.updateRule(id, {
-        conditionValue,
-        rewardAmount,
-        description,
-        isActive,
-      });
-      res.json({ success: true, data });
-    } catch (err) {
-      next(err);
-    }
-  };
-
-  /**
-   * DELETE /api/wallet/admin/incentive-rule/:id
-   */
-  deleteRule = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      await this.incentiveService.deleteRule(req.params.id);
-      res.json({ success: true });
-    } catch (err) {
-      next(err);
-    }
-  };
 
   /**
    * GET /api/wallet/admin/driver/:driverId

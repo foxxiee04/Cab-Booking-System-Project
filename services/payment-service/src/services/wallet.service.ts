@@ -2,7 +2,7 @@
  * WalletService — Driver Internal Wallet Engine
  *
  * The wallet is the financial centre for every driver.
- * All money flow (earn, commission, bonus, withdraw, refund, top-up) is
+ * All money flow (earn, commission, withdraw, refund, top-up) is
  * recorded as an immutable WalletTransaction so the full audit trail
  * is always available.
  *
@@ -113,7 +113,7 @@ export class WalletService {
   /**
    * Debit the platform obligation for a cash ride.
    * The driver collected the full fare in cash; the platform deducts the amount
-   * that still needs to be settled after any in-fare bonuses/penalties.
+   * that still needs to be settled after any trip penalties.
    * This can push the balance negative (debt).
    */
   async debitCommission(driverId: string, commission: number, rideId: string): Promise<number> {
@@ -128,14 +128,14 @@ export class WalletService {
   }
 
   /**
-   * Credit an incentive bonus (milestone, peak-hour, etc.).
+   * Reverse a cash-ride commission debit when a cash ride is refunded.
    */
-  async creditBonus(driverId: string, amount: number, description: string, rideId?: string): Promise<number> {
+  async creditCommissionRefund(driverId: string, amount: number, rideId: string): Promise<number> {
     const { newBalance } = await this.applyDelta(
       driverId,
       amount,
-      WalletTransactionType.BONUS,
-      description,
+      WalletTransactionType.REFUND,
+      `Hoàn hoa hồng chuyến tiền mặt bị huỷ`,
       rideId,
     );
     return newBalance;

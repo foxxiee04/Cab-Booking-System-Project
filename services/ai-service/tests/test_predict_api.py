@@ -32,6 +32,12 @@ class TestHealthEndpoint:
         assert "chunks" in rag
         assert "vector_index" in rag
         assert "llm_provider" in rag
+        assert "effective_llm_provider" in rag
+        assert "effective_llm_model" in rag
+        assert "llm_provider_order" in rag
+        assert "reranker_enabled" in rag
+        assert "reranker_active" in rag
+        assert "query_rewrite_enabled" in rag
         assert "gemini_key_configured" in rag
 
 
@@ -236,6 +242,24 @@ class TestStatsEndpoint:
         assert "status" in data
         assert "model_loaded" in data
         assert "model_path" in data
+
+
+class TestChatStatusEndpoint:
+    """Test RAG chat diagnostics endpoint"""
+
+    def test_chat_status_returns_diagnostics(self):
+        response = client.get("/api/chat/status")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "ready" in data
+        assert "chunks_indexed" in data
+        assert "effective_llm_provider" in data
+        assert "effective_llm_model" in data
+        assert "reranker_enabled" in data
+        assert "reranker_active" in data
+        assert "query_rewrite_provider_order" in data
+        assert "key_configured" in data
 
 
 class TestRootEndpoint:

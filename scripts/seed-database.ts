@@ -12,20 +12,19 @@
  *   1. Bootstrap admin → auth_db direct INSERT (1 row only)
  *   2. Admin login qua /api/auth/login
  *   3. Tạo 5 voucher qua /api/voucher/admin
- *   4. Tạo 4 incentive rule qua /api/admin/wallet/incentive-rules
- *   5. Đăng ký 10 customer qua register-phone/start → verify → complete
+ *   4. Đăng ký 10 customer qua register-phone/start → verify → complete
  *      (OTP lấy từ auth-service /api/auth/dev/otp trong mock mode)
- *   6. Đăng ký 15 driver tương tự
- *   7. Mỗi driver: POST /api/drivers/register (vehicle + license)
- *   8. Admin approve 12 driver đầu (3 cuối để PENDING demo flow)
- *   9. Mỗi driver được approve: top-up ví 300k qua /api/wallet/top-up/init
+ *   5. Đăng ký 15 driver tương tự
+ *   6. Mỗi driver: POST /api/drivers/register (vehicle + license)
+ *   7. Admin approve 12 driver đầu (3 cuối để PENDING demo flow)
+ *   8. Mỗi driver được approve: top-up ví 300k qua /api/wallet/top-up/init
  *      + sandbox-confirm để kích hoạt wallet
- *  10. Mỗi driver được approve: goOnline + updateLocation theo cụm
- *  11. Tạo 12 ride: 8 CASH completed, 2 MOMO completed (mock webhook),
+ *   9. Mỗi driver được approve: goOnline + updateLocation theo cụm
+ *  10. Tạo 12 ride: 8 CASH completed, 2 MOMO completed (mock webhook),
  *      2 CANCELLED — KHÔNG có ride đang diễn ra hay FINDING_DRIVER.
- *  12. Sau khi ride xong, đặt TẤT CẢ driver OFFLINE để DB sạch.
- * 12b. Bring 20 driver online theo cụm (HEATMAP_DRIVER_INDICES) để test heatmap trên admin dashboard.
- *  13. Generate docs/seed-accounts-reference.md từ GET API thật
+ *  11. Sau khi ride xong, đặt TẤT CẢ driver OFFLINE để DB sạch.
+ * 11b. Bring 20 driver online theo cụm (HEATMAP_DRIVER_INDICES) để test heatmap trên admin dashboard.
+ *  12. Generate docs/seed-accounts-reference.md từ GET API thật
  *
  * Lý do không seed ride FINDING_DRIVER / IN_PROGRESS:
  *   - Sau reset + seed, nếu login lại driver app sẽ thấy "đang diễn ra" — không hợp lí
@@ -78,10 +77,35 @@ const POSTGRES_PASSWORD = process.env.POSTGRES_PASSWORD || 'postgres';
 
 const ACTIVATION_BALANCE = 300_000;
 const SEED_REFERENCE_OUTPUT = path.resolve(process.cwd(), 'docs', 'seed-accounts-reference.md');
+const DEMO_IDENTITY_ASSET_DIR = path.resolve(process.cwd(), 'assets', 'avt', 'cccd');
+const DEMO_AVATAR_ASSET = path.join(DEMO_IDENTITY_ASSET_DIR, 'avt.jpg');
+const DEMO_CCCD_ASSET = path.join(DEMO_IDENTITY_ASSET_DIR, 'cccd.png');
+const TEST_SCENARIO_CUSTOMER_PHONES = new Set(['0901234571']);
+const TEST_SCENARIO_DRIVER_PHONES = new Set(['0911234583', '0911234585', '0911234573']);
 
 const DELAY_AFTER_RIDE_CREATE_MS = 4_000;
 const DRIVER_ACCEPT_RETRY_MAX = 8;
 const DRIVER_ACCEPT_RETRY_DELAY_MS = 2_000;
+
+const seedAssetDataUrlCache = new Map<string, string>();
+
+function seedAssetDataUrl(filePath: string, mimeType: string): string {
+  const cached = seedAssetDataUrlCache.get(filePath);
+  if (cached) {
+    return cached;
+  }
+
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Seed asset not found: ${filePath}`);
+  }
+
+  const dataUrl = `data:${mimeType};base64,${fs.readFileSync(filePath).toString('base64')}`;
+  seedAssetDataUrlCache.set(filePath, dataUrl);
+  return dataUrl;
+}
+
+const demoAvatarDataUrl = () => seedAssetDataUrl(DEMO_AVATAR_ASSET, 'image/jpeg');
+const demoCccdDataUrl = () => seedAssetDataUrl(DEMO_CCCD_ASSET, 'image/png');
 
 type RequestOptions = {
   method?: string;
@@ -157,6 +181,15 @@ async function http<T = any>(pathOrUrl: string, opts: RequestOptions = {}): Prom
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function applyDemoAvatar(token: string, label: string) {
+  await http('/api/auth/me', {
+    method: 'PATCH',
+    token,
+    body: { profile: { avatar: demoAvatarDataUrl() } },
+  });
+  console.log(`    + demo avatar applied for ${label}`);
 }
 
 // ─── Redis rate-limit cleanup ────────────────────────────────────────────────
@@ -258,15 +291,16 @@ async function bootstrapSecondAdmin(): Promise<void> {
   const prisma = new PrismaClient({ datasources: { db: { url } } });
   try {
     const passwordHash = bcrypt.hashSync(SEED_PASSWORD, 10);
+    const avatar = demoAvatarDataUrl();
     await prisma.user.upsert({
       where: { phone: ADMIN_2.phone },
       update: {
         email: ADMIN_2.email, role: 'ADMIN', status: 'ACTIVE',
-        firstName: ADMIN_2.firstName, lastName: ADMIN_2.lastName, passwordHash,
+        firstName: ADMIN_2.firstName, lastName: ADMIN_2.lastName, avatar, passwordHash,
       },
       create: {
         phone: ADMIN_2.phone, email: ADMIN_2.email, role: 'ADMIN', status: 'ACTIVE',
-        firstName: ADMIN_2.firstName, lastName: ADMIN_2.lastName, passwordHash,
+        firstName: ADMIN_2.firstName, lastName: ADMIN_2.lastName, avatar, passwordHash,
       },
     });
     console.log(`  [auth] second admin upserted — phone=${ADMIN_2.phone}`);
@@ -364,48 +398,6 @@ async function seedVouchers(adminToken: string) {
         continue;
       }
       throw err;
-    }
-  }
-}
-
-// ─── Incentive rules ─────────────────────────────────────────────────────────
-
-const INCENTIVE_RULES = [
-  { type: 'TRIP_COUNT', conditionValue: 10, rewardAmount: 50_000, description: 'Chạy >= 10 cuốc/ngày thưởng 50.000 đ' },
-  { type: 'TRIP_COUNT', conditionValue: 20, rewardAmount: 120_000, description: 'Chạy >= 20 cuốc/ngày thưởng 120.000 đ' },
-  { type: 'DISTANCE_KM', conditionValue: 50, rewardAmount: 30_000, description: 'Đạt >= 50 km/ngày thưởng 30.000 đ' },
-  { type: 'PEAK_HOUR', conditionValue: 0, rewardAmount: 10_000, description: 'Mỗi cuốc trong giờ cao điểm thưởng 10.000 đ' },
-];
-
-async function seedIncentiveRules(adminToken: string) {
-  console.log('  [incentive-rules] creating via /api/admin/wallet/incentive-rules...');
-  const maxAttempts = Number(process.env.SEED_INCENTIVE_RULE_ATTEMPTS || '20');
-  const pauseMs = Number(process.env.SEED_INCENTIVE_RULE_RETRY_MS || '2000');
-
-  for (const rule of INCENTIVE_RULES) {
-    let ok = false;
-    for (let attempt = 1; attempt <= maxAttempts && !ok; attempt += 1) {
-      try {
-        await http('/api/admin/wallet/incentive-rules', {
-          method: 'POST',
-          token: adminToken,
-          body: rule,
-        });
-        console.log(`    + ${rule.type} (${rule.conditionValue}) → ${rule.rewardAmount}đ`);
-        ok = true;
-      } catch (err: any) {
-        const st = err?.status;
-        const retryable = st === 502 || st === 503 || st === 504;
-        if (retryable && attempt < maxAttempts) {
-          if (attempt === 1) {
-            console.log(`    … ${rule.type}: gateway/upstream ${st}, chờ wallet-service (${maxAttempts} lần tối đa)…`);
-          }
-          await sleep(pauseMs);
-          continue;
-        }
-        console.log(`    ! incentive rule ${rule.type} skipped: ${err.message?.slice(0, 120)}`);
-        break;
-      }
     }
   }
 }
@@ -620,6 +612,9 @@ async function registerCustomers(): Promise<RegisteredUser[]> {
   for (let i = 0; i < CUSTOMERS.length; i += 1) {
     const c = CUSTOMERS[i];
     const user = await registerUser(c.phone, c.firstName, c.lastName, 'CUSTOMER');
+    if (TEST_SCENARIO_CUSTOMER_PHONES.has(c.phone)) {
+      await applyDemoAvatar(user.accessToken, user.phone);
+    }
     results.push(user);
     console.log(`    + customer #${i + 1} ${user.phone} (${user.userId.slice(0, 8)}...)`);
   }
@@ -961,6 +956,9 @@ async function registerDrivers(): Promise<RegisteredUser[]> {
   for (let i = 0; i < DRIVERS.length; i += 1) {
     const d = DRIVERS[i];
     const user = await registerUser(d.phone, d.firstName, d.lastName, 'DRIVER');
+    if (TEST_SCENARIO_DRIVER_PHONES.has(d.phone)) {
+      await applyDemoAvatar(user.accessToken, user.phone);
+    }
     results.push(user);
     console.log(`    + driver #${i + 1} ${user.phone} (${user.userId.slice(0, 8)}...)`);
   }
@@ -995,6 +993,7 @@ async function registerDriverProfiles(driverUsers: RegisteredUser[]): Promise<Dr
           number: meta.license.number,
           expiryDate: expiry.toISOString(),
         },
+        cccdImageUrl: TEST_SCENARIO_DRIVER_PHONES.has(meta.phone) ? demoCccdDataUrl() : undefined,
       },
     });
     const driver = res?.data?.driver;
@@ -1886,15 +1885,6 @@ async function generateSeedReference(
   });
   lines.push('');
 
-  lines.push('## Incentive rules');
-  lines.push('');
-  lines.push('| Type | Condition | Reward (đ) | Description |');
-  lines.push('|------|-----------|-----------|-------------|');
-  for (const r of INCENTIVE_RULES) {
-    lines.push(`| ${r.type} | ${r.conditionValue} | ${r.rewardAmount.toLocaleString('vi-VN')} | ${r.description} |`);
-  }
-  lines.push('');
-
   fs.writeFileSync(SEED_REFERENCE_OUTPUT, lines.join('\n') + '\n', 'utf8');
   console.log(`  [report] written: ${SEED_REFERENCE_OUTPUT}`);
 }
@@ -2271,13 +2261,13 @@ async function seedWalletEarningsHistory(
         `INSERT INTO "DriverEarnings" (
           id, "rideId", "driverId",
           "grossFare", "commissionRate", "platformFee",
-          bonus, penalty, "netEarnings",
+          penalty, "netEarnings",
           "paymentMethod", "driverCollected", "cashDebt",
           "isPaid", "createdAt", "updatedAt"
         ) VALUES (
           $1,$2,$3,
           $4,$5,$6,
-          0,0,$7,
+          0,$7,
           $8,$9,$10,
           true,$11,$11
         ) ON CONFLICT ("rideId") DO NOTHING`,
@@ -2573,23 +2563,21 @@ async function main() {
 
   // Step 2 — admin login via API
   const adminToken = await loginAdmin();
+  await applyDemoAvatar(adminToken, ADMIN.phone);
 
   // Step 3 — vouchers via /api/voucher/admin
   await seedVouchers(adminToken);
 
-  // Step 4 — incentive rules via /api/admin/wallet/incentive-rules
-  await seedIncentiveRules(adminToken);
-
-  // Step 5 — register customers via OTP flow
+  // Step 4 — register customers via OTP flow
   const customers = await registerCustomers();
 
-  // Step 6 — register drivers via OTP flow (auth users only)
+  // Step 5 — register drivers via OTP flow (auth users only)
   const driverUsers = await registerDrivers();
 
-  // Step 7 — register driver profiles via /api/drivers/register
+  // Step 6 — register driver profiles via /api/drivers/register
   const driverProfiles = await registerDriverProfiles(driverUsers);
 
-  // Step 8 — admin approve non-pending drivers
+  // Step 7 — admin approve non-pending drivers
   await approveDrivers(adminToken, driverProfiles);
 
   // Step 9 — top-up wallet 300k for approved drivers
@@ -2635,7 +2623,6 @@ async function main() {
   console.log(`  Hist rides:   ~${HIST_TOTAL_TARGET} backfilled (40% in last 7 days, 60% in days 8-30)`);
   console.log(`  Total rides:  ~${rides.length + HIST_TOTAL_TARGET}`);
   console.log(`  Vouchers:     ${VOUCHER_SEEDS.length}`);
-  console.log(`  IncentiveRules:${INCENTIVE_RULES.length}`);
   console.log(`  Report:       ${SEED_REFERENCE_OUTPUT}`);
   console.log('');
   console.log('  Test credentials:');

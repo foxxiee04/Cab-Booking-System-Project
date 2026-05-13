@@ -16,7 +16,6 @@ import {
   AttachMoneyRounded,
   DriveEtaRounded,
   PercentRounded,
-  EmojiEventsRounded,
   MoneyOffRounded,
   BarChartRounded,
   AssessmentRounded,
@@ -175,10 +174,6 @@ const Earnings: React.FC = () => {
               <Typography variant="caption" sx={{ opacity: 0.7 }}>Trung bình/cuốc</Typography>
               <Typography variant="subtitle1" fontWeight={800}>{formatCurrency(avgFare)}</Typography>
             </Stack>
-            <Stack alignItems="center">
-              <Typography variant="caption" sx={{ opacity: 0.7 }}>Thưởng</Typography>
-              <Typography variant="subtitle1" fontWeight={800}>{formatCurrency(earnings.bonusTotal)}</Typography>
-            </Stack>
           </Stack>
         </CardContent>
       </Card>
@@ -188,7 +183,6 @@ const Earnings: React.FC = () => {
         {[
           { icon: <AttachMoneyRounded fontSize="small" />, label: 'Tổng cước (gộp)', value: formatCurrency(earnings.grossTotal), color: '#16a34a', bg: '#f0fdf4' },
           { icon: <PercentRounded fontSize="small" />, label: 'Phí nền tảng', value: formatCurrency(earnings.commissionTotal), color: '#dc2626', bg: '#fef2f2' },
-          { icon: <EmojiEventsRounded fontSize="small" />, label: 'Tổng thưởng', value: formatCurrency(earnings.bonusTotal), color: '#d97706', bg: '#fffbeb' },
           { icon: <DriveEtaRounded fontSize="small" />, label: 'Cuốc 7 ngày', value: String(weekTrips), color: '#7c3aed', bg: '#f5f3ff' },
         ].map((s) => (
           <Card key={s.label} elevation={0} sx={{ borderRadius: 3, bgcolor: s.bg }}>
@@ -283,14 +277,13 @@ const Earnings: React.FC = () => {
                 <YAxis tickFormatter={formatVND} tick={{ fontSize: 9 }} />
                 <Tooltip
                   formatter={(value: any, name: any) => {
-                    const labels: Record<string, string> = { net: 'Thực nhận', commission: 'Phí nền tảng', bonus: 'Thưởng' };
+                    const labels: Record<string, string> = { net: 'Thực nhận', commission: 'Phí nền tảng' };
                     return [formatCurrency(Number(value)), labels[name] || name];
                   }}
                 />
-                <Legend formatter={(v: string) => ({ net: 'Thực nhận', commission: 'Phí nền tảng', bonus: 'Thưởng' } as Record<string, string>)[v] || v} />
+                <Legend formatter={(v: string) => ({ net: 'Thực nhận', commission: 'Phí nền tảng' } as Record<string, string>)[v] || v} />
                 <Bar dataKey="net" fill="#16a34a" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="commission" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="bonus" fill="#f59e0b" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -307,7 +300,6 @@ const Earnings: React.FC = () => {
           <Stack spacing={1.2}>
             {[
               { label: 'Tổng cước gộp', value: earnings.grossTotal, color: '#2563eb', icon: <AttachMoneyRounded fontSize="small" />, sign: '+' },
-              { label: 'Thưởng', value: earnings.bonusTotal, color: '#d97706', icon: <EmojiEventsRounded fontSize="small" />, sign: '+' },
               { label: 'Phí nền tảng', value: earnings.commissionTotal, color: '#dc2626', icon: <PercentRounded fontSize="small" />, sign: '-' },
               { label: 'Phạt', value: earnings.penaltyTotal, color: '#7c3aed', icon: <MoneyOffRounded fontSize="small" />, sign: '-' },
             ].map((item) => (

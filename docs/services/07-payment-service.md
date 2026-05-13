@@ -102,16 +102,14 @@ DriverEarnings {
   grossFare       Decimal               -- Giá toàn bộ chuyến
   commissionRate  Decimal               -- Tỷ lệ hoa hồng (0.15–0.20)
   platformFee     Decimal               -- grossFare × commissionRate
-  bonus           Decimal @default(0)   -- Thưởng (đủ cuốc, giờ cao điểm...)
   penalty         Decimal @default(0)   -- Phạt (hủy nhiều...)
-  netEarnings     Decimal               -- grossFare - platformFee + bonus - penalty
+  netEarnings     Decimal               -- grossFare - platformFee - penalty
 
   paymentMethod   PaymentMethod
   driverCollected Boolean @default(false)  -- true nếu CASH (tài xế nhận tiền mặt)
   cashDebt        Decimal @default(0)      -- Nợ nền tảng nếu CASH ride
   isPaid          Boolean @default(false)
 
-  bonusBreakdown  Json?
   penaltyBreakdown Json?
   settledAt       DateTime?
   createdAt       DateTime @default(now())

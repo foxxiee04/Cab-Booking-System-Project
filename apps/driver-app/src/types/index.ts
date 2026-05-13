@@ -129,7 +129,6 @@ export interface EarningsDailyPoint {
   label: string;
   gross: number;
   commission: number;
-  bonus: number;
   penalty: number;
   net: number;
   rides: number;
@@ -143,14 +142,12 @@ export interface EarningsTripBreakdown {
   gross: number;
   commissionRate: number;
   commission: number;
-  bonus: number;
   penalty: number;
   net: number;
   paymentMethod?: PaymentMethod;
   vehicleType?: VehicleType;
   driverCollected?: boolean;
   cashDebt?: number;
-  bonusBreakdown?: Record<string, number>;
   penaltyBreakdown?: Record<string, number>;
 }
 
@@ -161,7 +158,6 @@ export interface Earnings {
   totalRides: number;
   grossTotal: number;
   commissionTotal: number;
-  bonusTotal: number;
   penaltyTotal: number;
   netTotal: number;
   unpaidCashDebt: number;

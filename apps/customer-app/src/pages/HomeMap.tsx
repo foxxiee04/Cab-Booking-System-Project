@@ -95,13 +95,17 @@ const HomeMap: React.FC = () => {
     return movedMeters > 35 || Date.now() - lastAutoReverseGeoRef.current > 45000;
   };
 
-  const syncCurrentLocation = useCallback(async (preferFresh = false, showSkeleton = false) => {
+  const syncCurrentLocation = useCallback(async (
+    preferFresh = false,
+    showSkeleton = false,
+    allowPrompt = false,
+  ) => {
     if (showSkeleton) {
       setBootstrappingLocation(true);
     }
 
     try {
-      const location = await getCurrentLocation({ preferFresh });
+      const location = await getCurrentLocation({ preferFresh, allowPrompt });
       setLocationNotice('');
       dispatch(setCurrentLocation(location));
       dispatch(setPickupLocation({
@@ -132,7 +136,7 @@ const HomeMap: React.FC = () => {
         setLocationNotice('Trình duyệt đang chặn vị trí của bạn. Bạn vẫn có thể nhập điểm đón thủ công để tiếp tục đặt xe.');
       } else {
         console.warn('Failed to get location. Falling back to manual pickup mode.');
-        setLocationNotice('Không lấy được vị trí hiện tại. Hãy nhập điểm đón thủ công để tiếp tục.');
+        setLocationNotice(fetchLocationError?.message || 'Không lấy được vị trí hiện tại. Hãy nhập điểm đón thủ công để tiếp tục.');
       }
     } finally {
       if (showSkeleton) {
@@ -147,34 +151,7 @@ const HomeMap: React.FC = () => {
     }
     locationBootstrappedRef.current = true;
 
-    void syncCurrentLocation(false, true);
-  }, [syncCurrentLocation]);
-
-  useEffect(() => {
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === 'visible') {
-        void syncCurrentLocation(true, false);
-      }
-    };
-
-    const refreshWhenFocused = () => {
-      void syncCurrentLocation(true, false);
-    };
-
-    const autoGpsInterval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        void syncCurrentLocation(true, false);
-      }
-    }, 7000);
-
-    window.addEventListener('focus', refreshWhenFocused);
-    document.addEventListener('visibilitychange', refreshWhenVisible);
-
-    return () => {
-      window.clearInterval(autoGpsInterval);
-      window.removeEventListener('focus', refreshWhenFocused);
-      document.removeEventListener('visibilitychange', refreshWhenVisible);
-    };
+    void syncCurrentLocation(true, true, true);
   }, [syncCurrentLocation]);
 
   useEffect(() => {
@@ -364,6 +341,7 @@ const HomeMap: React.FC = () => {
       <Box
         sx={{
           position: 'relative',
+          height: { xs: bookingFlowOpen ? 520 : 540, md: bookingFlowOpen ? 560 : 600 },
           minHeight: { xs: 400, md: 560 },
           borderRadius: 6,
           overflow: 'hidden',

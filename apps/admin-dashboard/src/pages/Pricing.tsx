@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -18,43 +18,10 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
-  IconButton,
-  Switch,
-  FormControlLabel,
 } from '@mui/material';
-import { TrendingUp, Save, DirectionsBike, DirectionsCar, AirportShuttle, Add, Edit, Delete, EmojiEvents } from '@mui/icons-material';
+import { TrendingUp, Save, DirectionsBike, DirectionsCar, AirportShuttle } from '@mui/icons-material';
 import { pricingApi } from '../api/pricing.api';
 import { formatCurrency } from '../utils/format.utils';
-import { normalizeGatewayApiBaseUrl } from '../utils/gateway-base-url';
-import axios from 'axios';
-
-const API_BASE = normalizeGatewayApiBaseUrl(process.env.REACT_APP_API_URL);
-
-interface IncentiveRule {
-  id: string;
-  type: 'TRIP_COUNT' | 'DISTANCE_KM' | 'PEAK_HOUR';
-  conditionValue: number;
-  rewardAmount: number;
-  isActive: boolean;
-  description: string | null;
-}
-
-const RULE_TYPE_LABELS: Record<string, string> = {
-  TRIP_COUNT:  'Số cuốc / ngày',
-  DISTANCE_KM: 'Quãng đường / ngày (km)',
-  PEAK_HOUR:   'Giờ cao điểm (mỗi cuốc)',
-};
-
-type RuleFormState = { type: 'TRIP_COUNT' | 'DISTANCE_KM' | 'PEAK_HOUR'; conditionValue: number; rewardAmount: number; description: string; isActive: boolean };
-const EMPTY_RULE: RuleFormState = { type: 'TRIP_COUNT', conditionValue: 10, rewardAmount: 50000, description: '', isActive: true };
 
 // Pricing rates — must match pricing-service/src/config/index.ts
 const VEHICLE_RATES = [
@@ -119,71 +86,6 @@ const Pricing: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
-
-  // Incentive rules state
-  const [rules, setRules] = useState<IncentiveRule[]>([]);
-  const [rulesLoading, setRulesLoading] = useState(false);
-  const [ruleDialog, setRuleDialog] = useState(false);
-  const [editingRule, setEditingRule] = useState<IncentiveRule | null>(null);
-  const [ruleForm, setRuleForm] = useState(EMPTY_RULE);
-  const [ruleError, setRuleError] = useState('');
-  const [ruleSaving, setRuleSaving] = useState(false);
-
-  const token = sessionStorage.getItem('accessToken') || '';
-  const headers = { Authorization: `Bearer ${token}` };
-
-  const loadRules = useCallback(async () => {
-    setRulesLoading(true);
-    try {
-      const res = await axios.get(`${API_BASE}/admin/wallet/incentive-rules`, { headers });
-      setRules(res.data?.data ?? res.data ?? []);
-    } catch { setRules([]); }
-    finally { setRulesLoading(false); }
-  }, []); // eslint-disable-line
-
-  useEffect(() => { loadRules(); }, [loadRules]);
-
-  const openCreateDialog = () => {
-    setEditingRule(null);
-    setRuleForm(EMPTY_RULE);
-    setRuleError('');
-    setRuleDialog(true);
-  };
-
-  const openEditDialog = (rule: IncentiveRule) => {
-    setEditingRule(rule);
-    setRuleForm({ type: rule.type, conditionValue: rule.conditionValue, rewardAmount: rule.rewardAmount, description: rule.description ?? '', isActive: rule.isActive });
-    setRuleError('');
-    setRuleDialog(true);
-  };
-
-  const handleSaveRule = async () => {
-    if (ruleForm.conditionValue <= 0 || ruleForm.rewardAmount <= 0) {
-      setRuleError('Vui lòng nhập giá trị hợp lệ > 0');
-      return;
-    }
-    setRuleSaving(true);
-    setRuleError('');
-    try {
-      if (editingRule) {
-        await axios.patch(`${API_BASE}/admin/wallet/incentive-rules/${editingRule.id}`, ruleForm, { headers });
-      } else {
-        await axios.post(`${API_BASE}/admin/wallet/incentive-rules`, ruleForm, { headers });
-      }
-      setRuleDialog(false);
-      await loadRules();
-    } catch (e: any) {
-      setRuleError(e.response?.data?.message || 'Lưu thất bại');
-    } finally { setRuleSaving(false); }
-  };
-
-  const handleDeleteRule = async (id: string) => {
-    if (!window.confirm('Xác nhận xoá rule này?')) return;
-    try {
-      await axios.delete(`${API_BASE}/admin/wallet/incentive-rules/${id}`, { headers });
-      await loadRules();
-    } catch { setError('Xoá rule thất bại'); }
-  };
 
   useEffect(() => {
     pricingApi.getSurge()
@@ -357,125 +259,6 @@ const Pricing: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Incentive Rules */}
-      <Card elevation={0} sx={{ borderRadius: 4, border: '1px solid', borderColor: 'divider' }}>
-        <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-            <Box>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <EmojiEvents color="warning" />
-                <Typography variant="subtitle1" fontWeight={800}>Quy tắc thưởng tài xế</Typography>
-              </Stack>
-              <Typography variant="caption" color="text.secondary">
-                Cấu hình các rule thưởng theo số cuốc, quãng đường hoặc giờ cao điểm.
-              </Typography>
-            </Box>
-            <Button variant="contained" startIcon={<Add />} onClick={openCreateDialog} sx={{ borderRadius: 3 }}>
-              Thêm rule
-            </Button>
-          </Stack>
-
-          {rulesLoading ? (
-            <Box display="flex" justifyContent="center" py={3}><CircularProgress /></Box>
-          ) : rules.length === 0 ? (
-            <Typography color="text.secondary" variant="body2" textAlign="center" py={3}>
-              Chưa có quy tắc thưởng nào.
-            </Typography>
-          ) : (
-            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ bgcolor: '#f8fafc' }}>
-                    <TableCell sx={{ fontWeight: 700 }}>Loại thưởng</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700 }}>Điều kiện</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700 }}>Phần thưởng</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Mô tả</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Trạng thái</TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 700 }}>Hành động</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {rules.map((rule) => (
-                    <TableRow key={rule.id} hover>
-                      <TableCell>
-                        <Chip label={RULE_TYPE_LABELS[rule.type] ?? rule.type} size="small" color="warning" />
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>
-                        {rule.type === 'DISTANCE_KM' ? `≥ ${rule.conditionValue} km` : rule.type === 'TRIP_COUNT' ? `≥ ${rule.conditionValue} cuốc` : `+${rule.conditionValue} VND/cuốc`}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700, color: 'success.main' }}>
-                        +{formatCurrency(rule.rewardAmount)}
-                      </TableCell>
-                      <TableCell sx={{ color: 'text.secondary', fontSize: 12 }}>
-                        {rule.description || '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Chip label={rule.isActive ? 'Đang bật' : 'Tắt'} size="small" color={rule.isActive ? 'success' : 'default'} />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Stack direction="row" spacing={0.5} justifyContent="center">
-                          <IconButton size="small" onClick={() => openEditDialog(rule)}><Edit fontSize="small" /></IconButton>
-                          <IconButton size="small" color="error" onClick={() => handleDeleteRule(rule.id)}><Delete fontSize="small" /></IconButton>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Incentive Rule Dialog */}
-      <Dialog open={ruleDialog} onClose={() => setRuleDialog(false)} PaperProps={{ sx: { borderRadius: 4, minWidth: 380 } }}>
-        <DialogTitle fontWeight={800}>{editingRule ? 'Sửa quy tắc thưởng' : 'Thêm quy tắc thưởng'}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2.5} pt={1}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Loại thưởng</InputLabel>
-              <Select label="Loại thưởng" value={ruleForm.type} onChange={(e) => setRuleForm((f) => ({ ...f, type: e.target.value as any }))}>
-                {Object.entries(RULE_TYPE_LABELS).map(([k, v]) => (
-                  <MenuItem key={k} value={k}>{v}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            <TextField
-              label={ruleForm.type === 'DISTANCE_KM' ? 'Điều kiện (km/ngày)' : ruleForm.type === 'TRIP_COUNT' ? 'Điều kiện (số cuốc/ngày)' : 'Thưởng mỗi cuốc giờ cao điểm (VND)'}
-              type="number" fullWidth size="small"
-              value={ruleForm.conditionValue}
-              onChange={(e) => setRuleForm((f) => ({ ...f, conditionValue: Number(e.target.value) }))}
-              helperText={ruleForm.type === 'PEAK_HOUR' ? 'Giá trị này không dùng cho PEAK_HOUR; dùng rewardAmount' : ''}
-            />
-
-            <TextField
-              label="Phần thưởng (VND)" type="number" fullWidth size="small"
-              value={ruleForm.rewardAmount}
-              onChange={(e) => setRuleForm((f) => ({ ...f, rewardAmount: Number(e.target.value) }))}
-            />
-
-            <TextField
-              label="Mô tả (tuỳ chọn)" fullWidth size="small"
-              value={ruleForm.description}
-              onChange={(e) => setRuleForm((f) => ({ ...f, description: e.target.value }))}
-            />
-
-            <FormControlLabel
-              control={<Switch checked={ruleForm.isActive} onChange={(e) => setRuleForm((f) => ({ ...f, isActive: e.target.checked }))} />}
-              label="Kích hoạt rule này"
-            />
-
-            {ruleError && <Alert severity="error" sx={{ borderRadius: 2 }}>{ruleError}</Alert>}
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
-          <Button variant="outlined" onClick={() => setRuleDialog(false)} disabled={ruleSaving} sx={{ borderRadius: 3 }}>Huỷ</Button>
-          <Button variant="contained" onClick={handleSaveRule} disabled={ruleSaving} sx={{ borderRadius: 3, fontWeight: 700 }}>
-            {ruleSaving ? <CircularProgress size={18} /> : 'Lưu'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };

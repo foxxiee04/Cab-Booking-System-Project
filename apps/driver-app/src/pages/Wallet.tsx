@@ -32,15 +32,11 @@ import {
   AccountBalanceRounded,
   AccountBalanceWalletRounded,
   CheckCircleRounded,
-  EmojiEventsRounded,
   ErrorRounded,
   HourglassTopRounded,
   InfoOutlined,
-  LocalFireDepartmentRounded,
   LockRounded,
-  RouteRounded,
   ScheduleRounded,
-  TwoWheelerRounded,
   WarningAmberRounded,
   LockOpenRounded,
   BlockRounded,
@@ -50,7 +46,7 @@ import {
   SavingsRounded,
   TrendingDownRounded,
 } from '@mui/icons-material';
-import { walletApi, WalletTransaction, DailyStats, IncentiveRule, DebtRecord } from '../api/wallet.api';
+import { walletApi, WalletTransaction, DebtRecord } from '../api/wallet.api';
 import { formatCurrency, formatDate } from '../utils/format.utils';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -90,41 +86,38 @@ const getBankLogoUrl = (bankName: string): string | null =>
   BANK_LOGO_MAP[bankName] ?? null;
 
 type TxFilter = 'ALL' | 'EARN' | 'DEBT' | 'WITHDRAW';
+type KnownTxType = 'EARN' | 'COMMISSION' | 'WITHDRAW' | 'REFUND' | 'TOP_UP';
 
 const TX_TYPE_META: Record<
-  WalletTransaction['type'],
+  KnownTxType,
   { label: string; color: 'success' | 'error' | 'warning' | 'info' | 'default'; sign: '+' | '-'; filterKey: TxFilter }
 > = {
   EARN:       { label: 'Thu nhập online',  color: 'success', sign: '+', filterKey: 'EARN'     },
   COMMISSION: { label: 'Công nợ tiền mặt', color: 'error',   sign: '-', filterKey: 'DEBT'     },
-  BONUS:      { label: 'Thưởng',           color: 'warning', sign: '+', filterKey: 'EARN'     },
   WITHDRAW:   { label: 'Doanh nghiệp chuyển khoản', color: 'default', sign: '-', filterKey: 'WITHDRAW' },
   REFUND:     { label: 'Hoàn tiền',        color: 'info',    sign: '-', filterKey: 'WITHDRAW' },
   TOP_UP:     { label: 'Nạp vào tài khoản doanh nghiệp', color: 'success', sign: '+', filterKey: 'EARN' },
 };
 
-const TX_TYPE_ICONS: Record<WalletTransaction['type'], React.ReactNode> = {
+const LEGACY_TX_META: { label: string; color: 'default'; sign: '+'; filterKey: TxFilter } = {
+  label: 'Điều chỉnh ví',
+  color: 'default',
+  sign: '+',
+  filterKey: 'EARN',
+};
+
+const TX_TYPE_ICONS: Record<KnownTxType, React.ReactNode> = {
   EARN:       <MonetizationOnRounded fontSize="small" />,
   COMMISSION: <TrendingDownRounded fontSize="small" />,
-  BONUS:      <EmojiEventsRounded fontSize="small" />,
   WITHDRAW:   <AccountBalanceRounded fontSize="small" />,
   REFUND:     <ReceiptLongRounded fontSize="small" />,
   TOP_UP:     <SavingsRounded fontSize="small" />,
 };
 
-const RULE_ICONS: Record<IncentiveRule['type'], React.ReactNode> = {
-  TRIP_COUNT:  <TwoWheelerRounded fontSize="small" />,
-  DISTANCE_KM: <RouteRounded fontSize="small" />,
-  PEAK_HOUR:   <LocalFireDepartmentRounded fontSize="small" />,
-};
-
-const RULE_TYPE_LABELS: Record<IncentiveRule['type'], string> = {
-  TRIP_COUNT:  'Số cuốc/ngày',
-  DISTANCE_KM: 'Quãng đường/ngày',
-  PEAK_HOUR:   'Giờ cao điểm',
-};
-
 const TX_PAGE = 15;
+
+const getTxMeta = (type: string) => TX_TYPE_META[type as KnownTxType] ?? LEGACY_TX_META;
+const getTxIcon = (type: string) => TX_TYPE_ICONS[type as KnownTxType] ?? <ReceiptLongRounded fontSize="small" />;
 
 const digitsOnly = (v: string) => v.replace(/\D/g, '');
 const formatDigitGroups = (v: string) => digitsOnly(v).replace(/(\d{4})(?=\d)/g, '$1 ');
@@ -199,10 +192,6 @@ export default function WalletPage() {
 
   const [debtRecords, setDebtRecords] = useState<DebtRecord[]>([]);
   const [debtLoading, setDebtLoading] = useState(false);
-
-  const [rules, setRules] = useState<IncentiveRule[]>([]);
-  const [stats, setStats] = useState<DailyStats[]>([]);
-  const [incentiveLoading, setIncentiveLoading] = useState(false);
 
   // Withdraw dialog
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -284,28 +273,11 @@ export default function WalletPage() {
     }
   }, []);
 
-  const loadIncentive = useCallback(async () => {
-    setIncentiveLoading(true);
-    try {
-      const [rulesRes, statsRes] = await Promise.all([
-        walletApi.getIncentiveRules(),
-        walletApi.getDailyStats(7),
-      ]);
-      const rulesPayload = (rulesRes.data?.data ?? rulesRes.data) as any;
-      const statsPayload = (statsRes.data?.data ?? statsRes.data) as any;
-      setRules(Array.isArray(rulesPayload) ? rulesPayload : []);
-      setStats(Array.isArray(statsPayload) ? statsPayload : (statsPayload ? [statsPayload] : []));
-    } finally {
-      setIncentiveLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     loadBalance();
     loadTransactions(0);
-    loadIncentive();
     loadDebtRecords();
-  }, [loadBalance, loadTransactions, loadIncentive, loadDebtRecords]);
+  }, [loadBalance, loadTransactions, loadDebtRecords]);
 
   const selectedWithdrawBank = useMemo(
     () => BANK_OPTIONS.find((b) => b.name === withdrawBankName) ?? null,
@@ -323,12 +295,11 @@ export default function WalletPage() {
   const businessAccounts = walletState?.businessAccounts ?? DEFAULT_BUSINESS_ACCOUNTS;
   const topUpBusinessAccount = businessAccounts.topUpAccount ?? DEFAULT_BUSINESS_ACCOUNTS.topUpAccount;
   const payoutBusinessAccount = businessAccounts.payoutAccount ?? topUpBusinessAccount;
-  const todayStats = stats[0];
   const activeDebtRecords = debtRecords.filter((r) => r.status !== 'SETTLED');
   const overdueDebtRecords = debtRecords.filter((r) => r.status === 'OVERDUE');
 
   const filteredTxs = useMemo(
-    () => txFilter === 'ALL' ? transactions : transactions.filter((t) => TX_TYPE_META[t.type]?.filterKey === txFilter),
+    () => txFilter === 'ALL' ? transactions : transactions.filter((t) => getTxMeta(t.type).filterKey === txFilter),
     [transactions, txFilter],
   );
 
@@ -513,9 +484,6 @@ export default function WalletPage() {
                     <Typography variant="caption" sx={{ opacity: 0.75, display: 'block', lineHeight: 1.1 }}>
                       Số dư khả dụng
                     </Typography>
-                    <Typography variant="caption" sx={{ opacity: 0.5, fontSize: '0.62rem' }}>
-                      Có thể rút về ngân hàng cá nhân
-                    </Typography>
                   </Box>
                   <Typography variant="h5" fontWeight={800}>
                     {formatCurrency(withdrawableBalance)}
@@ -536,7 +504,7 @@ export default function WalletPage() {
                         Tiền chờ xử lý
                       </Typography>
                       <Typography variant="caption" sx={{ color: pendingBalance > 0 ? '#fde68a' : 'rgba(255,255,255,0.35)', opacity: 0.7, fontSize: '0.62rem' }}>
-                        {pendingBalance > 0 ? 'Thu nhập online — chuyển vào khả dụng sau 24h' : 'Thu nhập online sẽ hiển thị ở đây sau khi hoàn thành chuyến'}
+                        {pendingBalance > 0 ? 'Thu nhập online — thanh toán trong vòng 24h' : 'Thu nhập online sẽ hiển thị ở đây sau khi hoàn thành chuyến'}
                       </Typography>
                     </Box>
                   </Stack>
@@ -743,13 +711,13 @@ export default function WalletPage() {
       ) : (
         <Stack spacing={1}>
           {filteredTxs.map((tx) => {
-            const meta = TX_TYPE_META[tx.type];
+            const meta = getTxMeta(tx.type);
             const isCredit = meta.sign === '+';
             const iconBg = isCredit
-              ? tx.type === 'BONUS' ? 'rgba(251,191,36,0.12)' : 'rgba(22,163,74,0.1)'
+              ? 'rgba(22,163,74,0.1)'
               : tx.type === 'COMMISSION' ? 'rgba(239,68,68,0.1)' : 'rgba(100,116,139,0.1)';
             const iconColor = isCredit
-              ? tx.type === 'BONUS' ? 'warning.main' : 'success.main'
+              ? 'success.main'
               : tx.type === 'COMMISSION' ? 'error.main' : 'text.secondary';
 
             return (
@@ -762,7 +730,7 @@ export default function WalletPage() {
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         bgcolor: iconBg, color: iconColor,
                       }}>
-                        {TX_TYPE_ICONS[tx.type]}
+                        {getTxIcon(tx.type)}
                       </Box>
                       <Box minWidth={0}>
                         <Stack direction="row" alignItems="center" spacing={0.6} flexWrap="wrap">
@@ -780,7 +748,7 @@ export default function WalletPage() {
                     </Stack>
                     <Box textAlign="right" flexShrink={0} ml={1}>
                       <Typography variant="subtitle2" fontWeight={800}
-                        color={isCredit ? (tx.type === 'BONUS' ? 'warning.dark' : 'success.main') : (tx.type === 'COMMISSION' ? 'error.main' : 'text.secondary')}>
+                        color={isCredit ? 'success.main' : (tx.type === 'COMMISSION' ? 'error.main' : 'text.secondary')}>
                         {meta.sign}{formatCurrency(tx.amount)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -928,103 +896,13 @@ export default function WalletPage() {
             <Stack spacing={0.4}>
               {[
                 'Tự động: trừ khi bạn có thu nhập từ chuyến online',
-                'Thủ công: nạp tiền vào tài khoản doanh nghiệp',
+                'Thủ công: nạp tiền vào tài khoản của hệ thống',
               ].map((s, i) => (
                 <Typography key={i} variant="caption" color="text.secondary">• {s}</Typography>
               ))}
             </Stack>
           </CardContent>
         </Card>
-      </Stack>
-    );
-  };
-
-  // ─── Render: Incentive ────────────────────────────────────────────────────
-
-  const renderIncentive = () => {
-    if (incentiveLoading) {
-      return <Stack spacing={1.2}>{[1, 2, 3].map((k) => <Skeleton key={k} variant="rounded" height={72} sx={{ borderRadius: 3 }} />)}</Stack>;
-    }
-    return (
-      <Stack spacing={2}>
-        {todayStats && (
-          <Card variant="outlined" sx={{ borderRadius: 3, bgcolor: '#f0fdf4', borderColor: '#bbf7d0' }}>
-            <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-              <Typography variant="subtitle2" fontWeight={700} color="success.dark" gutterBottom>
-                Hôm nay
-              </Typography>
-              <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
-                {[
-                  { label: 'Số cuốc',     value: todayStats.tripsCompleted },
-                  { label: 'Quãng đường', value: `${todayStats.distanceKm.toFixed(1)} km` },
-                  { label: 'Cao điểm',    value: todayStats.peakTrips },
-                  { label: 'Thưởng',      value: formatCurrency(todayStats.bonusAwarded), color: 'success.dark' },
-                ].map((item) => (
-                  <Box key={item.label}>
-                    <Typography variant="caption" color="text.secondary" display="block">{item.label}</Typography>
-                    <Typography fontWeight={700} color={item.color}>{item.value}</Typography>
-                  </Box>
-                ))}
-              </Stack>
-            </CardContent>
-          </Card>
-        )}
-
-        <Typography variant="subtitle1" fontWeight={700}>Quy tắc thưởng</Typography>
-        {rules.filter((r) => r.isActive).length === 0 ? (
-          <Typography color="text.secondary" variant="body2">Chưa có quy tắc thưởng nào đang hoạt động.</Typography>
-        ) : rules.filter((r) => r.isActive).map((rule) => {
-          let progress = 0;
-          let progressLabel = '';
-          if (todayStats) {
-            if (rule.type === 'TRIP_COUNT' && rule.conditionValue > 0) {
-              progress = Math.min(100, (todayStats.tripsCompleted / rule.conditionValue) * 100);
-              progressLabel = `${todayStats.tripsCompleted}/${rule.conditionValue} cuốc`;
-            } else if (rule.type === 'DISTANCE_KM' && rule.conditionValue > 0) {
-              progress = Math.min(100, (todayStats.distanceKm / rule.conditionValue) * 100);
-              progressLabel = `${todayStats.distanceKm.toFixed(1)}/${rule.conditionValue} km`;
-            } else if (rule.type === 'PEAK_HOUR') {
-              progressLabel = `${todayStats.peakTrips} cuốc giờ cao điểm hôm nay`;
-            }
-          }
-          return (
-            <Card key={rule.id} variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-                <Stack direction="row" spacing={1.5}>
-                  <Box sx={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#fffbeb', color: 'warning.dark' }}>
-                    {RULE_ICONS[rule.type]}
-                  </Box>
-                  <Box flex={1}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-                      <Box>
-                        <Typography variant="body2" fontWeight={700}>{rule.description || RULE_TYPE_LABELS[rule.type]}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {rule.type === 'PEAK_HOUR'    ? 'Mỗi cuốc giờ cao điểm (6–9h, 16–19h)' :
-                           rule.type === 'TRIP_COUNT'   ? `≥ ${rule.conditionValue} cuốc/ngày` :
-                                                          `≥ ${rule.conditionValue} km/ngày`}
-                        </Typography>
-                      </Box>
-                      <Chip icon={<EmojiEventsRounded fontSize="small" />} label={`+${formatCurrency(rule.rewardAmount)}`}
-                        color="warning" size="small" sx={{ fontWeight: 800, ml: 1, flexShrink: 0 }} />
-                    </Stack>
-                    {progressLabel && rule.type !== 'PEAK_HOUR' && (
-                      <Box mt={1}>
-                        <Stack direction="row" justifyContent="space-between" mb={0.3}>
-                          <Typography variant="caption" color="text.secondary">{progressLabel}</Typography>
-                          {progress >= 100 && <Chip icon={<CheckCircleRounded />} label="Đã đạt" color="success" size="small" sx={{ height: 18, fontSize: '0.6rem' }} />}
-                        </Stack>
-                        <LinearProgress variant="determinate" value={progress} color={progress >= 100 ? 'success' : 'warning'} sx={{ height: 5, borderRadius: 3 }} />
-                      </Box>
-                    )}
-                    {rule.type === 'PEAK_HOUR' && progressLabel && (
-                      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>{progressLabel}</Typography>
-                    )}
-                  </Box>
-                </Stack>
-              </CardContent>
-            </Card>
-          );
-        })}
       </Stack>
     );
   };
@@ -1056,12 +934,10 @@ export default function WalletPage() {
             </Stack>
           }
         />
-        <Tab label="Thưởng" />
       </Tabs>
 
       {tab === 0 && renderTxList()}
       {tab === 1 && renderDebtRecords()}
-      {tab === 2 && renderIncentive()}
 
       {/* ── Withdrawal Dialog ── */}
       <Dialog open={withdrawOpen} onClose={closeWithdrawDialog}

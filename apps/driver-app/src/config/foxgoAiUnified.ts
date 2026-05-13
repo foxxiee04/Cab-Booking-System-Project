@@ -103,7 +103,7 @@ export const FOXGO_QUICK_PATTERNS: FoxgoQuickPattern[] = [
       'Đăng ký tài xế: tải app FoxGo Driver, gửi GPLX, giấy tờ xe, ảnh. Sau duyệt có thể online nhận cuốc.',
   },
   {
-    re: /quy tắc|quy định.*tài xế|vận hành.*tài xế/i,
+    re: /quy tắc|quy định\s+vận hành|quy định.*tài xế|vận hành(?:.*tài xế)?/i,
     answer:
       'Tài xế: đón đúng điểm, không chèo kéo ngoài app, an toàn giao thông, giữ thái độ chuyên nghiệp. Vi phạm nặng có thể khóa tài khoản.',
   },

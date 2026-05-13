@@ -162,51 +162,119 @@ const LeafletViewportController: React.FC<{
   const pickupLng = pickup?.lng;
   const dropoffLat = dropoff?.lat;
   const dropoffLng = dropoff?.lng;
+  const lastViewportKeyRef = useRef('');
 
-  // Fix: invalidate map size after mount/resize so tiles render correctly in flex/animated containers
-  useEffect(() => {
+  const invalidateMapSize = useCallback(() => {
     const container = map.getContainer();
-    map.invalidateSize();
-
-    if (container && typeof window !== 'undefined' && window.ResizeObserver) {
-      let lastW = 0; let lastH = 0;
-      const ro = new ResizeObserver((entries) => {
-        const entry = entries[0];
-        if (!entry) return;
-        const { width, height } = entry.contentRect;
-        if (width !== lastW || height !== lastH) {
-          lastW = width; lastH = height;
-          map.invalidateSize({ animate: false });
-        }
-      });
-      ro.observe(container);
-      return () => ro.disconnect();
+    if (!container.offsetWidth || !container.offsetHeight) {
+      return false;
     }
 
-    // Fallback for environments without ResizeObserver
-    const timer = setTimeout(() => { map.invalidateSize(); }, 200);
-    const resizeTimer = setTimeout(() => { map.invalidateSize(); }, 600);
-    return () => {
-      clearTimeout(timer);
-      clearTimeout(resizeTimer);
-    };
+    map.invalidateSize({ animate: false });
+    return true;
   }, [map]);
 
-  useEffect(() => {
-    if (!pickupLat || !pickupLng) {
+  const fitMapViewport = useCallback((animate = false) => {
+    const container = map.getContainer();
+    if (!invalidateMapSize() || pickupLat == null || pickupLng == null) {
       return;
     }
 
-    if (!dropoffLat || !dropoffLng) {
-      map.setView([pickupLat, pickupLng], Math.max(map.getZoom(), 15), { animate: true });
+    const viewportKey = [
+      pickupLat.toFixed(6),
+      pickupLng.toFixed(6),
+      dropoffLat?.toFixed(6) || '',
+      dropoffLng?.toFixed(6) || '',
+      container.offsetWidth,
+      container.offsetHeight,
+    ].join(':');
+    if (lastViewportKeyRef.current === viewportKey) {
+      return;
+    }
+    lastViewportKeyRef.current = viewportKey;
+
+    if (dropoffLat == null || dropoffLng == null) {
+      map.setView([pickupLat, pickupLng], Math.max(map.getZoom(), 15), { animate });
       return;
     }
 
     map.fitBounds(
       L.latLngBounds([[pickupLat, pickupLng], [dropoffLat, dropoffLng]]),
-      { padding: [72, 72], animate: true }
+      { padding: [72, 72], animate, maxZoom: 16 },
     );
-  }, [map, pickupLat, pickupLng, dropoffLat, dropoffLng]);
+  }, [dropoffLat, dropoffLng, invalidateMapSize, map, pickupLat, pickupLng]);
+
+  const scheduleSizeRefreshes = useCallback(() => {
+    const frames: number[] = [];
+    const timers: number[] = [];
+    const run = () => invalidateMapSize();
+
+    frames.push(window.requestAnimationFrame(run));
+    [80, 220, 520].forEach((delay) => {
+      timers.push(window.setTimeout(run, delay));
+    });
+
+    return () => {
+      frames.forEach((frame) => window.cancelAnimationFrame(frame));
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [invalidateMapSize]);
+
+  // Fix: invalidate map size after mount/resize so tiles render correctly in flex/animated containers.
+  // Leaflet often reads a too-small size when React/MUI cards are still settling, which leaves
+  // only one tile cluster painted until the user manually zooms or resizes.
+  useEffect(() => {
+    const container = map.getContainer();
+    const parent = container.parentElement;
+    const cleanups: Array<() => void> = [scheduleSizeRefreshes()];
+
+    const queueRefresh = () => {
+      cleanups.push(scheduleSizeRefreshes());
+    };
+
+    if (container && typeof window !== 'undefined' && window.ResizeObserver) {
+      const ro = new ResizeObserver((entries) => {
+        if (entries.some((entry) => entry.contentRect.width > 0 && entry.contentRect.height > 0)) {
+          queueRefresh();
+        }
+      });
+      ro.observe(container);
+      if (parent) {
+        ro.observe(parent);
+      }
+      cleanups.push(() => ro.disconnect());
+    }
+
+    const handleWindowResize = () => queueRefresh();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        queueRefresh();
+      }
+    };
+
+    window.addEventListener('resize', handleWindowResize);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    cleanups.push(() => {
+      window.removeEventListener('resize', handleWindowResize);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    });
+
+    return () => {
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, [map, scheduleSizeRefreshes]);
+
+  useEffect(() => {
+    const cleanupSizeRefreshes = scheduleSizeRefreshes();
+    const fitTimer = window.setTimeout(() => fitMapViewport(true), 120);
+    const settleTimer = window.setTimeout(() => fitMapViewport(false), 420);
+
+    return () => {
+      cleanupSizeRefreshes();
+      window.clearTimeout(fitTimer);
+      window.clearTimeout(settleTimer);
+    };
+  }, [fitMapViewport, scheduleSizeRefreshes]);
 
   return null;
 };
@@ -920,6 +988,9 @@ export const BookingMap: React.FC<BookingMapProps> = ({
         attribution={leafletAttribution}
         url={leafletTileUrl}
         maxZoom={20}
+        keepBuffer={5}
+        updateWhenIdle={false}
+        updateWhenZooming={false}
       />
       <LeafletViewportController pickup={pickup ?? null} dropoff={dropoff ?? null} />
       {showReferenceMarkers && pickup && <LeafletMarker position={[pickup.lat, pickup.lng]} icon={createLeafletPin('A', MAP_COLORS.accent)} />}

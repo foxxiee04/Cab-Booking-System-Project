@@ -42,7 +42,7 @@ export const refreshAuthSession = async (): Promise<AuthTokens> => {
 // Create axios instance
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: API_URL,
-  timeout: 15000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },

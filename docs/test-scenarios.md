@@ -15,20 +15,22 @@ npx tsx scripts/seed-database.ts
 npm run dev:frontends
 ```
 
-> `seed-database.ts` tạo: 2 admin, 100 khách hàng, 40 tài xế (37 approved + 3 PENDING), 5 vouchers, 4 incentive rules, ~30 live API rides + ~370 historical rides (tổng ~400) đồng bộ qua **TẤT CẢ** stores: ride_db ↔ payment_db ↔ wallet_db (transactions + ledger + balance) ↔ review_db (Mongo) ↔ driver ratings. Thời gian ~3-5 phút.
+> `seed-database.ts` tạo: 2 admin, 100 khách hàng, 40 tài xế (37 approved + 3 PENDING), 5 vouchers, ~30 live API rides + ~370 historical rides (tổng ~400) đồng bộ qua **TẤT CẢ** stores: ride_db ↔ payment_db ↔ wallet_db (transactions + ledger + balance) ↔ review_db (Mongo) ↔ driver ratings. Thời gian ~3-5 phút.
 
 ---
 
 ## Tài Khoản Demo
 
-| Vai trò | SĐT | Họ tên | App | Ghi chú |
-|---------|-----|--------|-----|----------|
-| **Khách hàng** | `0901234571` | Nguyen Thi Demo | http://localhost:4000 | Bật GPS tại IUH |
-| **Tài xế A** | `0911234583` | Pham Van Bao | http://localhost:4001 | CAR_4 · ⭐ 4.8 |
-| **Tài xế B** | `0911234585` | Le Thi Mai | http://localhost:4001 (Incognito) | CAR_4 · ⭐ 3.5 |
-| **Tài xế C** | `0911234573` | Le Minh N | http://localhost:4001 (Firefox) | CAR_4 · ⭐ 4.2 |
-| **Admin 1** | `0900000001` | System Admin | http://localhost:4002 | — |
-| **Admin 2** | `0900000002` | Sub Admin | http://localhost:4002 | Sub-admin (test multi-admin) |
+| Vai trò | SĐT | Họ tên | App | Ghi chú | Ảnh seed |
+|---------|-----|--------|-----|----------|----------|
+| **Khách hàng** | `0901234571` | Nguyen Thi Demo | http://localhost:4000 | Bật GPS tại IUH | Avatar: `assets/avt/cccd/avt.jpg` |
+| **Tài xế A** | `0911234583` | Pham Van Bao | http://localhost:4001 | CAR_4 · ⭐ 4.8 | Avatar: `assets/avt/cccd/avt.jpg` · CCCD: `assets/avt/cccd/cccd.png` |
+| **Tài xế B** | `0911234585` | Le Thi Mai | http://localhost:4001 (Incognito) | CAR_4 · ⭐ 3.5 | Avatar: `assets/avt/cccd/avt.jpg` · CCCD: `assets/avt/cccd/cccd.png` |
+| **Tài xế C** | `0911234573` | Le Minh N | http://localhost:4001 (Firefox) | CAR_4 · ⭐ 4.2 | Avatar: `assets/avt/cccd/avt.jpg` · CCCD: `assets/avt/cccd/cccd.png` |
+| **Admin 1** | `0900000001` | System Admin | http://localhost:4002 | — | Avatar: `assets/avt/cccd/avt.jpg` |
+| **Admin 2** | `0900000002` | Sub Admin | http://localhost:4002 | Sub-admin (test multi-admin) | Avatar: `assets/avt/cccd/avt.jpg` |
+
+> `scripts/seed-database.ts` encode các asset trên thành data URL khi seed, nên avatar/CCCD hiển thị lại sau mỗi lần reset + seed mà không cần upload thủ công. CCCD chỉ áp dụng cho tài xế.
 
 ### GPS Tài xế — Tự động (không cần DevTools)
 
@@ -224,10 +226,13 @@ Score = Distance × 40% + Rating × 25% + IdleTime × 15%
 
 | Câu hỏi demo | Nội dung trả lời mong đợi |
 |-------------|--------------------------|
-| *"Cước taxi từ IUH đến sân bay Tân Sơn Nhất bao nhiêu?"* | Ước tính ~50.000–80.000đ CAR_4 |
-| *"Voucher WEEKEND10 dùng như thế nào?"* | Hướng dẫn nhập mã khi đặt xe |
-| *"Tôi bị trừ tiền nhưng không thấy chuyến"* | Giải thích + contact support |
+| *"Giá xe 4 chỗ đi 5km khoảng bao nhiêu?"* | Trả bảng giá / ví dụ tham khảo: ô tô 4 chỗ khoảng 133.000đ cho 5km, 15 phút, chưa surge |
+| *"Cước từ IUH đến sân bay Tân Sơn Nhất hiện tại bao nhiêu?"* | Nói rõ Mia không tính giá tuyến cụ thể qua chat; hướng dẫn nhập điểm đón/đến trong app để Pricing Service tính chính xác |
+| *"Voucher không áp dụng được thì vì sao?"* | Nêu các nguyên nhân: hết hạn, chưa đạt đơn tối thiểu, sai loại xe, sai phương thức thanh toán, đã dùng |
+| *"Thanh toán MoMo thành công nhưng không tạo chuyến"* | Hướng dẫn đợi 10–15 phút, gửi mã giao dịch + thời gian cho support@foxgo.vn; tiền hoàn 3–5 ngày làm việc nếu lỗi |
 | *"Có xe 7 chỗ không?"* | Giới thiệu CAR_7 |
+
+**Cách chứng minh API/model đang trả lời:** gọi `POST /api/ai/chat` qua gateway hoặc `POST /api/chat` trực tiếp ai-service; response có `mode`, `llm_provider`, `llm_model`, `reranker_active`, `rewrite_used`. Gọi `GET /api/ai/chat/status` để xem provider hiệu lực, key nào đang cấu hình, reranker đã load chưa.
 
 ### E2. Chatbot tài xế
 
@@ -237,15 +242,17 @@ Score = Distance × 40% + Rating × 25% + IdleTime × 15%
 |-------------|-----------------|
 | *"Hoa hồng xe 4 chỗ bao nhiêu %?"* | CAR_4: 18%, CAR_7: 15%, xe máy: 20% |
 | *"Tại sao tôi không nhận cuốc được?"* | Kiểm tra ví, GPS, trạng thái online |
+| *"Quy định vận hành"* | Trả lời ngay bằng fallback cục bộ nếu AI service chậm/offline: đón đúng điểm, không chèo kéo ngoài app, an toàn giao thông, thái độ chuyên nghiệp |
 | *"Làm sao tăng rating?"* | Tips phục vụ khách hàng |
 
 ### E3. Fallback khi AI offline
 
 - Dừng ai-service (hoặc ngắt mạng nội bộ)
 - Customer vẫn đặt xe, tài xế vẫn nhận cuốc bình thường
-- Timeout 150ms → response ngay lập tức từ fallback handler
+- Chat UI dùng fallback cục bộ cho một số câu phổ biến khi `/ai/chat` lỗi; các luồng nghiệp vụ đặt xe/ghép tài xế không phụ thuộc chatbot
+- Các call AI nghiệp vụ như pricing/matching vẫn có timeout ngắn 150ms và fallback rule-based riêng
 
-**Điểm chứng minh:** ai-service:8000, multi-turn context, 150ms timeout + graceful fallback
+**Điểm chứng minh:** ai-service:8000, RAG multi-turn context, response diagnostics (`mode`, `llm_provider`, `reranker_active`) + graceful fallback
 
 ---
 

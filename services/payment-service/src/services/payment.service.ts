@@ -8,7 +8,6 @@ import { momoGateway } from './momo.gateway';
 import { paymentGatewayManager, PaymentGatewayType } from './payment-gateway.manager';
 import { commissionService, TripContext, DriverStats } from './commission.service';
 import { WalletService } from './wallet.service';
-import { IncentiveService } from './incentive.service';
 import { VoucherService } from './voucher.service';
 import { resolveDriverUserId } from '../utils/resolve-driver-id';
 
@@ -22,7 +21,7 @@ interface RideCompletedPayload {
   surgeMultiplier?: number;
   vehicleType?: string; // ECONOMY, COMFORT, PREMIUM
   paymentMethod?: string; // CASH, MOMO, VISA, CARD, WALLET
-  /** Optional driver stats forwarded by driver-service for incentive/penalty calc */
+  /** Optional driver stats forwarded by driver-service for penalty calculation */
   driverStats?: DriverStats;
   /** Optional voucher code applied by the customer */
   voucherCode?: string;
@@ -43,14 +42,12 @@ export class PaymentService {
   private prisma: PrismaClient;
   private eventPublisher: EventPublisher;
   private walletService: WalletService;
-  private incentiveService: IncentiveService;
   private voucherService: VoucherService;
 
   constructor(prisma: PrismaClient, eventPublisher: EventPublisher) {
     this.prisma = prisma;
     this.eventPublisher = eventPublisher;
     this.walletService = new WalletService(prisma);
-    this.incentiveService = new IncentiveService(prisma, this.walletService);
     this.voucherService = new VoucherService(prisma);
   }
 
@@ -485,14 +482,12 @@ export class PaymentService {
             grossFare: earnings.grossFare,
             commissionRate: earnings.commissionRate,
             platformFee: earnings.platformFee,
-            bonus: earnings.bonus,
             penalty: earnings.penalty,
             netEarnings: earnings.netEarnings,
             paymentMethod: mappedMethod,
             driverCollected: earnings.driverCollected,
             cashDebt: earnings.cashDebt,
             isPaid: !earnings.driverCollected || earnings.cashDebt === 0,
-            bonusBreakdown: earnings.breakdown.bonuses as any,
             penaltyBreakdown: earnings.breakdown.penalties as any,
           },
           create: {
@@ -501,14 +496,12 @@ export class PaymentService {
             grossFare:       earnings.grossFare,
             commissionRate:  earnings.commissionRate,
             platformFee:     earnings.platformFee,
-            bonus:           earnings.bonus,
             penalty:         earnings.penalty,
             netEarnings:     earnings.netEarnings,
             paymentMethod:   mappedMethod,
             driverCollected: earnings.driverCollected,
             cashDebt:        earnings.cashDebt,
             isPaid:          !earnings.driverCollected || earnings.cashDebt === 0,
-            bonusBreakdown:   earnings.breakdown.bonuses   as any,
             penaltyBreakdown: earnings.breakdown.penalties as any,
           },
         });
@@ -557,7 +550,6 @@ export class PaymentService {
               earnings: {
                 commissionRate:  earnings.commissionRate,
                 platformFee:     earnings.platformFee,
-                bonus:           earnings.bonus,
                 penalty:         earnings.penalty,
                 netEarnings:     earnings.netEarnings,
                 driverCollected: earnings.driverCollected,
@@ -588,7 +580,7 @@ export class PaymentService {
           // Cash payment: mark as completed immediately (COD)
           await this.processPaymentRecord(createdPayment);
           // CASH: driver already has the full fare in hand; platform settles the
-          // remaining obligation from wallet after per-trip bonus/penalty adjustments.
+          // remaining obligation from wallet after penalty adjustments.
           if (driverId && earnings.cashDebt > 0) {
             await this.walletService.debitCommission(driverId, earnings.cashDebt, rideId);
             await this.prisma.driverEarnings.updateMany({
@@ -630,7 +622,6 @@ export class PaymentService {
             platformFee:   earnings.platformFee,
             netEarnings:   earnings.netEarnings,
             cashDebt:      earnings.cashDebt,
-            bonus:         earnings.bonus,
             voucherDiscount: discountAmount,
           }, rideId);
         } catch (publishError) {
@@ -638,20 +629,6 @@ export class PaymentService {
         }
       }
 
-      // Evaluate incentives for every completed ride
-      if (driverId) {
-        try {
-          await this.incentiveService.evaluateAfterRide({
-            rideId,
-            driverId,
-            distanceKm: distance || 0,
-            completedAt: new Date(),
-          });
-        } catch (incentiveError) {
-          // Non-critical: log but do not fail the ride completion
-          logger.error(`Incentive evaluation failed for ride ${rideId}:`, incentiveError);
-        }
-      }
     } catch (error) {
       logger.error(`Error processing ride completed for ${rideId}:`, error);
       throw error;
@@ -1003,7 +980,7 @@ export class PaymentService {
 
     await this.reconcileWalletSettledCashDebt(driverId);
 
-    const [earningsRows, total, aggregates, walletBonusAggregate] = await Promise.all([
+    const [earningsRows, total, aggregates] = await Promise.all([
       this.prisma.driverEarnings.findMany({
         where: { driverId },
         skip,
@@ -1013,11 +990,7 @@ export class PaymentService {
       this.prisma.driverEarnings.count({ where: { driverId } }),
       this.prisma.driverEarnings.aggregate({
         where: { driverId },
-        _sum: { grossFare: true, platformFee: true, bonus: true, penalty: true, netEarnings: true, cashDebt: true },
-      }),
-      this.prisma.walletTransaction.aggregate({
-        where: { driverId, type: WalletTransactionType.BONUS },
-        _sum: { amount: true },
+        _sum: { grossFare: true, platformFee: true, penalty: true, netEarnings: true, cashDebt: true },
       }),
     ]);
 
@@ -1032,7 +1005,6 @@ export class PaymentService {
       summary: {
         totalGrossFare:  aggregates._sum.grossFare   || 0,
         totalPlatformFee: aggregates._sum.platformFee || 0,
-        totalBonus:      (aggregates._sum.bonus || 0) + (walletBonusAggregate._sum.amount || 0),
         totalPenalty:    aggregates._sum.penalty     || 0,
         totalNetEarnings: aggregates._sum.netEarnings || 0,
         unpaidCashDebt:  unpaidCashDebt._sum.cashDebt || 0,
@@ -1276,10 +1248,9 @@ export class PaymentService {
       try {
         if (payment.method === PaymentMethod.CASH) {
           // For cash rides: reverse the commission deduction → credit commission back
-          await this.walletService.creditBonus(
+          await this.walletService.creditCommissionRefund(
             payment.driverId,
             driverEarnings.platformFee,
-            `Hoàn hoa hồng (huỷ chuyến cash)`,
             payment.rideId,
           );
         } else {
@@ -1584,7 +1555,6 @@ export class PaymentService {
             grossFare: driverEarnings.grossFare,
             commissionRate: driverEarnings.commissionRate,
             platformFee: driverEarnings.platformFee,
-            bonus: driverEarnings.bonus,
             penalty: driverEarnings.penalty,
             netEarnings: driverEarnings.netEarnings,
             paymentMethod: driverEarnings.paymentMethod,

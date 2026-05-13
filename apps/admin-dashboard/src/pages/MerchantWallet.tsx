@@ -170,7 +170,6 @@ const CATEGORY_COLOR: Record<string, 'success' | 'info' | 'warning' | 'error' | 
   TOP_UP:     'info',
   PAYOUT:     'warning',
   WITHDRAW:   'warning',
-  BONUS:      'default',
   VOUCHER:    'default',
   REFUND:     'error',
 };
@@ -181,7 +180,6 @@ const CATEGORY_LABEL: Record<string, string> = {
   TOP_UP: 'Nạp tiền',
   PAYOUT: 'Thu nhập tài xế (T+24h)',
   WITHDRAW: 'Rút / Đối soát',
-  BONUS: 'Thưởng incentive',
   VOUCHER: 'Trợ giá voucher',
   REFUND: 'Hoàn tiền',
 };
@@ -449,7 +447,7 @@ const MerchantWallet: React.FC = () => {
                   value={balance.totalOut}
                   icon={<ArrowDownward />}
                   color="error.main"
-                  subtitle="Chi trả tài xế + Rút tiền + Thưởng + Voucher + Hoàn tiền"
+                  subtitle="Chi trả tài xế + Rút tiền + Voucher + Hoàn tiền"
                 />
                 <StatCard
                   label="Số dư nền tảng (Net)"
@@ -578,7 +576,7 @@ const MerchantWallet: React.FC = () => {
                   onChange={(e) => { setLedgerCategoryFilter(e.target.value); setLedgerPage(1); }}
                 >
                   <MenuItem value="">Tất cả</MenuItem>
-                  {['PAYMENT','PAYOUT','COMMISSION','TOP_UP','WITHDRAW','BONUS','VOUCHER','REFUND'].map((c) => (
+                  {['PAYMENT','PAYOUT','COMMISSION','TOP_UP','WITHDRAW','VOUCHER','REFUND'].map((c) => (
                     <MenuItem key={c} value={c}>{CATEGORY_LABEL[c] ?? c}</MenuItem>
                   ))}
                 </Select>

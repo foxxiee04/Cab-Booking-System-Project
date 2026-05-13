@@ -1,23 +1,19 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '../generated/prisma-client';
-import { AuthenticatedRequest } from '../middleware/auth';
 import { DriverWalletService } from '../services/driver-wallet.service';
 import { MerchantLedgerService } from '../services/merchant-ledger.service';
-import { BonusService } from '../services/bonus.service';
 import { EventPublisher } from '../events/publisher';
 import { logger } from '../utils/logger';
 
 export class AdminController {
   private walletService:  DriverWalletService;
   private ledgerService:  MerchantLedgerService;
-  private bonusService:   BonusService;
   private prisma:         PrismaClient;
 
   constructor(prisma: PrismaClient, eventPublisher: EventPublisher) {
     this.prisma         = prisma;
     this.ledgerService  = new MerchantLedgerService(prisma);
     this.walletService  = new DriverWalletService(prisma, eventPublisher);
-    this.bonusService   = new BonusService(prisma, this.walletService, this.ledgerService);
   }
 
   // GET /admin/wallet/merchant-ledger
@@ -104,57 +100,6 @@ export class AdminController {
     }
   };
 
-  // GET /admin/wallet/incentive-rules
-  getIncentiveRules = async (_req: Request, res: Response): Promise<void> => {
-    try {
-      const rules = await this.bonusService.getIncentiveRules();
-      res.json({ success: true, data: rules });
-    } catch (error) {
-      logger.error('getIncentiveRules error:', error);
-      res.status(500).json({ success: false, message: 'Failed to fetch incentive rules' });
-    }
-  };
-
-  // POST /admin/wallet/incentive-rules
-  createIncentiveRule = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { type, conditionValue, rewardAmount, description } = req.body;
-      if (!type || conditionValue == null || rewardAmount == null) {
-        res.status(400).json({ success: false, message: 'type, conditionValue, and rewardAmount are required' });
-        return;
-      }
-      const rule = await this.bonusService.createIncentiveRule({ type, conditionValue, rewardAmount, description });
-      res.status(201).json({ success: true, data: rule });
-    } catch (error) {
-      logger.error('createIncentiveRule error:', error);
-      res.status(500).json({ success: false, message: 'Failed to create incentive rule' });
-    }
-  };
-
-  // PATCH /admin/wallet/incentive-rules/:id
-  updateIncentiveRule = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { id } = req.params;
-      const rule = await this.bonusService.updateIncentiveRule(id, req.body);
-      res.json({ success: true, data: rule });
-    } catch (error) {
-      logger.error('updateIncentiveRule error:', error);
-      res.status(500).json({ success: false, message: 'Failed to update incentive rule' });
-    }
-  };
-
-  // DELETE /admin/wallet/incentive-rules/:id
-  deleteIncentiveRule = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { id } = req.params;
-      await this.bonusService.deleteIncentiveRule(id);
-      res.json({ success: true, message: 'Incentive rule deleted' });
-    } catch (error) {
-      logger.error('deleteIncentiveRule error:', error);
-      res.status(500).json({ success: false, message: 'Failed to delete incentive rule' });
-    }
-  };
-
   // GET /admin/wallet/withdrawals
   getWithdrawals = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -191,25 +136,6 @@ export class AdminController {
     } catch (error) {
       logger.error('rejectWithdrawal error:', error);
       res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Failed to reject withdrawal' });
-    }
-  };
-
-  // POST /admin/wallet/drivers/:driverId/credit-bonus  (manual bonus)
-  manualCreditBonus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    try {
-      const { driverId }    = req.params;
-      const { amount, description } = req.body;
-
-      if (typeof amount !== 'number' || amount <= 0 || !description) {
-        res.status(400).json({ success: false, message: 'amount (positive number) and description are required' });
-        return;
-      }
-
-      await this.walletService.creditBonus({ driverId, amount, description });
-      res.json({ success: true, message: `Credited ${amount} VND bonus to driver ${driverId}` });
-    } catch (error) {
-      logger.error('manualCreditBonus error:', error);
-      res.status(500).json({ success: false, message: 'Failed to credit bonus' });
     }
   };
 

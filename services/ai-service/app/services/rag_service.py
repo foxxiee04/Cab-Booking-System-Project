@@ -14,7 +14,7 @@ Pipeline (upgraded):
      e. Cross-encoder reranking on the top-N pool → final top-K context.
      f. Build a prompt with context + history + few-shot Mia persona.
      g. Generate a natural, human-like answer via LLM
-        (Claude → Groq → Gemini → OpenAI → friendly template).
+        (OpenAI → Gemini → rulebase/template fallback).
 """
 
 import logging
@@ -92,6 +92,8 @@ MAX_CONTEXT_CHARS = int(os.getenv("RAG_MAX_CONTEXT_CHARS", "6400"))
 # Hybrid gating: RRF scores are ~0.02–0.15 — never compare them to cosine.
 RAG_COSINE_ABSENT = float(os.getenv("RAG_COSINE_ABSENT", "0.22"))  # below → no relevant KB hit
 RAG_COSINE_LLM = float(os.getenv("RAG_COSINE_LLM", "0.30"))  # at/above → allow LLM synthesis
+QA_FAST_PATH_ENABLED = os.getenv("RAG_QA_FAST_PATH_ENABLED", "true").lower() in ("true", "1", "yes")
+QA_FAST_PATH_THRESHOLD = float(os.getenv("RAG_QA_FAST_PATH_THRESHOLD", "0.68"))
 
 # Cross-encoder reranker — biggest single accuracy lever after retrieval.
 # bge-reranker-v2-m3 (568 MB) is multilingual and excellent for Vietnamese.
@@ -102,8 +104,10 @@ RERANK_POOL = int(os.getenv("RAG_RERANK_POOL", "20"))  # candidates fed to reran
 # LLM-based query rewriting (uses Gemini Flash). Trades 1 extra API call for
 # better recall on short/ambiguous queries ("vậy thì sao", "ơi", "nó"…).
 QUERY_REWRITE_ENABLED = os.getenv("RAG_QUERY_REWRITE_ENABLED", "true").lower() in ("true", "1", "yes")
+QUERY_REWRITE_PROVIDER = os.getenv("RAG_QUERY_REWRITE_PROVIDER", "auto").lower()
 
-# LLM provider priority: claude → groq → gemini → openai → template
+# LLM provider priority for `auto`: OpenAI → Gemini → rulebase/template.
+# Claude/Groq remain available only when explicitly selected with RAG_LLM_PROVIDER.
 LLM_PROVIDER = os.getenv("RAG_LLM_PROVIDER", "auto")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -115,14 +119,16 @@ LLM_MODEL_OPENAI = os.getenv("RAG_LLM_MODEL_OPENAI", "gpt-4o-mini")
 LLM_MODEL_GEMINI = os.getenv("RAG_LLM_MODEL_GEMINI", "gemini-2.5-flash")
 # Lighter Gemini model just for query rewriting (cheap + fast).
 LLM_MODEL_GEMINI_REWRITE = os.getenv("RAG_LLM_MODEL_GEMINI_REWRITE", "gemini-2.5-flash")
-LLM_TIMEOUT_S = float(os.getenv("RAG_LLM_TIMEOUT_S", "20"))
-LLM_REWRITE_TIMEOUT_S = float(os.getenv("RAG_LLM_REWRITE_TIMEOUT_S", "6"))
+LLM_TIMEOUT_S = float(os.getenv("RAG_LLM_TIMEOUT_S", "5"))
+LLM_REWRITE_TIMEOUT_S = float(os.getenv("RAG_LLM_REWRITE_TIMEOUT_S", "2"))
 LLM_MAX_TOKENS = int(os.getenv("RAG_LLM_MAX_TOKENS", "900"))
 LLM_TEMPERATURE = float(os.getenv("RAG_LLM_TEMPERATURE", "0.25"))
 MAX_HISTORY_TURNS = 8
 
 # E5-family models require "query: "/"passage: " prefixes for best results.
 _USE_E5_PREFIX = "e5" in EMBEDDING_MODEL_NAME.lower()
+_LLM_PROVIDER_ORDER = ("openai", "gemini")
+_SUPPORTED_LLM_PROVIDERS = ("openai", "gemini", "claude", "groq")
 
 
 def _embed_passage(text: str) -> str:
@@ -131,6 +137,94 @@ def _embed_passage(text: str) -> str:
 
 def _embed_query(text: str) -> str:
     return f"query: {text}" if _USE_E5_PREFIX else text
+
+
+def _provider_key_configured(provider: str) -> bool:
+    if provider == "claude":
+        return bool(ANTHROPIC_API_KEY)
+    if provider == "groq":
+        return bool(GROQ_API_KEY)
+    if provider == "gemini":
+        return bool(GEMINI_API_KEY)
+    if provider == "openai":
+        return bool(OPENAI_API_KEY)
+    return False
+
+
+def _provider_model(provider: str, *, rewrite: bool = False) -> Optional[str]:
+    if provider == "claude":
+        return LLM_MODEL_CLAUDE
+    if provider == "groq":
+        return LLM_MODEL_GROQ
+    if provider == "gemini":
+        return LLM_MODEL_GEMINI_REWRITE if rewrite else LLM_MODEL_GEMINI
+    if provider == "openai":
+        return LLM_MODEL_OPENAI
+    return None
+
+
+def _configured_llm_provider_order() -> List[str]:
+    """Return configured answer providers that have keys, in actual fallback order."""
+    provider = (LLM_PROVIDER or "auto").strip().lower()
+    if provider in ("none", "off", "false", "template", "retrieval"):
+        return []
+    if provider == "auto":
+        candidates = list(_LLM_PROVIDER_ORDER)
+    elif provider in _SUPPORTED_LLM_PROVIDERS:
+        candidates = [provider]
+    else:
+        logger.warning("Unknown RAG_LLM_PROVIDER=%s — using template fallback", LLM_PROVIDER)
+        return []
+    return [p for p in candidates if _provider_key_configured(p)]
+
+
+def _configured_rewrite_provider_order() -> List[str]:
+    """Prefer cheap Gemini rewrite, then fall back to the configured answer provider(s)."""
+    if not QUERY_REWRITE_ENABLED:
+        return []
+    provider = (QUERY_REWRITE_PROVIDER or "auto").strip().lower()
+    if provider in ("none", "off", "false", "disabled"):
+        return []
+    if provider in _SUPPORTED_LLM_PROVIDERS:
+        return [provider] if _provider_key_configured(provider) else []
+    if provider == "same":
+        return _configured_llm_provider_order()
+
+    candidates: List[str] = []
+    if _provider_key_configured("gemini"):
+        candidates.append("gemini")
+    for p in _configured_llm_provider_order():
+        if p not in candidates:
+            candidates.append(p)
+    return candidates
+
+
+def get_llm_diagnostics() -> dict:
+    """Non-secret provider/model diagnostics used by health/status endpoints."""
+    answer_order = _configured_llm_provider_order()
+    rewrite_order = _configured_rewrite_provider_order()
+    effective_answer = answer_order[0] if answer_order else "template"
+    effective_rewrite = rewrite_order[0] if rewrite_order else None
+    return {
+        "llm_provider_configured": LLM_PROVIDER,
+        "llm_provider_order": answer_order,
+        "effective_llm_provider": effective_answer,
+        "effective_llm_model": _provider_model(effective_answer),
+        "llm_models": {p: _provider_model(p) for p in _SUPPORTED_LLM_PROVIDERS},
+        "query_rewrite_enabled": QUERY_REWRITE_ENABLED,
+        "query_rewrite_provider_configured": QUERY_REWRITE_PROVIDER,
+        "query_rewrite_provider_order": rewrite_order,
+        "effective_query_rewrite_provider": effective_rewrite,
+        "effective_query_rewrite_model": _provider_model(effective_rewrite, rewrite=True)
+        if effective_rewrite
+        else None,
+        "keys": {
+            "anthropic": bool(ANTHROPIC_API_KEY),
+            "groq": bool(GROQ_API_KEY),
+            "gemini": bool(GEMINI_API_KEY),
+            "openai": bool(OPENAI_API_KEY),
+        },
+    }
 
 # ─────────────────────────────────────────────────────────────────────────────
 # System prompt — Mia persona (accuracy-first, warm tone, few-shot anchored)
@@ -242,14 +336,29 @@ _QUICK_MENU_EXPAND: dict[str, str] = {
     "hủy chuyến / phí": (
         "Hủy chuyến phí hủy chính sách khách hoặc tài xế FoxGo"
     ),
+    "hủy cuốc / từ chối": (
+        "Tài xế hủy cuốc từ chối chuyến no-show khách không xuất hiện ảnh hưởng tỷ lệ nhận tỷ lệ hủy"
+    ),
     "đăng ký tài xế": (
         "Đăng ký tài xế FoxGo Driver GPLX giấy tờ xe hồ sơ duyệt"
+    ),
+    "cách đăng ký làm tài xế": (
+        "Cách đăng ký làm tài xế FoxGo Driver chuẩn bị CCCD bằng lái giấy tờ xe chờ admin duyệt"
     ),
     "hoa hồng & ví tài xế": (
         "Tài xế hoa hồng phần trăm chiết khấu ví tài xế thu nhập Wallet"
     ),
     "rút tiền / ký quỹ": (
         "Tài xế rút tiền ví ký quỹ nạp ví đối soát"
+    ),
+    "quy định vận hành": (
+        "Quy định vận hành tài xế FoxGo đón đúng điểm không chèo kéo ngoài app an toàn giao thông thái độ chuyên nghiệp"
+    ),
+    "đánh giá tài xế": (
+        "Tài xế tăng rating điểm đánh giá sao phục vụ khách đúng giờ xe sạch lịch sự"
+    ),
+    "tại sao tôi không nhận cuốc được?": (
+        "Tài xế không nhận được cuốc kiểm tra ví GPS trạng thái online thông báo mạng khu vực cầu thấp"
     ),
     "quên đồ trên xe": (
         "Khách quên đồ trên xe liên hệ tài xế lịch sử chuyến hỗ trợ"
@@ -452,6 +561,113 @@ def _tokenize_vi(text: str) -> List[str]:
     return [t for t in text.split() if t and t not in _VI_STOPWORDS_STRIPPED]
 
 
+class KnowledgeAnswer:
+    __slots__ = ("question", "answer", "source", "title", "tokens", "question_tokens", "plain_question", "plain_search")
+
+    def __init__(self, question: str, answer: str, source: str, title: str, categories: str = ""):
+        self.question = question.strip()
+        self.answer = answer.strip()
+        self.source = source
+        self.title = title
+        search = f"{self.question}\n{self.answer}\n{title}\n{categories}"
+        self.tokens = set(_tokenize_vi(search))
+        self.question_tokens = set(_tokenize_vi(self.question))
+        self.plain_question = _strip_diacritics(self.question.lower())
+        self.plain_search = _strip_diacritics(search.lower())
+
+
+def _extract_categories(content: str) -> str:
+    for line in content.split("\n")[:8]:
+        if line.startswith("DANH MỤC:"):
+            return line.replace("DANH MỤC:", "").strip()
+    return ""
+
+
+def _clean_qa_answer(answer: str) -> str:
+    cleaned = answer.strip()
+    cleaned = re.sub(r"\n---\s*$", "", cleaned).strip()
+    return _format_user_facing_answer(cleaned)
+
+
+def _build_qa_answers(docs: List[Tuple[str, str, str]]) -> List[KnowledgeAnswer]:
+    qa_answers: List[KnowledgeAnswer] = []
+    qa_re = re.compile(
+        r"(?:^|\n)Hỏi:\s*(?P<question>.*?)\nĐáp:\s*(?P<answer>.*?)(?=\n---|\nHỏi:|\nQ:|\Z)",
+        re.DOTALL,
+    )
+    for filename, title, content in docs:
+        categories = _extract_categories(content)
+        for match in qa_re.finditer(content):
+            question = match.group("question").strip()
+            answer = _clean_qa_answer(match.group("answer"))
+            if question and answer:
+                qa_answers.append(KnowledgeAnswer(question, answer, filename, title, categories))
+    logger.info("Total Q&A fast-path answers: %s", len(qa_answers))
+    return qa_answers
+
+
+def _match_qa_answer(query: str, qa_answers: List[KnowledgeAnswer]) -> Optional[Tuple[float, KnowledgeAnswer]]:
+    if not QA_FAST_PATH_ENABLED or not qa_answers:
+        return None
+
+    expanded = _expand_quick_menu_label(query)
+    q_tokens = set(_tokenize_vi(expanded))
+    if len(q_tokens) < 2:
+        return None
+
+    plain_query = _strip_diacritics(query.strip().lower())
+    best: Optional[Tuple[float, KnowledgeAnswer]] = None
+    for item in qa_answers:
+        if not item.tokens:
+            continue
+
+        all_overlap = len(q_tokens & item.tokens) / max(1, len(q_tokens))
+        question_overlap = len(q_tokens & item.question_tokens) / max(1, len(q_tokens)) if item.question_tokens else 0.0
+        score = max(all_overlap, question_overlap * 1.08)
+
+        if len(plain_query) >= 8:
+            if plain_query in item.plain_question:
+                score = max(score, 0.96)
+            elif plain_query in item.plain_search:
+                score = max(score, 0.78)
+
+        # Very short menu labels like "Quy định vận hành" should only fast-path
+        # when most meaningful tokens are present.
+        if len(q_tokens) <= 4 and all_overlap < 0.75 and question_overlap < 0.75:
+            continue
+
+        if best is None or score > best[0]:
+            best = (score, item)
+
+    if best and best[0] >= QA_FAST_PATH_THRESHOLD:
+        return best
+    return None
+
+
+def _lexical_overlap_score(query_text: str, chunk: Chunk) -> float:
+    """Small deterministic precision boost when reranker is off."""
+    q_tokens = set(_tokenize_vi(query_text))
+    if not q_tokens:
+        return 0.0
+    haystack = f"{chunk.title}\n{chunk.text}"
+    doc_tokens = set(_tokenize_vi(haystack))
+    if not doc_tokens:
+        return 0.0
+    overlap = len(q_tokens & doc_tokens) / max(1, len(q_tokens))
+
+    plain_query = _strip_diacritics(query_text.lower())
+    plain_doc = _strip_diacritics(haystack.lower())
+    phrase_bonus = 0.0
+    meaningful = [t for t in q_tokens if len(t) >= 4]
+    for token in meaningful[:8]:
+        if token in plain_doc:
+            phrase_bonus += 0.015
+
+    if len(plain_query) >= 8 and plain_query in plain_doc:
+        phrase_bonus += 0.12
+    return min(1.0, overlap + min(0.12, phrase_bonus))
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Vector + BM25 hybrid index
 # ─────────────────────────────────────────────────────────────────────────────
@@ -534,7 +750,8 @@ class VectorIndex:
         top_k: int = TOP_K,
     ) -> List[Tuple[float, float, Chunk]]:
         """
-        Hybrid RRF (semantic + BM25) ranking. Returns tuples of
+        Hybrid RRF (semantic + BM25), with a lightweight precision pass.
+        Returns tuples of
         (rrf_score, cosine_similarity, chunk) — **cosine** must be used for confidence gating.
         """
         k_inner = min(top_k * 3, self.n)
@@ -546,9 +763,6 @@ class VectorIndex:
         if not all_indices:
             return []
 
-        rrf = {i: semantic.get(i, 0.0) + bm25.get(i, 0.0) for i in all_indices}
-        top_indices = sorted(rrf.keys(), key=lambda i: -rrf[i])[:top_k]
-
         _ensure_imports()
         np = _np
         q = query_embedding.astype("float32")
@@ -557,9 +771,22 @@ class VectorIndex:
             q = q / norm
         q1 = q.flatten()
 
-        out: List[Tuple[float, float, Chunk]] = []
-        for i in top_indices:
+        rrf = {i: semantic.get(i, 0.0) + bm25.get(i, 0.0) for i in all_indices}
+        scored_indices: List[Tuple[float, int, float]] = []
+        for i in all_indices:
             cos = float(np.dot(self.embeddings[i], q1))
+            lexical = _lexical_overlap_score(query_text, self.chunks[i])
+            both_channels_bonus = 0.012 if i in semantic and i in bm25 else 0.0
+            # RRF scores are small (~0.016 per channel). This blend keeps RRF as
+            # the base while making high-cosine and exact-keyword candidates less
+            # likely to be lost when the cross-encoder reranker is disabled.
+            final = rrf[i] + (max(0.0, cos) * 0.045) + (lexical * 0.035) + both_channels_bonus
+            scored_indices.append((final, i, cos))
+
+        top_rows = sorted(scored_indices, key=lambda row: -row[0])[:top_k]
+
+        out: List[Tuple[float, float, Chunk]] = []
+        for _, i, cos in top_rows:
             out.append((float(rrf[i]), cos, self.chunks[i]))
         return out
 
@@ -791,13 +1018,21 @@ def _format_context(retrieved: List[Tuple[float, Chunk]]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-async def _call_llm_claude(messages: List[dict]) -> Optional[str]:
+async def _call_llm_claude(
+    messages: List[dict],
+    *,
+    system_prompt: str = SYSTEM_PROMPT,
+    max_tokens: int = LLM_MAX_TOKENS,
+    temperature: float = LLM_TEMPERATURE,
+    timeout_s: float = LLM_TIMEOUT_S,
+    model: Optional[str] = None,
+) -> Optional[str]:
     """Call Anthropic Claude API — most human-like responses."""
     if not ANTHROPIC_API_KEY:
         return None
     try:
         _ensure_imports()
-        async with _httpx.AsyncClient(timeout=LLM_TIMEOUT_S) as client:
+        async with _httpx.AsyncClient(timeout=timeout_s) as client:
             resp = await client.post(
                 "https://api.anthropic.com/v1/messages",
                 headers={
@@ -806,10 +1041,10 @@ async def _call_llm_claude(messages: List[dict]) -> Optional[str]:
                     "content-type": "application/json",
                 },
                 json={
-                    "model": LLM_MODEL_CLAUDE,
-                    "max_tokens": LLM_MAX_TOKENS,
-                    "temperature": LLM_TEMPERATURE,
-                    "system": SYSTEM_PROMPT,
+                    "model": model or LLM_MODEL_CLAUDE,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "system": system_prompt,
                     "messages": messages,
                 },
             )
@@ -821,12 +1056,20 @@ async def _call_llm_claude(messages: List[dict]) -> Optional[str]:
         return None
 
 
-async def _call_llm_groq(messages: List[dict]) -> Optional[str]:
+async def _call_llm_groq(
+    messages: List[dict],
+    *,
+    system_prompt: str = SYSTEM_PROMPT,
+    max_tokens: int = LLM_MAX_TOKENS,
+    temperature: float = LLM_TEMPERATURE,
+    timeout_s: float = LLM_TIMEOUT_S,
+    model: Optional[str] = None,
+) -> Optional[str]:
     if not GROQ_API_KEY:
         return None
     try:
         _ensure_imports()
-        async with _httpx.AsyncClient(timeout=LLM_TIMEOUT_S) as client:
+        async with _httpx.AsyncClient(timeout=timeout_s) as client:
             resp = await client.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={
@@ -834,10 +1077,10 @@ async def _call_llm_groq(messages: List[dict]) -> Optional[str]:
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": LLM_MODEL_GROQ,
-                    "messages": [{"role": "system", "content": SYSTEM_PROMPT}] + messages,
-                    "max_tokens": LLM_MAX_TOKENS,
-                    "temperature": LLM_TEMPERATURE,
+                    "model": model or LLM_MODEL_GROQ,
+                    "messages": [{"role": "system", "content": system_prompt}] + messages,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
                 },
             )
             resp.raise_for_status()
@@ -847,7 +1090,15 @@ async def _call_llm_groq(messages: List[dict]) -> Optional[str]:
         return None
 
 
-async def _call_llm_gemini(messages: List[dict]) -> Optional[str]:
+async def _call_llm_gemini(
+    messages: List[dict],
+    *,
+    system_prompt: str = SYSTEM_PROMPT,
+    max_tokens: int = LLM_MAX_TOKENS,
+    temperature: float = LLM_TEMPERATURE,
+    timeout_s: float = LLM_TIMEOUT_S,
+    model: Optional[str] = None,
+) -> Optional[str]:
     """Google Gemini (AI Studio API key) — often cost-effective vs Claude/OpenAI."""
     if not GEMINI_API_KEY:
         return None
@@ -864,21 +1115,22 @@ async def _call_llm_gemini(messages: List[dict]) -> Optional[str]:
         if not contents:
             return None
 
+        model_name = model or LLM_MODEL_GEMINI
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{LLM_MODEL_GEMINI}:generateContent"
+            f"{model_name}:generateContent"
         )
         gen_config: dict = {
-            "maxOutputTokens": LLM_MAX_TOKENS,
-            "temperature": LLM_TEMPERATURE,
+            "maxOutputTokens": max_tokens,
+            "temperature": temperature,
         }
         # Disable thinking for Gemini 2.5 models — RAG context already does the reasoning;
         # thinking adds 15-40s latency with no benefit for retrieval-grounded QA.
-        if "2.5" in LLM_MODEL_GEMINI:
+        if "2.5" in model_name:
             gen_config["thinkingConfig"] = {"thinkingBudget": 0}
 
         payload = {
-            "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+            "systemInstruction": {"parts": [{"text": system_prompt}]},
             "contents": contents,
             "generationConfig": gen_config,
             "safetySettings": [
@@ -888,7 +1140,7 @@ async def _call_llm_gemini(messages: List[dict]) -> Optional[str]:
                 {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
             ],
         }
-        async with _httpx.AsyncClient(timeout=LLM_TIMEOUT_S) as client:
+        async with _httpx.AsyncClient(timeout=timeout_s) as client:
             resp = await client.post(
                 url,
                 params={"key": GEMINI_API_KEY},
@@ -910,12 +1162,20 @@ async def _call_llm_gemini(messages: List[dict]) -> Optional[str]:
         return None
 
 
-async def _call_llm_openai(messages: List[dict]) -> Optional[str]:
+async def _call_llm_openai(
+    messages: List[dict],
+    *,
+    system_prompt: str = SYSTEM_PROMPT,
+    max_tokens: int = LLM_MAX_TOKENS,
+    temperature: float = LLM_TEMPERATURE,
+    timeout_s: float = LLM_TIMEOUT_S,
+    model: Optional[str] = None,
+) -> Optional[str]:
     if not OPENAI_API_KEY:
         return None
     try:
         _ensure_imports()
-        async with _httpx.AsyncClient(timeout=LLM_TIMEOUT_S) as client:
+        async with _httpx.AsyncClient(timeout=timeout_s) as client:
             resp = await client.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers={
@@ -923,10 +1183,10 @@ async def _call_llm_openai(messages: List[dict]) -> Optional[str]:
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": LLM_MODEL_OPENAI,
-                    "messages": [{"role": "system", "content": SYSTEM_PROMPT}] + messages,
-                    "max_tokens": LLM_MAX_TOKENS,
-                    "temperature": LLM_TEMPERATURE,
+                    "model": model or LLM_MODEL_OPENAI,
+                    "messages": [{"role": "system", "content": system_prompt}] + messages,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
                 },
             )
             resp.raise_for_status()
@@ -934,6 +1194,56 @@ async def _call_llm_openai(messages: List[dict]) -> Optional[str]:
     except Exception as exc:
         logger.warning(f"OpenAI API failed: {exc}")
         return None
+
+
+async def _call_llm_provider(
+    provider: str,
+    messages: List[dict],
+    *,
+    system_prompt: str = SYSTEM_PROMPT,
+    max_tokens: int = LLM_MAX_TOKENS,
+    temperature: float = LLM_TEMPERATURE,
+    timeout_s: float = LLM_TIMEOUT_S,
+    rewrite: bool = False,
+) -> Optional[str]:
+    model = _provider_model(provider, rewrite=rewrite)
+    if provider == "claude":
+        return await _call_llm_claude(
+            messages,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout_s=timeout_s,
+            model=model,
+        )
+    if provider == "groq":
+        return await _call_llm_groq(
+            messages,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout_s=timeout_s,
+            model=model,
+        )
+    if provider == "gemini":
+        return await _call_llm_gemini(
+            messages,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout_s=timeout_s,
+            model=model,
+        )
+    if provider == "openai":
+        return await _call_llm_openai(
+            messages,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout_s=timeout_s,
+            model=model,
+        )
+    return None
 
 
 def _template_answer(query: str, retrieved: List[Tuple[float, Chunk]]) -> str:
@@ -1024,9 +1334,14 @@ _REWRITE_SYSTEM = (
 def _should_rewrite(query: str) -> bool:
     """Only rewrite when it likely helps: short, has follow-up pronouns, or very long."""
     words = query.split()
-    if len(words) <= 6:
-        return True
     if _FOLLOWUP_PATTERN.search(query):
+        return True
+    if len(words) <= 3:
+        low = _strip_diacritics(query.lower())
+        # Short quick-menu labels are expanded locally; rewriting them costs an
+        # extra LLM round trip and often makes driver chat feel slower.
+        if any(term in low for term in ("momo", "vnpay", "voucher", "hotline")):
+            return False
         return True
     if len(words) >= 28:
         return True  # condense rambling questions into a clean search query
@@ -1035,12 +1350,15 @@ def _should_rewrite(query: str) -> bool:
 
 async def _maybe_rewrite_query(
     query: str, history: Optional[List[dict]]
-) -> Optional[str]:
-    """Returns a rewritten query string, or None to skip rewriting."""
-    if not QUERY_REWRITE_ENABLED or not GEMINI_API_KEY:
-        return None
+) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Returns (rewritten query, provider, model), or (None, None, None) to skip."""
+    if not QUERY_REWRITE_ENABLED:
+        return None, None, None
     if not _should_rewrite(query):
-        return None
+        return None, None, None
+    providers = _configured_rewrite_provider_order()
+    if not providers:
+        return None, None, None
     try:
         _ensure_imports()
         # Build a compact history context
@@ -1060,48 +1378,32 @@ async def _maybe_rewrite_query(
             f"Câu hỏi hiện tại: {query}\n\n"
             "Viết lại câu hỏi thành 1 câu tìm kiếm tối ưu (chỉ 1 dòng, tiếng Việt)."
         )
+        messages = [{"role": "user", "content": user_msg}]
 
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{LLM_MODEL_GEMINI_REWRITE}:generateContent"
-        )
-        gen_config: dict = {"maxOutputTokens": 120, "temperature": 0.1}
-        if "2.5" in LLM_MODEL_GEMINI_REWRITE:
-            gen_config["thinkingConfig"] = {"thinkingBudget": 0}
-
-        payload = {
-            "systemInstruction": {"parts": [{"text": _REWRITE_SYSTEM}]},
-            "contents": [{"role": "user", "parts": [{"text": user_msg}]}],
-            "generationConfig": gen_config,
-        }
-        async with _httpx.AsyncClient(timeout=LLM_REWRITE_TIMEOUT_S) as client:
-            resp = await client.post(
-                url,
-                params={"key": GEMINI_API_KEY},
-                json=payload,
-                headers={"Content-Type": "application/json"},
+        for provider in providers:
+            out = await _call_llm_provider(
+                provider,
+                messages,
+                system_prompt=_REWRITE_SYSTEM,
+                max_tokens=120,
+                temperature=0.1,
+                timeout_s=LLM_REWRITE_TIMEOUT_S,
+                rewrite=True,
             )
-            resp.raise_for_status()
-            data = resp.json()
-
-        cands = data.get("candidates") or []
-        if not cands:
-            return None
-        parts = cands[0].get("content", {}).get("parts") or []
-        out = "".join(p.get("text", "") for p in parts).strip()
-        # Clean up — Gemini sometimes wraps in quotes or adds "Câu hỏi:"
-        out = out.strip().strip('"').strip("'")
-        for prefix in ("Câu hỏi:", "Query:", "Tìm kiếm:", "Rewrite:"):
-            if out.lower().startswith(prefix.lower()):
-                out = out[len(prefix):].strip()
-        # Sanity: don't accept multi-line or absurdly long rewrites
-        first_line = out.split("\n")[0].strip()
-        if not first_line or len(first_line) > 280:
-            return None
-        return first_line
+            if not out:
+                continue
+            # Clean up — models sometimes wrap in quotes or add "Câu hỏi:"
+            out = out.strip().strip('"').strip("'")
+            for prefix in ("Câu hỏi:", "Query:", "Tìm kiếm:", "Rewrite:"):
+                if out.lower().startswith(prefix.lower()):
+                    out = out[len(prefix):].strip()
+            # Sanity: don't accept multi-line or absurdly long rewrites
+            first_line = out.split("\n")[0].strip()
+            if first_line and len(first_line) <= 280:
+                return first_line, provider, _provider_model(provider, rewrite=True)
     except Exception as exc:
         logger.info(f"Query rewrite skipped ({exc})")
-        return None
+    return None, None, None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1112,7 +1414,9 @@ async def _generate_answer(
     query: str,
     retrieved: List[Tuple[float, Chunk]],
     history: Optional[List[dict]] = None,
-) -> Tuple[str, str]:
+    *,
+    allow_template_fallback: bool = True,
+) -> Tuple[Optional[str], str, str, Optional[str]]:
     context = _format_context(retrieved)[:MAX_CONTEXT_CHARS] if retrieved else ""
 
     llm_messages: List[dict] = []
@@ -1139,29 +1443,15 @@ async def _generate_answer(
         )
     llm_messages.append({"role": "user", "content": user_content})
 
-    provider = LLM_PROVIDER.lower()
-
-    if provider in ("claude", "auto") and ANTHROPIC_API_KEY:
-        answer = await _call_llm_claude(llm_messages)
+    for provider in _configured_llm_provider_order():
+        answer = await _call_llm_provider(provider, llm_messages)
         if answer:
-            return answer, "llm_claude"
+            return answer, f"llm_{provider}", provider, _provider_model(provider)
 
-    if provider in ("groq", "auto") and GROQ_API_KEY:
-        answer = await _call_llm_groq(llm_messages)
-        if answer:
-            return answer, "llm_groq"
+    if allow_template_fallback:
+        return _template_answer(query, retrieved), "retrieval", "template", None
 
-    if provider in ("gemini", "auto") and GEMINI_API_KEY:
-        answer = await _call_llm_gemini(llm_messages)
-        if answer:
-            return answer, "llm_gemini"
-
-    if provider in ("openai", "auto") and OPENAI_API_KEY:
-        answer = await _call_llm_openai(llm_messages)
-        if answer:
-            return answer, "llm_openai"
-
-    return _template_answer(query, retrieved), "retrieval"
+    return None, "llm_unavailable", "none", None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1176,6 +1466,7 @@ class RagService:
         self._reranker_load_attempted = False
         self._index: Optional[VectorIndex] = None
         self._chunks: List[Chunk] = []
+        self._qa_answers: List[KnowledgeAnswer] = []
         self._init_error: Optional[str] = None
         self._rag_lock = threading.RLock()
 
@@ -1209,6 +1500,7 @@ class RagService:
             if not docs:
                 logger.warning("No knowledge documents found")
 
+            self._qa_answers = _build_qa_answers(docs)
             self._chunks = _build_chunks(docs)
 
             if self._chunks:
@@ -1259,18 +1551,21 @@ class RagService:
                     return {
                         "ok": ok,
                         "chunks": len(self._chunks),
+                        "qa_answers": len(self._qa_answers),
                         "action": "full_init",
                         "error": self._init_error,
                     }
 
             docs = _load_documents(KNOWLEDGE_DIR)
             chunks = _build_chunks(docs)
+            qa_answers = _build_qa_answers(docs)
             if not chunks:
                 with self._rag_lock:
                     self._chunks = []
                     self._index = None
+                    self._qa_answers = qa_answers
                     self._ready = True
-                return {"ok": True, "chunks": 0, "action": "reload"}
+                return {"ok": True, "chunks": 0, "qa_answers": len(qa_answers), "action": "reload"}
 
             model = self._model
             texts = [_embed_passage(c.text) for c in chunks]
@@ -1282,10 +1577,11 @@ class RagService:
             with self._rag_lock:
                 self._chunks = chunks
                 self._index = new_index
+                self._qa_answers = qa_answers
                 self._ready = True
 
             logger.info("RAG knowledge reloaded: %s chunks", len(chunks))
-            return {"ok": True, "chunks": len(chunks), "action": "reload"}
+            return {"ok": True, "chunks": len(chunks), "qa_answers": len(qa_answers), "action": "reload"}
 
         except Exception as exc:
             logger.error(f"RAG reload failed: {exc}", exc_info=True)
@@ -1297,14 +1593,25 @@ class RagService:
 
     def get_health_snapshot(self) -> dict:
         """Non-secret diagnostics for /api/health (ops: RAG up, chunk count, key presence)."""
+        llm = get_llm_diagnostics()
         with self._rag_lock:
             return {
                 "ready": self._ready,
                 "chunks": len(self._chunks),
+                "qa_answers": len(self._qa_answers),
                 "vector_index": self._index is not None,
                 "init_error": self._init_error,
+                "reranker_enabled": RERANKER_ENABLED,
                 "reranker_active": self._reranker is not None,
+                "reranker_load_attempted": self._reranker_load_attempted,
+                "reranker_model": RERANKER_MODEL,
                 "embedding_model": EMBEDDING_MODEL_NAME,
+                "top_k_default": TOP_K,
+                "rerank_pool": RERANK_POOL,
+                "min_faiss_prefilter": MIN_FAISS_PREFILTER,
+                "cosine_absent": RAG_COSINE_ABSENT,
+                "cosine_llm": RAG_COSINE_LLM,
+                **llm,
             }
 
     async def chat(
@@ -1319,16 +1626,73 @@ class RagService:
         small = _try_smalltalk(stripped)
         if small:
             small["latency_ms"] = int((time.time() - t0) * 1000)
+            small["llm_provider"] = "template"
+            small["llm_model"] = None
+            small["reranker_active"] = False
+            small["rewrite_used"] = False
             return _apply_answer_polish(small)
 
         if not self._ready:
             if not self.initialize():
+                answer, mode, llm_provider, llm_model = await _generate_answer(
+                    stripped,
+                    [],
+                    history=history,
+                    allow_template_fallback=False,
+                )
+                if answer:
+                    return _apply_answer_polish({
+                        "answer": answer,
+                        "sources": [],
+                        "retrieval_count": 0,
+                        "score_max": 0.0,
+                        "mode": f"{mode}_rag_unavailable",
+                        "latency_ms": int((time.time() - t0) * 1000),
+                        "llm_provider": llm_provider,
+                        "llm_model": llm_model,
+                        "reranker_active": False,
+                        "rewrite_used": False,
+                        "rewrite_query": None,
+                        "rewrite_provider": None,
+                        "rewrite_model": None,
+                        "error": self._init_error,
+                    })
+
                 return _apply_answer_polish({
                     "answer": "Hệ thống đang khởi động, bạn thử lại sau vài giây nhé! Hoặc liên hệ support@foxgo.vn.",
                     "sources": [], "retrieval_count": 0, "score_max": 0.0,
                     "mode": "error", "latency_ms": int((time.time() - t0) * 1000),
+                    "llm_provider": "template",
+                    "llm_model": None,
+                    "reranker_active": False,
+                    "rewrite_used": False,
                     "error": self._init_error,
                 })
+
+        with self._rag_lock:
+            qa_answers = list(self._qa_answers)
+
+        fast_match = _match_qa_answer(stripped, qa_answers)
+        def rulebase_fallback_payload() -> Optional[dict]:
+            """Use exact Q&A only after LLM providers are unavailable."""
+            if not fast_match:
+                return None
+            fast_score, fast_answer = fast_match
+            return {
+                "answer": fast_answer.answer,
+                "sources": [fast_answer.title],
+                "retrieval_count": 1,
+                "score_max": round(float(fast_score), 4),
+                "mode": "rulebase_fallback",
+                "latency_ms": int((time.time() - t0) * 1000),
+                "llm_provider": "knowledge_base",
+                "llm_model": None,
+                "reranker_active": bool(self._reranker is not None),
+                "rewrite_used": False,
+                "rewrite_query": None,
+                "rewrite_provider": None,
+                "rewrite_model": None,
+            }
 
         with self._rag_lock:
             model = self._model
@@ -1337,21 +1701,28 @@ class RagService:
 
         raw_hits: List[Tuple[float, float, Chunk]] = []
         rewrite_used: Optional[str] = None
+        rewrite_provider: Optional[str] = None
+        rewrite_model: Optional[str] = None
         if index is not None and stripped and model is not None:
             retrieval_query = _expand_quick_menu_label(stripped)
 
             # Step 1 — optional LLM rewrite (resolves "vậy", "thì sao", "nó"…)
-            rewritten = await _maybe_rewrite_query(retrieval_query, history)
+            rewritten, rewrite_provider, rewrite_model = await _maybe_rewrite_query(
+                retrieval_query,
+                history,
+            )
             if rewritten and rewritten.strip() and rewritten.strip().lower() != retrieval_query.strip().lower():
                 rewrite_used = rewritten
                 enriched_query = rewritten
             else:
                 enriched_query = _enrich_query(retrieval_query, history)
 
-            # Step 2 — embed + hybrid retrieval (wider pool when reranker active)
+            # Step 2 — embed + hybrid retrieval. Always search a wider pool:
+            # the cross-encoder uses it when active, and the lightweight
+            # precision pass benefits from it when reranker is disabled.
             embed_text = _embed_query(_query_embedding_text(enriched_query))
             query_emb = model.encode([embed_text], normalize_embeddings=True)
-            pool_k = max(top_k, RERANK_POOL) if reranker is not None else top_k
+            pool_k = max(top_k, RERANK_POOL)
             raw_hits = index.search_hybrid(query_emb[0], enriched_query, top_k=pool_k)
 
             # Step 3 — cross-encoder rerank → keep top_k
@@ -1361,6 +1732,42 @@ class RagService:
                 raw_hits = raw_hits[:top_k]
 
         if not raw_hits:
+            answer, mode, llm_provider, llm_model = await _generate_answer(
+                stripped,
+                [],
+                history=history,
+                allow_template_fallback=False,
+            )
+            if answer:
+                if rewrite_used:
+                    mode = f"{mode}_no_context+rewrite"
+                else:
+                    mode = f"{mode}_no_context"
+                return _apply_answer_polish({
+                    "answer": answer,
+                    "sources": [],
+                    "retrieval_count": 0,
+                    "score_max": 0.0,
+                    "mode": mode,
+                    "latency_ms": int((time.time() - t0) * 1000),
+                    "llm_provider": llm_provider,
+                    "llm_model": llm_model,
+                    "reranker_active": bool(reranker is not None),
+                    "rewrite_used": bool(rewrite_used),
+                    "rewrite_query": rewrite_used,
+                    "rewrite_provider": rewrite_provider if rewrite_used else None,
+                    "rewrite_model": rewrite_model if rewrite_used else None,
+                })
+
+            fallback = rulebase_fallback_payload()
+            if fallback:
+                fallback["reranker_active"] = bool(reranker is not None)
+                fallback["rewrite_used"] = bool(rewrite_used)
+                fallback["rewrite_query"] = rewrite_used
+                fallback["rewrite_provider"] = rewrite_provider if rewrite_used else None
+                fallback["rewrite_model"] = rewrite_model if rewrite_used else None
+                return _apply_answer_polish(fallback)
+
             return _apply_answer_polish({
                 "answer": (
                     "Mình chưa thấy thông tin về câu này trong tài liệu FoxGo bạn ơi. "
@@ -1376,10 +1783,53 @@ class RagService:
                 "score_max": 0.0,
                 "mode": "no_context",
                 "latency_ms": int((time.time() - t0) * 1000),
+                "llm_provider": "template",
+                "llm_model": None,
+                "reranker_active": bool(reranker is not None),
+                "rewrite_used": bool(rewrite_used),
+                "rewrite_query": rewrite_used,
+                "rewrite_provider": rewrite_provider if rewrite_used else None,
+                "rewrite_model": rewrite_model if rewrite_used else None,
             })
 
         score_max = max(h[1] for h in raw_hits)
         if score_max < RAG_COSINE_ABSENT:
+            answer, mode, llm_provider, llm_model = await _generate_answer(
+                stripped,
+                [],
+                history=history,
+                allow_template_fallback=False,
+            )
+            if answer:
+                if rewrite_used:
+                    mode = f"{mode}_no_context+rewrite"
+                else:
+                    mode = f"{mode}_no_context"
+                return _apply_answer_polish({
+                    "answer": answer,
+                    "sources": [],
+                    "retrieval_count": len(raw_hits),
+                    "score_max": round(float(score_max), 4),
+                    "mode": mode,
+                    "latency_ms": int((time.time() - t0) * 1000),
+                    "llm_provider": llm_provider,
+                    "llm_model": llm_model,
+                    "reranker_active": bool(reranker is not None),
+                    "rewrite_used": bool(rewrite_used),
+                    "rewrite_query": rewrite_used,
+                    "rewrite_provider": rewrite_provider if rewrite_used else None,
+                    "rewrite_model": rewrite_model if rewrite_used else None,
+                })
+
+            fallback = rulebase_fallback_payload()
+            if fallback:
+                fallback["reranker_active"] = bool(reranker is not None)
+                fallback["rewrite_used"] = bool(rewrite_used)
+                fallback["rewrite_query"] = rewrite_used
+                fallback["rewrite_provider"] = rewrite_provider if rewrite_used else None
+                fallback["rewrite_model"] = rewrite_model if rewrite_used else None
+                return _apply_answer_polish(fallback)
+
             # Surface top candidate sources as hints — helps the user reframe.
             hint_titles = []
             for _, _, ch in raw_hits[:3]:
@@ -1404,6 +1854,13 @@ class RagService:
                 "score_max": round(float(score_max), 4),
                 "mode": "no_context",
                 "latency_ms": int((time.time() - t0) * 1000),
+                "llm_provider": "template",
+                "llm_model": None,
+                "reranker_active": bool(reranker is not None),
+                "rewrite_used": bool(rewrite_used),
+                "rewrite_query": rewrite_used,
+                "rewrite_provider": rewrite_provider if rewrite_used else None,
+                "rewrite_model": rewrite_model if rewrite_used else None,
             })
 
         # Highest-cosine chunks first → better LLM grounding
@@ -1413,6 +1870,41 @@ class RagService:
         )
 
         if score_max < RAG_COSINE_LLM:
+            answer, mode, llm_provider, llm_model = await _generate_answer(
+                stripped,
+                retrieved,
+                history=history,
+                allow_template_fallback=False,
+            )
+            if answer:
+                mode = f"{mode}_low_confidence"
+                if rewrite_used:
+                    mode = f"{mode}+rewrite"
+                return _apply_answer_polish({
+                    "answer": answer,
+                    "sources": list({chunk.title for _, chunk in retrieved}),
+                    "retrieval_count": len(retrieved),
+                    "score_max": round(float(score_max), 4),
+                    "mode": mode,
+                    "latency_ms": int((time.time() - t0) * 1000),
+                    "llm_provider": llm_provider,
+                    "llm_model": llm_model,
+                    "reranker_active": bool(reranker is not None),
+                    "rewrite_used": bool(rewrite_used),
+                    "rewrite_query": rewrite_used,
+                    "rewrite_provider": rewrite_provider if rewrite_used else None,
+                    "rewrite_model": rewrite_model if rewrite_used else None,
+                })
+
+            fallback = rulebase_fallback_payload()
+            if fallback:
+                fallback["reranker_active"] = bool(reranker is not None)
+                fallback["rewrite_used"] = bool(rewrite_used)
+                fallback["rewrite_query"] = rewrite_used
+                fallback["rewrite_provider"] = rewrite_provider if rewrite_used else None
+                fallback["rewrite_model"] = rewrite_model if rewrite_used else None
+                return _apply_answer_polish(fallback)
+
             answer = _template_answer(stripped, retrieved)
             return _apply_answer_polish({
                 "answer": answer,
@@ -1421,11 +1913,38 @@ class RagService:
                 "score_max": round(float(score_max), 4),
                 "mode": "retrieval_low_confidence",
                 "latency_ms": int((time.time() - t0) * 1000),
+                "llm_provider": "template",
+                "llm_model": None,
+                "reranker_active": bool(reranker is not None),
+                "rewrite_used": bool(rewrite_used),
+                "rewrite_query": rewrite_used,
+                "rewrite_provider": rewrite_provider if rewrite_used else None,
+                "rewrite_model": rewrite_model if rewrite_used else None,
             })
 
-        answer, mode = await _generate_answer(stripped, retrieved, history=history)
-        if rewrite_used:
+        answer, mode, llm_provider, llm_model = await _generate_answer(
+            stripped,
+            retrieved,
+            history=history,
+            allow_template_fallback=False,
+        )
+        if answer and rewrite_used:
             mode = f"{mode}+rewrite"
+
+        if not answer:
+            fallback = rulebase_fallback_payload()
+            if fallback:
+                fallback["reranker_active"] = bool(reranker is not None)
+                fallback["rewrite_used"] = bool(rewrite_used)
+                fallback["rewrite_query"] = rewrite_used
+                fallback["rewrite_provider"] = rewrite_provider if rewrite_used else None
+                fallback["rewrite_model"] = rewrite_model if rewrite_used else None
+                return _apply_answer_polish(fallback)
+
+            answer = _template_answer(stripped, retrieved)
+            mode = "retrieval"
+            llm_provider = "template"
+            llm_model = None
 
         return _apply_answer_polish({
             "answer": answer,
@@ -1434,6 +1953,13 @@ class RagService:
             "score_max": round(float(score_max), 4),
             "mode": mode,
             "latency_ms": int((time.time() - t0) * 1000),
+            "llm_provider": llm_provider,
+            "llm_model": llm_model,
+            "reranker_active": bool(reranker is not None),
+            "rewrite_used": bool(rewrite_used),
+            "rewrite_query": rewrite_used,
+            "rewrite_provider": rewrite_provider if rewrite_used else None,
+            "rewrite_model": rewrite_model if rewrite_used else None,
         })
 
 

@@ -25,7 +25,6 @@ enum DebtStatus {
 enum TransactionType {
   EARN        // online ride net earnings credited to driver
   COMMISSION  // cash ride commission debited from driver
-  BONUS       // incentive bonus credited to driver
   WITHDRAW    // driver withdrawal debited
   REFUND      // refund credited (ride cancelled after online payment)
   TOP_UP      // driver wallet top-up credited
@@ -54,16 +53,9 @@ enum MerchantLedgerCategory {
   PAYOUT     // net earnings paid out to driver (liability settled)
   COMMISSION // platform commission kept from cash ride
   WITHDRAW   // driver withdrawal paid out
-  BONUS      // bonus paid to driver
   VOUCHER    // voucher discount absorbed by platform
   REFUND     // customer refund paid by platform
   TOP_UP     // driver top-up received (cash in)
-}
-
-enum IncentiveRuleType {
-  TRIP_COUNT
-  DISTANCE_KM
-  PEAK_HOUR
 }
 
 enum TopUpProvider {
@@ -254,39 +246,6 @@ model WalletTopUpOrder {
 
   @@index([driverId, createdAt(sort: Desc)])
   @@map("wallet_topup_orders")
-}
-
-// ─── Incentive Rules ────────────────────────────────────────────────────────
-
-model IncentiveRule {
-  id             String            @id @default(uuid())
-  type           IncentiveRuleType
-  conditionValue Float
-  rewardAmount   Float
-  isActive       Boolean           @default(true)
-  description    String?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-
-  @@map("incentive_rules")
-}
-
-// ─── Driver Daily Stats ─────────────────────────────────────────────────────
-
-model DriverDailyStats {
-  id             String   @id @default(uuid())
-  driverId       String
-  date           DateTime @db.Date
-  tripsCompleted Int      @default(0)
-  distanceKm     Float    @default(0)
-  peakTrips      Int      @default(0)
-  bonusAwarded   Float    @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@unique([driverId, date])
-  @@index([driverId, date(sort: Desc)])
-  @@map("driver_daily_stats")
 }
 
 // ─── Outbox Events (reliable publishing) ───────────────────────────────────

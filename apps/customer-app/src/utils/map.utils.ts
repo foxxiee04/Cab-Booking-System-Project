@@ -324,13 +324,8 @@ export const parseVietnameseAddress = (address: string): {
  * Get current location from browser with multi-strategy fallback
  * Tries high-accuracy geolocation with timeout, then falls back to lower accuracy
  */
-export const getCurrentLocation = (options?: { preferFresh?: boolean }): Promise<Location> => {
+export const getCurrentLocation = (options?: { preferFresh?: boolean; allowPrompt?: boolean }): Promise<Location> => {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error('Geolocation is not supported'));
-      return;
-    }
-
     const resolvePosition = (position: GeolocationPosition) => {
       // Validate location is within Vietnam bounds (roughly)
       const { latitude: lat, longitude: lng, accuracy } = position.coords;
@@ -383,6 +378,26 @@ export const getCurrentLocation = (options?: { preferFresh?: boolean }): Promise
       }
     };
 
+    const useFreshLocation = Boolean(options?.preferFresh);
+    const allowPermissionPrompt = options?.allowPrompt !== false;
+
+    if (!useFreshLocation && resolveFromLastKnownLocation()) {
+      return;
+    }
+
+    if (!allowPermissionPrompt) {
+      reject({
+        code: 2,
+        message: 'Bấm nút định vị trên bản đồ để cho phép lấy vị trí hiện tại.',
+      } as GeolocationPositionError);
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocation is not supported'));
+      return;
+    }
+
     const handleError = (error: GeolocationPositionError, isHighAccuracy: boolean) => {
       // Keep console output concise in development and avoid duplicate timeout spam.
       if (error.code === error.TIMEOUT) {
@@ -403,7 +418,6 @@ export const getCurrentLocation = (options?: { preferFresh?: boolean }): Promise
       // If high accuracy failed, try lower accuracy
       if (isHighAccuracy && (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE)) {
         console.log('High accuracy geolocation unavailable, trying lower accuracy...');
-        const useFreshLocation = Boolean(options?.preferFresh);
         navigator.geolocation.getCurrentPosition(
           resolvePosition,
           (fallbackError) => {
@@ -426,7 +440,6 @@ export const getCurrentLocation = (options?: { preferFresh?: boolean }): Promise
     };
 
     const runGeolocation = () => {
-      const useFreshLocation = Boolean(options?.preferFresh);
       navigator.geolocation.getCurrentPosition(
         resolvePosition,
         (error) => handleError(error, true),
@@ -447,6 +460,13 @@ export const getCurrentLocation = (options?: { preferFresh?: boolean }): Promise
             // Do NOT fall back to cached location when GPS is explicitly denied by the user.
             // The cache fallback is only appropriate for transient errors (timeout / unavailable).
             reject({ code: 1, message: 'Bạn đã từ chối quyền truy cập vị trí' } as GeolocationPositionError);
+            return;
+          }
+          if (result.state === 'prompt' && !allowPermissionPrompt) {
+            reject({
+              code: 2,
+              message: 'Bấm nút định vị trên bản đồ để cho phép lấy vị trí hiện tại.',
+            } as GeolocationPositionError);
             return;
           }
           runGeolocation();

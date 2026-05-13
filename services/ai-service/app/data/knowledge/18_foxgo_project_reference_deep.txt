@@ -25,7 +25,7 @@ Hỏi: Giá ước tính trước chuyến tính bằng gì?
 
 ---
 Hỏi: RAG Mia index hoạt động ra sao tóm tắt kỹ thuật?
-Đáp: Đọc `app/data/knowledge/*.txt` → **chunk Q&A-aware** → **SentenceTransformer** embed → **FAISS** cosine + **BM25** tiếng Việt (bỏ dấu tokenizer) → **RRF** fusion → **cổng tin cậy cosine** `RAG_COSINE_ABSENT` / `RAG_COSINE_LLM` → LLM hoặc template.
+Đáp: Đọc `app/data/knowledge/*.txt` → **chunk Q&A-aware** → **SentenceTransformer** embed → **FAISS** cosine + **BM25** tiếng Việt (bỏ dấu tokenizer) → **RRF** fusion + precision pass nhẹ → nếu bật thì **cross-encoder reranker** xếp lại top-N → **cổng tin cậy cosine** `RAG_COSINE_ABSENT` / `RAG_COSINE_LLM` → LLM hoặc template.
 
 ---
 Hỏi: Vì sao RRF score không được dùng để gate LLM?
@@ -33,7 +33,7 @@ Hỏi: Vì sao RRF score không được dùng để gate LLM?
 
 ---
 Hỏi: Các provider LLM hỗ trợ cho Mia và thứ tự ưu tiên?
-Đáp: Biến `RAG_LLM_PROVIDER`: **auto** thử **Claude → Groq → Gemini → OpenAI → template**. Khóa API tương ứng `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`.
+Đáp: Biến `RAG_LLM_PROVIDER`: **auto** thử **OpenAI GPT → Gemini → rulebase/template**. Claude/Groq vẫn dùng được khi cấu hình explicit `RAG_LLM_PROVIDER=claude` hoặc `groq`. Khóa API chính là `OPENAI_API_KEY`, fallback là `GEMINI_API_KEY`.
 
 ---
 Hỏi: Làm sao reload kho tri thức RAG khi sửa file `.txt`?
@@ -45,11 +45,11 @@ Hỏi: Ngưỡng `RAG_MAX_CONTEXT_CHARS` dùng để làm gì?
 
 ---
 Hỏi: Endpoint nào cho khách hỏi Mia qua HTTP?
-Đáp: **`POST /api/chat`** với JSON `message`, optional `history[]`, `top_k`. Phản hồi có `mode` (`llm_*`, `retrieval_low_confidence`, `no_context`, …).
+Đáp: **`POST /api/chat`** trực tiếp ai-service hoặc **`POST /api/ai/chat`** qua gateway. JSON gồm `message`, optional `history[]`, `top_k`. Phản hồi có `mode`, `llm_provider`, `llm_model`, `reranker_active`, `rewrite_used`, `score_max`.
 
 ---
 Hỏi: Health AI service trả gì liên quan RAG?
-Đáp: **`GET /api/health`**: `rag.ready`, `rag.chunks`, `rag.vector_index`, cờ **đã cấu hình** LLM keys (không lộ giá trị).
+Đáp: **`GET /api/health`**: `rag.ready`, `rag.chunks`, `rag.vector_index`, provider/model hiệu lực, thứ tự fallback LLM, trạng thái query rewrite, trạng thái reranker, embedding model và cờ **đã cấu hình** LLM keys (không lộ giá trị).
 
 ---
 Hỏi: Pipeline ML chính trong ai-service?
@@ -133,7 +133,7 @@ Hỏi: Vì sao có file `16_` và `17_` roleplay?
 
 ---
 Hỏi: `GET /api/chat/status` khác gì health?
-Đáp: **Status** thêm **embedding model class**, `chunks_indexed`; **health** chuẩn hoá schema `RagHealthInfo`.
+Đáp: **Status** là bản ngắn để debug chat: `chunks_indexed`, `effective_llm_provider`, `effective_llm_model`, `key_configured`, `reranker_active`, `query_rewrite_provider_order`. **Health** chuẩn hoá schema `RagHealthInfo` cho monitor.
 
 ---
 Hỏi: OpenAPI có liệt kê `/api/chat`?
@@ -141,7 +141,7 @@ Hỏi: OpenAPI có liệt kê `/api/chat`?
 
 ---
 Hỏi: Trường `mode` trả về ý nghĩa cho app?
-Đáp: **Telemetry**: `llm_*` là LLM; `retrieval_low_confidence` là **trích xuất**; `no_context` là **từ chối trả lời tự tin**.
+Đáp: **Telemetry**: `llm_*` là LLM; `retrieval_low_confidence` là **trích xuất**; `no_context` là **từ chối trả lời tự tin**. Xem thêm `llm_provider`/`llm_model` để biết API và model thật sự đã trả lời, ví dụ `openai` + `gpt-4o-mini`.
 
 ---
 Hỏi: `MAX_HISTORY_TURNS` trong RAG?

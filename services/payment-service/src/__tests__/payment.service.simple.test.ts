@@ -60,8 +60,8 @@ jest.mock('../generated/prisma-client', () => ({
     ZALOPAY: 'ZALOPAY',
   },
   WalletTransactionType: {
-    BONUS: 'BONUS',
     COMMISSION: 'COMMISSION',
+    REFUND: 'REFUND',
   },
 }));
 
@@ -114,10 +114,6 @@ describe('PaymentService - Simple Test Suite', () => {
     (paymentService as any).walletService = {
       debitCommission: jest.fn().mockResolvedValue(-8_789),
       creditEarning: jest.fn().mockResolvedValue(42_000),
-    };
-    (paymentService as any).incentiveService = {
-      evaluateAfterRide: jest.fn().mockResolvedValue({ totalBonus: 0, bonuses: [] }),
-      getDailyStats: jest.fn(),
     };
     (paymentService as any).voucherService = {
       applyVoucher: jest.fn(),
@@ -206,13 +202,11 @@ describe('PaymentService - Simple Test Suite', () => {
         grossFare: 50_000,
         commissionRate: 0.2,
         platformFee: 10_000,
-        bonus: 2_000,
         penalty: 789,
-        netEarnings: 41_211,
+        netEarnings: 39_211,
         driverCollected: true,
-        cashDebt: 8_789,
+        cashDebt: 10_789,
         breakdown: {
-          bonuses: { highRating: 2_000 },
           penalties: { lowAcceptance: 789 },
         },
       } as any);
@@ -242,7 +236,7 @@ describe('PaymentService - Simple Test Suite', () => {
         paymentMethod: 'CASH',
       });
 
-      expect((paymentService as any).walletService.debitCommission).toHaveBeenCalledWith('driver-1', 8_789, 'ride-cash-1');
+      expect((paymentService as any).walletService.debitCommission).toHaveBeenCalledWith('driver-1', 10_789, 'ride-cash-1');
       expect(mockPrisma.driverEarnings.updateMany).toHaveBeenCalledWith({
         where: { rideId: 'ride-cash-1', driverId: 'driver-1', driverCollected: true },
         data: { isPaid: true },
@@ -257,9 +251,8 @@ describe('PaymentService - Simple Test Suite', () => {
       mockPrisma.driverEarnings.findMany.mockResolvedValue([]);
       mockPrisma.driverEarnings.count.mockResolvedValue(0);
       mockPrisma.driverEarnings.aggregate
-        .mockResolvedValueOnce({ _sum: { grossFare: 0, platformFee: 0, bonus: 0, penalty: 0, netEarnings: 0, cashDebt: 0 } })
+        .mockResolvedValueOnce({ _sum: { grossFare: 0, platformFee: 0, penalty: 0, netEarnings: 0, cashDebt: 0 } })
         .mockResolvedValueOnce({ _sum: { cashDebt: 0 } });
-      mockPrisma.walletTransaction.aggregate.mockResolvedValue({ _sum: { amount: 15_000 } });
 
       const result = await paymentService.getDriverEarnings('driver-1');
 
@@ -272,7 +265,6 @@ describe('PaymentService - Simple Test Suite', () => {
         },
         data: { isPaid: true },
       });
-      expect(result.summary.totalBonus).toBe(15_000);
       expect(result.summary.unpaidCashDebt).toBe(0);
     });
   });

@@ -115,11 +115,10 @@ model DriverEarnings {
   platformFee     Float                      // grossFare × commissionRate (rounded)
 
   // Adjustments (VND)
-  bonus           Float    @default(0)       // total incentive bonus
   penalty         Float    @default(0)       // total penalty deduction
 
   // Net result (VND)
-  netEarnings     Float                      // grossFare − platformFee + bonus − penalty
+  netEarnings     Float                      // grossFare − platformFee − penalty
 
   // Payment accounting
   paymentMethod   String                     // CASH | MOMO | VNPAY | …
@@ -131,7 +130,6 @@ model DriverEarnings {
   paidAt          DateTime?
 
   // JSON breakdown for audit trail
-  bonusBreakdown   Json?                     // { peakHour: 15000, tripMilestone: 50000, … }
   penaltyBreakdown Json?                     // { highCancelRate: 3000, … }
 
   createdAt       DateTime @default(now())
@@ -159,16 +157,9 @@ model OutboxEvent {
 enum WalletTransactionType {
   EARN        // Net income credited from an online ride
   COMMISSION  // Platform fee debited for a cash ride
-  BONUS       // Incentive reward credited
   WITHDRAW    // Driver withdrawal debited
   REFUND      // Reversal of a previous EARN (online-ride refund)
   TOP_UP      // Driver deposits money into wallet via MoMo/VNPay
-}
-
-enum IncentiveRuleType {
-  TRIP_COUNT  // Total trips in a calendar day (≥ conditionValue → rewardAmount)
-  DISTANCE_KM // Total km driven in a calendar day (≥ conditionValue → rewardAmount)
-  PEAK_HOUR   // Per-trip bonus; conditionValue unused (0); always applies during peak
 }
 
 // The driver's real-time financial balance.
@@ -196,7 +187,7 @@ model WalletTransaction {
   amount       Float                 // always a positive number; direction encoded in type
   balanceAfter Float                 // wallet balance snapshot after this transaction
   description  String?
-  rideId       String?               // links back to the originating ride (nullable for WITHDRAW/BONUS)
+  rideId       String?               // links back to the originating ride (nullable for WITHDRAW/TOP_UP)
 
   createdAt    DateTime @default(now())
 
@@ -205,39 +196,6 @@ model WalletTransaction {
   @@index([driverId, createdAt(sort: Desc)])
   @@index([rideId])
   @@map("wallet_transactions")
-}
-
-// Configurable incentive rules stored in DB (editable by admin).
-model IncentiveRule {
-  id             String            @id @default(uuid())
-  type           IncentiveRuleType
-  conditionValue Float             // 10 → 10 trips; 100 → 100 km; 0 → peak-hour (per-trip)
-  rewardAmount   Float             // VND bonus
-  isActive       Boolean           @default(true)
-  description    String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("incentive_rules")
-}
-
-// Running totals per driver per calendar day for incentive evaluation.
-model DriverDailyStats {
-  id             String   @id @default(uuid())
-  driverId       String
-  date           DateTime @db.Date  // calendar date (UTC)
-  tripsCompleted Int      @default(0)
-  distanceKm     Float    @default(0)
-  peakTrips      Int      @default(0)
-  bonusAwarded   Float    @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([driverId, date])
-  @@index([driverId, date(sort: Desc)])
-  @@map("driver_daily_stats")
 }
 
 // ─── Wallet Top-Up via MoMo / VNPay ──────────────────────────────────────

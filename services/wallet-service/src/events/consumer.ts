@@ -4,13 +4,12 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 import { DriverWalletService } from '../services/driver-wallet.service';
 import { MerchantLedgerService } from '../services/merchant-ledger.service';
-import { BonusService } from '../services/bonus.service';
 import { EventPublisher } from './publisher';
 
 /**
  * Payload emitted by payment-service after a ride earning is settled.
- * Includes full commission/bonus breakdown so wallet-service can update
- * balances without needing to call payment-service.
+ * Includes the settled earning numbers so wallet-service can update balances
+ * without needing to call payment-service.
  */
 interface DriverEarningSettledPayload {
   rideId: string;
@@ -23,7 +22,6 @@ interface DriverEarningSettledPayload {
   platformFee: number;
   netEarnings: number;
   cashDebt: number;         // >0 for CASH rides
-  bonus: number;
   voucherDiscount: number;
 }
 
@@ -51,7 +49,6 @@ export class EventConsumer {
 
   private walletService: DriverWalletService;
   private ledgerService: MerchantLedgerService;
-  private bonusService: BonusService;
 
   isConnected(): boolean {
     return Boolean(this.connection && this.channel);
@@ -60,7 +57,6 @@ export class EventConsumer {
   constructor(prisma: PrismaClient, eventPublisher: EventPublisher) {
     this.walletService = new DriverWalletService(prisma, eventPublisher);
     this.ledgerService = new MerchantLedgerService(prisma);
-    this.bonusService  = new BonusService(prisma, this.walletService, this.ledgerService);
   }
 
   async connect(): Promise<void> {
@@ -134,7 +130,6 @@ export class EventConsumer {
       platformFee,
       netEarnings,
       cashDebt,
-      bonus,
       voucherDiscount,
     } = payload;
 
@@ -163,15 +158,6 @@ export class EventConsumer {
       });
     }
 
-    // Credit any per-ride bonus
-    if (bonus > 0) {
-      await this.walletService.creditBonus({
-        driverId: walletOwnerId,
-        amount: bonus,
-        description: 'Thưởng chuyến đi',
-        rideId,
-      });
-    }
   }
 
   private async handleRefundCompleted(payload: RefundCompletedPayload): Promise<void> {

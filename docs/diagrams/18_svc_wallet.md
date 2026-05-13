@@ -12,7 +12,6 @@ graph TB
         subgraph CTRL["Controllers"]
             WC["WalletController"]
             MC["MerchantController<br/>(admin only)"]
-            INC["IncentiveController"]
         end
 
         subgraph SVC["Domain Services"]
@@ -26,7 +25,6 @@ graph TB
         subgraph SCHED["Schedulers (cron)"]
             T24H["PendingEarnings cron<br/>settle pending → available<br/>(every 5 min)"]
             DEBT_DUE["DebtRecord cron<br/>flag OVERDUE after dueDate<br/>(daily)"]
-            INCENT["IncentiveAwarder cron<br/>award trip-count / distance<br/>bonuses (daily)"]
         end
 
         subgraph LEDGER["Ledger Sources of Truth"]

@@ -124,7 +124,6 @@ export interface Payment {
     grossFare: number;
     commissionRate: number;
     platformFee: number;
-    bonus: number;
     penalty: number;
     netEarnings: number;
     paymentMethod: string;

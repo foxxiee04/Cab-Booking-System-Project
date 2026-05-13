@@ -81,8 +81,6 @@
   <text x="900" y="562" class="small">Nhận thông báo</text>
   <text x="900" y="580" class="small">realtime</text>
 
-  <text x="900" y="655" class="note">Các chức năng có dữ liệu cá nhân / giao dịch đều yêu cầu đăng nhập.</text>
-
   <!-- Customer use cases -->
   <ellipse cx="330" cy="165" rx="110" ry="34" class="uc"/>
   <text x="330" y="157" class="small">Nhập điểm đón</text>
@@ -213,28 +211,25 @@
 
   <!-- Actor associations: orthogonal and routed around text. -->
   <path d="M92 300 H165 V285 H320" class="assoc"/>
-  <path d="M92 300 H165 V470 H788" class="assoc"/>
+  <path d="M92 300 H165 V410 H235" class="assoc"/>
+  <path d="M92 300 H165 V535 H218" class="assoc"/>
   <path d="M92 300 H165 V660 H220" class="assoc"/>
-  <path d="M92 300 H165 V170 H800" class="assoc"/>
-  <path d="M92 300 H165 V370 H788" class="assoc"/>
 
   <path d="M1708 530 H1635 V430 H1490" class="assoc"/>
   <path d="M1708 530 H1635 V165 H1588" class="assoc"/>
+  <path d="M1708 530 H1635 V560 H1645" class="assoc"/>
   <path d="M1708 530 H1635 V795 H1616" class="assoc"/>
-  <path d="M1708 530 H1635 V170 H1000" class="assoc"/>
-  <path d="M1708 530 H1635 V370 H1012" class="assoc"/>
 
   <path d="M92 1080 H165 V990 H194" class="assoc"/>
   <path d="M92 1080 H165 V990 H437" class="assoc"/>
   <path d="M92 1080 H165 V1135 H202" class="assoc"/>
-  <path d="M92 1080 H165 V170 H800" class="assoc"/>
 
   <!-- Customer include / extend relationships. Kept short to avoid unreadable crossings. -->
-  <path d="M465 243 V165 H440" class="rel"/>
-  <text x="438" y="202" class="tiny">&lt;&lt;include&gt;&gt;</text>
+  <path d="M435 246 V220 H330 V199" class="rel"/>
+  <text x="370" y="220" class="tiny">&lt;&lt;include&gt;&gt;</text>
 
-  <path d="M465 243 V165 H480" class="rel"/>
-  <text x="540" y="202" class="tiny">&lt;&lt;include&gt;&gt;</text>
+  <path d="M495 246 V220 H600 V199" class="rel"/>
+  <text x="550" y="220" class="tiny">&lt;&lt;include&gt;&gt;</text>
 
   <path d="M610 285 H800 V170" class="rel"/>
   <text x="720" y="262" class="tiny">&lt;&lt;include&gt;&gt;</text>
@@ -302,6 +297,4 @@
   <path d="M1045 1020 V1062 H1290 V1024" class="rel"/>
   <text x="1168" y="1054" class="tiny">&lt;&lt;extend&gt;&gt;</text>
 
-  <path d="M1290 1101 V1070 H900 V604" class="rel"/>
-  <text x="1085" y="1084" class="tiny">&lt;&lt;include&gt;&gt;</text>
 </svg>

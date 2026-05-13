@@ -464,8 +464,7 @@ services:
       - SUGGESTED_RADIUS_MAX_KM=${SUGGESTED_RADIUS_MAX_KM:-5.0}
       - SUGGESTED_SURGE_MIN=${SUGGESTED_SURGE_MIN:-1.0}
       - SUGGESTED_SURGE_MAX=${SUGGESTED_SURGE_MAX:-2.0}
-      # RAG chatbot — set at least one LLM key for human-like answers
-      # Priority order: Claude → Groq → Gemini → OpenAI → template fallback
+      # RAG chatbot — auto priority: OpenAI GPT → Gemini → rulebase/template fallback
       - RAG_LLM_PROVIDER=${RAG_LLM_PROVIDER:-auto}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - RAG_LLM_MODEL_CLAUDE=${RAG_LLM_MODEL_CLAUDE:-claude-haiku-4-5-20251001}
@@ -473,11 +472,21 @@ services:
       - RAG_LLM_MODEL=${RAG_LLM_MODEL:-llama-3.3-70b-versatile}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - RAG_LLM_MODEL_GEMINI=${RAG_LLM_MODEL_GEMINI:-gemini-2.5-flash}
+      - RAG_LLM_MODEL_GEMINI_REWRITE=${RAG_LLM_MODEL_GEMINI_REWRITE:-gemini-2.5-flash}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - RAG_LLM_MODEL_OPENAI=${RAG_LLM_MODEL_OPENAI:-gpt-4o-mini}
-      - RAG_LLM_TIMEOUT_S=${RAG_LLM_TIMEOUT_S:-20}
+      - RAG_LLM_TIMEOUT_S=${RAG_LLM_TIMEOUT_S:-5}
+      - RAG_LLM_REWRITE_TIMEOUT_S=${RAG_LLM_REWRITE_TIMEOUT_S:-3}
       - RAG_EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-bkai-foundation-models/vietnamese-bi-encoder}
+      - RAG_TOP_K=${RAG_TOP_K:-8}
+      - RAG_FAISS_PREFILTER=${RAG_FAISS_PREFILTER:-0.16}
+      - RAG_COSINE_ABSENT=${RAG_COSINE_ABSENT:-0.22}
+      - RAG_COSINE_LLM=${RAG_COSINE_LLM:-0.30}
       - RAG_RERANKER_ENABLED=${RAG_RERANKER_ENABLED:-true}
+      - RAG_RERANKER_MODEL=${RAG_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
+      - RAG_RERANK_POOL=${RAG_RERANK_POOL:-20}
+      - RAG_QUERY_REWRITE_ENABLED=${RAG_QUERY_REWRITE_ENABLED:-true}
+      - RAG_QUERY_REWRITE_PROVIDER=${RAG_QUERY_REWRITE_PROVIDER:-auto}
       # Periodic maintenance (0 = off): RAG re-index from app/data/knowledge/*.txt
       - AI_AUTO_RELOAD_RAG_SEC=${AI_AUTO_RELOAD_RAG_SEC:-0}
       # ML retrain: heavy CPU; enable AI_AUTO_RETRAIN_ENABLED=true and interval > 0

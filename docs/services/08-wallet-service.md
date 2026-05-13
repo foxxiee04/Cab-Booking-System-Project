@@ -94,7 +94,7 @@ DebtRecord {
 WalletTransaction {
   id              String      @id @default(uuid())
   driverId        String
-  type            WalletTxType        -- EARN | COMMISSION | BONUS | WITHDRAW | REFUND | TOP_UP
+  type            WalletTxType        -- EARN | COMMISSION | WITHDRAW | REFUND | TOP_UP
   direction       TxDirection         -- CREDIT | DEBIT
   amount          Decimal
   balanceAfter    Decimal             -- Số dư sau giao dịch (immutable snapshot)
@@ -209,7 +209,6 @@ Rút tiền:
 | GET | `/api/admin/wallet/drivers/:driverId/transactions` | Giao dịch của tài xế |
 | POST | `/api/admin/wallet/withdrawals/:id/approve` | Duyệt rút tiền |
 | POST | `/api/admin/wallet/withdrawals/:id/reject` | Từ chối rút tiền |
-| GET | `/api/admin/wallet/incentive-rules` | Danh sách luật thưởng |
 
 ---
 

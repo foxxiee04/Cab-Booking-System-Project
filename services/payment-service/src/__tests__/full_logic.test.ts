@@ -9,12 +9,11 @@
  *   III. Driver Top-Up    (TC-07..08)
  *   IV.  Driver Withdraw  (TC-09..11)
  *   V.   Voucher          (TC-12..13)
- *   VI.  Bonus / Incentive(TC-14..15)
- *   VII. Refund           (TC-16..18)
- *   VIII.Debt Control     (TC-19..20)
- *   IX.  Reconciliation   (TC-21)
- *   X.   Edge Cases       (TC-22..24)
- *   XI.  Admin            (TC-25..27)
+ *   VI.  Refund           (TC-16..18)
+ *   VII. Debt Control     (TC-19..20)
+ *   VIII.Reconciliation   (TC-21)
+ *   IX.  Edge Cases       (TC-22..24)
+ *   X.   Admin            (TC-25..27)
  */
 
 // ─── Mock Prisma (must be first) ─────────────────────────────────────────────
@@ -44,7 +43,7 @@ const mockPrisma: any = {
     findUnique: jest.fn(),
     count: jest.fn().mockResolvedValue(0),
     aggregate: jest.fn().mockResolvedValue({
-      _sum: { grossFare: 0, platformFee: 0, bonus: 0, penalty: 0, netEarnings: 0, cashDebt: 0 },
+      _sum: { grossFare: 0, platformFee: 0, penalty: 0, netEarnings: 0, cashDebt: 0 },
     }),
   },
   driverWallet: {
@@ -72,15 +71,6 @@ const mockPrisma: any = {
     findUnique: jest.fn(),
     upsert: jest.fn(),
     aggregate: jest.fn().mockResolvedValue({ _sum: { usedCount: 0 } }),
-    findMany: jest.fn().mockResolvedValue([]),
-  },
-  incentiveRule: {
-    findMany: jest.fn().mockResolvedValue([]),
-    create: jest.fn(),
-  },
-  driverDailyStats: {
-    upsert: jest.fn(),
-    update: jest.fn(),
     findMany: jest.fn().mockResolvedValue([]),
   },
   outboxEvent: {
@@ -116,7 +106,6 @@ jest.mock('../generated/prisma-client', () => ({
   WalletTransactionType: {
     EARN: 'EARN',
     COMMISSION: 'COMMISSION',
-    BONUS: 'BONUS',
     WITHDRAW: 'WITHDRAW',
     REFUND: 'REFUND',
     TOP_UP: 'TOP_UP',
@@ -125,11 +114,6 @@ jest.mock('../generated/prisma-client', () => ({
     PENDING: 'PENDING',
     COMPLETED: 'COMPLETED',
     FAILED: 'FAILED',
-  },
-  IncentiveRuleType: {
-    TRIP_COUNT: 'TRIP_COUNT',
-    DISTANCE_KM: 'DISTANCE_KM',
-    PEAK_HOUR: 'PEAK_HOUR',
   },
   DiscountType: {
     PERCENT: 'PERCENT',
@@ -147,7 +131,6 @@ jest.mock('../events/publisher');
 // ─── Imports ─────────────────────────────────────────────────────────────────
 import { PaymentService } from '../services/payment.service';
 import { WalletService, DEBT_LIMIT } from '../services/wallet.service';
-import { IncentiveService } from '../services/incentive.service';
 import { CommissionService, DEFAULT_COMMISSION_CONFIG } from '../services/commission.service';
 import { VoucherService } from '../services/voucher.service';
 import { EventPublisher } from '../events/publisher';
@@ -170,13 +153,12 @@ function resetAllMocks() {
   mockPrisma.driverEarnings.count.mockResolvedValue(0);
   mockPrisma.driverEarnings.updateMany.mockResolvedValue({ count: 0 });
   mockPrisma.driverEarnings.aggregate.mockResolvedValue({
-    _sum: { grossFare: 0, platformFee: 0, bonus: 0, penalty: 0, netEarnings: 0, cashDebt: 0 },
+    _sum: { grossFare: 0, platformFee: 0, penalty: 0, netEarnings: 0, cashDebt: 0 },
   });
   mockPrisma.walletTransaction.findMany.mockResolvedValue([]);
   mockPrisma.walletTransaction.aggregate.mockResolvedValue({ _sum: { amount: 0 } });
   mockPrisma.walletTransaction.count.mockResolvedValue(0);
   mockPrisma.outboxEvent.create.mockResolvedValue({});
-  mockPrisma.incentiveRule.findMany.mockResolvedValue([]);
   mockPrisma.voucher.findMany.mockResolvedValue([]);
   mockPrisma.userVoucher.findMany.mockResolvedValue([]);
   mockPrisma.userVoucher.aggregate.mockResolvedValue({ _sum: { usedCount: 0 } });
@@ -213,9 +195,6 @@ describe('TC-01: Online MOMO Payment — Success', () => {
     (svc as any).walletService = {
       debitCommission: jest.fn(),
       creditEarning: creditEarningMock,
-    };
-    (svc as any).incentiveService = {
-      evaluateAfterRide: jest.fn().mockResolvedValue({ totalBonus: 0, bonuses: [] }),
     };
     (svc as any).voucherService = {
       applyVoucher: jest.fn(),
@@ -255,7 +234,7 @@ describe('TC-01: Online MOMO Payment — Success', () => {
     const creditedAmount = creditEarningMock.mock.calls[0][1] as number;
     // Net earnings must be positive (cannot be 0 or negative for a valid ride)
     expect(creditedAmount).toBeGreaterThan(0);
-    // Net earnings can be >= RIDE_PRICE when bonuses are included; must be < 2x fare as sanity check
+    // Net earnings must stay below the gross fare for a normal commission calculation.
     expect(creditedAmount).toBeLessThan(RIDE_PRICE * 2);
   });
 
@@ -396,7 +375,6 @@ describe('TC-04: Cash Ride — Normal Flow', () => {
     const { svc } = makePaymentService();
     const debitMock = jest.fn().mockResolvedValue(-PLATFORM_FEE);
     (svc as any).walletService = { debitCommission: debitMock, creditEarning: jest.fn() };
-    (svc as any).incentiveService = { evaluateAfterRide: jest.fn().mockResolvedValue({ totalBonus: 0, bonuses: [] }) };
     (svc as any).voucherService = { applyVoucher: jest.fn(), redeemVoucher: jest.fn() };
 
     mockPrisma.fare.findUnique.mockResolvedValue(null);
@@ -724,71 +702,7 @@ describe('TC-13: Voucher Budget Exhausted', () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// VI. TEST GROUP: BONUS / INCENTIVE
-// ══════════════════════════════════════════════════════════════════════════════
-
-describe('TC-14: Driver Qualifies for Bonus — Trip Milestone', () => {
-  beforeEach(resetAllMocks);
-
-  it('IncentiveService credits bonus wallet when trip milestone hit (20 trips)', async () => {
-    const walletSvc = new WalletService(mockPrisma as any);
-    const creditBonusMock = jest.spyOn(walletSvc, 'creditBonus').mockResolvedValue(100_000);
-
-    const incentiveSvc = new IncentiveService(mockPrisma as any, walletSvc);
-    const BONUS_AMOUNT = 50_000;
-
-    mockPrisma.incentiveRule.findMany.mockResolvedValue([
-      { id: 'rule-milestone', type: 'TRIP_COUNT', conditionValue: 20, rewardAmount: BONUS_AMOUNT, isActive: true },
-    ]);
-    // Stats after this ride = exactly 20 trips
-    mockPrisma.driverDailyStats.upsert.mockResolvedValue({
-      driverId: 'drv-bonus', tripsCompleted: 20, distanceKm: 150, peakTrips: 5, bonusAwarded: 0,
-    });
-    mockPrisma.driverDailyStats.update.mockResolvedValue({});
-
-    const result = await incentiveSvc.evaluateAfterRide({
-      rideId: 'ride-bonus-1',
-      driverId: 'drv-bonus',
-      distanceKm: 10,
-      completedAt: new Date(),
-    });
-
-    expect(result.totalBonus).toBe(BONUS_AMOUNT);
-    expect(result.bonuses[0].type).toBe('TRIP_COUNT');
-    expect(creditBonusMock).toHaveBeenCalledWith('drv-bonus', BONUS_AMOUNT, expect.any(String), 'ride-bonus-1');
-  });
-});
-
-describe('TC-15: Bonus Trigger Duplicate — Only Credits Once', () => {
-  beforeEach(resetAllMocks);
-
-  it('milestone bonus only triggers when count is exact multiple (not 21)', async () => {
-    const walletSvc = new WalletService(mockPrisma as any);
-    const creditBonusMock = jest.spyOn(walletSvc, 'creditBonus').mockResolvedValue(100_000);
-    const incentiveSvc = new IncentiveService(mockPrisma as any, walletSvc);
-
-    mockPrisma.incentiveRule.findMany.mockResolvedValue([
-      { id: 'rule-ms', type: 'TRIP_COUNT', conditionValue: 20, rewardAmount: 50_000, isActive: true },
-    ]);
-    // 21st trip — not a milestone
-    mockPrisma.driverDailyStats.upsert.mockResolvedValue({
-      driverId: 'drv-nodupe', tripsCompleted: 21, distanceKm: 160, peakTrips: 0, bonusAwarded: 50000,
-    });
-
-    const result = await incentiveSvc.evaluateAfterRide({
-      rideId: 'ride-nodupe-1',
-      driverId: 'drv-nodupe',
-      distanceKm: 10,
-      completedAt: new Date(),
-    });
-
-    expect(result.totalBonus).toBe(0);
-    expect(creditBonusMock).not.toHaveBeenCalled();
-  });
-});
-
-// ══════════════════════════════════════════════════════════════════════════════
-// VII. TEST GROUP: REFUND
+// VI. TEST GROUP: REFUND
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe('TC-16: Refund Before Settlement (COMPLETED → REFUNDED)', () => {
@@ -990,7 +904,7 @@ describe('TC-20: Driver Exceeds Maximum Debt — Full Blocking', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe('TC-21: Reconciliation — Money Adds Up', () => {
-  it('CommissionService: grossFare = platformFee + netEarnings (no bonus/penalty)', () => {
+  it('CommissionService: grossFare = platformFee + netEarnings when there is no penalty', () => {
     const commSvc = new CommissionService(DEFAULT_COMMISSION_CONFIG);
     const grossFare = 200_000;
 
@@ -1004,7 +918,7 @@ describe('TC-21: Reconciliation — Money Adds Up', () => {
     expect(result.grossFare).toBe(result.platformFee + result.netEarnings);
   });
 
-  it('CommissionService: cashDebt = platformFee (no bonus/penalty, cash)', () => {
+  it('CommissionService: cashDebt = platformFee when there is no penalty on cash rides', () => {
     const commSvc = new CommissionService(DEFAULT_COMMISSION_CONFIG);
     const grossFare = 150_000;
 
@@ -1019,20 +933,18 @@ describe('TC-21: Reconciliation — Money Adds Up', () => {
     expect(result.driverCollected).toBe(true);
   });
 
-  it('CommissionService: accounting holds with bonus (cash)', () => {
+  it('CommissionService: accounting holds with penalty (cash)', () => {
     const commSvc = new CommissionService(DEFAULT_COMMISSION_CONFIG);
 
     const result = commSvc.calculateCommission(100_000, {
       vehicleType: 'ECONOMY',
       surgeMultiplier: 1.0,
       paymentMethod: 'CASH',
-      driverStats: { tripsCompletedToday: 5, rating: 4.9 },
+      driverStats: { acceptanceRate: 0.5 },
     });
 
-    // Ledger balance: grossFare = netEarnings + platformFee (before bonus adjustment)
-    const bonus = result.bonus;
-    expect(result.netEarnings).toBe(Math.max(0, result.grossFare - result.platformFee + bonus - result.penalty));
-    expect(result.cashDebt).toBe(Math.max(0, result.platformFee - bonus + result.penalty));
+    expect(result.netEarnings).toBe(Math.max(0, result.grossFare - result.platformFee - result.penalty));
+    expect(result.cashDebt).toBe(Math.max(0, result.platformFee + result.penalty));
   });
 });
 
@@ -1199,18 +1111,15 @@ describe('TC-27: Admin — Revenue / Payout Statistics', () => {
     mockPrisma.driverEarnings.count.mockResolvedValue(3);
     mockPrisma.driverEarnings.aggregate
       .mockResolvedValueOnce({
-        _sum: { grossFare: 300_000, platformFee: 60_000, bonus: 5_000, penalty: 0, netEarnings: 245_000, cashDebt: 0 },
+        _sum: { grossFare: 300_000, platformFee: 60_000, penalty: 0, netEarnings: 240_000, cashDebt: 0 },
       })
       .mockResolvedValueOnce({ _sum: { cashDebt: 0 } });
-    mockPrisma.walletTransaction.aggregate.mockResolvedValue({ _sum: { amount: 15_000 } }); // incentive bonuses
 
     const result = await svc.getDriverEarnings('drv-stats-1');
 
     expect(result.summary.totalGrossFare).toBe(300_000);
     expect(result.summary.totalPlatformFee).toBe(60_000);
-    // totalBonus = commission bonus + wallet bonus (incentive)
-    expect(result.summary.totalBonus).toBe(5_000 + 15_000);
-    expect(result.summary.totalNetEarnings).toBe(245_000);
+    expect(result.summary.totalNetEarnings).toBe(240_000);
     expect(result.summary.unpaidCashDebt).toBe(0);
   });
 
