@@ -618,10 +618,10 @@ services:
     deploy:
       replicas: 1
       placement:
-        # Same worker half as pricing-service (app.half==2) — heavy AI off infra; requires node label.
+        # Dedicated ML worker. Do not co-locate AI with app.half workers on small nodes.
         constraints:
           - node.role == worker
-          - node.labels.app.half == 2
+          - node.labels.ml == true
       update_config:
         parallelism: 1
         delay: 10s
@@ -634,11 +634,11 @@ services:
       resources:
         limits:
           cpus: '1.5'
-          # RAG + reranker: đủ headroom; chạy trên worker để tránh tranh RAM với DB trên infra.
-          memory: 3072M
+          # RAG + reranker need a dedicated 8GB+ worker for local-like quality.
+          memory: 6144M
         reservations:
-          cpus: '0.25'
-          memory: 768M
+          cpus: '0.5'
+          memory: 2048M
 
   # ══════════════════════════════════════════════════════════════════════════
   # AUTO-SCALER — chạy trên Manager, query Prometheus → docker service scale
