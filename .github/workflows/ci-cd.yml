@@ -340,8 +340,35 @@ jobs:
         if: matrix.needs_shared
         run: npm run build:shared
 
+      - name: Prepare Docker daemon for Buildx
+        run: |
+          sudo systemctl restart docker
+
+          ready=false
+          for attempt in 1 2 3 4 5 6; do
+            if docker info >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            echo "::warning::Docker daemon is not ready (attempt ${attempt}/6), retrying in 5s..."
+            sleep 5
+          done
+
+          if [ "${ready}" != "true" ]; then
+            docker info
+            exit 1
+          fi
+
+          docker buildx rm cab-ci-builder >/dev/null 2>&1 || true
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          name: cab-ci-builder
+          driver: docker-container
+          driver-opts: |
+            network=host
+          install: true
 
       - name: Login to Docker Hub
         if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
