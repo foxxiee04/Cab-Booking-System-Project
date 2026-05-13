@@ -418,6 +418,15 @@ export default function WalletTopUpReturn() {
                         </Stack>
                       )}
 
+                      {newBalance !== null && (
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+                          <Typography variant="body2" color="text.secondary">Số dư mới</Typography>
+                          <Typography variant="body1" fontWeight={800} color="primary.main">
+                            {formatCurrency(newBalance)}
+                          </Typography>
+                        </Stack>
+                      )}
+
                       {activated && state === 'success' && (
                         <Chip color="success" label="Tài khoản tài xế đã được kích hoạt"
                           sx={{ fontWeight: 700, alignSelf: 'flex-start' }} />
