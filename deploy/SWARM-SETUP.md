@@ -457,7 +457,7 @@ AI_SERVICE_DNS_1=172.31.0.2
 AI_SERVICE_DNS_2=8.8.8.8
 ```
 
-**Ghi chú (AI parity):** `docker-stack.thesis.yml` đặt `ai-service` vào worker có `ml=true`. Đồng bộ `~/cab-booking/.env` với máy local cho API key và mọi `RAG_*` bạn đã chỉnh. Chỉ tắt `RAG_RERANKER_ENABLED=false` hoặc dùng embedding nhỏ hơn khi worker AI không đủ RAM/cache.
+**Ghi chú (AI parity):** `docker-stack.thesis.yml` đặt `ai-service` vào worker có `ml=true`. Đồng bộ `~/cab-booking/.env` với máy local cho API key và mọi `RAG_*` bạn đã chỉnh. `ai-service` nối cả `backend` và `frontend`: `backend` để các service nội bộ gọi AI, `frontend` để AI có outbound Internet gọi OpenAI/Gemini/HuggingFace mà không publish port 8000. Chỉ tắt `RAG_RERANKER_ENABLED=false` hoặc dùng embedding nhỏ hơn khi worker AI không đủ RAM/cache.
 **Tạo random secrets ngay trong terminal:**
 ```bash
 echo "JWT_SECRET=$(openssl rand -hex 32)"
@@ -673,6 +673,13 @@ docker stack ps cab-booking --filter "desired-state=running"
 ```bash
 docker service ps cab-booking_ai-service --no-trunc
 # Cột NODE phải là worker có label ml=true.
+```
+
+**Kiểm tra collectors toàn cluster:**
+```bash
+docker stack services cab-booking | grep -E 'promtail|cadvisor|node-exporter'
+# Với 6 nodes: promtail 6/6, cadvisor 6/6, node-exporter 6/6.
+# promtail dùng Swarm config nên không cần copy file config thủ công sang từng node.
 ```
 
 ---

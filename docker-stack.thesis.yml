@@ -603,6 +603,9 @@ services:
     # Swarm: image HEALTHCHECK start_period=60s can be too short on small CPUs (RAG + reranker load).
     networks:
       - backend
+      # backend is internal; this non-internal overlay gives AI outbound access
+      # for OpenAI/Gemini/HuggingFace while keeping port 8000 unpublished.
+      - frontend
     healthcheck:
       test:
         [
@@ -678,8 +681,11 @@ services:
   promtail:
     image: grafana/promtail:3.1.1
     command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    configs:
+      - source: promtail_config
+        target: /etc/promtail/promtail-config.yml
+        mode: 0444
     volumes:
-      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
@@ -873,3 +879,5 @@ secrets:
 configs:
   postgres_init_db:
     file: ./scripts/init-db.sql
+  promtail_config:
+    file: ./monitoring/promtail/promtail-config.yml
