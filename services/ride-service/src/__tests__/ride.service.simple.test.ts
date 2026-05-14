@@ -543,11 +543,20 @@ describe('RideService - Simple Test Suite', () => {
       expect(result.rides).toHaveLength(1);
       expect(result.total).toBe(1);
       expect(mockPrisma.ride.findMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: { driverId: 'driver-123' },
+        where: expect.objectContaining({
+          driverId: 'driver-123',
+          createdAt: expect.objectContaining({ lte: expect.any(Date) }),
+        }),
         skip: 0,
         take: 10,
+        orderBy: [{ completedAt: 'desc' }, { createdAt: 'desc' }],
       }));
-      expect(mockPrisma.ride.count).toHaveBeenCalledWith({ where: { driverId: 'driver-123' } });
+      expect(mockPrisma.ride.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          driverId: 'driver-123',
+          createdAt: expect.objectContaining({ lte: expect.any(Date) }),
+        }),
+      });
     });
 
     it('should include legacy driver userId records and status filter', async () => {
@@ -567,16 +576,19 @@ describe('RideService - Simple Test Suite', () => {
       expect(result.rides).toHaveLength(2);
       expect(result.total).toBe(2);
       expect(mockPrisma.ride.findMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: {
+        where: expect.objectContaining({
           driverId: { in: ['driver-profile-123', 'driver-user-123'] },
           status: 'COMPLETED',
-        },
+          createdAt: expect.objectContaining({ lte: expect.any(Date) }),
+        }),
+        orderBy: [{ completedAt: 'desc' }, { createdAt: 'desc' }],
       }));
       expect(mockPrisma.ride.count).toHaveBeenCalledWith({
-        where: {
+        where: expect.objectContaining({
           driverId: { in: ['driver-profile-123', 'driver-user-123'] },
           status: 'COMPLETED',
-        },
+          createdAt: expect.objectContaining({ lte: expect.any(Date) }),
+        }),
       });
     });
   });
