@@ -1,0 +1,19 @@
+sequenceDiagram
+  autonumber
+  actor Driver
+  participant Wallet as Wallet Service
+  participant Payment as Payment Service
+  participant Provider as MoMo/VNPay
+  participant Admin as Admin Dashboard
+  participant DB as wallet_db
+  Driver->>Wallet: Request wallet top-up
+  Wallet->>Payment: Create top-up payment
+  Payment->>Provider: Create checkout session
+  Provider-->>Payment: IPN success
+  Payment-->>Wallet: Publish topup.completed
+  Wallet->>DB: Credit ledger
+  Driver->>Wallet: Request withdrawal
+  Wallet->>Admin: Create approval task
+  Admin->>Wallet: Approve withdrawal
+  Wallet->>DB: Debit ledger
+  Wallet-->>Driver: Withdrawal approved

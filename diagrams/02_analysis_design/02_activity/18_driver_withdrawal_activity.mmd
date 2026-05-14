@@ -1,0 +1,44 @@
+flowchart LR
+  subgraph Driver["Actor: Driver"]
+    direction TB
+    Start([Start]):::user
+    EnterRequest["Enter amount and bank account"]:::service
+    FixRequest["Correct amount or bank format"]:::risk
+    WaitApproval["Wait for admin approval"]:::service
+    ViewResult["View withdrawal result"]:::service
+  end
+
+  subgraph WalletAdmin["System: Wallet / Admin"]
+    direction TB
+    Auth{"Driver verified and wallet active?"}:::security
+    Deny["Reject unauthorized or inactive wallet"]:::risk
+    Validate{"Amount, balance, bank data valid?"}:::infra
+    HoldCheck{"No duplicate pending request and T+24h passed?"}:::infra
+    RejectRule["Reject insufficient balance, hold, or duplicate"]:::risk
+    CreateTask["Create withdrawal approval task"]:::service
+    AdminDecision{"Admin approves?"}:::infra
+    RejectAdmin["Reject with reason"]:::risk
+    Debit["Debit available balance and write ledger"]:::data
+    Notify["Notify driver"]:::external
+    Done([End]):::ok
+  end
+
+  Start --> EnterRequest --> Auth
+  Auth -- No --> Deny --> Done
+  Auth -- Yes --> Validate
+  Validate -- No --> FixRequest --> EnterRequest
+  Validate -- Yes --> HoldCheck
+  HoldCheck -- No --> RejectRule --> ViewResult --> Done
+  HoldCheck -- Yes --> CreateTask --> WaitApproval --> AdminDecision
+  AdminDecision -- No --> RejectAdmin --> Notify --> ViewResult --> Done
+  AdminDecision -- Yes --> Debit --> Notify --> ViewResult --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

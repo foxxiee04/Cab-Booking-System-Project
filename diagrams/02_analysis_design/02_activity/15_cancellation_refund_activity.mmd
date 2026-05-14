@@ -1,0 +1,45 @@
+flowchart LR
+  subgraph User["Actor: Customer / Driver"]
+    direction TB
+    Start([Start]):::user
+    Request["Request ride cancellation"]:::service
+    Reason["Select reason and optional note"]:::service
+    FixReason["Show missing or invalid reason"]:::risk
+    ViewResult["View cancellation, fee, refund result"]:::service
+  end
+
+  subgraph System["System: Ride / Payment / Wallet"]
+    direction TB
+    Auth{"Requester belongs to ride?"}:::security
+    Deny["Reject unauthorized cancellation"]:::risk
+    ReasonValid{"Reason format valid?"}:::infra
+    Cancellable{"Ride state allows cancellation?"}:::infra
+    TooLate["Reject because ride already started/completed"]:::risk
+    Policy["Calculate cancellation fee and refund amount"]:::service
+    Paid{"Payment captured or wallet hold exists?"}:::infra
+    Refund["Void payment, refund, or release hold"]:::service
+    UpdateRide["Update ride status to CANCELLED"]:::data
+    Notify["Notify counterpart and operations"]:::external
+    Done([End]):::ok
+  end
+
+  Start --> Request --> Auth
+  Auth -- No --> Deny --> Done
+  Auth -- Yes --> Reason --> ReasonValid
+  ReasonValid -- No --> FixReason --> Reason
+  ReasonValid -- Yes --> Cancellable
+  Cancellable -- No --> TooLate --> Done
+  Cancellable -- Yes --> Policy --> Paid
+  Paid -- Yes --> Refund --> UpdateRide
+  Paid -- No --> UpdateRide
+  UpdateRide --> Notify --> ViewResult --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

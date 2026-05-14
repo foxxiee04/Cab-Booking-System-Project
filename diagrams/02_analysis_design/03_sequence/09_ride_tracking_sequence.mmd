@@ -1,0 +1,22 @@
+sequenceDiagram
+  autonumber
+  actor DriverApp as Driver App
+  participant Gateway as API Gateway
+  participant Ride as Ride Service
+  participant Redis as Redis GEO
+  participant Socket as Socket.IO
+  actor Customer
+  DriverApp->>Gateway: Start navigation
+  Gateway->>Ride: Mark driver arriving
+  Ride->>Socket: Broadcast ride state
+  Socket-->>Customer: Driver is arriving
+  loop Every few seconds
+    DriverApp->>Gateway: Send GPS update
+    Gateway->>Redis: Store latest location
+    Gateway->>Ride: Append location point
+    Gateway->>Socket: Emit driver location
+    Socket-->>Customer: Move driver marker
+  end
+  DriverApp->>Gateway: Arrived, picked up, completed
+  Gateway->>Ride: Update ride state
+  Ride->>Socket: Broadcast state update

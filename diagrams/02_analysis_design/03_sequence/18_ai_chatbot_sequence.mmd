@@ -1,0 +1,14 @@
+sequenceDiagram
+  autonumber
+  actor User
+  participant Gateway as API Gateway
+  participant AI as AI Service
+  participant Vector as Vector Index
+  participant Docs as Project Docs
+  User->>Gateway: Ask chatbot
+  Gateway->>AI: Send question and context
+  AI->>Vector: Retrieve relevant chunks
+  Vector-->>AI: Top documents
+  AI->>Docs: Optional source lookup
+  AI-->>Gateway: Grounded answer
+  Gateway-->>User: AI response

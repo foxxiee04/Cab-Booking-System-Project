@@ -6,13 +6,20 @@ import {
   Card,
   CardContent,
   Chip,
-  Grid,
+  Divider,
   MenuItem,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import {
+  AddRounded,
+  EditRounded,
+  PauseCircleOutlineRounded,
+  PlayCircleOutlineRounded,
+  RestartAltRounded,
+  SaveRounded,
+} from '@mui/icons-material';
 import { adminApi } from '../api/admin.api';
 import { Voucher, VoucherAudience, VoucherDiscountType } from '../types';
 import { formatCurrency, formatDate } from '../utils/format.utils';
@@ -85,13 +92,59 @@ const DISCOUNT_LABELS: Record<VoucherDiscountType, string> = {
   PERCENT: 'Giảm theo phần trăm',
 };
 
+const formGridSx = {
+  display: 'grid',
+  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+  gap: 1.5,
+  '& .MuiTextField-root': { minWidth: 0 },
+};
+
+const sectionTitleSx = {
+  mb: 1.25,
+  color: '#334155',
+  fontSize: 13,
+  fontWeight: 800,
+  textTransform: 'uppercase',
+};
+
 const formatDiscount = (voucher: Voucher) => {
   if (voucher.discountType === 'PERCENT') {
-    return `${voucher.discountValue}%${voucher.maxDiscount ? ` (tối đa ${formatCurrency(voucher.maxDiscount)})` : ''}`;
+    return `${voucher.discountValue}%${voucher.maxDiscount ? `, tối đa ${formatCurrency(voucher.maxDiscount)}` : ''}`;
   }
 
   return formatCurrency(voucher.discountValue);
 };
+
+const formatUsage = (voucher: Voucher) => (
+  `${voucher.perUserLimit}/người${voucher.usageLimit ? `, ${voucher.usageLimit} tổng` : ', không giới hạn tổng'}`
+);
+
+const getVoucherStatus = (voucher: Voucher, now = new Date()) => {
+  const start = new Date(voucher.startTime);
+  const end = new Date(voucher.endTime);
+
+  if (!voucher.isActive) {
+    return { label: 'Tạm tắt', color: 'default' as const };
+  }
+  if (now < start) {
+    return { label: 'Sắp diễn ra', color: 'info' as const };
+  }
+  if (now > end) {
+    return { label: 'Hết hạn', color: 'warning' as const };
+  }
+  return { label: 'Đang hiệu lực', color: 'success' as const };
+};
+
+const DetailBlock: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <Box sx={{ minWidth: 0 }}>
+    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.25 }}>
+      {label}
+    </Typography>
+    <Typography variant="body2" fontWeight={700} sx={{ color: '#1e293b', overflowWrap: 'anywhere' }}>
+      {value}
+    </Typography>
+  </Box>
+);
 
 const VouchersPage: React.FC = () => {
   const [rows, setRows] = useState<Voucher[]>([]);
@@ -123,11 +176,13 @@ const VouchersPage: React.FC = () => {
   const isEditing = Boolean(editingVoucherId);
 
   const summary = useMemo(() => {
+    const now = new Date();
     return rows.reduce(
       (acc, voucher) => {
+        const status = getVoucherStatus(voucher, now).label;
         acc.total += 1;
-        if (voucher.isActive) {
-          acc.active += 1;
+        if (status === 'Đang hiệu lực') {
+          acc.running += 1;
         }
         if (voucher.audienceType === 'NEW_CUSTOMERS') {
           acc.newCustomers += 1;
@@ -137,7 +192,7 @@ const VouchersPage: React.FC = () => {
         }
         return acc;
       },
-      { total: 0, active: 0, newCustomers: 0, returningCustomers: 0 },
+      { total: 0, running: 0, newCustomers: 0, returningCustomers: 0 },
     );
   }, [rows]);
 
@@ -226,91 +281,17 @@ const VouchersPage: React.FC = () => {
     }
   };
 
-  const columns: GridColDef<Voucher>[] = [
-    { field: 'code', headerName: 'Mã voucher', minWidth: 140, flex: 0.9 },
-    {
-      field: 'audienceType',
-      headerName: 'Nhóm nhận',
-      minWidth: 170,
-      flex: 1,
-      valueFormatter: (params) => AUDIENCE_LABELS[params.value as VoucherAudience] || params.value,
-    },
-    {
-      field: 'discountValue',
-      headerName: 'Ưu đãi',
-      minWidth: 220,
-      flex: 1.2,
-      sortable: false,
-      renderCell: (params) => formatDiscount(params.row),
-    },
-    {
-      field: 'minFare',
-      headerName: 'Đơn tối thiểu',
-      minWidth: 150,
-      valueFormatter: (params) => formatCurrency(params.value || 0),
-    },
-    {
-      field: 'timeWindow',
-      headerName: 'Thời hạn',
-      minWidth: 250,
-      flex: 1.3,
-      sortable: false,
-      renderCell: (params) => `${formatDate(params.row.startTime)} - ${formatDate(params.row.endTime)}`,
-    },
-    {
-      field: 'usageLimit',
-      headerName: 'Lượt dùng',
-      minWidth: 140,
-      sortable: false,
-      renderCell: (params) => `${params.row.perUserLimit}/người${params.row.usageLimit ? ` • ${params.row.usageLimit} tổng` : ' • Không giới hạn tổng'}`,
-    },
-    {
-      field: 'isActive',
-      headerName: 'Trạng thái',
-      minWidth: 140,
-      renderCell: (params) => (
-        <Chip
-          label={params.value ? 'Đang hoạt động' : 'Tạm tắt'}
-          size="small"
-          color={params.value ? 'success' : 'default'}
-        />
-      ),
-    },
-    {
-      field: 'actions',
-      headerName: 'Thao tác',
-      minWidth: 150,
-      sortable: false,
-      renderCell: (params) => (
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ py: 0.5 }}>
-          <Button size="small" variant="text" onClick={() => handleEditVoucher(params.row)} sx={{ borderRadius: 999, fontWeight: 700 }}>
-            Sửa
-          </Button>
-          <Button
-            size="small"
-            variant={params.row.isActive ? 'outlined' : 'contained'}
-            onClick={() => handleToggleVoucher(params.row)}
-            disabled={togglingId === params.row.id}
-            sx={{ borderRadius: 999, fontWeight: 700 }}
-          >
-            {togglingId === params.row.id ? 'Đang cập nhật...' : params.row.isActive ? 'Tạm tắt' : 'Kích hoạt'}
-          </Button>
-        </Stack>
-      ),
-    },
-  ];
-
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" fontWeight="bold">Quản lý voucher</Typography>
+      <Typography variant="h4" fontWeight={900}>Quản lý voucher</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-        Admin tạo voucher, chọn nhóm khách hàng nhận voucher và quản lý thời hạn hiệu lực.
+        Tạo, chỉnh sửa và theo dõi trạng thái ưu đãi đang phát hành.
       </Typography>
 
       {(error || success) && (
         <Stack spacing={1.25} sx={{ mt: 2 }}>
-          {error && <Alert severity="error">{error}</Alert>}
-          {success && <Alert severity="success">{success}</Alert>}
+          {error && <Alert severity="error" sx={{ borderRadius: 2 }}>{error}</Alert>}
+          {success && <Alert severity="success" sx={{ borderRadius: 2 }}>{success}</Alert>}
         </Stack>
       )}
 
@@ -318,13 +299,13 @@ const VouchersPage: React.FC = () => {
         sx={{
           mt: 2,
           display: 'grid',
-          gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' },
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' },
           gap: 1.5,
         }}
       >
         {[
           { label: 'Tổng voucher', value: summary.total, color: '#1d4ed8' },
-          { label: 'Đang hoạt động', value: summary.active, color: '#15803d' },
+          { label: 'Đang hiệu lực', value: summary.running, color: '#15803d' },
           { label: 'Cho khách mới', value: summary.newCustomers, color: '#7c3aed' },
           { label: 'Cho khách quay lại', value: summary.returningCustomers, color: '#b45309' },
         ].map((item) => (
@@ -332,133 +313,365 @@ const VouchersPage: React.FC = () => {
             key={item.label}
             sx={{
               p: 1.75,
-              borderRadius: 3,
-              border: '1px solid rgba(148,163,184,0.18)',
+              borderRadius: 2,
+              border: '1px solid rgba(148,163,184,0.22)',
               background: '#fff',
+              boxShadow: '0 10px 24px rgba(15,23,42,0.04)',
             }}
           >
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
               {item.label}
             </Typography>
-            <Typography variant="h6" fontWeight={800} sx={{ color: item.color }}>
+            <Typography variant="h6" fontWeight={900} sx={{ color: item.color }}>
               {item.value}
             </Typography>
           </Box>
         ))}
       </Box>
 
-      <Grid container spacing={2} sx={{ mt: 1 }}>
-        <Grid item xs={12} lg={4}>
-          <Card sx={{ borderRadius: 4, height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight={800} sx={{ mb: 2 }}>
+      <Card elevation={0} sx={{ mt: 2, borderRadius: 2, border: '1px solid rgba(148,163,184,0.22)' }}>
+        <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1.5} sx={{ mb: 2 }}>
+            <Box>
+              <Typography variant="h6" fontWeight={900}>
                 {isEditing ? 'Chỉnh sửa voucher' : 'Tạo voucher mới'}
               </Typography>
-              <Stack spacing={1.5}>
-                <TextField label="Mã voucher" value={form.code} onChange={handleChange('code')} placeholder="VD: WELCOME300" fullWidth />
-                <TextField label="Mô tả" value={form.description} onChange={handleChange('description')} fullWidth multiline minRows={2} />
-                <TextField select label="Nhóm khách hàng" value={form.audienceType} onChange={handleChange('audienceType')} fullWidth>
+              <Typography variant="caption" color="text.secondary">
+                {isEditing ? `Đang chỉnh sửa mã ${form.code || 'voucher'}` : 'Nhập thông tin phát hành voucher'}
+              </Typography>
+            </Box>
+            <Chip
+              size="small"
+              color={form.isActive ? 'success' : 'default'}
+              label={form.isActive ? 'Sẽ lưu ở trạng thái hoạt động' : 'Sẽ lưu ở trạng thái tạm tắt'}
+              sx={{ fontWeight: 700 }}
+            />
+          </Stack>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.08fr) minmax(320px, 0.92fr)' },
+              gap: { xs: 2, md: 3 },
+            }}
+          >
+            <Box>
+              <Typography sx={sectionTitleSx}>Thông tin voucher</Typography>
+              <Box sx={formGridSx}>
+                <TextField
+                  size="small"
+                  label="Mã voucher"
+                  value={form.code}
+                  onChange={handleChange('code')}
+                  placeholder="VD: WELCOME300"
+                  fullWidth
+                />
+                <TextField
+                  select
+                  size="small"
+                  label="Nhóm khách hàng"
+                  value={form.audienceType}
+                  onChange={handleChange('audienceType')}
+                  fullWidth
+                >
                   {Object.entries(AUDIENCE_LABELS).map(([value, label]) => (
                     <MenuItem key={value} value={value}>{label}</MenuItem>
                   ))}
                 </TextField>
-                <TextField select label="Loại giảm" value={form.discountType} onChange={handleChange('discountType')} fullWidth>
+                <TextField
+                  size="small"
+                  label="Mô tả"
+                  value={form.description}
+                  onChange={handleChange('description')}
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  sx={{ gridColumn: '1 / -1' }}
+                />
+              </Box>
+            </Box>
+
+            <Box>
+              <Typography sx={sectionTitleSx}>Ưu đãi và lượt dùng</Typography>
+              <Box sx={formGridSx}>
+                <TextField
+                  select
+                  size="small"
+                  label="Loại giảm"
+                  value={form.discountType}
+                  onChange={handleChange('discountType')}
+                  fullWidth
+                >
                   {Object.entries(DISCOUNT_LABELS).map(([value, label]) => (
                     <MenuItem key={value} value={value}>{label}</MenuItem>
                   ))}
                 </TextField>
-                <Grid container spacing={1.5}>
-                  <Grid item xs={12} sm={6}>
-                    <TextField label={form.discountType === 'PERCENT' ? 'Giá trị %' : 'Số tiền giảm'} value={form.discountValue} onChange={handleChange('discountValue')} fullWidth />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField label="Giảm tối đa" value={form.maxDiscount} onChange={handleChange('maxDiscount')} fullWidth disabled={form.discountType !== 'PERCENT'} />
-                  </Grid>
-                </Grid>
-                <Grid container spacing={1.5}>
-                  <Grid item xs={12} sm={6}>
-                    <TextField label="Đơn tối thiểu" value={form.minFare} onChange={handleChange('minFare')} fullWidth />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField label="Lượt dùng / người" value={form.perUserLimit} onChange={handleChange('perUserLimit')} fullWidth />
-                  </Grid>
-                </Grid>
-                <Grid container spacing={1.5}>
-                  <Grid item xs={12} sm={6}>
-                    <TextField label="Tổng lượt dùng" value={form.usageLimit} onChange={handleChange('usageLimit')} fullWidth />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField label="Bắt đầu" type="datetime-local" value={form.startTime} onChange={handleChange('startTime')} fullWidth InputLabelProps={{ shrink: true }} />
-                  </Grid>
-                </Grid>
-                <TextField label="Kết thúc" type="datetime-local" value={form.endTime} onChange={handleChange('endTime')} fullWidth InputLabelProps={{ shrink: true }} />
-                <Box>
-                  <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
-                    <Chip
-                      size="small"
-                      color={form.isActive ? 'success' : 'default'}
-                      label={form.isActive ? 'Lưu ở trạng thái đang hoạt động' : 'Lưu ở trạng thái tạm tắt'}
-                    />
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={() => setForm((prev) => ({ ...prev, isActive: !prev.isActive }))}
-                      sx={{ borderRadius: 999, fontWeight: 700 }}
-                    >
-                      {form.isActive ? 'Chuyển sang tạm tắt' : 'Kích hoạt khi lưu'}
-                    </Button>
-                  </Stack>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
-                    <Button
-                      variant="contained"
-                      fullWidth
-                      onClick={handleSubmitVoucher}
-                      disabled={saving || !form.code.trim() || !form.discountValue || !form.startTime || !form.endTime}
-                      sx={{ borderRadius: 3, fontWeight: 800, py: 1.25 }}
-                    >
-                      {saving ? (isEditing ? 'Đang cập nhật voucher...' : 'Đang tạo voucher...') : (isEditing ? 'Lưu thay đổi' : 'Tạo voucher')}
-                    </Button>
-                    {isEditing && (
-                      <Button
-                        variant="outlined"
-                        fullWidth
-                        onClick={resetForm}
-                        sx={{ borderRadius: 3, fontWeight: 700, py: 1.25 }}
-                      >
-                        Hủy chỉnh sửa
-                      </Button>
-                    )}
-                  </Stack>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} lg={8}>
-          <Card sx={{ borderRadius: 4 }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight={800} sx={{ mb: 2 }}>
-                Danh sách voucher
-              </Typography>
-              <Box sx={{ height: 560 }}>
-                <DataGrid
-                  rows={rows}
-                  columns={columns}
-                  loading={loading}
-                  getRowId={(row) => row.id}
-                  pageSizeOptions={[10, 20, 50]}
-                  initialState={{
-                    pagination: {
-                      paginationModel: { page: 0, pageSize: 10 },
-                    },
-                  }}
+                <TextField
+                  size="small"
+                  label={form.discountType === 'PERCENT' ? 'Giá trị %' : 'Số tiền giảm'}
+                  type="number"
+                  value={form.discountValue}
+                  onChange={handleChange('discountValue')}
+                  fullWidth
+                  inputProps={{ min: 0 }}
+                />
+                <TextField
+                  size="small"
+                  label="Giảm tối đa"
+                  type="number"
+                  value={form.maxDiscount}
+                  onChange={handleChange('maxDiscount')}
+                  fullWidth
+                  disabled={form.discountType !== 'PERCENT'}
+                  inputProps={{ min: 0 }}
+                />
+                <TextField
+                  size="small"
+                  label="Đơn tối thiểu"
+                  type="number"
+                  value={form.minFare}
+                  onChange={handleChange('minFare')}
+                  fullWidth
+                  inputProps={{ min: 0 }}
+                />
+                <TextField
+                  size="small"
+                  label="Lượt dùng / người"
+                  type="number"
+                  value={form.perUserLimit}
+                  onChange={handleChange('perUserLimit')}
+                  fullWidth
+                  inputProps={{ min: 1 }}
+                />
+                <TextField
+                  size="small"
+                  label="Tổng lượt dùng"
+                  type="number"
+                  value={form.usageLimit}
+                  onChange={handleChange('usageLimit')}
+                  fullWidth
+                  inputProps={{ min: 0 }}
                 />
               </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+            </Box>
+
+            <Box sx={{ gridColumn: '1 / -1' }}>
+              <Typography sx={sectionTitleSx}>Thời gian hiệu lực</Typography>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                  gap: 1.5,
+                  '& .MuiTextField-root': { minWidth: 0 },
+                }}
+              >
+                <TextField
+                  size="small"
+                  label="Bắt đầu"
+                  type="datetime-local"
+                  value={form.startTime}
+                  onChange={handleChange('startTime')}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                />
+                <TextField
+                  size="small"
+                  label="Kết thúc"
+                  type="datetime-local"
+                  value={form.endTime}
+                  onChange={handleChange('endTime')}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Box>
+            </Box>
+          </Box>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            alignItems={{ xs: 'stretch', md: 'center' }}
+            justifyContent="space-between"
+            spacing={1.5}
+          >
+            <Button
+              variant="text"
+              color={form.isActive ? 'warning' : 'success'}
+              startIcon={form.isActive ? <PauseCircleOutlineRounded /> : <PlayCircleOutlineRounded />}
+              onClick={() => setForm((prev) => ({ ...prev, isActive: !prev.isActive }))}
+              sx={{ alignSelf: { xs: 'flex-start', md: 'center' }, borderRadius: 2, fontWeight: 800, textTransform: 'none' }}
+            >
+              {form.isActive ? 'Chuyển sang tạm tắt' : 'Kích hoạt khi lưu'}
+            </Button>
+
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ minWidth: { md: isEditing ? 380 : 220 } }}>
+              {isEditing && (
+                <Button
+                  variant="outlined"
+                  startIcon={<RestartAltRounded />}
+                  onClick={resetForm}
+                  sx={{ borderRadius: 2, fontWeight: 800, py: 1, textTransform: 'none' }}
+                >
+                  Hủy chỉnh sửa
+                </Button>
+              )}
+              <Button
+                variant="contained"
+                startIcon={isEditing ? <SaveRounded /> : <AddRounded />}
+                onClick={handleSubmitVoucher}
+                disabled={saving || !form.code.trim() || !form.discountValue || !form.startTime || !form.endTime}
+                sx={{ borderRadius: 2, fontWeight: 900, py: 1, textTransform: 'none' }}
+              >
+                {saving ? (isEditing ? 'Đang cập nhật...' : 'Đang tạo...') : (isEditing ? 'Lưu thay đổi' : 'Tạo voucher')}
+              </Button>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card elevation={0} sx={{ mt: 2, borderRadius: 2, border: '1px solid rgba(148,163,184,0.22)' }}>
+        <CardContent sx={{ p: { xs: 1.5, md: 2 } }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1} sx={{ mb: 1.5 }}>
+            <Box>
+              <Typography variant="h6" fontWeight={900}>Danh sách voucher</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {loading ? 'Đang tải dữ liệu...' : `${rows.length} voucher trong hệ thống`}
+              </Typography>
+            </Box>
+          </Stack>
+
+          {loading ? (
+            <Box sx={{ py: 5, textAlign: 'center', color: 'text.secondary' }}>
+              <Typography variant="body2">Đang tải danh sách voucher...</Typography>
+            </Box>
+          ) : rows.length === 0 ? (
+            <Box
+              sx={{
+                py: 5,
+                px: 2,
+                textAlign: 'center',
+                borderRadius: 2,
+                border: '1px dashed rgba(148,163,184,0.5)',
+                color: 'text.secondary',
+              }}
+            >
+              <Typography variant="body2">Chưa có voucher nào.</Typography>
+            </Box>
+          ) : (
+            <Stack spacing={1.25} sx={{ maxHeight: 680, overflow: 'auto', pr: { md: 0.5 } }}>
+              {rows.map((voucher) => {
+                const status = getVoucherStatus(voucher);
+                const isToggling = togglingId === voucher.id;
+
+                return (
+                  <Box
+                    key={voucher.id}
+                    sx={{
+                      p: { xs: 1.5, md: 2 },
+                      borderRadius: 2,
+                      border: '1px solid rgba(148,163,184,0.24)',
+                      backgroundColor: '#fff',
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 176px' },
+                      gap: 1.5,
+                      alignItems: 'center',
+                      transition: 'border-color 160ms ease, box-shadow 160ms ease',
+                      '&:hover': {
+                        borderColor: 'rgba(37,99,235,0.35)',
+                        boxShadow: '0 12px 28px rgba(15,23,42,0.07)',
+                      },
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: {
+                          xs: '1fr',
+                          sm: 'repeat(2, minmax(0, 1fr))',
+                          lg: 'minmax(200px, 1.2fr) repeat(3, minmax(140px, 1fr))',
+                          xl: 'minmax(220px, 1.35fr) repeat(4, minmax(140px, 1fr))',
+                        },
+                        gap: { xs: 1.25, md: 1.5 },
+                        alignItems: 'center',
+                        minWidth: 0,
+                      }}
+                    >
+                      <Box sx={{ minWidth: 0 }}>
+                        <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" alignItems="center">
+                          <Typography
+                            variant="subtitle2"
+                            fontWeight={900}
+                            sx={{ color: '#0f172a', fontFamily: 'monospace', overflowWrap: 'anywhere' }}
+                          >
+                            {voucher.code}
+                          </Typography>
+                          <Chip size="small" color={status.color} label={status.label} sx={{ fontWeight: 700 }} />
+                        </Stack>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{
+                            display: '-webkit-box',
+                            mt: 0.5,
+                            overflow: 'hidden',
+                            WebkitBoxOrient: 'vertical',
+                            WebkitLineClamp: 2,
+                          }}
+                        >
+                          {voucher.description || 'Không có mô tả'}
+                        </Typography>
+                      </Box>
+
+                      <DetailBlock label="Nhóm nhận" value={AUDIENCE_LABELS[voucher.audienceType]} />
+                      <DetailBlock label="Ưu đãi" value={formatDiscount(voucher)} />
+                      <DetailBlock label="Đơn tối thiểu" value={formatCurrency(voucher.minFare || 0)} />
+                      <DetailBlock label="Thời hạn" value={`${formatDate(voucher.startTime)} - ${formatDate(voucher.endTime)}`} />
+                      <DetailBlock label="Lượt dùng" value={formatUsage(voucher)} />
+                    </Box>
+
+                    <Stack
+                      direction={{ xs: 'row', md: 'column' }}
+                      spacing={1}
+                      useFlexGap
+                      flexWrap="wrap"
+                      sx={{
+                        justifyContent: { xs: 'flex-start', md: 'center' },
+                        '& .MuiButton-root': {
+                          minWidth: { xs: 132, md: '100%' },
+                          whiteSpace: 'nowrap',
+                          textTransform: 'none',
+                          borderRadius: 2,
+                          fontWeight: 800,
+                        },
+                      }}
+                    >
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<EditRounded />}
+                        onClick={() => handleEditVoucher(voucher)}
+                      >
+                        Sửa
+                      </Button>
+                      <Button
+                        size="small"
+                        variant={voucher.isActive ? 'outlined' : 'contained'}
+                        color={voucher.isActive ? 'warning' : 'success'}
+                        startIcon={voucher.isActive ? <PauseCircleOutlineRounded /> : <PlayCircleOutlineRounded />}
+                        onClick={() => handleToggleVoucher(voucher)}
+                        disabled={isToggling}
+                      >
+                        {isToggling ? 'Đang cập nhật' : voucher.isActive ? 'Tạm tắt' : 'Kích hoạt'}
+                      </Button>
+                    </Stack>
+                  </Box>
+                );
+              })}
+            </Stack>
+          )}
+        </CardContent>
+      </Card>
     </Box>
   );
 };

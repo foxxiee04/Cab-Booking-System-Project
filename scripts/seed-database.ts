@@ -2071,6 +2071,23 @@ function reviewMongoUri(): string {
   return `mongodb://${MONGO_USER}:${encodeURIComponent(MONGO_PASSWORD)}@${MONGO_HOST}:${MONGO_PORT}/review_db?authSource=admin`;
 }
 
+function capHistoricalRideTimes(rideAt: Date, durationSec: number, seedNow: Date) {
+  const doneAt = new Date(rideAt.getTime() + durationSec * 1000);
+  if (doneAt <= seedNow) {
+    return { rideAt, doneAt };
+  }
+
+  // Day-0 historical rides can randomly land later today. Keep generated
+  // completed rides safely behind wall-clock time so admin does not recognise
+  // future ledger/payment rows ahead of schedule.
+  const safetyMs = 5 * 60 * 1000;
+  const jitterMs = Math.floor(Math.random() * 25 * 60 * 1000);
+  const cappedDoneAt = new Date(seedNow.getTime() - safetyMs - jitterMs);
+  const cappedRideAt = new Date(cappedDoneAt.getTime() - durationSec * 1000);
+
+  return { rideAt: cappedRideAt, doneAt: cappedDoneAt };
+}
+
 async function seedWalletEarningsHistory(
   customers: RegisteredUser[],
   driverProfiles: Array<{ driverId: string; userId: string; pending: boolean }>,
@@ -2108,11 +2125,13 @@ async function seedWalletEarningsHistory(
 
   // Cache current wallet balance per driver (auth userId key)
   const walletBalances = new Map<string, number>();
+  const walletPendingBalances = new Map<string, number>();
   for (const { p } of approved) {
     const r = await walDb.query<{ balance: number }>(
       `SELECT balance FROM driver_wallets WHERE "driverId" = $1`, [p.userId]
     );
     walletBalances.set(p.userId, Number(r.rows[0]?.balance ?? 0));
+    walletPendingBalances.set(p.userId, 0);
   }
 
   // Per-driver rating accumulator → drivers.rating_average / rating_count
@@ -2126,6 +2145,7 @@ async function seedWalletEarningsHistory(
   // Merchant balance accumulator
   let merchantTotalIn = 0;
   let merchantTotalOut = 0;
+  const seedNow = new Date();
 
   let totalRides = 0;
   let totalGMV = 0;
@@ -2189,9 +2209,9 @@ async function seedWalletEarningsHistory(
     const distKm = Math.round((1.5 + Math.random() * 14) * 100) / 100;
     const durSec = Math.round(distKm * (3 + Math.random() * 3) * 60);
 
-    const rideAt = new Date(dayDate);
-    rideAt.setHours(baseHour, Math.floor(Math.random() * 60), 0, 0);
-    const doneAt = new Date(rideAt.getTime() + durSec * 1000);
+    const plannedRideAt = new Date(dayDate);
+    plannedRideAt.setHours(baseHour, Math.floor(Math.random() * 60), 0, 0);
+    const { rideAt, doneAt } = capHistoricalRideTimes(plannedRideAt, durSec, seedNow);
     const isCash = paymentMethod === 'CASH';
 
     const rideId = randomUUID();
@@ -2308,9 +2328,18 @@ async function seedWalletEarningsHistory(
       } catch { /* skip */ }
       prevBal = afterCommission;
     } else {
-      // Online flow: driver receives net earnings credited to wallet.
+      // Online flow: driver receives net earnings as pending first. It becomes
+      // available only after T+24h; admin payout ledger is recorded then.
       const afterEarn = prevBal + netEarnings;
+      const settleAt = new Date(doneAt.getTime() + 24 * 60 * 60 * 1000);
+      const isSettled = settleAt <= seedNow;
       walletBalances.set(driverUserId, afterEarn);
+      if (!isSettled) {
+        walletPendingBalances.set(
+          driverUserId,
+          (walletPendingBalances.get(driverUserId) ?? 0) + netEarnings,
+        );
+      }
       try {
         await walDb.query(
           `INSERT INTO wallet_transactions
@@ -2326,6 +2355,20 @@ async function seedWalletEarningsHistory(
             'Thu nhập chuyến (lịch sử)', rideId, `${ikey}-earn`,
             doneAt.toISOString(),
           ]
+        );
+      } catch { /* skip */ }
+      try {
+        await walDb.query(
+          `INSERT INTO pending_earnings
+             (id, "driverId", amount, "rideId", "settleAt", "settledAt", "createdAt")
+           VALUES ($1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT (id) DO NOTHING`,
+          [
+            randomUUID(), driverUserId, netEarnings, rideId,
+            settleAt.toISOString(),
+            isSettled ? settleAt.toISOString() : null,
+            doneAt.toISOString(),
+          ],
         );
       } catch { /* skip */ }
       prevBal = afterEarn;
@@ -2345,7 +2388,10 @@ async function seedWalletEarningsHistory(
         merchantTotalIn += platformFee;
       } catch { /* skip */ }
     } else {
-      // Online: PAYMENT IN (gross) + PAYOUT OUT (net to driver) → net profit = commission
+      // Online: PAYMENT is visible at ride completion. PAYOUT is visible only
+      // at the actual T+24h settlement time, so admin activity stays chronological.
+      const settleAt = new Date(doneAt.getTime() + 24 * 60 * 60 * 1000);
+      const isSettled = settleAt <= seedNow;
       try {
         await walDb.query(
           `INSERT INTO merchant_ledger (id, type, category, amount, "referenceId", description, "idempotencyKey", "createdAt")
@@ -2355,15 +2401,17 @@ async function seedWalletEarningsHistory(
         );
         merchantTotalIn += grossFare;
       } catch { /* skip */ }
-      try {
-        await walDb.query(
-          `INSERT INTO merchant_ledger (id, type, category, amount, "referenceId", description, "idempotencyKey", "createdAt")
-           VALUES ($1, 'OUT'::"MerchantLedgerType", 'PAYOUT'::"MerchantLedgerCategory", $2, $3, $4, $5, $6)
-           ON CONFLICT ("idempotencyKey") DO NOTHING`,
-          [randomUUID(), netEarnings, rideId, 'Trả thu nhập tài xế (lịch sử)', `${ikey}-mlpayout`, doneAt.toISOString()],
-        );
-        merchantTotalOut += netEarnings;
-      } catch { /* skip */ }
+      if (isSettled) {
+        try {
+          await walDb.query(
+            `INSERT INTO merchant_ledger (id, type, category, amount, "referenceId", description, "idempotencyKey", "createdAt")
+             VALUES ($1, 'OUT'::"MerchantLedgerType", 'PAYOUT'::"MerchantLedgerCategory", $2, $3, $4, $5, $6)
+             ON CONFLICT ("idempotencyKey") DO NOTHING`,
+            [randomUUID(), netEarnings, rideId, 'Giải ngân thu nhập tài xế sau T+24h (lịch sử)', `${ikey}-mlpayout`, settleAt.toISOString()],
+          );
+          merchantTotalOut += netEarnings;
+        } catch { /* skip */ }
+      }
     }
 
     // ── 6. Reviews (Mongo, ~85% of rides have both directions) ───────────
@@ -2413,14 +2461,18 @@ async function seedWalletEarningsHistory(
   // ── Final updates ────────────────────────────────────────────────────────
   console.log('  [hist] Updating driver_wallets balances + drivers ratings + merchant_balance...');
 
-  // 1) driver_wallets balance + availableBalance
+  // 1) driver_wallets balance + availableBalance + pendingBalance
   for (const [driverUserId, balance] of walletBalances) {
+    const pendingBalance = walletPendingBalances.get(driverUserId) ?? 0;
     try {
       await walDb.query(
         `UPDATE driver_wallets
-            SET balance = $1, "availableBalance" = GREATEST($1, 0), "updatedAt" = NOW()
-          WHERE "driverId" = $2`,
-        [balance, driverUserId],
+            SET balance = $1,
+                "pendingBalance" = $2,
+                "availableBalance" = GREATEST($1 - "lockedBalance" - $2, 0),
+                "updatedAt" = NOW()
+          WHERE "driverId" = $3`,
+        [balance, pendingBalance, driverUserId],
       );
     } catch { /* skip */ }
   }

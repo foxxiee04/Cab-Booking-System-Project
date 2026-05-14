@@ -1,0 +1,13 @@
+stateDiagram-v2
+  [*] --> REQUESTED
+  REQUESTED --> MATCHING: customer confirms
+  MATCHING --> DRIVER_ASSIGNED: driver accepts
+  MATCHING --> CANCELLED: timeout or cancel
+  DRIVER_ASSIGNED --> DRIVER_ARRIVING
+  DRIVER_ARRIVING --> ARRIVED
+  ARRIVED --> IN_PROGRESS
+  IN_PROGRESS --> COMPLETED
+  COMPLETED --> PAID
+  PAID --> REVIEWED
+  REVIEWED --> [*]
+  CANCELLED --> [*]

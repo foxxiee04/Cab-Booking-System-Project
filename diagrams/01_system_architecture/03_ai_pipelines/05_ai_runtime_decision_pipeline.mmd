@@ -1,0 +1,44 @@
+flowchart TB
+  Request["Booking or pricing request"]:::user
+  FeatureBuilder["Feature builder<br/>route, time, demand, driver pool"]:::service
+
+  subgraph Inference["Bounded AI Inference"]
+    direction LR
+    ETA["ETA predictor"]:::ai
+    Surge["Surge predictor"]:::ai
+    Accept["Acceptance predictor"]:::ai
+  end
+
+  Guard["Latency guard<br/>timeout + circuit breaker"]:::infra
+  Fallback["Rule-based fallback"]:::ok
+
+  subgraph Decisions["Decision Outputs"]
+    direction LR
+    Quote["Fare quote"]:::service
+    DispatchScore["Driver ranking score"]:::service
+    Explanation["Traceable reason codes"]:::service
+  end
+
+  Request --> FeatureBuilder
+  FeatureBuilder --> Guard
+  Guard --> ETA
+  Guard --> Surge
+  Guard --> Accept
+  Guard -. slow or unavailable .-> Fallback
+  ETA --> Quote
+  Surge --> Quote
+  Accept --> DispatchScore
+  Fallback --> Quote
+  Fallback --> DispatchScore
+  Quote --> Explanation
+  DispatchScore --> Explanation
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

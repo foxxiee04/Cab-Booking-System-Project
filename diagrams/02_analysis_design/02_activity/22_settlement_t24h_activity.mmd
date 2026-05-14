@@ -1,0 +1,37 @@
+flowchart LR
+  subgraph Scheduler["Actor: Scheduler"]
+    direction TB
+    Start([T+24h schedule]):::user
+    LoadHolds["Load matured held earnings"]:::service
+    ValidateBatch{"Batch window and lock valid?"}:::infra
+    Retry["Retry later and alert ops"]:::risk
+    Process["Process each matured hold"]:::service
+  end
+
+  subgraph Wallet["System: Wallet Service"]
+    direction TB
+    HoldValid{"Hold not settled, not disputed,<br/>driver wallet active?"}:::infra
+    Skip["Skip disputed, inactive, or duplicate hold"]:::risk
+    MoveFunds["Move held balance to available balance"]:::data
+    Ledger["Write settlement ledger entry"]:::data
+    Publish["Publish wallet.settled event"]:::external
+    Notify["Notify driver that earning is available"]:::external
+    Done([End]):::ok
+  end
+
+  Start --> LoadHolds --> ValidateBatch
+  ValidateBatch -- No --> Retry --> Done
+  ValidateBatch -- Yes --> Process --> HoldValid
+  HoldValid -- No --> Skip --> Process
+  HoldValid -- Yes --> MoveFunds --> Ledger --> Publish --> Notify --> Process
+  Process -. no more holds .-> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

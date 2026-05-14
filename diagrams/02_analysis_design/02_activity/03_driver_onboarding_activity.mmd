@@ -1,0 +1,47 @@
+flowchart LR
+  subgraph DriverFlow["Actor: Driver"]
+    direction TB
+    Start([Start]):::user
+    Signup["Create driver account"]:::service
+    PhoneFormat{"Phone/password format valid?"}:::infra
+    FixAccount["Show format error<br/>and request correction"]:::risk
+    Verify["Submit phone OTP"]:::service
+    OtpValid{"OTP valid and not expired?"}:::infra
+    Upload["Upload identity, license, vehicle, avatar"]:::service
+    FileValid{"Files valid?<br/>type, size, required fields"}:::infra
+    FixDocs["Fix rejected or invalid documents"]:::risk
+  end
+
+  subgraph AdminFlow["System: Driver Review"]
+    direction TB
+    Duplicate{"Identity or vehicle duplicated?"}:::infra
+    Queue["Put application in review queue"]:::service
+    Review["Review documents and license class"]:::service
+    Approved{"Approved?"}:::infra
+    Activate["Activate driver profile and wallet"]:::ok
+    Reject["Reject with reason and required fixes"]:::risk
+    Notify["Notify driver of review result"]:::external
+    Done([End]):::ok
+  end
+
+  Start --> Signup --> PhoneFormat
+  PhoneFormat -- No --> FixAccount --> Signup
+  PhoneFormat -- Yes --> Verify --> OtpValid
+  OtpValid -- No --> FixAccount
+  OtpValid -- Yes --> Upload --> FileValid
+  FileValid -- No --> FixDocs --> Upload
+  FileValid -- Yes --> Duplicate
+  Duplicate -- Yes --> Reject --> Notify --> FixDocs
+  Duplicate -- No --> Queue --> Review --> Approved
+  Approved -- No --> Reject
+  Approved -- Yes --> Activate --> Notify --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

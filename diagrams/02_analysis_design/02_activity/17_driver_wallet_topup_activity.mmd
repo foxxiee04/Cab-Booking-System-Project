@@ -1,0 +1,41 @@
+flowchart LR
+  subgraph Driver["Actor: Driver"]
+    direction TB
+    Start([Start]):::user
+    EnterAmount["Enter top-up amount and provider"]:::service
+    FixAmount["Correct amount or provider"]:::risk
+    PayProvider["Pay at MoMo/VNPay"]:::external
+    ViewBalance["View updated wallet balance"]:::ok
+  end
+
+  subgraph WalletPayment["System: Wallet / Payment"]
+    direction TB
+    Auth{"Driver authenticated and wallet active?"}:::security
+    Deny["Reject inactive wallet or unauthorized user"]:::risk
+    AmountValid{"Amount numeric, min/max valid?"}:::infra
+    CreateOrder["Create top-up payment order"]:::service
+    Callback["Receive provider callback"]:::external
+    CallbackValid{"Signature, status, idempotency valid?"}:::security
+    Fail["Mark top-up failed and keep audit"]:::risk
+    Credit["Credit wallet ledger"]:::data
+    Notify["Notify driver"]:::external
+    Done([End]):::ok
+  end
+
+  Start --> EnterAmount --> Auth
+  Auth -- No --> Deny --> Done
+  Auth -- Yes --> AmountValid
+  AmountValid -- No --> FixAmount --> EnterAmount
+  AmountValid -- Yes --> CreateOrder --> PayProvider --> Callback --> CallbackValid
+  CallbackValid -- No --> Fail --> Done
+  CallbackValid -- Yes --> Credit --> Notify --> ViewBalance --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

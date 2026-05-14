@@ -1,0 +1,44 @@
+flowchart LR
+  subgraph Customer["Actor: Customer"]
+    direction TB
+    Start([Start]):::user
+    Select["Enter or select voucher"]:::service
+    CodeFormat{"Code format valid?"}:::infra
+    FixCode["Show invalid code format"]:::risk
+    Complete["Complete ride"]:::service
+    Rating["Submit rating and optional comment"]:::service
+    ReviewValid{"Rating 1-5 and comment length valid?"}:::infra
+    FixReview["Show review validation error"]:::risk
+  end
+
+  subgraph System["System: Payment / Review"]
+    direction TB
+    Eligible{"Voucher active, unused,<br/>not expired, min fare met?"}:::infra
+    Reject["Show eligibility reason"]:::risk
+    Apply["Apply discount to fare"]:::service
+    RideCheck{"Ride completed and not reviewed?"}:::infra
+    Duplicate["Reject duplicate or early review"]:::risk
+    SaveReview["Store review and update rating aggregate"]:::data
+    Done([End]):::ok
+  end
+
+  Start --> Select --> CodeFormat
+  CodeFormat -- No --> FixCode --> Select
+  CodeFormat -- Yes --> Eligible
+  Eligible -- No --> Reject --> Complete
+  Eligible -- Yes --> Apply --> Complete
+  Complete --> RideCheck
+  RideCheck -- No --> Duplicate --> Done
+  RideCheck -- Yes --> Rating --> ReviewValid
+  ReviewValid -- No --> FixReview --> Rating
+  ReviewValid -- Yes --> SaveReview --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

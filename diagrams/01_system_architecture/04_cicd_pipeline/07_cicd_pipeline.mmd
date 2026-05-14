@@ -1,0 +1,26 @@
+flowchart LR
+  Commit["Git push / pull request"]:::user
+  Quality["Install, lint, test"]:::service
+  Build["Build apps and services"]:::service
+  Image["Build Docker images"]:::infra
+  Registry["Push image registry"]:::infra
+  Deploy["Rolling deploy to Swarm"]:::service
+  Verify["Smoke tests and health checks"]:::service
+  Promote{"Healthy release?"}:::infra
+  Stable["Promote release"]:::ok
+  Rollback["Rollback previous image"]:::risk
+  Alert["Notify maintainers"]:::external
+
+  Commit --> Quality --> Build --> Image --> Registry --> Deploy --> Verify --> Promote
+  Promote -- Yes --> Stable
+  Promote -- No --> Rollback --> Alert
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

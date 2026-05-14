@@ -199,6 +199,33 @@ export class DriverWalletService {
         where: { id: { in: ids } },
         data:  { settledAt: now },
       });
+
+      const payoutKeys = eligible.map((e: any) => `ledger_payout_${e.rideId}`);
+      const existingPayouts = payoutKeys.length > 0
+        ? await tx.merchantLedger.findMany({
+            where:  { idempotencyKey: { in: payoutKeys } },
+            select: { idempotencyKey: true },
+          })
+        : [];
+      const existingKeys = new Set(existingPayouts.map((e: any) => e.idempotencyKey));
+      const payoutsToRecord = eligible.filter((e: any) => !existingKeys.has(`ledger_payout_${e.rideId}`));
+
+      if (payoutsToRecord.length > 0) {
+        await tx.merchantLedger.createMany({
+          data: payoutsToRecord.map((e: any) => ({
+            type:          MerchantLedgerType.OUT,
+            category:      MerchantLedgerCategory.PAYOUT,
+            amount:        Number(e.amount),
+            referenceId:   e.rideId,
+            description:   `Giải ngân thu nhập tài xế sau T+24h`,
+            idempotencyKey: `ledger_payout_${e.rideId}`,
+          })),
+          skipDuplicates: true,
+        });
+
+        const payoutTotal = payoutsToRecord.reduce((s: number, e: any) => s + Number(e.amount), 0);
+        await this.upsertMerchantBalance(tx, 0, payoutTotal);
+      }
     });
 
     logger.info(`Settled ${totalToSettle} VND pending earnings for driver ${driverId}`);
@@ -466,7 +493,8 @@ export class DriverWalletService {
 
   /**
    * Credit driver net earnings from an online-paid ride.
-   * Merchant records the full gross fare IN, then pays out the net earnings.
+   * Merchant records the full gross fare IN immediately. Driver payout is
+   * recorded only when the pending earning actually settles after T+24h.
    */
   async creditEarning(input: CreditEarningInput): Promise<void> {
     const { driverId, netEarnings, grossFare, platformFee, voucherDiscount, rideId } = input;
@@ -476,7 +504,7 @@ export class DriverWalletService {
       return;
     }
 
-    // — all three merchant ledger writes + balance snapshot in one atomic tx —
+    // — payment receipt + pending earning are recorded atomically —
     const result = await this.prisma.$transaction(async (tx: PrismaAny) => {
       const deltaResult = await this.applyDeltaInTx(tx, {
         driverId,
@@ -509,18 +537,6 @@ export class DriverWalletService {
         },
       });
 
-      // Merchant OUT: net earnings committed to driver (actual fund release at T+24h)
-      await tx.merchantLedger.create({
-        data: {
-          type:          MerchantLedgerType.OUT,
-          category:      MerchantLedgerCategory.PAYOUT,
-          amount:        netEarnings,
-          referenceId:   rideId,
-          description:   `Thu nhập tài xế đang giữ (giải ngân sau 24h kể từ hoàn thành chuyến)`,
-          idempotencyKey: `ledger_payout_${rideId}`,
-        },
-      });
-
       // Merchant OUT: voucher cost absorbed by platform
       if (voucherDiscount > 0) {
         await tx.merchantLedger.create({
@@ -535,8 +551,8 @@ export class DriverWalletService {
         });
       }
 
-      // Snapshot: merchant nets platformFee - voucherCost
-      await this.upsertMerchantBalance(tx, grossFare, netEarnings + voucherDiscount);
+      // Snapshot: payout is counted only when settlement actually happens.
+      await this.upsertMerchantBalance(tx, grossFare, voucherDiscount);
 
       return deltaResult;
     });
@@ -1075,7 +1091,7 @@ export class DriverWalletService {
     const skip  = (page - 1) * limit;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = { driverId };
+    const where: any = { driverId, createdAt: { lte: new Date() } };
     if (params.type) {
       where.type = params.type as TransactionType;
     }

@@ -439,7 +439,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
-          source: "docker-stack.thesis.yml,monitoring,env,scripts,reset-and-seed.sh,deploy/nginx"
+          source: "docker-stack.thesis.yml,monitoring,env,scripts,deploy/nginx"
           target: "~/cab-booking/"
           strip_components: 0
 
@@ -469,6 +469,7 @@ jobs:
           script: |
             set -e
             cd ~/cab-booking
+            rm -f reset-and-seed.sh
 
             export IMAGE_TAG=latest
             export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}

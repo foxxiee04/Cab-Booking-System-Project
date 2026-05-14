@@ -1,0 +1,13 @@
+sequenceDiagram
+  autonumber
+  actor Customer
+  participant Ride as Ride Service
+  participant Review as Review Service
+  participant Driver as Driver Service
+  participant Mongo as MongoDB
+  Customer->>Ride: Submit review
+  Ride->>Review: Create review
+  Review->>Mongo: Store rating and comment
+  Review->>Driver: Update driver rating aggregate
+  Driver-->>Review: Rating updated
+  Review-->>Customer: Review saved

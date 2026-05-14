@@ -1,0 +1,32 @@
+flowchart TB
+  subgraph Targets["Metric Targets"]
+    direction LR
+    Gateway["API Gateway"]:::service
+    Services["Business services"]:::service
+    Node["Docker nodes"]:::infra
+    Rabbit["RabbitMQ"]:::infra
+    DB["Databases"]:::data
+  end
+
+  Prometheus["Prometheus<br/>scrape + store"]:::infra
+  Rules["Alert rules<br/>latency, errors, saturation"]:::infra
+  Grafana["Grafana dashboards"]:::external
+  Team["Operations team"]:::user
+
+  Gateway --> Prometheus
+  Services --> Prometheus
+  Node --> Prometheus
+  Rabbit --> Prometheus
+  DB --> Prometheus
+  Prometheus --> Rules --> Team
+  Prometheus --> Grafana --> Team
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

@@ -1,0 +1,17 @@
+erDiagram
+  REVIEW {
+    string id
+    string rideId
+    string bookingId
+    string type
+    string reviewerId
+    string revieweeId
+    int rating
+    string comment
+  }
+  PENDING_AUTO_RATING {
+    string id
+    string rideId
+    datetime scheduledAt
+    boolean processed
+  }

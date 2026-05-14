@@ -954,14 +954,15 @@ export class PaymentService {
 
   async getCustomerPayments(customerId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
+    const where = { customerId, createdAt: { lte: new Date() } };
     const [payments, total] = await Promise.all([
       this.prisma.payment.findMany({
-        where: { customerId },
+        where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.payment.count({ where: { customerId } }),
+      this.prisma.payment.count({ where }),
     ]);
 
     const fares = await this.prisma.fare.findMany({
@@ -977,25 +978,27 @@ export class PaymentService {
 
   async getDriverEarnings(driverId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
+    const now = new Date();
+    const where = { driverId, createdAt: { lte: now } };
 
     await this.reconcileWalletSettledCashDebt(driverId);
 
     const [earningsRows, total, aggregates] = await Promise.all([
       this.prisma.driverEarnings.findMany({
-        where: { driverId },
+        where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.driverEarnings.count({ where: { driverId } }),
+      this.prisma.driverEarnings.count({ where }),
       this.prisma.driverEarnings.aggregate({
-        where: { driverId },
+        where,
         _sum: { grossFare: true, platformFee: true, penalty: true, netEarnings: true, cashDebt: true },
       }),
     ]);
 
     const unpaidCashDebt = await this.prisma.driverEarnings.aggregate({
-      where: { driverId, driverCollected: true, isPaid: false },
+      where: { driverId, driverCollected: true, isPaid: false, createdAt: { lte: now } },
       _sum: { cashDebt: true },
     });
 
@@ -1271,7 +1274,10 @@ export class PaymentService {
 
   async getAllPayments(page = 1, limit = 20, status?: PaymentStatus) {
     const skip = (page - 1) * limit;
-    const where = status ? { status } : undefined;
+    const where = {
+      createdAt: { lte: new Date() },
+      ...(status ? { status } : {}),
+    };
 
     const [payments, total] = await Promise.all([
       this.prisma.payment.findMany({
@@ -1299,26 +1305,26 @@ export class PaymentService {
 
     const [totalRevenue, todayRevenue, weekRevenue, monthRevenue, pending, completed, failed] = await Promise.all([
       this.prisma.payment.aggregate({
-        where: { status: PaymentStatus.COMPLETED },
+        where: { status: PaymentStatus.COMPLETED, createdAt: { lte: now } },
         _sum: { amount: true },
       }),
       this.prisma.payment.aggregate({
-        where: { status: PaymentStatus.COMPLETED, createdAt: { gte: startOfDay } },
+        where: { status: PaymentStatus.COMPLETED, createdAt: { gte: startOfDay, lte: now } },
         _sum: { amount: true },
       }),
       this.prisma.payment.aggregate({
-        where: { status: PaymentStatus.COMPLETED, createdAt: { gte: startOfWeek } },
+        where: { status: PaymentStatus.COMPLETED, createdAt: { gte: startOfWeek, lte: now } },
         _sum: { amount: true },
       }),
       this.prisma.payment.aggregate({
-        where: { status: PaymentStatus.COMPLETED, createdAt: { gte: startOfMonth } },
+        where: { status: PaymentStatus.COMPLETED, createdAt: { gte: startOfMonth, lte: now } },
         _sum: { amount: true },
       }),
       this.prisma.payment.count({
-        where: { status: { in: [PaymentStatus.PENDING, PaymentStatus.PROCESSING, PaymentStatus.REQUIRES_ACTION] } },
+        where: { status: { in: [PaymentStatus.PENDING, PaymentStatus.PROCESSING, PaymentStatus.REQUIRES_ACTION] }, createdAt: { lte: now } },
       }),
-      this.prisma.payment.count({ where: { status: PaymentStatus.COMPLETED } }),
-      this.prisma.payment.count({ where: { status: PaymentStatus.FAILED } }),
+      this.prisma.payment.count({ where: { status: PaymentStatus.COMPLETED, createdAt: { lte: now } } }),
+      this.prisma.payment.count({ where: { status: PaymentStatus.FAILED, createdAt: { lte: now } } }),
     ]);
 
     return {
@@ -1342,7 +1348,7 @@ export class PaymentService {
     from.setHours(0, 0, 0, 0);
 
     const payments = await this.prisma.payment.findMany({
-      where: { status: PaymentStatus.COMPLETED, createdAt: { gte: from } },
+      where: { status: PaymentStatus.COMPLETED, createdAt: { gte: from, lte: new Date() } },
       select: { amount: true, createdAt: true, method: true },
       orderBy: { createdAt: 'asc' },
     });

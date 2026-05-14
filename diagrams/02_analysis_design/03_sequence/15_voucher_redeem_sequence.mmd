@@ -1,0 +1,15 @@
+sequenceDiagram
+  autonumber
+  actor Customer
+  participant Gateway as API Gateway
+  participant Payment as Payment Service
+  participant Pricing as Pricing Service
+  participant DB as payment_db
+  Customer->>Gateway: Apply voucher
+  Gateway->>Payment: Validate voucher
+  Payment->>DB: Check usage, expiry, and budget
+  DB-->>Payment: Voucher result
+  Payment->>Pricing: Recalculate fare
+  Pricing-->>Payment: Discounted fare
+  Payment-->>Gateway: Voucher applied
+  Gateway-->>Customer: Show final fare

@@ -1,0 +1,11 @@
+stateDiagram-v2
+  [*] --> CREATED
+  CREATED --> PENDING_PROVIDER: online checkout
+  CREATED --> CAPTURED: cash confirmed
+  PENDING_PROVIDER --> CAPTURED: valid IPN
+  PENDING_PROVIDER --> FAILED: invalid or expired
+  CAPTURED --> REFUNDED: cancellation refund
+  CAPTURED --> SETTLED: wallet event published
+  FAILED --> [*]
+  REFUNDED --> [*]
+  SETTLED --> [*]

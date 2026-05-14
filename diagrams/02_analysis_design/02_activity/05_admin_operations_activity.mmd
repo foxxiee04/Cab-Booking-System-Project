@@ -1,0 +1,48 @@
+flowchart LR
+  subgraph Admin["Actor: Admin"]
+    direction TB
+    Start([Start]):::user
+    Login["Enter admin credentials"]:::service
+    Authz{"Credentials, MFA, role valid?"}:::security
+    FixLogin["Show login or permission error"]:::risk
+    Dashboard["Open operations dashboard"]:::service
+    Task{"Select task"}:::infra
+    FillForm["Enter decision, reason, amount, or filter"]:::service
+    FormValid{"Input valid and complete?"}:::infra
+    FixForm["Show field-level validation errors"]:::risk
+  end
+
+  subgraph Platform["System: Operations Platform"]
+    direction TB
+    DriverReview["Approve/reject driver application"]:::service
+    FinanceReview["Approve/reject withdrawal or refund"]:::service
+    LiveOps["Monitor ride, user, voucher, system health"]:::service
+    ServiceOk{"Target service accepted update?"}:::infra
+    Retry["Retry or keep task pending"]:::risk
+    Audit["Write audit log with admin id"]:::data
+    Notify["Notify affected user or ops channel"]:::external
+    Done([End]):::ok
+  end
+
+  Start --> Login --> Authz
+  Authz -- No --> FixLogin --> Done
+  Authz -- Yes --> Dashboard --> Task --> FillForm --> FormValid
+  FormValid -- No --> FixForm --> FillForm
+  FormValid -- Yes --> DriverReview
+  Task -- Finance review --> FinanceReview
+  Task -- Live operations --> LiveOps
+  DriverReview --> ServiceOk
+  FinanceReview --> ServiceOk
+  LiveOps --> ServiceOk
+  ServiceOk -- No --> Retry --> Dashboard
+  ServiceOk -- Yes --> Audit --> Notify --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

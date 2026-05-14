@@ -1,0 +1,43 @@
+flowchart LR
+  subgraph Driver["Actor: Driver"]
+    direction TB
+    Start([Start]):::user
+    Receive["Receive ride request"]:::service
+    Review["Review pickup, dropoff, fare, timeout"]:::service
+    Decision{"Accept request?"}:::infra
+    Reject["Reject or let timer expire"]:::risk
+    Navigate["Navigate to pickup"]:::service
+  end
+
+  subgraph RideSystem["System: Ride Service"]
+    direction TB
+    DriverReady{"Driver approved, online, location fresh?"}:::security
+    Block["Block offer because driver not eligible"]:::risk
+    OfferFresh{"Offer still active?"}:::infra
+    Stale["Reject stale offer"]:::risk
+    Lock{"Assignment lock acquired?"}:::infra
+    Conflict["Another driver already assigned"]:::risk
+    Assign["Assign driver and create ride room"]:::ok
+    Notify["Notify customer and driver apps"]:::external
+    Done([End]):::ok
+  end
+
+  Start --> DriverReady
+  DriverReady -- No --> Block --> Done
+  DriverReady -- Yes --> Receive --> Review --> Decision
+  Decision -- No --> Reject --> Done
+  Decision -- Yes --> OfferFresh
+  OfferFresh -- No --> Stale --> Done
+  OfferFresh -- Yes --> Lock
+  Lock -- No --> Conflict --> Done
+  Lock -- Yes --> Assign --> Notify --> Navigate --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

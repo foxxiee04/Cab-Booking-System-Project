@@ -1,0 +1,43 @@
+erDiagram
+  VOUCHER ||--o{ USER_VOUCHER : collected_as
+  VOUCHER ||--o{ PAYMENT : applied_to
+  PAYMENT ||--o{ DRIVER_EARNINGS : creates
+  PAYMENT {
+    string id
+    string rideId
+    string customerId
+    string driverId
+    float amount
+    string method
+    string provider
+    string status
+  }
+  FARE {
+    string id
+    string rideId
+    float totalFare
+    float distanceKm
+  }
+  DRIVER_EARNINGS {
+    string id
+    string rideId
+    string driverId
+    float netEarnings
+  }
+  VOUCHER {
+    string id
+    string code
+    string discountType
+    float discountValue
+  }
+  USER_VOUCHER {
+    string id
+    string userId
+    string voucherId
+    int usedCount
+  }
+  OUTBOX_EVENT {
+    string id
+    string eventType
+    string correlationId
+  }

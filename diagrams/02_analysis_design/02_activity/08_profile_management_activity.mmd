@@ -1,0 +1,44 @@
+flowchart LR
+  subgraph User["Actor: User"]
+    direction TB
+    Start([Start]):::user
+    OpenProfile["Open profile screen"]:::service
+    Edit["Edit name, email, phone, avatar, address"]:::service
+    FixInput["Show field-level validation errors"]:::risk
+    VerifyPhone["Verify changed phone by OTP"]:::service
+    ViewSaved["View updated profile"]:::ok
+  end
+
+  subgraph ProfileSystem["System: Profile Service"]
+    direction TB
+    Auth{"JWT valid and owner/admin allowed?"}:::security
+    Deny["Reject unauthenticated or forbidden request"]:::risk
+    Validate{"Fields valid?<br/>email, phone, file type, size"}:::infra
+    Conflict{"Phone/email/identity conflict?"}:::infra
+    RejectConflict["Show duplicate or stale version error"]:::risk
+    NeedOtp{"Sensitive phone change?"}:::infra
+    Save["Persist profile and audit change"]:::data
+    Notify["Notify user about profile update"]:::external
+    Done([End]):::ok
+  end
+
+  Start --> OpenProfile --> Auth
+  Auth -- No --> Deny --> Done
+  Auth -- Yes --> Edit --> Validate
+  Validate -- No --> FixInput --> Edit
+  Validate -- Yes --> Conflict
+  Conflict -- Yes --> RejectConflict --> Edit
+  Conflict -- No --> NeedOtp
+  NeedOtp -- Yes --> VerifyPhone --> Save
+  NeedOtp -- No --> Save
+  Save --> Notify --> ViewSaved --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

@@ -1,0 +1,41 @@
+flowchart TB
+  subgraph Identity["Identity Context Stores"]
+    direction LR
+    Auth["Auth"]:::service --> AuthDB[("auth_db")]:::data
+    UserSvc["User"]:::service --> UserDB[("user_db")]:::data
+  end
+
+  subgraph Mobility["Mobility Context Stores"]
+    direction LR
+    Driver["Driver"]:::service --> DriverDB[("driver_db")]:::data
+    Booking["Booking"]:::service --> BookingDB[("booking_db")]:::data
+    Ride["Ride"]:::service --> RideDB[("ride_db")]:::data
+    Pricing["Pricing"]:::service --> PricingDB[("pricing_db")]:::data
+  end
+
+  subgraph Finance["Finance Context Stores"]
+    direction LR
+    Payment["Payment"]:::service --> PaymentDB[("payment_db")]:::data
+    Wallet["Wallet"]:::service --> WalletDB[("wallet_db")]:::data
+  end
+
+  subgraph Support["Support Context Stores"]
+    direction LR
+    Notification["Notification"]:::service --> NotiDB[("Mongo notifications")]:::data
+    Review["Review"]:::service --> ReviewDB[("Mongo reviews")]:::data
+    AI["AI"]:::ai --> AIStore[("models + vector index")]:::data
+  end
+
+  Identity --> Mobility
+  Mobility --> Finance
+  Mobility --> Support
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

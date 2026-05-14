@@ -1,0 +1,18 @@
+sequenceDiagram
+  autonumber
+  actor User
+  participant Gateway as API Gateway
+  participant Auth as Auth Service
+  participant Redis as Redis OTP
+  participant SMS as SMS Provider
+  participant DB as auth_db
+  User->>Gateway: Start registration or login
+  Gateway->>Auth: Send phone number
+  Auth->>Redis: Save OTP with TTL
+  Auth->>SMS: Send OTP
+  SMS-->>User: OTP code
+  User->>Gateway: Submit OTP
+  Gateway->>Auth: Verify OTP
+  Auth->>DB: Create user or session
+  Auth-->>Gateway: JWT and refresh token
+  Gateway-->>User: Authenticated session

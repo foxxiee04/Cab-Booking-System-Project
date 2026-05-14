@@ -1,0 +1,26 @@
+erDiagram
+  RIDE ||--o{ RIDE_CHAT_MESSAGE : has
+  RIDE ||--o{ RIDE_STATE_TRANSITION : records
+  RIDE {
+    string id
+    string customerId
+    string driverId
+    string status
+    string pickupAddress
+    string dropoffAddress
+    float fare
+  }
+  RIDE_CHAT_MESSAGE {
+    string id
+    string rideId
+    string senderId
+    string senderRole
+    string message
+  }
+  RIDE_STATE_TRANSITION {
+    string id
+    string rideId
+    string fromStatus
+    string toStatus
+    string actorType
+  }

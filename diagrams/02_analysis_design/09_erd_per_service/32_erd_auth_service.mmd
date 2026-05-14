@@ -1,0 +1,30 @@
+erDiagram
+  USER ||--o{ REFRESH_TOKEN : owns
+  USER ||--o{ AUDIT_LOG : records
+  USER {
+    string id
+    string phone
+    string email
+    string role
+    string status
+  }
+  REFRESH_TOKEN {
+    string id
+    string tokenId
+    string userId
+    datetime expiresAt
+    datetime revokedAt
+  }
+  OTP_RECORD {
+    string id
+    string phone
+    string otpHash
+    int attempts
+    boolean verified
+  }
+  AUDIT_LOG {
+    string id
+    string userId
+    string action
+    boolean success
+  }

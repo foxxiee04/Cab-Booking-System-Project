@@ -1,0 +1,34 @@
+classDiagram
+  class Booking {
+    +String id
+    +String customerId
+    +Location pickup
+    +Location dropoff
+    +BookingStatus status
+    +confirm()
+    +cancel()
+  }
+  class Ride {
+    +String id
+    +RideStatus status
+    +String driverId
+    +Float fare
+    +assignDriver()
+    +complete()
+  }
+  class Driver {
+    +String id
+    +DriverStatus status
+    +AvailabilityStatus availability
+    +goOnline()
+    +acceptRide()
+  }
+  class Location {
+    +Float lat
+    +Float lng
+    +String address
+  }
+  Booking "1" --> "1" Ride : becomes
+  Ride "*" --> "1" Driver : assigned to
+  Booking --> Location
+  Ride --> Location

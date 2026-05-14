@@ -1,0 +1,16 @@
+sequenceDiagram
+  autonumber
+  actor Customer
+  participant Gateway as API Gateway
+  participant Ride as Ride Service
+  participant Socket as Socket.IO
+  participant Notification as Notification Service
+  actor Driver
+  Customer->>Gateway: Send chat message
+  Gateway->>Ride: Store message
+  Gateway->>Socket: Emit to ride room
+  Socket-->>Driver: Receive message in realtime
+  alt Driver is offline
+    Gateway->>Notification: Send push notification
+    Notification-->>Driver: Push notification
+  end

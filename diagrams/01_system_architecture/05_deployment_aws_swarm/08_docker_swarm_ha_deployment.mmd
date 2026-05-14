@@ -1,0 +1,49 @@
+flowchart TB
+  Internet["Internet"]:::user
+  LB["HTTPS load balancer / Nginx"]:::infra
+
+  subgraph Swarm["AWS EC2 Docker Swarm Cluster"]
+    direction LR
+    Manager["Manager node<br/>scheduler + control plane"]:::infra
+    WorkerA["Worker node A<br/>app replicas"]:::infra
+    WorkerB["Worker node B<br/>app replicas"]:::infra
+  end
+
+  subgraph Replicas["Replicated Services"]
+    direction LR
+    Gateway["API Gateway x2"]:::service
+    Services["Business services x2+"]:::service
+    AI["AI Service x1-2"]:::ai
+    Jobs["Scheduled jobs"]:::service
+  end
+
+  subgraph Data["Persistent Layer"]
+    direction LR
+    PG[("PostgreSQL volume")]:::data
+    Mongo[("MongoDB volume")]:::data
+    Redis[("Redis")]:::data
+    Rabbit["RabbitMQ"]:::infra
+  end
+
+  Internet --> LB --> Gateway
+  Manager --> WorkerA
+  Manager --> WorkerB
+  WorkerA --> Replicas
+  WorkerB --> Replicas
+  Gateway --> Services
+  Services --> AI
+  Services --> Jobs
+  Services --> PG
+  Services --> Mongo
+  Services --> Redis
+  Services --> Rabbit
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

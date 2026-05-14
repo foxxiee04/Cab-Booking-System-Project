@@ -1,0 +1,63 @@
+flowchart LR
+  subgraph Access["Access Layer"]
+    direction TB
+    Web["React Apps"]:::user
+    Gateway["API Gateway<br/>REST + WebSocket facade"]:::service
+  end
+
+  subgraph Identity["Identity Context"]
+    direction TB
+    Auth["Auth Service"]:::service
+    Profile["User Service"]:::service
+  end
+
+  subgraph Mobility["Mobility Core"]
+    direction TB
+    Booking["Booking Service"]:::service
+    Ride["Ride Service"]:::service
+    DriverSvc["Driver Service"]:::service
+    Pricing["Pricing Service"]:::service
+  end
+
+  subgraph Finance["Finance Context"]
+    direction TB
+    Payment["Payment Service"]:::service
+    Wallet["Wallet Service"]:::service
+  end
+
+  subgraph Support["Support Context"]
+    direction TB
+    Notification["Notification Service"]:::service
+    Review["Review Service"]:::service
+    AI["AI Service"]:::ai
+  end
+
+  subgraph Messaging["Integration Layer"]
+    direction TB
+    Sync["gRPC / internal HTTP"]:::infra
+    Async["RabbitMQ domain events"]:::infra
+    Realtime["Socket.IO rooms"]:::infra
+  end
+
+  Web --> Gateway
+  Gateway --> Sync
+  Gateway --> Realtime
+  Sync --> Identity
+  Sync --> Mobility
+  Sync --> Finance
+  Sync --> Support
+  Mobility --> Async
+  Finance --> Async
+  Support --> Async
+  Pricing --> AI
+  Ride --> Realtime
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

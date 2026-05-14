@@ -1,0 +1,10 @@
+stateDiagram-v2
+  [*] --> OFFLINE
+  OFFLINE --> ONLINE: go online
+  ONLINE --> OFFERED: ride offer sent
+  OFFERED --> BUSY: accept offer
+  OFFERED --> ONLINE: decline or timeout
+  BUSY --> ONLINE: ride completed
+  BUSY --> SUSPENDED: safety or policy issue
+  ONLINE --> OFFLINE: go offline
+  SUSPENDED --> OFFLINE: admin clears issue

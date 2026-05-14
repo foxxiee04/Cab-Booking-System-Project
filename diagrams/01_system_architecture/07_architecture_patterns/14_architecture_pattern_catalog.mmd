@@ -1,0 +1,50 @@
+flowchart TB
+  Goal["Maintainable, scalable microservice architecture"]:::user
+
+  subgraph Access["Access and Edge"]
+    direction TB
+    Gateway["API Gateway"]:::service
+    Realtime["Realtime gateway<br/>Socket.IO rooms"]:::service
+  end
+
+  subgraph Decomposition["Service Decomposition"]
+    direction TB
+    BoundedContext["Bounded Context per Service"]:::service
+    DatabasePerService["Database per Service"]:::data
+    ContractFirst["Contract-first DTOs"]:::infra
+  end
+
+  subgraph Integration["Integration"]
+    direction TB
+    PubSub["Publish / Subscribe"]:::infra
+    Saga["Saga orchestration"]:::service
+    Idempotency["Idempotent consumer"]:::ok
+    Outbox["Transactional outbox"]:::infra
+  end
+
+  subgraph Reliability["Reliability"]
+    direction TB
+    CircuitBreaker["Circuit breaker"]:::infra
+    Retry["Retry with backoff"]:::infra
+    Fallback["Fallback response"]:::ok
+    HealthCheck["Health check"]:::infra
+  end
+
+  Goal --> Gateway
+  Goal --> BoundedContext
+  Goal --> PubSub
+  Goal --> CircuitBreaker
+  Gateway --> Realtime
+  BoundedContext --> DatabasePerService --> ContractFirst
+  PubSub --> Saga --> Idempotency --> Outbox
+  CircuitBreaker --> Retry --> Fallback --> HealthCheck
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

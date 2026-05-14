@@ -131,8 +131,12 @@ const REPORT_COMPANY = {
   email: 'Email: contact@foxgo.vn',
 };
 
-/** ~210mm @ 96dpi — cố định chiều ngang capture để scale PDF khớp A4, tránh “phình” theo màn hình. */
+/** ~210mm @ 96dpi — fallback khi không đo được chiều rộng báo cáo để clone PDF. */
 const PDF_CAPTURE_WIDTH_PX = 794;
+const PDF_MARGIN_MM = 14;
+const PDF_CAPTURE_SCALE = 2;
+const PDF_BLOCK_GUARD_PX = 32;
+const PDF_SPACER_CLASS = 'pdf-page-spacer';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 const formatShortCurrency = (v: number) => {
@@ -153,6 +157,46 @@ const formatTickDate = (raw: string, period: PeriodKey) => {
 const computeDelta = (current: number, prev: number): number => {
   if (prev === 0) return current > 0 ? 100 : 0;
   return Math.round(((current - prev) / prev) * 100);
+};
+
+const waitForPaint = () =>
+  new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+
+const removePdfSpacers = (root: HTMLElement) => {
+  root.querySelectorAll(`.${PDF_SPACER_CLASS}`).forEach((el) => el.remove());
+};
+
+/**
+ * html2canvas captures one tall bitmap, then jsPDF slices it. Insert blank
+ * space before atomic report blocks so charts/cards never straddle a PDF cut.
+ */
+const preparePdfPageBreaks = (root: HTMLElement, pageHeightPx: number) => {
+  removePdfSpacers(root);
+
+  const blocks = Array.from(root.querySelectorAll<HTMLElement>('[data-pdf-block="true"]'));
+  for (const block of blocks) {
+    const styles = window.getComputedStyle(block);
+    const blockHeight =
+      block.offsetHeight +
+      (parseFloat(styles.marginBottom || '0') || 0);
+
+    if (blockHeight <= 0 || blockHeight >= pageHeightPx) continue;
+
+    const pageOffset = block.offsetTop % pageHeightPx;
+    if (pageOffset <= 1) continue;
+
+    const remainingHeight = pageHeightPx - pageOffset;
+    if (blockHeight + PDF_BLOCK_GUARD_PX <= remainingHeight) continue;
+
+    const spacer = document.createElement('div');
+    spacer.className = PDF_SPACER_CLASS;
+    spacer.style.height = `${remainingHeight}px`;
+    spacer.style.width = '100%';
+    spacer.style.flexShrink = '0';
+    block.parentElement?.insertBefore(spacer, block);
+  }
 };
 
 /**
@@ -360,45 +404,88 @@ const Reports: React.FC = () => {
   const handleExportPdf = async () => {
     if (!reportRef.current) return;
     setExporting(true);
-    const element = reportRef.current;
-    const prevInline = { width: element.style.width, maxWidth: element.style.maxWidth };
+    let captureElement: HTMLElement | null = null;
     try {
-      // Cố định chiều ngang như A4 web (794px) để ảnh scale đúng lề A4, không phụ thuộc độ rộng màn hình.
-      element.style.width = `${PDF_CAPTURE_WIDTH_PX}px`;
-      element.style.maxWidth = `${PDF_CAPTURE_WIDTH_PX}px`;
-      await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-      });
-      await new Promise((r) => setTimeout(r, 250));
+      const sourceElement = reportRef.current;
+      const captureWidth = Math.max(
+        1,
+        Math.ceil(sourceElement.getBoundingClientRect().width || sourceElement.scrollWidth || PDF_CAPTURE_WIDTH_PX),
+      );
+      const captureWindowWidth = Math.max(
+        1,
+        Math.ceil(window.innerWidth || document.documentElement.clientWidth || captureWidth),
+      );
 
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-        windowWidth: PDF_CAPTURE_WIDTH_PX,
-      });
+      // Work on an off-screen clone so exporting never mutates or shrinks the live dashboard.
+      captureElement = sourceElement.cloneNode(true) as HTMLElement;
+      captureElement.style.position = 'absolute';
+      captureElement.style.left = '-10000px';
+      captureElement.style.top = '0';
+      captureElement.style.width = `${captureWidth}px`;
+      captureElement.style.minWidth = `${captureWidth}px`;
+      captureElement.style.maxWidth = `${captureWidth}px`;
+      captureElement.style.background = '#ffffff';
+      captureElement.style.pointerEvents = 'none';
+      document.body.appendChild(captureElement);
 
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
-      const marginMm = 10;
-      const usableW = pageW - 2 * marginMm;
-      const usableH = pageH - 2 * marginMm;
+      const usableW = pageW - 2 * PDF_MARGIN_MM;
+      const usableH = pageH - 2 * PDF_MARGIN_MM;
+      const pageHeightPx = (usableH * captureWidth) / usableW;
 
-      // Fit toàn bộ báo cáo trong **một** trang A4: scale đồng đều (giữ tỉ lệ), căn giữa trong vùng có lề.
-      const pxW = canvas.width;
-      const pxH = canvas.height;
-      let drawW = usableW;
-      let drawH = (pxH * drawW) / pxW;
-      if (drawH > usableH) {
-        drawH = usableH;
-        drawW = (pxW * drawH) / pxH;
+      preparePdfPageBreaks(captureElement, pageHeightPx);
+      await waitForPaint();
+      await new Promise((r) => setTimeout(r, 250));
+
+      const canvas = await html2canvas(captureElement, {
+        scale: PDF_CAPTURE_SCALE,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+        windowWidth: captureWindowWidth,
+      });
+
+      const pageCanvas = document.createElement('canvas');
+      const pageContext = pageCanvas.getContext('2d');
+      if (!pageContext) {
+        throw new Error('Cannot create PDF page canvas context');
       }
-      const x = marginMm + (usableW - drawW) / 2;
-      const y = marginMm + (usableH - drawH) / 2;
-      pdf.addImage(imgData, 'PNG', x, y, drawW, drawH, undefined, 'FAST');
+
+      const pageSliceHeightPx = Math.floor((usableH * canvas.width) / usableW);
+      pageCanvas.width = canvas.width;
+      let offsetY = 0;
+      let pageIndex = 0;
+
+      while (offsetY < canvas.height) {
+        const sliceHeight = Math.min(pageSliceHeightPx, canvas.height - offsetY);
+        pageCanvas.height = sliceHeight;
+        pageContext.fillStyle = '#ffffff';
+        pageContext.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        pageContext.drawImage(
+          canvas,
+          0,
+          offsetY,
+          canvas.width,
+          sliceHeight,
+          0,
+          0,
+          pageCanvas.width,
+          sliceHeight,
+        );
+
+        if (pageIndex > 0) {
+          pdf.addPage();
+        }
+
+        const imgData = pageCanvas.toDataURL('image/png');
+        const drawH = (sliceHeight * usableW) / canvas.width;
+        pdf.addImage(imgData, 'PNG', PDF_MARGIN_MM, PDF_MARGIN_MM, usableW, drawH, undefined, 'FAST');
+
+        offsetY += sliceHeight;
+        pageIndex += 1;
+      }
 
       const stamp = generatedAt.toISOString().slice(0, 10);
       pdf.save(`bao-cao-doanh-so-${period}-${stamp}.pdf`);
@@ -406,8 +493,7 @@ const Reports: React.FC = () => {
       console.error('PDF export failed:', err);
       setError('Xuất PDF thất bại. Vui lòng thử lại.');
     } finally {
-      element.style.width = prevInline.width;
-      element.style.maxWidth = prevInline.maxWidth;
+      captureElement?.remove();
       setExporting(false);
     }
   };
@@ -458,9 +544,9 @@ const Reports: React.FC = () => {
       {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 3 }}>{error}</Alert>}
 
       {/* ── Report body (everything inside is captured by the PDF) ── */}
-      <Box ref={reportRef} sx={{ bgcolor: 'transparent', maxWidth: '100%' }}>
+      <Box ref={reportRef} sx={{ bgcolor: '#fff', maxWidth: '100%' }}>
         {/* Cover header */}
-        <Card elevation={0} sx={{ borderRadius: 5, mb: 3, p: 3, border: '1px solid rgba(148,163,184,0.16)', background: 'linear-gradient(135deg, #5a7fb8 0%, #4f6ea1 100%)', color: '#fff' }}>
+        <Card data-pdf-block="true" elevation={0} sx={{ borderRadius: 5, mb: 3, p: 3, border: '1px solid rgba(148,163,184,0.16)', background: 'linear-gradient(135deg, #5a7fb8 0%, #4f6ea1 100%)', color: '#fff' }}>
           <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ md: 'flex-start' }} spacing={2.5}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography variant="caption" sx={{ display: 'block', opacity: 0.92, fontWeight: 700, letterSpacing: '0.04em' }}>
@@ -490,7 +576,7 @@ const Reports: React.FC = () => {
         </Card>
 
         {/* Executive summary — cùng kiểu Card viền như mục 2, 3 */}
-        <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.07)', mb: 3 }}>
+        <Card data-pdf-block="true" elevation={0} sx={{ borderRadius: 5, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.07)', mb: 3 }}>
           <CardContent sx={{ p: 3 }}>
             <SectionTitle subtitle={`Đối chiếu ${PERIOD_LABEL[period].toLowerCase()} vs ${PERIOD_PREV_LABEL[period].toLowerCase()}`}>
               1. Tóm tắt điều hành
@@ -546,7 +632,7 @@ const Reports: React.FC = () => {
         </Card>
 
         {/* Revenue trend */}
-        <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.07)', mb: 3 }}>
+        <Card data-pdf-block="true" elevation={0} sx={{ borderRadius: 5, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.07)', mb: 3 }}>
           <CardContent sx={{ p: 3 }}>
             <SectionTitle subtitle={period === 'year' ? 'Tổng hợp theo tháng' : 'Tổng hợp theo ngày'}>
               2. Diễn biến doanh thu
@@ -583,7 +669,7 @@ const Reports: React.FC = () => {
         </Card>
 
         {/* Vehicle breakdown + Payment methods */}
-        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+        <Grid data-pdf-block="true" container spacing={2.5} sx={{ mb: 3 }}>
           <Grid item xs={12} lg={7}>
             <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.07)', height: '100%' }}>
               <CardContent sx={{ p: 3 }}>
@@ -649,7 +735,7 @@ const Reports: React.FC = () => {
         </Grid>
 
         {/* Top performers */}
-        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+        <Grid data-pdf-block="true" container spacing={2.5} sx={{ mb: 3 }}>
           <Grid item xs={12} lg={6}>
             <Card elevation={0} sx={{ borderRadius: 5, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.07)' }}>
               <CardContent sx={{ p: 3 }}>
@@ -710,7 +796,7 @@ const Reports: React.FC = () => {
         </Grid>
 
         {/* Footer */}
-        <Card elevation={0} sx={{ borderRadius: 4, border: '1px solid rgba(148,163,184,0.16)', mb: 1 }}>
+        <Card data-pdf-block="true" elevation={0} sx={{ borderRadius: 4, border: '1px solid rgba(148,163,184,0.16)', mb: 1 }}>
           <CardContent>
             <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1}>
               <Typography variant="caption" color="text.secondary">

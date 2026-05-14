@@ -1,0 +1,24 @@
+flowchart TB
+  Probe["Docker health check"]:::infra
+  Endpoint["Service /health endpoint"]:::service
+  Dependencies{"Critical dependencies ready?"}:::infra
+  Healthy["Mark task healthy"]:::ok
+  Unhealthy["Mark task unhealthy"]:::risk
+  Restart["Restart container"]:::infra
+  Reschedule["Reschedule if restart fails"]:::infra
+  Notify["Notify through dashboard / alert"]:::external
+
+  Probe --> Endpoint --> Dependencies
+  Dependencies -- Yes --> Healthy
+  Dependencies -- No --> Unhealthy --> Restart --> Probe
+  Restart -. repeated failure .-> Reschedule --> Notify
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

@@ -1,0 +1,27 @@
+flowchart TB
+  Start([Booking confirmed]):::user
+  Build["Build driver candidate pool"]:::service
+  Radius["Search radius rounds<br/>2 km, 3 km, 5 km"]:::service
+  Filter["Filter availability, vehicle type, rating"]:::service
+  Score["Score by distance, acceptance probability, ETA"]:::ai
+  Offer["Send offer to best driver"]:::service
+  Accepted{"Accepted before timeout?"}:::infra
+  Assign["Assign driver and create ride"]:::ok
+  Retry{"More candidates or rounds?"}:::infra
+  Fail["No driver available"]:::risk
+
+  Start --> Build --> Radius --> Filter --> Score --> Offer --> Accepted
+  Accepted -- Yes --> Assign
+  Accepted -- No --> Retry
+  Retry -- Yes --> Radius
+  Retry -- No --> Fail
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

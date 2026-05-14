@@ -1,0 +1,45 @@
+flowchart LR
+  subgraph Customer["Actor: Customer"]
+    direction TB
+    Start([Start]):::user
+    Choose["Choose MoMo or VNPay"]:::service
+    OpenCheckout["Open provider checkout"]:::external
+    Retry["Retry payment or choose another method"]:::risk
+    Result["View payment result"]:::service
+  end
+
+  subgraph Payment["System: Payment Service"]
+    direction TB
+    Method{"Method supported and ride payable?"}:::infra
+    RejectMethod["Reject unsupported method or paid ride"]:::risk
+    Amount{"Amount matches ride fare and quote?"}:::infra
+    CreateOrder["Create payment order and checkout URL"]:::service
+    Callback["Receive return URL or IPN callback"]:::external
+    Verify{"Signature, amount, status valid?"}:::security
+    Duplicate{"Callback already processed?"}:::infra
+    AckDuplicate["Acknowledge duplicate safely"]:::ok
+    MarkPaid["Mark payment completed"]:::data
+    Publish["Publish payment.completed event"]:::external
+    MarkFailed["Mark failed/cancelled and keep audit"]:::risk
+    Done([End]):::ok
+  end
+
+  Start --> Choose --> Method
+  Method -- No --> RejectMethod --> Done
+  Method -- Yes --> Amount
+  Amount -- No --> MarkFailed --> Result --> Done
+  Amount -- Yes --> CreateOrder --> OpenCheckout --> Callback --> Verify
+  Verify -- No --> MarkFailed --> Retry
+  Verify -- Yes --> Duplicate
+  Duplicate -- Yes --> AckDuplicate --> Result --> Done
+  Duplicate -- No --> MarkPaid --> Publish --> Result --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

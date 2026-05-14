@@ -1,0 +1,47 @@
+erDiagram
+  DRIVER_WALLET ||--o{ WALLET_TRANSACTION : records
+  DRIVER_WALLET ||--o{ PENDING_EARNING : holds
+  DRIVER_WALLET ||--o{ DEBT_RECORD : tracks
+  DRIVER_WALLET ||--o{ WITHDRAWAL_REQUEST : requests
+  DRIVER_WALLET ||--o{ WALLET_TOPUP_ORDER : tops_up
+  DRIVER_WALLET {
+    string id
+    string driverId
+    float availableBalance
+    float pendingBalance
+    float lockedBalance
+    string status
+  }
+  WALLET_TRANSACTION {
+    string id
+    string driverId
+    string type
+    string direction
+    float amount
+    string idempotencyKey
+  }
+  PENDING_EARNING {
+    string id
+    string driverId
+    string rideId
+    float amount
+    datetime settleAt
+  }
+  DEBT_RECORD {
+    string id
+    string driverId
+    float remaining
+    string status
+  }
+  WITHDRAWAL_REQUEST {
+    string id
+    string driverId
+    float amount
+    string status
+  }
+  MERCHANT_LEDGER {
+    string id
+    string type
+    string category
+    float amount
+  }

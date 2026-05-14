@@ -1,0 +1,30 @@
+classDiagram
+  class Payment {
+    +String id
+    +String rideId
+    +Float amount
+    +PaymentStatus status
+    +complete()
+    +refund()
+  }
+  class Wallet {
+    +String driverId
+    +Float availableBalance
+    +Float pendingBalance
+    +holdEarning()
+    +withdraw()
+  }
+  class WalletTransaction {
+    +String id
+    +TransactionType type
+    +Float amount
+    +String idempotencyKey
+  }
+  class Voucher {
+    +String code
+    +DiscountType discountType
+    +Float discountValue
+  }
+  Payment "0..1" --> "1" Voucher : applies
+  Wallet "1" --> "*" WalletTransaction
+  Payment ..> Wallet : creates earning

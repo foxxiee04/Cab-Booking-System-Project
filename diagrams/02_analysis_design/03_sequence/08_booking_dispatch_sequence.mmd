@@ -1,0 +1,25 @@
+sequenceDiagram
+  autonumber
+  actor Customer
+  participant Gateway as API Gateway
+  participant Booking as Booking Service
+  participant Pricing as Pricing + AI
+  participant Driver as Driver Service
+  participant Ride as Ride Service
+  participant Socket as Socket.IO
+  actor DriverApp as Driver App
+  Customer->>Gateway: Request fare estimate
+  Gateway->>Booking: Route and vehicle type
+  Booking->>Pricing: Calculate fare, ETA, surge
+  Pricing-->>Booking: Quote with fallback status
+  Booking-->>Customer: Show quote
+  Customer->>Gateway: Confirm booking
+  Gateway->>Booking: Create booking
+  Booking->>Driver: Find ranked online drivers
+  Driver-->>Booking: Candidate drivers
+  Booking->>Ride: Create ride offer
+  Ride->>Socket: Push offer
+  Socket-->>DriverApp: New ride offer
+  DriverApp->>Gateway: Accept offer
+  Gateway->>Ride: Assign driver
+  Ride->>Socket: Notify customer and driver

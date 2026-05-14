@@ -847,14 +847,15 @@ export class RideService {
 
   async getCustomerRides(customerId: string, page = 1, limit = 20): Promise<{ rides: Ride[]; total: number }> {
     const skip = (page - 1) * limit;
+    const where = { customerId, createdAt: { lte: new Date() } };
     const [rides, total] = await Promise.all([
       this.prisma.ride.findMany({
-        where: { customerId },
+        where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.ride.count({ where: { customerId } }),
+      this.prisma.ride.count({ where }),
     ]);
     return { rides: await this.enrichRideCustomers(rides), total };
   }
@@ -871,6 +872,7 @@ export class RideService {
 
     const where = {
       driverId: normalizedDriverIds.length === 1 ? normalizedDriverIds[0] : { in: normalizedDriverIds },
+      createdAt: { lte: new Date() },
       ...(statuses && statuses.length > 0
         ? { status: statuses.length === 1 ? statuses[0] : { in: statuses } }
         : {}),
@@ -890,7 +892,10 @@ export class RideService {
 
   async getAllRides(page = 1, limit = 20, status?: RideStatus): Promise<{ rides: Ride[]; total: number }> {
     const skip = (page - 1) * limit;
-    const where = status ? { status } : undefined;
+    const where = {
+      createdAt: { lte: new Date() },
+      ...(status ? { status } : {}),
+    };
 
     const [rides, total] = await Promise.all([
       this.prisma.ride.findMany({
@@ -925,12 +930,12 @@ export class RideService {
     ];
 
     const [total, today, pending, active, completed, cancelled] = await Promise.all([
-      this.prisma.ride.count(),
-      this.prisma.ride.count({ where: { createdAt: { gte: startOfDay } } }),
-      this.prisma.ride.count({ where: { status: { in: pendingStatuses } } }),
-      this.prisma.ride.count({ where: { status: { in: activeStatuses } } }),
-      this.prisma.ride.count({ where: { status: RideStatus.COMPLETED } }),
-      this.prisma.ride.count({ where: { status: RideStatus.CANCELLED } }),
+      this.prisma.ride.count({ where: { createdAt: { lte: new Date() } } }),
+      this.prisma.ride.count({ where: { createdAt: { gte: startOfDay, lte: new Date() } } }),
+      this.prisma.ride.count({ where: { status: { in: pendingStatuses }, createdAt: { lte: new Date() } } }),
+      this.prisma.ride.count({ where: { status: { in: activeStatuses }, createdAt: { lte: new Date() } } }),
+      this.prisma.ride.count({ where: { status: RideStatus.COMPLETED, createdAt: { lte: new Date() } } }),
+      this.prisma.ride.count({ where: { status: RideStatus.CANCELLED, createdAt: { lte: new Date() } } }),
     ]);
 
     return { total, today, pending, active, completed, cancelled };
@@ -953,7 +958,7 @@ export class RideService {
       by: ['vehicleType'],
       where: {
         status: RideStatus.COMPLETED,
-        completedAt: { gte: from },
+        completedAt: { gte: from, lte: new Date() },
       },
       _count: { _all: true },
       _sum: { fare: true },

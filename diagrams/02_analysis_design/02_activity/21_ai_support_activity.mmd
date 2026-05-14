@@ -1,0 +1,45 @@
+flowchart LR
+  subgraph User["Actor: User"]
+    direction TB
+    Start([Start]):::user
+    Ask["Ask Mia support chatbot"]:::service
+    FixQuestion["Shorten, clarify, or remove invalid input"]:::risk
+    ReadAnswer["Read answer and suggested action"]:::service
+    Feedback["Send feedback or request human help"]:::service
+  end
+
+  subgraph AI["System: AI Service"]
+    direction TB
+    Auth{"User context and rate limit valid?"}:::security
+    Deny["Reject unauthorized or rate-limited request"]:::risk
+    Validate{"Question length and content valid?"}:::infra
+    Retrieve["Retrieve relevant policy, ride, payment docs"]:::data
+    Grounded{"Enough trusted context?"}:::ai
+    Escalate["Escalate to support/admin workflow"]:::risk
+    Generate["Generate grounded answer with guardrails"]:::ai
+    Safe{"Answer safe and confident?"}:::ai
+    Fallback["Return safe fallback and escalation option"]:::ok
+    Log["Log conversation and feedback"]:::data
+    Done([End]):::ok
+  end
+
+  Start --> Ask --> Auth
+  Auth -- No --> Deny --> Done
+  Auth -- Yes --> Validate
+  Validate -- No --> FixQuestion --> Ask
+  Validate -- Yes --> Retrieve --> Grounded
+  Grounded -- No --> Escalate --> Feedback --> Done
+  Grounded -- Yes --> Generate --> Safe
+  Safe -- No --> Fallback --> ReadAnswer
+  Safe -- Yes --> ReadAnswer
+  ReadAnswer --> Feedback --> Log --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

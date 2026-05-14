@@ -162,7 +162,9 @@ export class AdminController {
       const type        = req.query.type        as string | undefined;
       const referenceId = req.query.referenceId as string | undefined;
 
-      const where: Record<string, unknown> = {};
+      const where: Record<string, unknown> = {
+        createdAt: { lte: new Date() },
+      };
       if (type)        where['type']        = type;
       if (referenceId) where['referenceId'] = referenceId;
 

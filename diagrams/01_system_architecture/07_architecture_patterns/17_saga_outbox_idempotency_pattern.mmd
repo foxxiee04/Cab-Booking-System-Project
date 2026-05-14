@@ -1,0 +1,34 @@
+flowchart LR
+  Command["Ride completed command"]:::user
+  Ride["Ride Service<br/>state transition"]:::service
+  Outbox[("Outbox table<br/>pending event")]:::data
+  Relay["Event relay"]:::infra
+  MQ["RabbitMQ exchange"]:::infra
+
+  subgraph Consumers["Idempotent Consumers"]
+    direction TB
+    Payment["Payment handler<br/>dedupe by event id"]:::service
+    Wallet["Wallet handler<br/>ledger uniqueness"]:::service
+    Notification["Notification handler<br/>safe retry"]:::service
+  end
+
+  Compensation["Compensation action<br/>refund or release hold"]:::risk
+
+  Command --> Ride
+  Ride --> Outbox
+  Outbox --> Relay --> MQ
+  MQ --> Payment
+  MQ --> Wallet
+  MQ --> Notification
+  Payment -. failure .-> Compensation
+  Wallet -. failure .-> Compensation
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

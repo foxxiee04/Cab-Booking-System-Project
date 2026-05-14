@@ -11,6 +11,18 @@ interface RecordInput {
   metadata?: Record<string, unknown>;
 }
 
+function buildVisibleCreatedAtFilter(startDate?: Date, endDate?: Date) {
+  const now = new Date();
+  const cappedEndDate = endDate && endDate < now ? endDate : now;
+  const createdAt: { gte?: Date; lte: Date } = { lte: cappedEndDate };
+
+  if (startDate) {
+    createdAt.gte = startDate;
+  }
+
+  return createdAt;
+}
+
 export class MerchantLedgerService {
   constructor(private prisma: PrismaClient) {}
 
@@ -61,14 +73,11 @@ export class MerchantLedgerService {
     const skip  = (page - 1) * limit;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {};
+    const where: any = {
+      createdAt: buildVisibleCreatedAtFilter(params.startDate, params.endDate),
+    };
     if (params.type)     where.type     = params.type     as MerchantLedgerType;
     if (params.category) where.category = params.category as MerchantLedgerCategory;
-    if (params.startDate || params.endDate) {
-      where.createdAt = {};
-      if (params.startDate) where.createdAt.gte = params.startDate;
-      if (params.endDate)   where.createdAt.lte = params.endDate;
-    }
 
     const [entries, total] = await Promise.all([
       this.prisma.merchantLedger.findMany({
@@ -89,12 +98,9 @@ export class MerchantLedgerService {
    */
   async getStats(params: { startDate?: Date; endDate?: Date } = {}) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {};
-    if (params.startDate || params.endDate) {
-      where.createdAt = {};
-      if (params.startDate) where.createdAt.gte = params.startDate;
-      if (params.endDate)   where.createdAt.lte = params.endDate;
-    }
+    const where: any = {
+      createdAt: buildVisibleCreatedAtFilter(params.startDate, params.endDate),
+    };
 
     const entries = await this.prisma.merchantLedger.findMany({ where });
 
@@ -130,7 +136,13 @@ export class MerchantLedgerService {
    */
   async getBalance() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const snapshot = await (this.prisma as any).merchantBalance.findUnique({ where: { id: 1 } });
+    const now = new Date();
+    const futureEntries = await this.prisma.merchantLedger.count({
+      where: { createdAt: { gt: now } },
+    });
+    const snapshot = futureEntries === 0
+      ? await (this.prisma as any).merchantBalance.findUnique({ where: { id: 1 } })
+      : null;
 
     if (snapshot) {
       return {
@@ -142,12 +154,14 @@ export class MerchantLedgerService {
       };
     }
 
-    // Fallback: recompute from full ledger
-    const stats = await this.getStats();
+    // Fallback: recompute from visible ledger only. Future-dated seed rows
+    // stay pending until their createdAt reaches wall-clock time.
+    const stats = await this.getStats({ endDate: now });
     return {
       balance:  stats.netRevenue,
       totalIn:  stats.totalIn,
       totalOut: stats.totalOut,
+      updatedAt: now,
       source:   'computed' as const,
     };
   }

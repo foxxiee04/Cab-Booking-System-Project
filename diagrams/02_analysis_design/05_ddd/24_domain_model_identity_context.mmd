@@ -1,0 +1,28 @@
+classDiagram
+  class User {
+    +String id
+    +String phone
+    +UserRole role
+    +UserStatus status
+    +verifyOtp()
+    +changePassword()
+  }
+  class RefreshToken {
+    +String tokenId
+    +DateTime expiresAt
+    +revoke()
+  }
+  class OtpRecord {
+    +String phone
+    +String otpHash
+    +Int attempts
+    +Boolean verified
+  }
+  class AuditLog {
+    +String action
+    +Boolean success
+    +Json metadata
+  }
+  User "1" --> "*" RefreshToken
+  User "1" --> "*" AuditLog
+  OtpRecord ..> User : verifies phone

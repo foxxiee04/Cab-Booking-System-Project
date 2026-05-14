@@ -1,0 +1,8 @@
+{
+  "timeout": 120000,
+  "protocolTimeout": 120000,
+  "args": [
+    "--no-sandbox",
+    "--disable-setuid-sandbox"
+  ]
+}

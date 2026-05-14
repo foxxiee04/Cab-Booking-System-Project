@@ -279,10 +279,10 @@ Score = Distance × 40% + Rating × 25% + IdleTime × 15%
 | `PAYMENT` | THU | Tiền khách nạp (online payment) |
 | `COMMISSION` | THU | Hoa hồng platform (% theo loại xe) |
 | `VOUCHER` | CHI | Trợ giá voucher cho khách |
-| `PAYOUT` | CHI | Thu nhập tài xế (ghi nợ, T+24h) |
+| `PAYOUT` | CHI | Thu nhập tài xế chỉ ghi khi khoản T+24h thật sự được giải ngân |
 | `WITHDRAW` | CHI | Đối soát khi tài xế ngừng HĐ |
 
-8. **Giải thích T+24h**: Chuyến online → platform nhận tiền ngay → ghi nhận nợ tài xế → giải ngân sau 24h (anti-fraud)
+8. **Giải thích T+24h**: Chuyến online → platform nhận tiền ngay (`PAYMENT`) → tiền tài xế nằm ở `pending_earnings` → admin chỉ thấy `PAYOUT` khi giải ngân sau 24h (anti-fraud)
 
 ### F3. Thống kê
 

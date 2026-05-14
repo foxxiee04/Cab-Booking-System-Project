@@ -1,0 +1,22 @@
+sequenceDiagram
+  autonumber
+  actor Customer
+  participant Gateway as API Gateway
+  participant Payment as Payment Service
+  participant Provider as MoMo/VNPay
+  participant MQ as RabbitMQ
+  participant Ride as Ride Service
+  participant Wallet as Wallet Service
+  Customer->>Gateway: Pay online
+  Gateway->>Payment: Create payment
+  Payment->>Provider: Create checkout session
+  Provider-->>Customer: Checkout URL
+  Provider->>Payment: IPN callback
+  Payment->>Payment: Verify signature and idempotency
+  alt Valid new callback
+    Payment->>MQ: Publish payment.completed
+    MQ->>Ride: Mark ride as paid
+    MQ->>Wallet: Hold driver earning
+  else Invalid or duplicate callback
+    Payment-->>Provider: Safe acknowledgement
+  end

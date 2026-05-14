@@ -1,0 +1,13 @@
+sequenceDiagram
+  autonumber
+  participant Job as Settlement Job
+  participant Wallet as Wallet Service
+  participant DB as wallet_db
+  participant Notification as Notification Service
+  actor Driver
+  Job->>Wallet: Run T+24h settlement
+  Wallet->>DB: Find matured holds
+  DB-->>Wallet: Hold entries
+  Wallet->>DB: Move held balance to available balance
+  Wallet->>Notification: Notify balance update
+  Notification-->>Driver: Earning available

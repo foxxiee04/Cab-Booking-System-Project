@@ -1,0 +1,43 @@
+flowchart LR
+  subgraph UserApp["Actor: Customer / Driver"]
+    direction TB
+    Start([Ride assigned]):::user
+    Compose["Compose chat message or call request"]:::service
+    FixMessage["Fix empty text, length, or attachment format"]:::risk
+    Receive["Receive realtime message or push notification"]:::service
+    EndCall["End chat/call session"]:::ok
+  end
+
+  subgraph RealtimeNotify["System: Gateway / Notification"]
+    direction TB
+    Participant{"Sender belongs to active ride?"}:::security
+    Deny["Reject unauthorized room access"]:::risk
+    Validate{"Payload valid and safe?"}:::infra
+    Store["Store message/call metadata"]:::data
+    Online{"Recipient online in socket room?"}:::infra
+    SocketSend["Emit Socket.IO event"]:::external
+    PushSend["Send push/SMS/email fallback"]:::external
+    Delivered{"Delivery acknowledged?"}:::infra
+    Record["Record delivery status"]:::data
+    Done([End]):::ok
+  end
+
+  Start --> Compose --> Participant
+  Participant -- No --> Deny --> Done
+  Participant -- Yes --> Validate
+  Validate -- No --> FixMessage --> Compose
+  Validate -- Yes --> Store --> Online
+  Online -- Yes --> SocketSend --> Delivered
+  Online -- No --> PushSend --> Delivered
+  Delivered -- No --> Record --> PushSend
+  Delivered -- Yes --> Receive --> Record --> EndCall --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

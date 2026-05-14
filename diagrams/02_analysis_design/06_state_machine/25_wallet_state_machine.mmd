@@ -1,0 +1,10 @@
+stateDiagram-v2
+  [*] --> ACTIVE
+  ACTIVE --> TOPUP_PENDING
+  TOPUP_PENDING --> ACTIVE: provider confirms
+  ACTIVE --> EARNING_HELD: ride completed
+  EARNING_HELD --> AVAILABLE: T+24h settlement
+  AVAILABLE --> WITHDRAW_PENDING
+  WITHDRAW_PENDING --> AVAILABLE: rejected
+  WITHDRAW_PENDING --> WITHDRAWN: approved
+  WITHDRAWN --> AVAILABLE

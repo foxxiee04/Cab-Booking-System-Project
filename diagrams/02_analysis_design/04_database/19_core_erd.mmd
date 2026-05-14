@@ -1,0 +1,46 @@
+erDiagram
+  USER ||--o{ REFRESH_TOKEN : owns
+  USER ||--o{ USER_PROFILE : has
+  USER ||--o{ DRIVER : may_be
+  DRIVER ||--o{ VEHICLE : owns
+  DRIVER ||--o{ DRIVER_LOCATION : reports
+  USER ||--o{ BOOKING : creates
+  BOOKING ||--|| RIDE : becomes
+  DRIVER ||--o{ RIDE : accepts
+  RIDE ||--o{ RIDE_STATE_TRANSITION : records
+  RIDE ||--o{ PAYMENT : paid_by
+  PAYMENT ||--o{ TRANSACTION : has
+  DRIVER ||--|| WALLET : owns
+  WALLET ||--o{ WALLET_LEDGER : records
+  RIDE ||--o{ REVIEW : receives
+
+  USER {
+    string id
+    string phone
+    string role
+  }
+  DRIVER {
+    string id
+    string status
+    float rating
+  }
+  BOOKING {
+    string id
+    string pickup
+    string destination
+  }
+  RIDE {
+    string id
+    string status
+    decimal fare
+  }
+  PAYMENT {
+    string id
+    string provider
+    string status
+  }
+  WALLET {
+    string id
+    decimal available_balance
+    decimal held_balance
+  }

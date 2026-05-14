@@ -721,7 +721,7 @@ docker exec $(docker ps -q -f name=cab-booking_ride-service) \
 
 **Tóm tắt lệnh (đồng bộ với `docs/rebuild-and-reseed.md`):**
 - CI/CD **không reset/seed** khi deploy. Deploy xong, nếu cần dữ liệu sạch thì SSH vào **Primary Manager** và chạy thủ công.
-- Trên server thường dùng: `bash ~/cab-booking/reset-and-seed.sh` (file root repo; CI/CD scp lên cùng `scripts/`).
+- Trên server thường dùng: `bash ~/cab-booking/scripts/reset-and-seed.sh`.
 - **Nguồn trong repo:** `bash scripts/reset-database-swarm.sh` (drop DB → `prisma db push` qua exec / SSH / `docker run --network host` + `127.0.0.1:5433` → restart service (stagger) → **chờ replica X/X + /health** → seed qua host `npx` hoặc **`cab-bootstrap-runner`** → **verify** lại).
 
 > **Sau PHASE 18 (auto-scaler):** replica của gateway/auth/… có thể >1 trên worker; **postgres vẫn trên Primary Manager**. Reset/seed **luôn** chạy trên Manager. Lỗi kiểu `users` không tồn tại (P2021) thường do `prisma db push` chưa chạy cho **auth_db** / **user_db** vì task service nằm trên worker — script `reset-database-swarm.sh` mới xử lý SSH + fallback image, **không** dùng `docker run --network <stack>_backend` (overlay `backend` trong `docker-stack.thesis.yml` là **`internal: true`**, không attachable → Docker từ chối gắn mạng đó cho container one-off).
@@ -851,7 +851,7 @@ curl http://18.136.250.236:3000/health
 
 Auto-scaler chạy như 1 Swarm service trên Manager, query CPU từ Prometheus mỗi 30s, tự scale các stateless services.
 
-> **Reset DB / seed sau khi bật auto-scaler:** việc scale replica **không** đổi chỗ postgres hay cách publish `5433`. Vẫn SSH vào **Primary Manager** và dùng `scripts/reset-database-swarm.sh` (hoặc `~/cab-booking/reset-and-seed.sh`) như **PHASE 15b** — tránh script cũ chỉ `docker exec` trên Manager cho `auth-service` / `user-service` khi task đang chạy trên worker.
+> **Reset DB / seed sau khi bật auto-scaler:** việc scale replica **không** đổi chỗ postgres hay cách publish `5433`. Vẫn SSH vào **Primary Manager** và dùng `scripts/reset-database-swarm.sh` (hoặc `~/cab-booking/scripts/reset-and-seed.sh`) như **PHASE 15b** — tránh script cũ chỉ `docker exec` trên Manager cho `auth-service` / `user-service` khi task đang chạy trên worker.
 
 > CI/CD đã build + push image `foxxiee04/cab-autoscaler:latest` và stack file đã khai báo service `autoscaler`. Sau khi deploy stack, auto-scaler chạy tự động.
 

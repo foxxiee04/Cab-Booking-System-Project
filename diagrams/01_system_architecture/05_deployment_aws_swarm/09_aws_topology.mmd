@@ -1,0 +1,35 @@
+flowchart TB
+  Users["Mobile and web users"]:::user
+  DNS["Route 53 / DNS"]:::infra
+  TLS["TLS termination"]:::infra
+
+  subgraph VPC["AWS VPC"]
+    direction TB
+    subgraph Public["Public Subnet"]
+      Bastion["Bastion / deploy runner"]:::infra
+      Nginx["Nginx reverse proxy"]:::infra
+    end
+    subgraph Private["Private Subnet"]
+      Swarm["Docker Swarm EC2 nodes"]:::infra
+      AppNet["Overlay networks"]:::infra
+      Storage["Attached volumes / backups"]:::data
+    end
+  end
+
+  Providers["External providers<br/>Maps, OSRM, MoMo, VNPay, SMS"]:::external
+  Observability["Prometheus, Grafana, logs"]:::infra
+
+  Users --> DNS --> TLS --> Nginx --> Swarm --> AppNet
+  Swarm --> Storage
+  Swarm --> Providers
+  Swarm --> Observability
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

@@ -1,0 +1,42 @@
+flowchart LR
+  subgraph User["Actor: Customer / Driver / Admin"]
+    direction TB
+    Start([Start]):::user
+    Choose["Choose register, login, or forgot password"]:::service
+    EnterPhone["Enter phone number and password fields"]:::service
+    FixInput["Show required field or format error"]:::risk
+    SubmitOtp["Submit OTP code"]:::service
+    RetryOtp["Request new OTP or correct code"]:::risk
+  end
+
+  subgraph Auth["System: Auth Service"]
+    direction TB
+    Format{"Phone/password format valid?"}:::infra
+    AccountState{"Account exists and role allowed?"}:::security
+    Blocked["Reject locked, inactive, or wrong role account"]:::risk
+    SendOtp["Generate OTP, hash it, store TTL"]:::service
+    SmsOk{"SMS provider accepted request?"}:::external
+    OtpValid{"OTP correct, fresh, attempts within limit?"}:::infra
+    IssueToken["Create user/session and issue JWT"]:::ok
+    Done([End]):::ok
+  end
+
+  Start --> Choose --> EnterPhone --> Format
+  Format -- No --> FixInput --> EnterPhone
+  Format -- Yes --> AccountState
+  AccountState -- No --> Blocked --> Done
+  AccountState -- Yes --> SendOtp --> SmsOk
+  SmsOk -- No --> RetryOtp --> SendOtp
+  SmsOk -- Yes --> SubmitOtp --> OtpValid
+  OtpValid -- No --> RetryOtp --> SubmitOtp
+  OtpValid -- Yes --> IssueToken --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

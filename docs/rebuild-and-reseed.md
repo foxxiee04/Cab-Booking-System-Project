@@ -40,14 +40,14 @@ ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@18.136.250.236
 
 ### Lệnh reset + seed 1 lần (trong repo + trên server sau CI)
 
-File tại **root repo** (CI copy lên `~/cab-booking/reset-and-seed.sh`):
+Wrapper nằm trong `scripts/`:
 
 ```bash
-bash ~/cab-booking/reset-and-seed.sh
-# hoặc trong repo: bash reset-and-seed.sh   (gọi scripts/reset-database-swarm.sh)
+bash ~/cab-booking/scripts/reset-and-seed.sh
+# hoặc trong repo: bash scripts/reset-and-seed.sh   (gọi scripts/reset-database-swarm.sh)
 ```
 
-Trên server, có thể giữ wrapper tay tại `~/cab-booking/reset-and-seed.sh` — nên **đồng bộ với repo** sau `git pull` hoặc dùng bản do CI deploy.
+Trên server, dùng wrapper trong repo tại `~/cab-booking/scripts/reset-and-seed.sh` — nên **đồng bộ với repo** sau `git pull` hoặc dùng bản do CI deploy.
 
 Script swarm (`scripts/reset-database-swarm.sh`) sau khi restart service sẽ:
 

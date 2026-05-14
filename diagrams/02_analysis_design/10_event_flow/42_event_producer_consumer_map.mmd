@@ -1,0 +1,48 @@
+flowchart TB
+  subgraph Events["Domain Events"]
+    direction LR
+    E1["BookingCreated"]:::infra
+    E2["RideCompleted"]:::infra
+    E3["PaymentCompleted"]:::infra
+    E4["WithdrawalRequested"]:::infra
+    E5["DriverApproved"]:::infra
+  end
+
+  subgraph Producers["Producers"]
+    direction LR
+    Booking["Booking Service"]:::service
+    Ride["Ride Service"]:::service
+    Payment["Payment Service"]:::service
+    Wallet["Wallet Service"]:::service
+    Driver["Driver Service"]:::service
+  end
+
+  subgraph Consumers["Consumers"]
+    direction LR
+    Notify["Notification Service"]:::service
+    WalletC["Wallet Service"]:::service
+    RideC["Ride Service"]:::service
+    Admin["Admin Dashboard"]:::user
+  end
+
+  Booking --> E1
+  Ride --> E2
+  Payment --> E3
+  Wallet --> E4
+  Driver --> E5
+  E1 --> RideC
+  E2 --> Payment
+  E2 --> Notify
+  E3 --> WalletC
+  E4 --> Admin
+  E5 --> Notify
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

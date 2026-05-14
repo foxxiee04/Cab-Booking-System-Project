@@ -1,0 +1,55 @@
+flowchart LR
+  subgraph Customer["Actor: Customer"]
+    direction TB
+    Start([Start]):::user
+    Login{"Signed in?"}:::infra
+    Signin["Sign in or register with OTP"]:::service
+    Pick["Enter pickup, destination, vehicle type"]:::service
+    InputValid{"Input valid?<br/>required fields, coordinate format"}:::infra
+    FixInput["Show validation error<br/>and let customer edit"]:::risk
+    ViewQuote["View fare, ETA, route, voucher result"]:::service
+    Accept{"Accept quote?"}:::infra
+    Edit["Edit route or cancel booking draft"]:::risk
+    Track["Track assigned driver and ride state"]:::service
+    PayReview["Pay and submit rating/review"]:::service
+  end
+
+  subgraph System["System: FoxGo"]
+    direction TB
+    CheckArea{"Route serviceable?"}:::infra
+    Price["Calculate fare, ETA, surge, discount"]:::service
+    Create["Create booking request"]:::service
+    Dispatch["Dispatch ranked nearby drivers"]:::service
+    Assigned{"Driver assigned before timeout?"}:::infra
+    Retry["Expand radius or retry next driver"]:::service
+    NoDriver["Notify no driver available<br/>and release booking"]:::risk
+    RideDone{"Ride completed?"}:::infra
+    CancelFlow["Go to cancellation/refund flow"]:::risk
+    Done([End]):::ok
+  end
+
+  Start --> Login
+  Login -- No --> Signin --> Pick
+  Login -- Yes --> Pick
+  Pick --> InputValid
+  InputValid -- No --> FixInput --> Pick
+  InputValid -- Yes --> CheckArea
+  CheckArea -- No --> FixInput
+  CheckArea -- Yes --> Price --> ViewQuote --> Accept
+  Accept -- No --> Edit --> Done
+  Accept -- Yes --> Create --> Dispatch --> Assigned
+  Assigned -- No --> Retry --> Dispatch
+  Retry -. max attempts reached .-> NoDriver --> Done
+  Assigned -- Yes --> Track --> RideDone
+  RideDone -- No --> CancelFlow --> Done
+  RideDone -- Yes --> PayReview --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

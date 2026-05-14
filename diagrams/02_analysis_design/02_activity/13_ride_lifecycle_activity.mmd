@@ -1,0 +1,40 @@
+flowchart LR
+  subgraph Driver["Actor: Driver"]
+    direction TB
+    Start([Driver assigned]):::user
+    ToPickup["Navigate to pickup"]:::service
+    Arrive["Mark arrived"]:::service
+    StartTrip["Start trip after customer pickup"]:::service
+    Complete["Complete trip"]:::service
+    FixState["Correct invalid status transition"]:::risk
+  end
+
+  subgraph RideSystem["System: Ride Service"]
+    direction TB
+    StateOk{"Next state allowed?"}:::infra
+    BroadcastArriving["Broadcast ARRIVING / ARRIVED"]:::external
+    PickupOk{"Pickup confirmed and ride not cancelled?"}:::infra
+    CancelNoShow["Handle cancellation or no-show policy"]:::risk
+    Track["Track route, GPS, and elapsed time"]:::service
+    CompletionOk{"Completion data valid?<br/>GPS, fare, duration"}:::infra
+    CloseRide["Close ride and publish ride.completed"]:::ok
+    Done([End]):::ok
+  end
+
+  Start --> ToPickup --> StateOk
+  StateOk -- No --> FixState --> ToPickup
+  StateOk -- Yes --> BroadcastArriving --> Arrive --> PickupOk
+  PickupOk -- No --> CancelNoShow --> Done
+  PickupOk -- Yes --> StartTrip --> Track --> Complete --> CompletionOk
+  CompletionOk -- No --> FixState --> Complete
+  CompletionOk -- Yes --> CloseRide --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

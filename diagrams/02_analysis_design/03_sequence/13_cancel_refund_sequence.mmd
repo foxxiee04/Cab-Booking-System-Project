@@ -1,0 +1,18 @@
+sequenceDiagram
+  autonumber
+  actor Customer
+  participant Ride as Ride Service
+  participant Payment as Payment Service
+  participant Wallet as Wallet Service
+  participant Notification as Notification Service
+  actor Driver
+  Customer->>Ride: Cancel ride
+  Ride->>Ride: Validate current state
+  alt Cancellation is allowed
+    Ride->>Payment: Void or refund payment if needed
+    Payment->>Wallet: Release held earning
+    Ride->>Notification: Notify customer and driver
+    Notification-->>Driver: Ride cancelled
+  else Cancellation is too late
+    Ride-->>Customer: Reject cancellation
+  end

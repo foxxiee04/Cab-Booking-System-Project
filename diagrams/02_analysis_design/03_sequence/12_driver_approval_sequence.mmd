@@ -1,0 +1,18 @@
+sequenceDiagram
+  autonumber
+  actor Driver
+  participant Gateway as API Gateway
+  participant DriverSvc as Driver Service
+  participant Admin as Admin Dashboard
+  participant Notification as Notification Service
+  Driver->>Gateway: Submit documents
+  Gateway->>DriverSvc: Create pending application
+  DriverSvc-->>Admin: Display application
+  Admin->>DriverSvc: Review documents
+  alt Approved
+    Admin->>DriverSvc: Set status to APPROVED
+    DriverSvc->>Notification: Notify approval
+  else Rejected
+    Admin->>DriverSvc: Set status to REJECTED
+    DriverSvc->>Notification: Notify required fixes
+  end

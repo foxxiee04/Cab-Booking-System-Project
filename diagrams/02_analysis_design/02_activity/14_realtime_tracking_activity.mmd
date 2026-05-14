@@ -1,0 +1,42 @@
+flowchart LR
+  subgraph DriverApp["Actor: Driver App"]
+    direction TB
+    Start([Ride active]):::user
+    JoinRoom["Join ride socket room"]:::service
+    SendGps["Send GPS update"]:::service
+    FixGps["Correct invalid GPS or reconnect"]:::risk
+    Stop["Stop tracking when ride closes"]:::ok
+  end
+
+  subgraph Realtime["System: Realtime Gateway"]
+    direction TB
+    AuthRoom{"Participant and ride room valid?"}:::security
+    Deny["Reject unauthorized socket event"]:::risk
+    Validate{"GPS format, speed, timestamp valid?"}:::infra
+    RideActive{"Ride still active?"}:::infra
+    Store["Store latest location in Redis and ride trail"]:::data
+    Broadcast["Broadcast location to customer room"]:::external
+    Ack{"Client acknowledged or reconnecting?"}:::infra
+    Queue["Keep latest state for reconnect"]:::service
+    Done([End]):::ok
+  end
+
+  Start --> JoinRoom --> AuthRoom
+  AuthRoom -- No --> Deny --> Done
+  AuthRoom -- Yes --> SendGps --> Validate
+  Validate -- No --> FixGps --> SendGps
+  Validate -- Yes --> RideActive
+  RideActive -- No --> Stop --> Done
+  RideActive -- Yes --> Store --> Broadcast --> Ack
+  Ack -- No --> Queue --> SendGps
+  Ack -- Yes --> SendGps
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

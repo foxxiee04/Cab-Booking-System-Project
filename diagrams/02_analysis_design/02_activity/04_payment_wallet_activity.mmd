@@ -1,0 +1,42 @@
+flowchart LR
+  subgraph PaymentFlow["Actor: Customer / Driver"]
+    direction TB
+    Start([Ride completed]):::user
+    Method{"Payment method supported?"}:::infra
+    BadMethod["Show unsupported method error"]:::risk
+    AmountCheck{"Amount matches fare and fees?"}:::infra
+    Capture["Capture cash confirmation<br/>or online checkout result"]:::service
+    Valid{"Signature, status, idempotency valid?"}:::infra
+    Failed["Fail safely, keep audit trail,<br/>allow retry when possible"]:::risk
+  end
+
+  subgraph WalletFlow["System: Payment / Wallet"]
+    direction TB
+    Ledger["Write immutable payment ledger"]:::data
+    Commission["Calculate platform commission"]:::service
+    Hold["Hold driver earning for T+24h"]:::service
+    Release{"Settlement or withdrawal allowed?"}:::infra
+    RejectWallet["Reject because hold, balance,<br/>or bank data is invalid"]:::risk
+    ReleaseFunds["Release earning or process withdrawal"]:::ok
+    Done([End]):::ok
+  end
+
+  Start --> Method
+  Method -- No --> BadMethod --> Done
+  Method -- Yes --> AmountCheck
+  AmountCheck -- No --> Failed --> Done
+  AmountCheck -- Yes --> Capture --> Valid
+  Valid -- No --> Failed
+  Valid -- Yes --> Ledger --> Commission --> Hold --> Release
+  Release -- No --> RejectWallet --> Done
+  Release -- Yes --> ReleaseFunds --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

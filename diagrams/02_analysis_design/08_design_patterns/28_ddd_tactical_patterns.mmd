@@ -1,0 +1,38 @@
+flowchart TB
+  subgraph Aggregate["Aggregate Pattern"]
+    direction LR
+    RideAgg["Ride aggregate<br/>state transition rules"]:::service
+    WalletAgg["Wallet aggregate<br/>balance invariants"]:::service
+    PaymentAgg["Payment aggregate<br/>provider status"]:::service
+  end
+
+  subgraph DomainModel["Domain Model Patterns"]
+    direction LR
+    Entity["Entity<br/>identity over time"]:::service
+    ValueObject["Value Object<br/>money, location, phone"]:::service
+    DomainEvent["Domain Event<br/>ride.completed"]:::infra
+  end
+
+  subgraph Application["Application Layer Patterns"]
+    direction LR
+    UseCase["Use case service"]:::service
+    Repository["Repository interface"]:::service
+    Mapper["DTO mapper"]:::infra
+  end
+
+  RideAgg --> Entity
+  WalletAgg --> ValueObject
+  PaymentAgg --> DomainEvent
+  UseCase --> Aggregate
+  UseCase --> Repository
+  UseCase --> Mapper
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

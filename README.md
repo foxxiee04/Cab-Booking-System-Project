@@ -219,7 +219,7 @@ graph TB
 | `ride.completed` | ride-service | payment, api-gateway, notification | Kích hoạt thanh toán |
 | `ride.cancelled` | ride-service | payment, api-gateway, notification | Hoàn tiền nếu có |
 | `booking.confirmed` | booking-service | ride-service | Tạo Ride từ Booking |
-| `driver.earning.settled` | payment-service | wallet-service | Credit ví tài xế |
+| `driver.earning.settled` | payment-service | wallet-service | Online: giữ thu nhập T+24h; cash: ghi nợ hoa hồng |
 | `refund.completed` | payment-service | wallet, notification | Hoàn tiền |
 | `wallet.topup.completed` | wallet-service | payment, notification | Nạp tiền thành công |
 | `user.registered` | auth-service | user-service | Tạo UserProfile |
@@ -437,7 +437,7 @@ sequenceDiagram
     Note over Pay,DB: Outbox Worker polling 1s
     DB->>MQ: driver.earning.settled
     MQ->>Wallet: pendingBalance += netEarnings (T+24h)
-    Wallet->>Wallet: MerchantLedger double-entry
+    Wallet->>Wallet: MerchantLedger PAYMENT now, PAYOUT only when T+24h settles
 ```
 
 ### 4.4 Luồng ví tài xế
