@@ -794,6 +794,14 @@ Internet
 | `REACT_APP_SOCKET_URL` | Trùng origin WebSocket (thường cùng API) |
 | `REACT_APP_GOOGLE_MAPS_API_KEY` | *(tuỳ chọn)* |
 
+Nếu backend deploy fail ở `appleboy/scp-action` với `dial tcp ...:22: i/o timeout`, lỗi xảy ra trước `docker stack deploy` nên chưa phải lỗi Swarm. Kiểm tra nhanh:
+
+- EC2 Primary Manager đang `running`, không bị stop/terminate.
+- Elastic IP/DNS trong `DEPLOY_HOST` đang trỏ đúng Primary Manager.
+- Security Group/NACL mở inbound SSH `DEPLOY_PORT` từ GitHub Actions runners; với runner hosted IP động thường cần `0.0.0.0/0` cho port 22 hoặc dùng self-hosted runner/VPN.
+- `DEPLOY_PORT` đúng cổng SSH thật, thường `22`.
+- SSH daemon trên server đang chạy: `sudo systemctl status ssh`.
+
 ### 10.3 Deploy thủ công (kích hoạt lại pipeline)
 
 ```bash

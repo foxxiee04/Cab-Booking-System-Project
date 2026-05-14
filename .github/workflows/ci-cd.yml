@@ -432,6 +432,50 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate deploy SSH reachability
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || 22 }}
+        run: |
+          python - <<'PY'
+          import os
+          import socket
+          import sys
+          import time
+
+          host = os.environ.get("DEPLOY_HOST", "").strip()
+          port_raw = os.environ.get("DEPLOY_PORT", "22").strip() or "22"
+
+          if not host:
+              print("::error::DEPLOY_HOST is empty. Set the EC2 public IP/Elastic IP or SSH hostname in GitHub Secrets.")
+              sys.exit(1)
+
+          try:
+              port = int(port_raw)
+          except ValueError:
+              print(f"::error::DEPLOY_PORT must be a number, got {port_raw!r}.")
+              sys.exit(1)
+
+          last_error = None
+          for attempt in range(1, 4):
+              try:
+                  with socket.create_connection((host, port), timeout=12):
+                      print(f"SSH TCP preflight OK: {host}:{port}")
+                      sys.exit(0)
+              except OSError as exc:
+                  last_error = exc
+                  print(f"SSH TCP preflight failed (attempt {attempt}/3): {exc}")
+                  time.sleep(5)
+
+          print(
+              "::error::Cannot reach DEPLOY_HOST:DEPLOY_PORT over TCP before SCP. "
+              "Check that the EC2 instance is running, the Elastic IP/DNS matches DEPLOY_HOST, "
+              "Security Group/NACL allow inbound SSH from GitHub Actions runners, and DEPLOY_PORT is correct."
+          )
+          print(f"Last error: {last_error}")
+          sys.exit(1)
+          PY
+
       - name: Copy stack, env, and monitoring files to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -439,6 +483,8 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
+          timeout: 60s
+          command_timeout: 10m
           source: "docker-stack.thesis.yml,monitoring,env,scripts,deploy/nginx"
           target: "~/cab-booking/"
           strip_components: 0
