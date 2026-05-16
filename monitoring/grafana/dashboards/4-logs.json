@@ -13,7 +13,7 @@
       "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 },
       "targets": [{
         "datasource": "Loki",
-        "expr": "{job=\"docker-containers\"} |= \"error\" | json | line_format \"[{{.service}}] {{.log}}\"",
+        "expr": "{job=\"docker-containers\"} |~ \"(?i)error|exception|failed\"",
         "legendFormat": ""
       }],
       "options": { "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true }
@@ -25,7 +25,7 @@
       "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
       "targets": [{
         "datasource": "Loki",
-        "expr": "{service=\"cab-api-gateway\"}",
+        "expr": "{service=~\".*api-gateway.*\"}",
         "legendFormat": ""
       }],
       "options": { "showTime": true, "sortOrder": "Descending" }
@@ -37,7 +37,7 @@
       "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
       "targets": [{
         "datasource": "Loki",
-        "expr": "{service=\"cab-auth-service\"}",
+        "expr": "{service=~\".*auth-service.*\"}",
         "legendFormat": ""
       }],
       "options": { "showTime": true, "sortOrder": "Descending" }
@@ -49,7 +49,7 @@
       "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
       "targets": [{
         "datasource": "Loki",
-        "expr": "{service=\"cab-ride-service\"}",
+        "expr": "{service=~\".*ride-service.*\"}",
         "legendFormat": ""
       }],
       "options": { "showTime": true, "sortOrder": "Descending" }
@@ -61,7 +61,7 @@
       "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
       "targets": [{
         "datasource": "Loki",
-        "expr": "{service=\"cab-payment-service\"}",
+        "expr": "{service=~\".*payment-service.*\"}",
         "legendFormat": ""
       }],
       "options": { "showTime": true, "sortOrder": "Descending" }

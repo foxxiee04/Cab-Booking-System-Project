@@ -143,6 +143,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
+    command: ["sh", "-c", "rabbitmq-plugins enable --offline rabbitmq_prometheus && rabbitmq-server"]
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbit}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-rabbit123}
@@ -689,15 +690,15 @@ services:
     image: grafana/promtail:3.1.1
     command: ["-config.file=/etc/promtail/promtail-config.yml"]
     configs:
-      - source: promtail_config_v2
+      - source: promtail_config_v3
         target: /etc/promtail/promtail-config.yml
         mode: 0444
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Node-local bind mount keeps positions per-node (global mode = 1 replica/node).
-      # /var/lib/promtail is created on each Swarm node via cloud-init or first-run.
-      - /var/lib/promtail:/var/lib/promtail
+      # Local Docker volume keeps positions per-node (global mode = 1 replica/node)
+      # without requiring /var/lib/promtail to exist on every Swarm node.
+      - promtail_positions:/var/lib/promtail
     networks:
       - backend
     deploy:
@@ -868,6 +869,9 @@ volumes:
   loki_data:
     name: cab-booking-loki-data
     driver: local
+  promtail_positions:
+    name: cab-booking-promtail-positions
+    driver: local
   hf_model_cache:
     name: cab-booking-hf-model-cache
     driver: local
@@ -902,5 +906,5 @@ secrets:
 configs:
   postgres_init_db:
     file: ./scripts/init-db.sql
-  promtail_config_v2:
+  promtail_config_v3:
     file: ./monitoring/promtail/promtail-config.yml

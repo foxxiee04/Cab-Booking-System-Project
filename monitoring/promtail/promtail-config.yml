@@ -3,7 +3,7 @@ server:
   grpc_listen_port: 0
 
 positions:
-  # Persistent path (mounted as a named volume in both compose and Swarm).
+  # Persistent path (mounted as a node-local bind in Swarm).
   # /tmp is ephemeral — on restart promtail would re-read all logs and flood Loki.
   filename: /var/lib/promtail/positions.yaml
 
@@ -16,13 +16,16 @@ scrape_configs:
       - host: unix:///var/run/docker.sock
         refresh_interval: 30s
     relabel_configs:
-      # Extract container name as service label
+      # Fallback to container name when no Swarm service label exists.
       - source_labels: [__meta_docker_container_name]
         regex: /(.*)
         target_label: service
-      # Extract Docker Swarm service name if available
+      # Prefer Docker Swarm service name for stable Grafana/Loki queries.
       - source_labels: [__meta_docker_container_label_com_docker_swarm_service_name]
         target_label: swarm_service
+      - source_labels: [__meta_docker_container_label_com_docker_swarm_service_name]
+        regex: (.+)
+        target_label: service
       # Set log path
       - source_labels: [__meta_docker_container_id]
         target_label: __path__
