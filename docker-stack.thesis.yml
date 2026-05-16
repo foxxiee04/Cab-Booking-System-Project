@@ -689,7 +689,7 @@ services:
     image: grafana/promtail:3.1.1
     command: ["-config.file=/etc/promtail/promtail-config.yml"]
     configs:
-      - source: promtail_config
+      - source: promtail_config_v2
         target: /etc/promtail/promtail-config.yml
         mode: 0444
     volumes:
@@ -902,5 +902,5 @@ secrets:
 configs:
   postgres_init_db:
     file: ./scripts/init-db.sql
-  promtail_config:
+  promtail_config_v2:
     file: ./monitoring/promtail/promtail-config.yml
