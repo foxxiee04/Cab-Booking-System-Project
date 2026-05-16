@@ -16,6 +16,7 @@ export async function start() {
       rabbitmq: eventConsumer.isConnected(),
     }),
     serviceHealthChecker,
+    enableRateLimit: true,
   });
   const httpServer = createServer(app);
   const socketServer = new SocketServer(httpServer);

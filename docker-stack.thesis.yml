@@ -232,7 +232,7 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: any
+        condition: on-failure
         delay: 10s
         window: 120s
       resources:
@@ -265,7 +265,7 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: any
+        condition: on-failure
         delay: 10s
         window: 120s
       resources:
@@ -298,7 +298,7 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: any
+        condition: on-failure
         delay: 10s
         window: 120s
       resources:
@@ -333,7 +333,7 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: any
+        condition: on-failure
         delay: 10s
         window: 120s
       resources:
@@ -365,7 +365,7 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: any
+        condition: on-failure
         delay: 10s
         window: 120s
       resources:
@@ -398,7 +398,7 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: any
+        condition: on-failure
         delay: 10s
         window: 120s
       resources:
@@ -431,7 +431,7 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: any
+        condition: on-failure
         delay: 10s
         window: 120s
       resources:
@@ -465,7 +465,7 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: any
+        condition: on-failure
         delay: 10s
         window: 120s
       resources:
@@ -497,7 +497,7 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: any
+        condition: on-failure
         delay: 10s
         window: 120s
       resources:
@@ -529,7 +529,7 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: any
+        condition: on-failure
         delay: 10s
         window: 120s
       resources:
@@ -548,6 +548,11 @@ services:
     dns:
       - ${AI_SERVICE_DNS_1:-8.8.8.8}
       - ${AI_SERVICE_DNS_2:-8.8.4.4}
+    volumes:
+      # Persist HuggingFace model cache across container restarts — eliminates
+      # re-download of vietnamese-bi-encoder + bge-reranker-v2-m3 (~1GB) on each deploy.
+      # First start still downloads; subsequent restarts skip network fetch entirely.
+      - hf_model_cache:/root/.cache/huggingface
     # Do not set extra_hosts for huggingface.co here: a pinned CDN IP often yields
     # Errno 101 "Network is unreachable" inside Swarm overlay while host/docker0 works.
     # If you only ever see DNS -3 (not 101), temporarily: docker service update --host-add "huggingface.co:<dig-ip>" cab-booking_ai-service
@@ -597,9 +602,11 @@ services:
       - AI_AUTO_RETRAIN_SEC=${AI_AUTO_RETRAIN_SEC:-0}
       - AI_AUTO_RETRAIN_ENABLED=${AI_AUTO_RETRAIN_ENABLED:-false}
       - AI_INTERNAL_TOKEN=${AI_INTERNAL_TOKEN:-}
-      # Match local: allow HF hub unless overridden (thesis air-gap: HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1).
+      # After first successful deploy (models cached in hf_model_cache volume),
+      # set HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 in .env to skip network on restart.
       - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0}
       - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-0}
+      - HF_HOME=/root/.cache/huggingface
     # Swarm: image HEALTHCHECK start_period=60s can be too short on small CPUs (RAG + reranker load).
     networks:
       - backend
@@ -688,6 +695,9 @@ services:
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Node-local bind mount keeps positions per-node (global mode = 1 replica/node).
+      # /var/lib/promtail is created on each Swarm node via cloud-init or first-run.
+      - /var/lib/promtail:/var/lib/promtail
     networks:
       - backend
     deploy:
@@ -701,6 +711,11 @@ services:
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
+    ports:
+      - target: 8080
+        published: 8081
+        protocol: tcp
+        mode: host
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -722,6 +737,11 @@ services:
     command:
       - --path.rootfs=/host
       - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    ports:
+      - target: 9100
+        published: 9100
+        protocol: tcp
+        mode: host
     volumes:
       - /:/host:ro,rslave
     networks:
@@ -847,6 +867,9 @@ volumes:
     driver: local
   loki_data:
     name: cab-booking-loki-data
+    driver: local
+  hf_model_cache:
+    name: cab-booking-hf-model-cache
     driver: local
 
 # ══════════════════════════════════════════════════════════════════════════

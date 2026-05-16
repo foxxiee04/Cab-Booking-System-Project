@@ -24,8 +24,8 @@ export const registerSchema = Joi.object({
   phone: phoneSchema,
   password: passwordSchema,
   role: Joi.string().valid('CUSTOMER', 'DRIVER').optional(),
-  firstName: Joi.string().min(1).max(50).optional(),
-  lastName: Joi.string().min(1).max(50).optional(),
+  firstName: Joi.string().trim().min(1).max(50).optional(),
+  lastName: Joi.string().trim().min(1).max(50).optional(),
 });
 
 export const loginSchema = Joi.object({
@@ -69,8 +69,8 @@ export const registerCompleteSchema = Joi.object({
   phone: phoneSchema,
   password: passwordSchema,
   role: Joi.string().valid('CUSTOMER', 'DRIVER').optional(),
-  firstName: Joi.string().min(1).max(50).optional(),
-  lastName: Joi.string().min(1).max(50).optional(),
+  firstName: Joi.string().trim().min(1).max(50).optional(),
+  lastName: Joi.string().trim().min(1).max(50).optional(),
   email: Joi.string().email().max(255).optional().messages({
     'string.email': 'Email không hợp lệ',
   }),

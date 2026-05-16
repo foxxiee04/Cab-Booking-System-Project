@@ -363,19 +363,27 @@ const Dashboard: React.FC = () => {
   const googleMapsApiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || '';
 
   useEffect(() => {
-    const fetchDashboard = async () => {
+    // Lightweight stats-only refresh — called every 15s and on socket events.
+    const fetchStats = async () => {
       try {
-        const [statsRes, driversRes, ridesRes, paymentsRes] = await Promise.all([
-          adminApi.getStats(),
-          adminApi.getDrivers({ limit: 500 }),
-          adminApi.getRides({ limit: 200 }),
-          adminApi.getPayments({ limit: 200 }),
-        ]);
-
+        const statsRes = await adminApi.getStats();
         dispatch(setStats(statsRes.data?.stats || null));
-        // Heatmap only counts drivers who are actively ONLINE — feeding offline
-        // drivers in misleads operators (they see "hot zones" of drivers who
-        // logged out hours ago).
+        setError('');
+      } catch {
+        setError(t('dashboard.loadStatsFailed'));
+      }
+    };
+
+    // Heavy data fetch — called once on mount and every 60s. Filters online
+    // drivers server-side to avoid transferring offline records just for the
+    // heatmap (was fetching limit:500 all-status drivers previously).
+    const fetchHeavy = async () => {
+      try {
+        const [driversRes, ridesRes, paymentsRes] = await Promise.all([
+          adminApi.getDrivers({ isOnline: true, limit: 200 }),
+          adminApi.getRides({ limit: 100 }),
+          adminApi.getPayments({ limit: 100 }),
+        ]);
         setDrivers(
           (driversRes.data?.drivers || []).filter(
             (d) => d.currentLocation && d.isOnline === true,
@@ -383,12 +391,7 @@ const Dashboard: React.FC = () => {
         );
         setRides(ridesRes.data?.rides || []);
         setPayments(paymentsRes.data?.payments || []);
-        setError('');
-      } catch {
-        setError(t('dashboard.loadStatsFailed'));
-      } finally {
-        setLoading(false);
-      }
+      } catch { /* non-critical — stats are the source of truth */ }
     };
 
     const fetchRevenue = async () => {
@@ -398,14 +401,24 @@ const Dashboard: React.FC = () => {
       } catch { /* non-critical */ }
     };
 
-    fetchDashboard();
-    fetchRevenue();
+    const initialLoad = async () => {
+      try {
+        await Promise.all([fetchStats(), fetchHeavy(), fetchRevenue()]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    const interval = window.setInterval(fetchDashboard, 15000);
-    const unsub = adminSocketService.subscribe(fetchDashboard);
+    initialLoad();
+
+    const statsInterval = window.setInterval(fetchStats, 15000);
+    const heavyInterval = window.setInterval(fetchHeavy, 60000);
+    // Socket events only refresh lightweight stats, not the full 500-driver payload.
+    const unsub = adminSocketService.subscribe(fetchStats);
 
     return () => {
-      window.clearInterval(interval);
+      window.clearInterval(statsInterval);
+      window.clearInterval(heavyInterval);
       unsub();
     };
   }, [dispatch, t]);

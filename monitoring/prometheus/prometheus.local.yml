@@ -1,0 +1,47 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    env: local
+    project: cab-booking
+
+scrape_configs:
+
+  # ── Prometheus self-monitoring ──────────────────────────────────────────
+  - job_name: prometheus
+    static_configs:
+      - targets: ['prometheus:9090']
+
+  # ── Node metrics — static (local compose has only one host) ────────────
+  - job_name: node-exporter
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          instance: local
+          node_role: manager
+
+  # ── Container metrics via cAdvisor ─────────────────────────────────────
+  - job_name: cadvisor
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          instance: local
+          node_role: manager
+
+  # ── RabbitMQ ───────────────────────────────────────────────────────────
+  - job_name: rabbitmq
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['rabbitmq:15692']
+        labels:
+          service: rabbitmq
+
+  # ── API Gateway ─────────────────────────────────────────────────────────
+  - job_name: api-gateway
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['api-gateway:3000']
+        labels:
+          service: api-gateway

@@ -9,6 +9,7 @@ import { createRequestContextMiddleware } from '../../../shared/dist';
 import { config } from './config';
 import { authMiddleware } from './middleware/auth';
 import { generalLimiter } from './middleware/rate-limit';
+import { sanitizeBody } from './middleware/sanitize';
 import proxyRoutes from './routes/proxy';
 import mapRoutes from './routes/map';
 import adminRoutes from './routes/admin';
@@ -47,6 +48,7 @@ export function createApp({
     stream: { write: (message) => logger.info(message.trim()) },
   }));
   app.use(express.json({ limit: '25mb' }));
+  app.use(sanitizeBody);
 
   if (enableRateLimit) {
     app.use(generalLimiter);

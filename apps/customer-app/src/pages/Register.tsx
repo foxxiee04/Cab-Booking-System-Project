@@ -22,6 +22,7 @@ import {
 import { useAppDispatch } from '../store/hooks';
 import { setCredentials } from '../store/auth.slice';
 import { authApi } from '../api/auth.api';
+import { containsScript, SCRIPT_ERROR_MSG } from '../utils/inputSecurity';
 
 type Step = 'phone' | 'otp' | 'profile';
 
@@ -41,6 +42,7 @@ const Register: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({ firstName: '', lastName: '' });
   const [resendDelay, setResendDelay] = useState(0);
 
   useEffect(() => {
@@ -109,6 +111,10 @@ const Register: React.FC = () => {
 
     if (!formData.firstName.trim() || !formData.lastName.trim()) {
       setError('Vui lòng nhập họ và tên');
+      return;
+    }
+    if (containsScript(formData.firstName) || containsScript(formData.lastName)) {
+      setError(SCRIPT_ERROR_MSG);
       return;
     }
     if (formData.password.length < 8) {
@@ -287,9 +293,18 @@ const Register: React.FC = () => {
                       fullWidth
                       label="Họ"
                       value={formData.lastName}
-                      onChange={(event) => setFormData({ ...formData, lastName: event.target.value })}
+                      onChange={(event) => {
+                        const val = event.target.value;
+                        setFormData({ ...formData, lastName: val });
+                        setFieldErrors((prev) => ({
+                          ...prev,
+                          lastName: containsScript(val) ? SCRIPT_ERROR_MSG : '',
+                        }));
+                      }}
                       required
                       autoFocus
+                      error={Boolean(fieldErrors.lastName)}
+                      helperText={fieldErrors.lastName}
                       sx={{ mb: 2 }}
                       InputProps={{
                         startAdornment: (
@@ -304,8 +319,17 @@ const Register: React.FC = () => {
                       fullWidth
                       label="Tên"
                       value={formData.firstName}
-                      onChange={(event) => setFormData({ ...formData, firstName: event.target.value })}
+                      onChange={(event) => {
+                        const val = event.target.value;
+                        setFormData({ ...formData, firstName: val });
+                        setFieldErrors((prev) => ({
+                          ...prev,
+                          firstName: containsScript(val) ? SCRIPT_ERROR_MSG : '',
+                        }));
+                      }}
                       required
+                      error={Boolean(fieldErrors.firstName)}
+                      helperText={fieldErrors.firstName}
                       sx={{ mb: 2 }}
                     />
 
