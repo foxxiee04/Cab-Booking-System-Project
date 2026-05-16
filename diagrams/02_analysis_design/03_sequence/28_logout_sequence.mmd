@@ -1,0 +1,18 @@
+sequenceDiagram
+  autonumber
+  actor User
+  participant App as React App
+  participant Gateway as API Gateway
+  participant Auth as Auth Service
+  participant DB as auth_db
+  participant Socket as Socket.IO
+  User->>App: Click logout
+  App->>Gateway: POST /api/auth/logout
+  Gateway->>Auth: Revoke refresh token
+  Auth->>DB: Mark RefreshToken revoked
+  DB-->>Auth: Revoked
+  Auth-->>Gateway: Logout accepted
+  Gateway-->>App: 200 OK
+  App->>Socket: Leave rooms and disconnect
+  App->>App: Clear tokens, user store, cached data
+  App-->>User: Redirect to login screen

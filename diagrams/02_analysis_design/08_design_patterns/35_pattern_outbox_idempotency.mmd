@@ -1,0 +1,27 @@
+flowchart LR
+    Provider["MoMo / VNPay<br/>IPN callback"] --> Gateway["API Gateway"]
+    Gateway --> Payment["Payment Service"]
+
+    Payment --> Check{"Idempotency key<br/>đã xử lý?"}
+
+    Check -- "Có" --> SameResult["Trả kết quả cũ<br/>không ghi trùng"]
+    Check -- "Chưa" --> Tx["DB transaction<br/><br/>1. Cập nhật payment<br/>2. Lưu idempotency key<br/>3. Ghi outbox event"]
+
+    Tx --> Relay["Outbox Relay"]
+    Relay --> MQ["RabbitMQ<br/>payment.succeeded<br/>payment.failed"]
+
+    MQ --> Ride["Ride Service"]
+    MQ --> Wallet["Wallet Service"]
+    MQ --> Notification["Notification Service"]
+
+    classDef external fill:#dbeafe,stroke:#60a5fa,color:#0f172a
+    classDef core fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef decision fill:#fce7f3,stroke:#ec4899,color:#831843
+    classDef mq fill:#f5f3ff,stroke:#8b5cf6,color:#4c1d95
+    classDef service fill:#ecfdf5,stroke:#10b981,color:#064e3b
+
+    class Provider,Gateway external
+    class Payment,Tx,Relay,SameResult core
+    class Check decision
+    class MQ mq
+    class Ride,Wallet,Notification service

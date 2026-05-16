@@ -1,0 +1,72 @@
+flowchart TB
+    Problem(["Bài toán
+Đặt xe realtime · Thanh toán an toàn · 12 service độc lập"])
+
+    subgraph SEntry["① Cổng vào hệ thống"]
+        direction LR
+        E1["API Gateway
+api-gateway route vào 11 service phía sau"]
+        E2["Adapter / gRPC Bridge
+HTTP → service nội bộ qua gRPC"]
+        E3["Pub/Sub Realtime
+Socket.IO + Redis adapter"]
+    end
+
+    subgraph SCore["② Lõi nghiệp vụ"]
+        direction LR
+        C1["Aggregate Root
+Booking · Ride · Payment · DriverWallet"]
+        C2["State Machine
+vòng đời Ride có transition hợp lệ"]
+        C3["Strategy
+fare rule · payment provider · matching score"]
+        C4["Domain Service
+pricing · commission · matching"]
+    end
+
+    subgraph SCons["③ Nhất quán dữ liệu"]
+        direction LR
+        D1["Database per Service
+DB riêng từng service, không share"]
+        D2["Transactional Outbox
+data + event ghi nguyên tử vào RabbitMQ"]
+        D3["Idempotency Key
+MoMo/VNPay callback không xử lý trùng"]
+        D4["Saga via Events
+booking → ride → payment → wallet"]
+    end
+
+    subgraph SFin["④ Ví & Chịu lỗi"]
+        direction LR
+        F1["T+24h Pending Hold
+giữ tiền tài xế trước khi rút"]
+        F2["FIFO Debt Settlement
+trả công nợ tiền mặt cũ nhất trước"]
+        F3["Security Deposit
+ngưỡng kích hoạt ví tài xế"]
+        F4["Timeout + Fallback
+AI/Pricing degrade an toàn 150ms"]
+    end
+
+    Result(["Kết quả
+Dễ mở rộng · Ít lỗi lan truyền · Thanh toán & ví an toàn"])
+
+    Problem  --> SEntry
+    SEntry   --> SCore
+    SCore    --> SCons
+    SCons    --> SFin
+    SFin     --> Result
+
+    classDef goalStyle  fill:#1e3a8a,stroke:#93c5fd,color:#e0f2fe,font-weight:bold
+    classDef resultStyle fill:#14532d,stroke:#4ade80,color:#dcfce7,font-weight:bold
+    classDef eStyle     fill:#ecfdf5,stroke:#10b981,color:#064e3b
+    classDef cStyle     fill:#fff7ed,stroke:#f97316,color:#7c2d12
+    classDef dStyle     fill:#f5f3ff,stroke:#8b5cf6,color:#4c1d95
+    classDef fStyle     fill:#ecfeff,stroke:#06b6d4,color:#164e63
+
+    class Problem goalStyle
+    class Result resultStyle
+    class E1,E2,E3 eStyle
+    class C1,C2,C3,C4 cStyle
+    class D1,D2,D3,D4 dStyle
+    class F1,F2,F3,F4 fStyle

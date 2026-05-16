@@ -1,0 +1,27 @@
+flowchart LR
+    Start["booking.confirmed"] --> Pending["PENDING<br/>đang tìm tài xế"]
+
+    Pending -- "driver.accept" --> Accepted["ACCEPTED<br/>đã có tài xế"]
+    Accepted -- "driver.start_trip" --> Progress["IN_PROGRESS<br/>đang đi"]
+    Progress -- "driver.complete_trip" --> Completed["COMPLETED<br/>kết thúc chuyến"]
+
+    Pending -- "timeout / customer.cancel" --> Cancelled["CANCELLED"]
+    Accepted -- "valid cancel policy" --> Cancelled
+
+    Completed --> Settlement["Payment settlement<br/>chỉ chạy tại COMPLETED"]
+
+    Rule["Rule chính<br/>không được nhảy trạng thái<br/>ví dụ PENDING sang COMPLETED"]
+    Rule -.-> Pending
+    Rule -.-> Completed
+
+    classDef event fill:#dbeafe,stroke:#60a5fa,color:#0f172a
+    classDef state fill:#f8fafc,stroke:#64748b,color:#0f172a
+    classDef done fill:#dcfce7,stroke:#22c55e,color:#14532d,font-weight:bold
+    classDef cancel fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef note fill:#fff7ed,stroke:#fb923c,color:#7c2d12
+
+    class Start event
+    class Pending,Accepted,Progress state
+    class Completed,Settlement done
+    class Cancelled cancel
+    class Rule note

@@ -1,0 +1,28 @@
+flowchart LR
+  Request["Yêu cầu đặt xe<br/>pickup, dropoff, loại xe, thời điểm"]:::user
+  Features["Feature builder<br/>quãng đường, thời gian, khu vực<br/>demand/supply, pool tài xế"]:::service
+  AI["AI Service<br/>ETA + Surge: RandomForest eta-rf-v2<br/>P_accept: GradientBoosting accept-gbm-v1<br/>Wait-time: GBR wait-gbr-v1"]:::ai
+
+  Price["Báo giá<br/>base + loại xe + km + phút + surge<br/>Output: fare, ETA, wait_time"]:::service
+  Dispatch["Xếp hạng tài xế<br/>ETA, rating, accept, cancel, idle, priority × P_accept<br/>Output: driver ranking"]:::service
+  Result["Kết quả giải thích được<br/>fare, tài xế ưu tiên, score_breakdown, reason_code"]:::data
+
+  Fallback["Fallback rule-based<br/>AI timeout/lỗi: giá cố định, Redis GEO, P_accept = 1.0"]:::ok
+
+  Request --> Features --> AI
+  AI --> Price
+  AI --> Dispatch
+  Price --> Result
+  Dispatch --> Result
+  Features -. "AI không sẵn sàng" .-> Fallback --> Result
+
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

@@ -1,0 +1,37 @@
+flowchart TB
+    Apps["Customer App · Driver App · Admin Dashboard"]
+    Gateway["API Gateway<br/>Routing · Auth Guard · Socket.IO"]
+    MQ[("RabbitMQ<br/>Domain Events")]
+    Events["Key Domain Events<br/><br/>booking.confirmed -> Ride creates ride<br/>ride.completed -> Finance settles payment<br/>driver.earning.settled -> Wallet updates<br/>payment.finalized -> Notification sends receipt<br/>driver.rating_updated -> Driver rating/matching signal"]
+
+    Apps --> Gateway
+
+    subgraph Domain["Bounded Contexts"]
+        direction LR
+        Booking["Booking Context<br/><br/>Service: booking-service<br/>Aggregate: Booking<br/>Owns: booking_db<br/>Rule: payment gate before dispatch"]
+        Ride["Ride Context<br/><br/>Services: ride · driver · pricing<br/>Aggregates: Ride · Driver<br/>Owns: ride_db · driver_db · Redis GEO<br/>Rule: matching and ride state machine"]
+        Finance["Finance Context<br/><br/>Services: payment · wallet<br/>External: MoMo / VNPay<br/>Aggregates: Payment · DriverWallet<br/>Owns: payment_db · wallet_db<br/>Rule: idempotency · T+24h · FIFO debt"]
+        Support["Identity & Support Context<br/><br/>Services: auth · user · notification · review · AI<br/>Models: User · UserProfile · Review · ML prediction<br/>Owns: auth_db · user_db · MongoDB<br/>Rule: auth, support, rating, prediction"]
+    end
+
+    Gateway --> Booking
+    Gateway --> Ride
+    Gateway --> Finance
+    Gateway --> Support
+
+    Booking <--> MQ
+    Ride <--> MQ
+    Finance <--> MQ
+    Support <--> MQ
+    MQ --- Events
+
+    classDef entry fill:#dbeafe,stroke:#60a5fa,color:#0f172a
+    classDef context fill:#f8fafc,stroke:#64748b,color:#0f172a
+    classDef finance fill:#fef3c7,stroke:#f59e0b,color:#0f172a
+    classDef bus fill:#dcfce7,stroke:#22c55e,color:#0f172a
+    classDef event fill:#fef9c3,stroke:#eab308,color:#0f172a
+    class Apps,Gateway entry
+    class Booking,Ride,Support context
+    class Finance finance
+    class MQ bus
+    class Events event

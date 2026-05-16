@@ -1,0 +1,50 @@
+flowchart LR
+    Title(["12 service trong hệ thống<br/>api-gateway + 11 service phía sau"])
+
+    subgraph Clients["Ứng dụng bên ngoài"]
+        direction TB
+        Customer["Customer App"]
+        Driver["Driver App"]
+        Admin["Admin Dashboard"]
+    end
+
+    Gateway["api-gateway<br/><br/>Auth Guard<br/>Route request<br/>Socket.IO realtime<br/>HTTP -> gRPC bridge"]
+
+    subgraph Services["11 service phía sau Gateway"]
+        direction LR
+        Identity["Identity / User<br/><br/>auth-service<br/>user-service"]
+        Mobility["Booking / Ride<br/><br/>booking-service<br/>ride-service<br/>driver-service<br/>pricing-service"]
+        Finance["Finance<br/><br/>payment-service<br/>wallet-service"]
+        Support["Support / AI<br/><br/>notification-service<br/>review-service<br/>ai-service"]
+    end
+
+    Title --> Gateway
+    Customer --> Gateway
+    Driver --> Gateway
+    Admin --> Gateway
+
+    Gateway --> Identity
+    Gateway --> Mobility
+    Gateway --> Finance
+    Gateway --> Support
+
+    Why(["Ý nghĩa<br/>Ảnh này hiển thị đủ 12 service<br/>Client không gọi thẳng service<br/>Gateway gom auth, routing và realtime"])
+    Gateway --> Why
+
+    classDef title fill:#f8fafc,stroke:#64748b,color:#0f172a,font-weight:bold
+    classDef client fill:#dbeafe,stroke:#60a5fa,color:#0f172a
+    classDef gateway fill:#1e3a8a,stroke:#93c5fd,color:#eff6ff,font-weight:bold
+    classDef identity fill:#ecfeff,stroke:#06b6d4,color:#164e63
+    classDef mobility fill:#ecfdf5,stroke:#10b981,color:#064e3b
+    classDef finance fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef support fill:#f5f3ff,stroke:#8b5cf6,color:#4c1d95
+    classDef note fill:#fff7ed,stroke:#fb923c,color:#7c2d12
+
+    class Title title
+    class Customer,Driver,Admin client
+    class Gateway gateway
+    class Identity identity
+    class Mobility mobility
+    class Finance finance
+    class Support support
+    class Why note

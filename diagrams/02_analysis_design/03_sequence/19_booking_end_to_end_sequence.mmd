@@ -1,0 +1,101 @@
+%%{init: {"sequence": {"mirrorActors": true}} }%%
+sequenceDiagram
+  autonumber
+  actor Customer as Customer App
+  participant Gateway as API Gateway
+  participant Auth as Auth Service
+  participant Booking as Booking Service
+  participant Payment as Payment Service
+  participant Pricing as Pricing Service
+  participant Driver as Driver Service
+  actor DriverApp as Driver App
+  participant AI as AI Matching Service
+  participant Ride as Ride Service
+  participant Notification as Notification Service
+  participant Review as Review Service
+  participant Broker as RabbitMQ Event Broker
+
+  Customer->>Gateway: Request ride (pickup, destination, vehicle type)
+  Gateway->>Auth: Verify JWT
+  Auth-->>Gateway: Auth OK
+  Gateway->>Pricing: Calculate fare and ETA
+  Pricing->>AI: Predict ETA and surge factor
+  AI-->>Pricing: Prediction or fallback score
+  Pricing-->>Gateway: Estimated fare
+  Gateway-->>Customer: Show quote and ETA
+
+  Customer->>Gateway: Confirm booking (payment method)
+  Gateway->>Booking: Create booking with payment method
+  Booking-->>Gateway: Booking created, waiting for dispatch gate
+  rect rgb(245, 247, 255)
+    alt Online payment selected
+      Gateway->>Payment: Execute Payment Flow before dispatch
+      Note right of Payment: Refer to Payment Flow Sequence<br/>Online payment must succeed before driver matching
+      Payment-->>Gateway: payment.succeeded
+    else Cash/offline selected
+      Gateway->>Payment: Register deferred cash payment
+      Note right of Payment: Cash is collected after trip completion
+      Payment-->>Gateway: deferred payment accepted
+    end
+  end
+  Gateway->>Booking: Confirm booking for driver matching
+  Booking->>Broker: Publish booking.confirmed
+  Broker->>Ride: Create ride PENDING
+  Ride->>Broker: Publish ride.created
+
+  Broker->>AI: Find best driver
+  AI->>AI: Score candidates and select best match
+  AI-->>Ride: Best driver selected
+  Ride->>Driver: Assign driver offer
+  Driver-->>DriverApp: Push ride offer
+  DriverApp->>Gateway: Accept ride offer
+  Gateway->>Ride: Assign driver and accept ride
+  Ride->>Broker: Publish ride.accepted
+  Broker->>Notification: Notify ride accepted
+  Notification-->>Customer: Push driver information
+  Notification-->>DriverApp: Push customer information
+
+  DriverApp->>Gateway: Start ride
+  Gateway->>Ride: Update status IN_PROGRESS
+  Ride->>Broker: Publish ride.status_changed
+  Broker->>Notification: Notify ride started
+  Notification-->>Customer: Push ride started
+
+  loop During trip
+    DriverApp->>Gateway: Send GPS update
+    Gateway->>Ride: Append live location
+    Ride-->>Customer: Live location update (WebSocket)
+  end
+
+  DriverApp->>Gateway: Complete ride
+  Gateway->>Ride: Update status COMPLETED
+  Ride->>Broker: Publish ride.completed
+  Broker->>Payment: Finalize payment and settlement
+  rect rgb(255, 251, 235)
+    Payment->>Payment: Driver earning settlement sub-sequence
+    Note right of Payment: Sub-seq này được tách riêng để trình bày logic tính tiền tài xế<br/>Gồm fare cuối, platform fee, net earnings, cash debt<br/>Online: ghi thu nhập chờ T+24h<br/>Cash: ghi công nợ phí nền tảng
+  end
+  Payment->>Broker: Publish payment.finalized
+  Broker->>Notification: Notify trip completed and receipt
+  Notification->>Notification: Dispatch push notifications
+  Notification-->>Customer: Push receipt and rating request
+  Notification-->>DriverApp: Push trip summary
+
+  Customer->>Gateway: Open receipt
+  Gateway->>Payment: Get receipt by rideId
+  Payment-->>Gateway: Fare, payment status, discount, final amount
+  Gateway-->>Customer: Show trip receipt
+
+  alt Customer submits rating
+    Customer->>Gateway: Submit driver rating (stars, comment, tags)
+    Gateway->>Review: Create review CUSTOMER_TO_DRIVER
+    Review->>Review: Validate rating and prevent duplicate review
+    Review->>Driver: Update driver rating aggregate
+    Driver-->>Review: Rating updated
+    Review-->>Gateway: Review saved
+    Gateway-->>Customer: Rating saved
+  else Customer skips rating
+    Gateway->>Review: Schedule auto-rating after 24h
+    Review->>Review: Create 5-star auto-rating if no customer review exists
+    Review->>Driver: Update driver rating aggregate
+  end

@@ -1,0 +1,36 @@
+flowchart LR
+  subgraph User["Actor: Authenticated User"]
+    direction TB
+    Start([Start]):::user
+    ClickLogout["Click logout"]:::service
+    Confirm{"Confirm logout?"}:::infra
+    Stay["Stay in current session"]:::ok
+    ViewLogin["Return to login screen"]:::ok
+  end
+
+  subgraph Auth["System: Client / API Gateway / Auth Service"]
+    direction TB
+    TokenPresent{"Refresh token exists?"}:::security
+    Revoke["Revoke refresh token in auth_db"]:::data
+    ClearClient["Clear access token, refresh token, user cache"]:::data
+    LeaveRooms["Leave Socket.IO rooms and disconnect realtime session"]:::service
+    Audit["Write logout audit event"]:::data
+    Done([End]):::ok
+  end
+
+  Start --> ClickLogout --> Confirm
+  Confirm -- No --> Stay --> Done
+  Confirm -- Yes --> TokenPresent
+  TokenPresent -- Yes --> Revoke --> ClearClient
+  TokenPresent -- No --> ClearClient
+  ClearClient --> LeaveRooms --> Audit --> ViewLogin --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

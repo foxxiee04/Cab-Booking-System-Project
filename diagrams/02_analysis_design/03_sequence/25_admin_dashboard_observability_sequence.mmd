@@ -1,0 +1,23 @@
+sequenceDiagram
+  autonumber
+  actor Admin
+  participant Dashboard as Admin Dashboard
+  participant Gateway as API Gateway
+  participant Services as Business Services
+  participant Prometheus as Prometheus
+  participant Loki as Loki / Logs
+  participant Grafana as Grafana
+  Admin->>Dashboard: Open dashboard or reports
+  Dashboard->>Gateway: GET /api/admin/dashboard
+  Gateway->>Services: Collect ride, driver, payment, wallet KPIs
+  Services-->>Gateway: Aggregated operational data
+  Gateway-->>Dashboard: Dashboard payload
+  Dashboard->>Prometheus: Query service/container metrics
+  Prometheus-->>Dashboard: Time-series metrics
+  Dashboard->>Loki: Query application logs
+  Loki-->>Dashboard: Log entries
+  opt Open full monitoring view
+    Dashboard->>Grafana: Open dashboard link
+    Grafana-->>Admin: Visualize metrics and logs
+  end
+  Dashboard-->>Admin: Show KPIs, charts, and degraded services

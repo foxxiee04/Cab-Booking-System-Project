@@ -1,0 +1,145 @@
+flowchart TB
+    root["FoxGo System Sitemap"]
+
+    root --> auth["Authentication"]
+    root --> customer["Customer App"]
+    root --> driver["Driver App"]
+    root --> admin["Admin Dashboard"]
+    root --> shared["Shared Realtime & Support"]
+
+    subgraph AUTH["Authentication"]
+        auth_login["Login"]
+        auth_register["Register"]
+        auth_otp["OTP Verification"]
+        auth_forgot["Forgot Password"]
+        auth_logout["Logout"]
+        auth --> auth_login
+        auth --> auth_register
+        auth_register --> auth_otp
+        auth --> auth_forgot
+        auth --> auth_logout
+    end
+
+    subgraph CUSTOMER["Customer App Navigation"]
+        cus_home["Home Map"]
+        cus_profile["Profile"]
+        cus_booking["Booking Flow"]
+        cus_fare["Fare Estimate"]
+        cus_finding["Finding Driver"]
+        cus_tracking["Ride Tracking"]
+        cus_payment["Online Payment"]
+        cus_callback["Payment Result"]
+        cus_voucher["Vouchers"]
+        cus_history["Ride History"]
+        cus_review["Review & Rating"]
+        cus_messages["Messages"]
+        cus_ai["AI Chat Assist"]
+
+        customer --> cus_home
+        customer --> cus_profile
+        customer --> cus_voucher
+        customer --> cus_history
+        customer --> cus_messages
+        customer --> cus_ai
+        cus_home --> cus_booking
+        cus_booking --> cus_fare
+        cus_fare --> cus_finding
+        cus_finding --> cus_tracking
+        cus_tracking --> cus_payment
+        cus_payment --> cus_callback
+        cus_tracking --> cus_review
+    end
+
+    subgraph DRIVER["Driver App Navigation"]
+        drv_dashboard["Driver Dashboard"]
+        drv_profile["Profile Setup"]
+        drv_account["Account"]
+        drv_online["Online / Offline"]
+        drv_offer["Ride Offer"]
+        drv_active["Active Ride"]
+        drv_wallet["Wallet"]
+        drv_topup["Top-up / Withdraw"]
+        drv_earnings["Earnings"]
+        drv_history["Ride History"]
+        drv_messages["Messages"]
+        drv_ai["AI Assist"]
+
+        driver --> drv_dashboard
+        driver --> drv_profile
+        driver --> drv_account
+        driver --> drv_wallet
+        driver --> drv_earnings
+        driver --> drv_history
+        driver --> drv_messages
+        driver --> drv_ai
+        drv_dashboard --> drv_online
+        drv_online --> drv_offer
+        drv_offer --> drv_active
+        drv_wallet --> drv_topup
+    end
+
+    subgraph ADMIN["Admin Dashboard Navigation"]
+        adm_dashboard["Overview Dashboard"]
+        adm_customers["Customers"]
+        adm_drivers["Drivers"]
+        adm_approvals["Driver Approvals"]
+        adm_rides["Rides"]
+        adm_pricing["Pricing"]
+        adm_vouchers["Vouchers"]
+        adm_payments["Payments"]
+        adm_merchant["Merchant Wallet"]
+        adm_reports["Reports"]
+        adm_notifications["Notifications"]
+        adm_logs["Logs"]
+        adm_profile["Admin Profile"]
+
+        admin --> adm_dashboard
+        admin --> adm_customers
+        admin --> adm_drivers
+        admin --> adm_approvals
+        admin --> adm_rides
+        admin --> adm_pricing
+        admin --> adm_vouchers
+        admin --> adm_payments
+        admin --> adm_merchant
+        admin --> adm_reports
+        admin --> adm_notifications
+        admin --> adm_logs
+        admin --> adm_profile
+    end
+
+    subgraph SUPPORT["Realtime & Support"]
+        rt_socket["Socket.IO Rooms"]
+        rt_tracking["Location Tracking"]
+        rt_chat["Ride Chat"]
+        rt_call["WebRTC Call"]
+        rt_notify["Notifications"]
+        rt_ai["AI Support / RAG"]
+
+        shared --> rt_socket
+        rt_socket --> rt_tracking
+        rt_socket --> rt_chat
+        rt_socket --> rt_call
+        shared --> rt_notify
+        shared --> rt_ai
+    end
+
+    cus_tracking -. realtime .-> rt_tracking
+    cus_messages -. chat .-> rt_chat
+    drv_active -. realtime .-> rt_tracking
+    drv_messages -. chat .-> rt_chat
+    cus_ai -. support .-> rt_ai
+    drv_ai -. support .-> rt_ai
+    adm_notifications -. event .-> rt_notify
+
+    classDef root fill:#0f172a,stroke:#0f172a,color:#ffffff,stroke-width:2px;
+    classDef group fill:#f8fafc,stroke:#94a3b8,color:#0f172a;
+    classDef customer fill:#dbeafe,stroke:#60a5fa,color:#0f172a;
+    classDef driver fill:#dcfce7,stroke:#86efac,color:#0f172a;
+    classDef admin fill:#fef3c7,stroke:#facc15,color:#0f172a;
+    classDef support fill:#f3e8ff,stroke:#c084fc,color:#0f172a;
+    class root root;
+    class customer,cus_home,cus_profile,cus_booking,cus_fare,cus_finding,cus_tracking,cus_payment,cus_callback,cus_voucher,cus_history,cus_review,cus_messages,cus_ai customer;
+    class driver,drv_dashboard,drv_profile,drv_account,drv_online,drv_offer,drv_active,drv_wallet,drv_topup,drv_earnings,drv_history,drv_messages,drv_ai driver;
+    class admin,adm_dashboard,adm_customers,adm_drivers,adm_approvals,adm_rides,adm_pricing,adm_vouchers,adm_payments,adm_merchant,adm_reports,adm_notifications,adm_logs,adm_profile admin;
+    class shared,rt_socket,rt_tracking,rt_chat,rt_call,rt_notify,rt_ai,auth,auth_login,auth_register,auth_otp,auth_forgot,auth_logout support;

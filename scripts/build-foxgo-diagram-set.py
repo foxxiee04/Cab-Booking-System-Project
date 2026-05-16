@@ -976,27 +976,65 @@ sequenceDiagram
         "Sequence Diagram",
         "Online Payment IPN Sequence",
         """
+%%{init: {"sequence": {"mirrorActors": true}} }%%
 sequenceDiagram
   autonumber
-  actor Customer
+  actor Customer as Customer App
   participant Gateway as API Gateway
-  participant Payment as Payment Service
-  participant Provider as MoMo/VNPay
-  participant MQ as RabbitMQ
   participant Ride as Ride Service
-  participant Wallet as Wallet Service
-  Customer->>Gateway: Pay online
-  Gateway->>Payment: Create payment
-  Payment->>Provider: Create checkout session
-  Provider-->>Customer: Checkout URL
-  Provider->>Payment: IPN callback
-  Payment->>Payment: Verify signature and idempotency
-  alt Valid new callback
-    Payment->>MQ: Publish payment.completed
-    MQ->>Ride: Mark ride as paid
-    MQ->>Wallet: Hold driver earning
-  else Invalid or duplicate callback
+  participant Payment as Payment Service
+  participant PayDB as payment_db
+  participant Provider as MoMo / VNPay
+  participant MQ as RabbitMQ
+  participant Notify as Notification Service
+
+  Customer->>Gateway: POST /api/rides {paymentMethod = MOMO or VNPAY}
+  Gateway->>Ride: Create ride and estimate fare
+  Ride->>Ride: Store ride as CREATED
+  Ride-->>Customer: rideId + estimatedFare
+
+  Customer->>Gateway: POST /api/payments/momo/create or vnpay/create
+  Gateway->>Payment: Forward request via gRPC HTTP bridge
+  Payment->>PayDB: Find Payment by rideId + Idempotency-Key
+  alt Existing intent
+    PayDB-->>Payment: Stored status + gatewayResponse
+  else New intent
+    Payment->>Provider: Create signed checkout order (orderId = rideId)
+    Provider-->>Payment: payUrl / deeplink / qrCodeUrl / txnRef
+    Payment->>PayDB: INSERT Payment(REQUIRES_ACTION, gatewayResponse)
+    Payment->>MQ: payment.intent.created
+  end
+  Payment-->>Gateway: paymentUrl / payUrl / status
+  Gateway-->>Customer: Checkout data
+  Customer->>Provider: Redirect or open checkout
+
+  par Provider IPN
+    Provider->>Payment: POST /momo/webhook or GET /vnpay/ipn
+  and Browser return
+    Provider-->>Customer: Redirect /payment/callback
+    Customer->>Gateway: GET /api/payments/{provider}/return
+    Gateway->>Payment: Confirm return result
+  end
+
+  Payment->>Payment: Verify signature and VNPay amount
+  Payment->>PayDB: Read payment by rideId
+  alt Invalid signature, amount, or order
+    Payment-->>Provider: Failure acknowledgement
+    Payment-->>Customer: Payment failed
+  else Duplicate terminal state
+    PayDB-->>Payment: COMPLETED / FAILED / REFUNDED
     Payment-->>Provider: Safe acknowledgement
+    Payment-->>Customer: Current payment status
+  else Successful callback
+    Payment->>PayDB: TX update Payment(COMPLETED) + OutboxEvent(payment.completed)
+    Payment->>MQ: payment.completed + payment.success
+    Note over Payment,MQ: Optional booking payment callback is sent after commit
+    MQ->>Ride: startFindingDriverAfterPayment(rideId)
+    MQ->>Notify: Notify customer payment success
+  else Failed callback
+    Payment->>PayDB: TX update Payment(FAILED) + OutboxEvent(payment.failed)
+    Payment->>MQ: payment.failed
+    MQ->>Notify: Notify customer payment failure
   end
 """,
     ),
@@ -1162,17 +1200,55 @@ sequenceDiagram
         """
 sequenceDiagram
   autonumber
-  participant Job as Settlement Job
+  participant Ride as Ride Service
+  participant MQ as RabbitMQ
+  participant Payment as Payment Service
+  participant PayDB as payment_db
   participant Wallet as Wallet Service
-  participant DB as wallet_db
-  participant Notification as Notification Service
+  participant WalletDB as wallet_db
+  participant Job as Settlement Job
   actor Driver
-  Job->>Wallet: Run T+24h settlement
-  Wallet->>DB: Find matured holds
-  DB-->>Wallet: Hold entries
-  Wallet->>DB: Move held balance to available balance
-  Wallet->>Notification: Notify balance update
-  Notification-->>Driver: Earning available
+
+  Ride->>MQ: ride.completed {fare, driverId, method, voucherCode}
+  MQ->>Payment: Consume ride.completed
+  Payment->>PayDB: Check Fare + Payment + DriverEarnings by rideId
+  alt Duplicate ride.completed
+    PayDB-->>Payment: Existing records found
+    Payment-->>MQ: Ack without reprocessing
+  else First settlement event
+    Payment->>Payment: Calculate fare, voucher, commission, netEarnings
+    Payment->>PayDB: TX upsert Fare + Payment + DriverEarnings
+    Payment->>PayDB: INSERT OutboxEvent(fare.calculated)
+  end
+
+  alt Cash ride
+    Payment->>PayDB: Mark Payment COMPLETED (COD)
+    Payment->>MQ: driver.earning.settled(cashDebt)
+    MQ->>Wallet: Consume driver.earning.settled
+    Wallet->>WalletDB: debitCommission(driverId, cashDebt)
+    Wallet->>WalletDB: DebtRecord + WalletTransaction(COMMISSION)
+    Wallet->>WalletDB: MerchantLedger(COMMISSION)
+  else Online ride (MoMo / VNPay)
+    Payment->>MQ: driver.earning.settled(netEarnings, voucherDiscount)
+    MQ->>Wallet: Consume driver.earning.settled
+    Wallet->>WalletDB: creditEarning(driverId, netEarnings)
+    Wallet->>WalletDB: pendingBalance += netEarnings
+    Wallet->>WalletDB: PendingEarning(settleAt = now + 24h)
+    Wallet->>WalletDB: MerchantLedger(PAYMENT)
+    alt Voucher was used
+      Wallet->>WalletDB: MerchantLedger(VOUCHER)
+    end
+  end
+
+  loop Every 30 minutes or when driver reads balance
+    Driver->>Wallet: GET /wallet/balance
+    Job->>Wallet: settlePendingEarnings(driverId)
+    Wallet->>WalletDB: Find unsettled PendingEarning where settleAt <= now
+    Wallet->>WalletDB: pendingBalance -> availableBalance
+    Wallet->>WalletDB: Settle oldest DebtRecords first
+    Wallet->>WalletDB: MerchantLedger(PAYOUT)
+    Wallet-->>Driver: Updated availableBalance
+  end
 """,
     ),
     Diagram(

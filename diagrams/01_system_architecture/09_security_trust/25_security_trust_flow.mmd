@@ -1,0 +1,66 @@
+flowchart TB
+  Title["BẢO MẬT TRONG HỆ THỐNG ĐẶT XE FOXGO"]
+
+  subgraph Clients["1. Ứng dụng sử dụng hệ thống"]
+    direction LR
+    Customer["Customer App"]
+    Driver["Driver App"]
+    Admin["Admin Dashboard"]
+  end
+
+  Edge["2. HTTPS / Nginx<br/>lớp ngoài"]
+  Gateway["3. API Gateway<br/>Rate Limit<br/>Verify JWT<br/>Routing"]
+
+  subgraph Security["4. Xác thực & phân quyền"]
+    direction LR
+    Auth["Auth Service<br/>OTP số điện thoại<br/>JWT + Refresh Token"]
+    RBAC["RBAC<br/>CUSTOMER<br/>DRIVER<br/>ADMIN"]
+  end
+
+  subgraph Services["5. Backend Services của FoxGo"]
+    direction LR
+    Mobility["Booking<br/>Ride<br/>Driver<br/>Pricing"]
+    Money["Payment<br/>Wallet"]
+    Account["User"]
+    Support["Notification<br/>Review<br/>AI"]
+  end
+
+  subgraph Data["6. Dữ liệu & hạ tầng"]
+    direction LR
+    PostgreSQL[("PostgreSQL<br/>service databases")]
+    MongoDB[("MongoDB<br/>notification/review")]
+    Redis[("Redis<br/>cache, GEO, OTP")]
+    RabbitMQ["RabbitMQ<br/>domain events"]
+  end
+
+  Title --> Clients
+  Customer --> Edge
+  Driver --> Edge
+  Admin --> Edge
+  Edge --> Gateway
+
+  Gateway -->|"Đăng nhập / đăng ký"| Auth
+  Auth -->|"Trả token"| Gateway
+
+  Gateway -->|"Request có JWT"| RBAC
+  RBAC -->|"Đúng quyền"| Services
+  Services --> Data
+
+  Note["Ý chính: Không truy cập thẳng service/database.<br/>Mọi request đi qua Gateway, kiểm tra Auth/JWT, rồi RBAC phân quyền."]
+  Data --> Note
+
+  classDef title fill:#ffffff,stroke:#ffffff,color:#0f172a,font-size:24px,font-weight:bold;
+  classDef client fill:#f8fafc,stroke:#64748b,color:#0f172a,stroke-width:1.5px;
+  classDef edge fill:#eff6ff,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;
+  classDef security fill:#dbeafe,stroke:#1d4ed8,color:#0f172a,stroke-width:1.8px;
+  classDef service fill:#ecfdf5,stroke:#16a34a,color:#0f172a,stroke-width:1.5px;
+  classDef data fill:#fefce8,stroke:#ca8a04,color:#0f172a,stroke-width:1.5px;
+  classDef note fill:#fff7ed,stroke:#f97316,color:#0f172a,stroke-width:1.5px;
+
+  class Title title;
+  class Customer,Driver,Admin client;
+  class Edge edge;
+  class Gateway,Auth,RBAC security;
+  class Mobility,Money,Account,Support service;
+  class PostgreSQL,MongoDB,Redis,RabbitMQ data;
+  class Note note;

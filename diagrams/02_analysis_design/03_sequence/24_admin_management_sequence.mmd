@@ -1,0 +1,27 @@
+sequenceDiagram
+  autonumber
+  actor Admin
+  participant Dashboard as Admin Dashboard
+  participant Gateway as API Gateway
+  participant Auth as Auth Guard
+  participant UserSvc as User Service
+  participant DriverSvc as Driver Service
+  participant RideSvc as Ride Service
+  participant Audit as Audit Log
+  Admin->>Dashboard: Search users, drivers, or rides
+  Dashboard->>Gateway: GET /api/admin/resources?filter
+  Gateway->>Auth: Verify ADMIN JWT
+  Auth-->>Gateway: Authorized
+  alt Manage customer
+    Gateway->>UserSvc: Query/update user profile
+    UserSvc-->>Gateway: User result
+  else Manage driver
+    Gateway->>DriverSvc: Query/update driver status
+    DriverSvc-->>Gateway: Driver result
+  else Manage ride
+    Gateway->>RideSvc: Query ride details or state
+    RideSvc-->>Gateway: Ride result
+  end
+  Gateway->>Audit: Record admin operation
+  Gateway-->>Dashboard: Operation result
+  Dashboard-->>Admin: Show updated data

@@ -1,0 +1,31 @@
+sequenceDiagram
+  autonumber
+  actor Customer
+  actor Driver
+  participant Gateway as API Gateway
+  participant Booking as Booking Service
+  participant Ride as Ride Service
+  participant Payment as Payment Service
+  participant Wallet as Wallet Service
+  participant MQ as RabbitMQ
+  Customer->>Gateway: Confirm booking with CASH
+  Gateway->>Booking: Create booking(paymentMethod=CASH)
+  Booking->>Payment: Register deferred cash payment
+  Payment-->>Booking: Deferred payment accepted
+  Booking->>MQ: booking.confirmed
+  MQ->>Ride: Create ride and dispatch driver
+  Driver->>Gateway: Complete ride after collecting cash
+  Gateway->>Ride: Mark ride COMPLETED
+  Ride->>MQ: ride.completed(fare, driverId, CASH)
+  MQ->>Payment: Finalize cash payment
+  Payment->>Payment: Calculate commission and cash collected
+  Payment->>Wallet: Create earning and platform debt
+  alt Wallet balance covers debt
+    Wallet->>Wallet: Settle oldest debt by FIFO
+  else Wallet balance insufficient
+    Wallet->>Wallet: Keep DebtRecord OPEN
+  end
+  Wallet->>MQ: driver.earning.settled / debt.updated
+  Payment->>MQ: payment.finalized
+  Gateway-->>Customer: Show completed cash payment
+  Gateway-->>Driver: Show earning and debt status

@@ -1,0 +1,26 @@
+flowchart LR
+    Completed["ride.completed"] --> Settlement["Payment Settlement<br/><br/>grossFare<br/>- platformFee<br/>= netEarnings"]
+
+    Settlement --> Method{"Payment method"}
+
+    Method -- "Online" --> Online["Khách đã trả qua<br/>MoMo / VNPay"]
+    Online --> Pending["Wallet pending earning<br/>giữ T+24h"]
+    Pending --> Available["Available balance<br/>tài xế có thể rút"]
+
+    Method -- "Offline / Cash" --> Cash["Khách trả tiền mặt<br/>cho tài xế"]
+    Cash --> Debt["Ghi công nợ<br/>platformFee"]
+    Debt --> FIFO["FIFO debt settlement<br/>trả nợ cũ nhất trước"]
+
+    Settlement --> Events["Domain events<br/><br/>payment.finalized<br/>driver.earning.settled"]
+
+    classDef event fill:#f5f3ff,stroke:#8b5cf6,color:#4c1d95
+    classDef finance fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef decision fill:#fce7f3,stroke:#ec4899,color:#831843
+    classDef online fill:#ecfdf5,stroke:#10b981,color:#064e3b
+    classDef cash fill:#fff7ed,stroke:#fb923c,color:#7c2d12
+
+    class Completed,Events event
+    class Settlement finance
+    class Method decision
+    class Online,Pending,Available online
+    class Cash,Debt,FIFO cash

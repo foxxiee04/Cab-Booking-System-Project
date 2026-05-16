@@ -1,0 +1,198 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#1d4ed8"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; rx: 18; }
+      .panel-title { font: 700 22px Arial, sans-serif; fill: #0f172a; letter-spacing: .2px; }
+      .title { font: 800 34px Arial, sans-serif; fill: #0f172a; }
+      .subtitle { font: 500 17px Arial, sans-serif; fill: #475569; }
+      .card-title { font: 700 18px Arial, sans-serif; fill: #0f172a; }
+      .card-text { font: 500 15px Arial, sans-serif; fill: #334155; }
+      .small { font: 600 13px Arial, sans-serif; fill: #64748b; }
+      .blue { fill: #dbeafe; stroke: #60a5fa; stroke-width: 2; rx: 12; }
+      .yellow { fill: #fef3c7; stroke: #f59e0b; stroke-width: 2; rx: 12; }
+      .green { fill: #dcfce7; stroke: #22c55e; stroke-width: 2; rx: 12; }
+      .purple { fill: #f5f3ff; stroke: #8b5cf6; stroke-width: 2; rx: 12; }
+      .orange { fill: #fff7ed; stroke: #fb923c; stroke-width: 2; rx: 12; }
+      .red { fill: #fee2e2; stroke: #ef4444; stroke-width: 2; rx: 12; }
+      .dark { fill: #1e3a8a; stroke: #93c5fd; stroke-width: 2; rx: 14; }
+      .dark-title { font: 800 18px Arial, sans-serif; fill: #eff6ff; }
+      .dark-text { font: 700 15px Arial, sans-serif; fill: #dbeafe; }
+      .line { fill: none; stroke: #475569; stroke-width: 2.2; marker-end: url(#arrow); }
+      .blue-line { fill: none; stroke: #1d4ed8; stroke-width: 2.1; opacity: .72; marker-end: url(#arrow-blue); }
+      .dash { fill: none; stroke: #64748b; stroke-width: 2; stroke-dasharray: 7 7; marker-end: url(#arrow); }
+      .label { font: 700 13px Arial, sans-serif; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1920" height="1080"/>
+  <text class="title" x="960" y="46" text-anchor="middle">FoxGo Cloud Deployment: CI/CD + AWS EC2 + Docker Swarm</text>
+  <text class="subtitle" x="960" y="75" text-anchor="middle">One slide story: release pipeline, HTTPS entrypoint, Swarm node topology, and private service runtime</text>
+
+  <!-- Panels -->
+  <rect class="panel" x="40" y="110" width="500" height="860"/>
+  <text class="panel-title" x="290" y="145" text-anchor="middle">1. CI/CD Release</text>
+
+  <rect class="panel" x="570" y="110" width="410" height="860"/>
+  <text class="panel-title" x="775" y="145" text-anchor="middle">2. Public Edge &amp; Security</text>
+
+  <rect class="panel" x="1010" y="110" width="870" height="860"/>
+  <text class="panel-title" x="1445" y="145" text-anchor="middle">3. AWS EC2 Docker Swarm Runtime</text>
+
+  <!-- CI/CD cards -->
+  <g transform="translate(85,180)">
+    <rect class="blue" width="410" height="74"/>
+    <text class="card-title" x="205" y="30" text-anchor="middle">Developer</text>
+    <text class="card-text" x="205" y="54" text-anchor="middle">git push main</text>
+  </g>
+  <g transform="translate(85,294)">
+    <rect class="blue" width="410" height="74"/>
+    <text class="card-title" x="205" y="31" text-anchor="middle">GitHub Repository</text>
+    <text class="card-text" x="205" y="55" text-anchor="middle">source code + workflow</text>
+  </g>
+  <g transform="translate(85,408)">
+    <rect class="yellow" width="410" height="150"/>
+    <text class="card-title" x="205" y="34" text-anchor="middle">GitHub Actions</text>
+    <text class="card-text" x="205" y="65" text-anchor="middle">auto test: unit · contract · integration · AI</text>
+    <text class="card-text" x="205" y="91" text-anchor="middle">build 12 Docker images</text>
+    <text class="card-text" x="205" y="117" text-anchor="middle">push registry + trigger deploy</text>
+  </g>
+  <g transform="translate(85,620)">
+    <rect class="yellow" width="190" height="116"/>
+    <text class="card-title" x="95" y="36" text-anchor="middle">Docker Hub</text>
+    <text class="card-text" x="95" y="65" text-anchor="middle">cab-* images</text>
+    <text class="small" x="95" y="91" text-anchor="middle">versioned artifacts</text>
+  </g>
+  <g transform="translate(305,620)">
+    <rect class="yellow" width="190" height="116"/>
+    <text class="card-title" x="95" y="31" text-anchor="middle">SSH Deploy</text>
+    <text class="card-text" x="95" y="59" text-anchor="middle">copy stack/env</text>
+    <text class="card-text" x="95" y="82" text-anchor="middle">docker stack deploy</text>
+    <text class="card-text" x="95" y="105" text-anchor="middle">nginx reload</text>
+  </g>
+
+  <!-- Edge cards -->
+  <g transform="translate(610,180)">
+    <rect class="blue" width="330" height="74"/>
+    <text class="card-title" x="165" y="30" text-anchor="middle">Users</text>
+    <text class="card-text" x="165" y="54" text-anchor="middle">Customer · Driver · Admin</text>
+  </g>
+  <g transform="translate(610,294)">
+    <rect class="blue" width="330" height="142"/>
+    <text class="card-title" x="165" y="32" text-anchor="middle">DNS + Elastic IP</text>
+    <text class="card-text" x="165" y="62" text-anchor="middle">foxgo.io.vn · driver.foxgo.io.vn</text>
+    <text class="card-text" x="165" y="87" text-anchor="middle">admin.foxgo.io.vn · api.foxgo.io.vn</text>
+    <text class="small" x="165" y="114" text-anchor="middle">Elastic IP: 18.136.250.236</text>
+  </g>
+  <g transform="translate(610,482)">
+    <rect class="dark" width="330" height="150"/>
+    <text class="dark-title" x="165" y="34" text-anchor="middle">Nginx Reverse Proxy</text>
+    <text class="dark-text" x="165" y="67" text-anchor="middle">SSL/TLS termination</text>
+    <text class="dark-text" x="165" y="92" text-anchor="middle">Let's Encrypt certs</text>
+    <text class="dark-text" x="165" y="117" text-anchor="middle">Static SPA + API proxy</text>
+  </g>
+  <g transform="translate(610,690)">
+    <rect class="red" width="330" height="140"/>
+    <text class="card-title" x="165" y="32" text-anchor="middle">Security Group</text>
+    <text class="card-text" x="165" y="63" text-anchor="middle">Public: 80 / 443</text>
+    <text class="card-text" x="165" y="88" text-anchor="middle">Deploy: SSH 22</text>
+    <text class="card-text" x="165" y="113" text-anchor="middle">Service ports private</text>
+  </g>
+  <g transform="translate(610,866)">
+    <rect class="orange" width="330" height="76"/>
+    <text class="card-title" x="165" y="31" text-anchor="middle">Static Frontend Builds</text>
+    <text class="card-text" x="165" y="56" text-anchor="middle">Customer SPA · Driver SPA · Admin Dashboard</text>
+  </g>
+
+  <!-- Runtime cards -->
+  <text class="small" x="1222" y="179" text-anchor="middle">Manager quorum</text>
+  <g transform="translate(1050,200)">
+    <rect class="dark" width="345" height="210"/>
+    <text class="dark-title" x="172.5" y="35" text-anchor="middle">foxgo-manager</text>
+    <text class="dark-text" x="172.5" y="62" text-anchor="middle">Primary Manager · on-demand</text>
+    <text class="dark-text" x="172.5" y="96" text-anchor="middle">Elastic IP owner</text>
+    <text class="dark-text" x="172.5" y="122" text-anchor="middle">api-gateway</text>
+    <text class="dark-text" x="172.5" y="148" text-anchor="middle">infra=true</text>
+    <text class="dark-text" x="172.5" y="174" text-anchor="middle">PostgreSQL · MongoDB · Redis · RabbitMQ</text>
+  </g>
+  <g transform="translate(1430,200)">
+    <rect class="blue" width="220" height="92"/>
+    <text class="card-title" x="110" y="31" text-anchor="middle">foxgo-manager-2</text>
+    <text class="card-text" x="110" y="58" text-anchor="middle">Raft reachable</text>
+    <text class="small" x="110" y="78" text-anchor="middle">no app scheduling</text>
+  </g>
+  <g transform="translate(1430,318)">
+    <rect class="blue" width="220" height="92"/>
+    <text class="card-title" x="110" y="31" text-anchor="middle">foxgo-manager-3</text>
+    <text class="card-text" x="110" y="58" text-anchor="middle">Raft reachable</text>
+    <text class="small" x="110" y="78" text-anchor="middle">no app scheduling</text>
+  </g>
+
+  <g transform="translate(1162,485)">
+    <rect class="purple" width="340" height="134"/>
+    <text class="card-title" x="170" y="35" text-anchor="middle">Swarm Overlay Network</text>
+    <text class="card-text" x="170" y="66" text-anchor="middle">frontend + backend internal</text>
+    <text class="card-text" x="170" y="92" text-anchor="middle">service discovery by name</text>
+    <text class="card-text" x="170" y="116" text-anchor="middle">rolling update</text>
+  </g>
+
+  <g transform="translate(1050,705)">
+    <rect class="green" width="245" height="160"/>
+    <text class="card-title" x="122.5" y="34" text-anchor="middle">foxgo-worker-1</text>
+    <text class="card-text" x="122.5" y="61" text-anchor="middle">label app.half=1</text>
+    <text class="card-text" x="122.5" y="99" text-anchor="middle">auth · user · booking</text>
+    <text class="card-text" x="122.5" y="125" text-anchor="middle">driver · pricing</text>
+  </g>
+  <g transform="translate(1322,705)">
+    <rect class="green" width="245" height="160"/>
+    <text class="card-title" x="122.5" y="34" text-anchor="middle">foxgo-worker-2</text>
+    <text class="card-text" x="122.5" y="61" text-anchor="middle">label app.half=2</text>
+    <text class="card-text" x="122.5" y="99" text-anchor="middle">ride · payment · wallet</text>
+    <text class="card-text" x="122.5" y="125" text-anchor="middle">notification · review</text>
+  </g>
+  <g transform="translate(1594,705)">
+    <rect class="green" width="245" height="160"/>
+    <text class="card-title" x="122.5" y="34" text-anchor="middle">foxgo-worker-ai</text>
+    <text class="card-text" x="122.5" y="61" text-anchor="middle">label ml=true</text>
+    <text class="card-text" x="122.5" y="103" text-anchor="middle">ai-service only</text>
+  </g>
+
+  <g transform="translate(1050,905)">
+    <rect class="orange" width="789" height="50"/>
+    <text class="card-title" x="394.5" y="31" text-anchor="middle">12 runtime images = api-gateway + 10 Node.js services + ai-service</text>
+  </g>
+
+  <!-- Arrows: CI/CD -->
+  <path class="line" d="M290 254 L290 294"/>
+  <path class="line" d="M290 368 L290 408"/>
+  <path class="line" d="M205 558 L180 620"/>
+  <path class="line" d="M375 558 L400 620"/>
+
+  <!-- Arrows: Public edge -->
+  <path class="line" d="M775 254 L775 294"/>
+  <path class="line" d="M775 436 L775 482"/>
+  <path class="line" d="M775 632 L775 866"/>
+  <path class="dash" d="M775 690 L775 632"/>
+
+  <!-- Cross-panel arrows -->
+  <path class="blue-line" d="M495 678 C650 1010, 990 1005, 1050 382"/>
+  <path class="blue-line" d="M940 557 C995 520, 1015 355, 1050 332"/>
+  <text class="label" x="965" y="496">api.*</text>
+
+  <!-- Runtime arrows -->
+  <path class="line" d="M1395 250 L1430 246"/>
+  <path class="line" d="M1395 356 L1430 364"/>
+  <path class="line" d="M1222 410 L1300 485"/>
+  <path class="line" d="M1240 619 L1172 705"/>
+  <path class="line" d="M1332 619 L1444 705"/>
+  <path class="line" d="M1428 619 L1716 705"/>
+
+  <!-- Security group dotted to runtime -->
+  <path class="dash" d="M940 760 C1000 760, 1005 490, 1050 400"/>
+</svg>

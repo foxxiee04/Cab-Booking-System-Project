@@ -1,0 +1,24 @@
+flowchart TB
+    Start(["Design Patterns<br/>trong FoxGo"])
+
+    P1["1. API Gateway<br/><br/>Một cổng vào 12 service<br/>Auth · Routing · Realtime"]
+    P2["2. Ride State Machine<br/><br/>Kiểm soát vòng đời chuyến<br/>Không chuyển sai trạng thái"]
+    P3["3. Outbox + Idempotency<br/><br/>Event không mất<br/>Callback không xử lý trùng"]
+    P4["4. Saga + Wallet Rules<br/><br/>Thanh toán sau chuyến<br/>T+24h · FIFO công nợ"]
+
+    Goal(["Mục tiêu<br/>Rõ ranh giới · An toàn dữ liệu · Dễ mở rộng"])
+
+    Start --> P1
+    Start --> P2
+    P1 --> P3
+    P2 --> P4
+    P3 --> Goal
+    P4 --> Goal
+
+    classDef start fill:#1e3a8a,stroke:#93c5fd,color:#eff6ff,font-weight:bold
+    classDef pattern fill:#f8fafc,stroke:#64748b,color:#0f172a
+    classDef goal fill:#14532d,stroke:#86efac,color:#dcfce7,font-weight:bold
+
+    class Start start
+    class P1,P2,P3,P4 pattern
+    class Goal goal

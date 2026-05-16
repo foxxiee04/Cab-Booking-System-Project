@@ -1,0 +1,31 @@
+flowchart LR
+  Docs["FoxGo knowledge<br/>booking, pricing, payment, wallet, cancellation, driver"]:::data
+  Chunk["Chunking<br/>tách đoạn + Q&A"]:::service
+  DocVector["Document embedding vector<br/>Vietnamese bi-encoder"]:::ai
+  VectorIndex[("Vector index<br/>FAISS vectors + BM25 keywords")]:::data
+
+  User["User question<br/>message + history"]:::user
+  Rewrite["Rewrite / smalltalk<br/>làm rõ câu hỏi mơ hồ"]:::service
+  QueryVector["Query embedding vector<br/>biến câu hỏi thành vector"]:::ai
+  Retrieve["Hybrid retrieval<br/>vector cosine + keyword + RRF"]:::ai
+  Rerank["Rerank top context<br/>BGE cross-encoder"]:::ai
+  Prompt["Grounded prompt<br/>context + persona Mia"]:::ai
+  LLM["LLM provider<br/>OpenAI -> Gemini API key"]:::external
+  Answer["Answer<br/>sources, mode, score_max"]:::service
+  Fallback["Fallback<br/>Q&A, template, hỏi lại, hotline/email"]:::ok
+
+  Docs --> Chunk --> DocVector --> VectorIndex
+  User --> Rewrite --> QueryVector --> Retrieve --> Rerank --> Prompt --> LLM --> Answer
+  VectorIndex --> Retrieve
+  Prompt -. "score thấp / thiếu key / LLM lỗi" .-> Fallback --> Answer
+
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

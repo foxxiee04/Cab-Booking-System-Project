@@ -1,0 +1,30 @@
+sequenceDiagram
+  autonumber
+  actor User
+  participant App as React App
+  participant Gateway as API Gateway
+  participant Auth as Auth Guard
+  participant UserSvc as User Service
+  participant AuthSvc as Auth Service
+  participant DB as user_db
+  User->>App: Open profile screen
+  App->>Gateway: GET /api/users/me
+  Gateway->>Auth: Verify JWT and owner scope
+  Auth-->>Gateway: Authorized
+  Gateway->>UserSvc: Load profile by userId
+  UserSvc->>DB: SELECT UserProfile
+  DB-->>UserSvc: Profile data
+  UserSvc-->>App: Current profile
+  User->>App: Edit profile and submit
+  App->>Gateway: PUT /api/users/me
+  Gateway->>Auth: Verify JWT and owner scope
+  Auth-->>Gateway: Authorized
+  alt Sensitive phone change
+    Gateway->>AuthSvc: Verify OTP for changed phone
+    AuthSvc-->>Gateway: OTP valid
+  end
+  Gateway->>UserSvc: Update profile
+  UserSvc->>DB: UPDATE UserProfile
+  DB-->>UserSvc: Updated row
+  UserSvc-->>App: Updated profile
+  App-->>User: Show success message

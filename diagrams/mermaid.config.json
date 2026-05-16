@@ -48,12 +48,5 @@
     "boxMargin": 10,
     "messageMargin": 34,
     "mirrorActors": false
-  },
-  "er": {
-    "useMaxWidth": false,
-    "fontSize": 13
-  },
-  "stateDiagram": {
-    "useMaxWidth": false
   }
 }

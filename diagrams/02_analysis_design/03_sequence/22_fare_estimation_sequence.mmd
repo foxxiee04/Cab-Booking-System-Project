@@ -1,0 +1,27 @@
+sequenceDiagram
+  autonumber
+  actor Customer
+  participant App as Customer App
+  participant Gateway as API Gateway
+  participant Map as Map / OSRM
+  participant Pricing as Pricing Service
+  participant Redis as Redis Cache
+  participant AI as AI Service
+  Customer->>App: Enter pickup, destination, vehicle type
+  App->>Gateway: GET /api/pricing/estimate
+  Gateway->>Map: Normalize address and route
+  Map-->>Gateway: Coordinates, distance, duration
+  Gateway->>Pricing: EstimateFare(route, vehicleType, time)
+  Pricing->>Redis: Read surge and cached quote
+  Redis-->>Pricing: Surge/cache data
+  Pricing->>AI: Predict ETA and surge support
+  alt AI responds within timeout
+    AI-->>Pricing: Prediction result
+  else AI timeout or disabled
+    Pricing->>Pricing: Use rule-based fallback
+  end
+  Pricing->>Pricing: Calculate fare and quote TTL
+  Pricing->>Redis: Cache quote
+  Pricing-->>Gateway: Fare, ETA, distance, surge
+  Gateway-->>App: Quote response
+  App-->>Customer: Display estimated fare

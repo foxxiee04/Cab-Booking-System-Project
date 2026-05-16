@@ -1,0 +1,23 @@
+flowchart LR
+  User["Người dùng<br/>Customer / Driver / Admin"]
+  OTP["1. OTP<br/>Xác thực số điện thoại"]
+  JWT["2. JWT Token<br/>Access Token<br/>Refresh Token"]
+  RBAC["3. RBAC<br/>Kiểm tra vai trò<br/>CUSTOMER / DRIVER / ADMIN"]
+  API["Cho phép truy cập API<br/>đúng chức năng"]
+  Deny["Từ chối<br/>nếu sai quyền"]
+
+  User -->|"Đăng nhập / đăng ký"| OTP
+  OTP -->|"Đúng OTP"| JWT
+  JWT -->|"Gửi token khi gọi API"| RBAC
+  RBAC -->|"Đúng quyền"| API
+  RBAC -->|"Sai quyền"| Deny
+
+  classDef user fill:#f8fafc,stroke:#64748b,color:#0f172a,stroke-width:1.5px;
+  classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.8px;
+  classDef allow fill:#dcfce7,stroke:#16a34a,color:#0f172a,stroke-width:1.5px;
+  classDef deny fill:#fee2e2,stroke:#dc2626,color:#0f172a,stroke-width:1.5px;
+
+  class User user;
+  class OTP,JWT,RBAC security;
+  class API allow;
+  class Deny deny;

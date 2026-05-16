@@ -1,0 +1,112 @@
+%%{init: {"sequence": {"mirrorActors": true}} }%%
+sequenceDiagram
+  autonumber
+  actor C as Customer App
+  actor D as Driver App
+  participant G as API Gateway
+  participant B as Booking Service
+  participant Pay as Payment Service
+  participant PDB as payment_db
+  participant Provider as MoMo / VNPay
+  participant Ride as Ride Service
+  participant W as Wallet Service
+  participant WDB as wallet_db
+  participant N as Notification Service
+  participant MQ as RabbitMQ Event Broker
+
+  rect rgb(245, 247, 255)
+    C->>G: Confirm booking(paymentMethod)
+    G->>B: Store booking payment choice
+    B-->>G: bookingId, estimatedFare, paymentMethod
+
+    alt Online selected
+      G->>Pay: Create payment intent(bookingId, amount, provider)
+      Pay->>PDB: Find Payment by rideId + idempotency key
+      alt Existing intent
+        PDB-->>Pay: Return stored payUrl/status
+      else New intent
+        Pay->>Provider: Create signed checkout order
+        Provider-->>Pay: payUrl / deeplink / qrCode / txnRef
+        Pay->>PDB: INSERT Payment(REQUIRES_ACTION)
+        Pay->>MQ: payment.intent.created
+      end
+      Pay-->>G: paymentUrl/status
+      G-->>C: Open provider checkout
+      C->>Provider: Pay order
+
+      par Provider callback
+        Provider->>Pay: IPN/webhook payment result
+      and App return
+        Provider-->>C: Redirect back to app
+        C->>G: Check payment status
+        G->>Pay: Query payment by rideId
+      end
+
+      Pay->>Pay: Verify signature, amount, orderId
+      alt Success
+        Pay->>PDB: TX Payment(COMPLETED) + OutboxEvent(payment.completed)
+        Pay->>MQ: payment.completed / payment.success
+        MQ->>B: Open dispatch gate
+        B->>MQ: booking.confirmed
+        MQ->>Ride: Create ride PENDING
+        Pay-->>G: payment.succeeded
+        G-->>C: Payment success, finding driver
+      else Failed or invalid
+        Pay->>PDB: TX Payment(FAILED) + OutboxEvent(payment.failed)
+        Pay->>MQ: payment.failed
+        Pay-->>G: payment.failed
+        G-->>C: Retry payment or choose cash
+      end
+    else Offline / CASH selected
+      G->>Pay: Register deferred cash payment
+      Pay->>PDB: UPSERT Payment(PENDING, method=CASH)
+      Pay-->>G: deferred payment accepted
+      G->>B: Confirm booking for dispatch
+      B->>MQ: booking.confirmed
+      MQ->>Ride: Create ride PENDING
+      G-->>C: Finding driver, pay cash after trip
+    end
+  end
+
+  Note over Ride,D: Driver matching and trip lifecycle happen before final payment settlement
+
+  D->>G: Complete ride
+  G->>Ride: Update status COMPLETED
+  Ride->>MQ: ride.completed {fare, driverId, paymentMethod}
+  MQ->>Pay: Finalize payment for completed ride
+  Pay->>PDB: Check Fare + Payment + DriverEarnings by rideId
+  Pay->>Pay: Calculate grossFare, platformFee, netEarnings, cashDebt
+  Note right of Pay: grossFare = final fare<br/>platformFee = grossFare x commissionRate<br/>netEarnings = grossFare - platformFee - penalty<br/>cashDebt = platformFee + penalty when CASH
+  Pay->>PDB: TX upsert Fare + DriverEarnings
+
+  alt Ride was paid online
+    Pay->>PDB: Ensure Payment is COMPLETED
+    Pay->>MQ: driver.earning.settled(netEarnings, voucherDiscount)
+    MQ->>W: Consume driver.earning.settled
+    W->>WDB: creditEarning(driverId, netEarnings)
+    W->>WDB: pendingBalance += netEarnings
+    W->>WDB: PendingEarning(settleAt = now + 24h)
+    W->>WDB: MerchantLedger(PAYMENT)
+    Note right of W: Platform collected online payment<br/>Driver earnings are held for T+24h
+  else Ride was paid CASH
+    C-->>D: Pay final fare in cash
+    Pay->>PDB: Mark Payment COMPLETED (COD)
+    Pay->>MQ: driver.earning.settled(cashDebt)
+    MQ->>W: Consume driver.earning.settled
+    W->>WDB: debitCommission(driverId, cashDebt)
+    W->>WDB: DebtRecord + WalletTransaction(COMMISSION)
+    W->>WDB: MerchantLedger(COMMISSION)
+    Note right of W: Driver keeps full cash fare<br/>Wallet records platform-fee debt
+  end
+
+  Pay->>MQ: payment.finalized
+  MQ->>N: Notify receipt and payment summary
+  N-->>C: Receipt + rating request
+  N-->>D: Trip earning/payment summary
+
+  loop After T+24h or when driver opens wallet
+    D->>W: GET /wallet/balance
+    W->>WDB: Move eligible pendingBalance to availableBalance
+    W->>WDB: Settle DebtRecord FIFO if needed
+    W-->>D: Updated availableBalance
+  end

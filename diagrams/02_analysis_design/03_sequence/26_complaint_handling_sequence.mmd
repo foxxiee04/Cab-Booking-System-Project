@@ -1,0 +1,31 @@
+sequenceDiagram
+  autonumber
+  actor User as Customer / Driver
+  participant App as User App
+  participant Gateway as API Gateway
+  participant Support as Support/Admin API
+  participant Ride as Ride Service
+  participant Payment as Payment Service
+  participant Review as Review Service
+  participant Notification as Notification Service
+  actor Admin
+  User->>App: Submit complaint with ride/payment evidence
+  App->>Gateway: POST /api/support/complaints
+  Gateway->>Support: Create complaint
+  Support->>Ride: Verify requester belongs to ride
+  Ride-->>Support: Ride summary
+  Support->>Payment: Load payment context
+  Payment-->>Support: Payment summary
+  Support->>Review: Load review/rating context
+  Review-->>Support: Review summary
+  Support-->>App: Complaint created
+  Admin->>Support: Review complaint and choose action
+  alt Refund or payment adjustment
+    Support->>Payment: Create refund/adjustment request
+    Payment-->>Support: Payment action result
+  else Warning or account action
+    Support->>Ride: Attach resolution note
+    Ride-->>Support: Case evidence updated
+  end
+  Support->>Notification: Send resolution notification
+  Notification-->>User: Complaint result

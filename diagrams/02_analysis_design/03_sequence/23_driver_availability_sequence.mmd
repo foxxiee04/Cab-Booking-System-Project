@@ -1,0 +1,35 @@
+sequenceDiagram
+  autonumber
+  actor Driver
+  participant App as Driver App
+  participant Gateway as API Gateway
+  participant Auth as Auth Guard
+  participant DriverSvc as Driver Service
+  participant Redis as Redis GEO
+  participant Socket as Socket.IO
+  Driver->>App: Toggle ONLINE
+  App->>Gateway: POST /api/drivers/me/availability
+  Gateway->>Auth: Verify DRIVER JWT
+  Auth-->>Gateway: Authorized
+  Gateway->>DriverSvc: Set availability ONLINE with GPS
+  DriverSvc->>DriverSvc: Check approval, vehicle, wallet policy
+  alt Eligible and GPS valid
+    DriverSvc->>Redis: GEOADD drivers:geo:online
+    DriverSvc-->>Gateway: ONLINE
+    Gateway->>Socket: Join driver online room
+    Gateway-->>App: Online status accepted
+  else Not eligible
+    DriverSvc-->>Gateway: Reject with reason
+    Gateway-->>App: Show reason
+  end
+  loop Periodic location ping
+    App->>Gateway: PATCH /api/drivers/me/location
+    Gateway->>DriverSvc: Update location
+    DriverSvc->>Redis: GEOADD latest location
+  end
+  Driver->>App: Toggle OFFLINE
+  App->>Gateway: POST /api/drivers/me/availability OFFLINE
+  Gateway->>DriverSvc: Set availability OFFLINE
+  DriverSvc->>Redis: ZREM drivers:geo:online
+  Gateway->>Socket: Leave online room
+  Gateway-->>App: Offline status accepted

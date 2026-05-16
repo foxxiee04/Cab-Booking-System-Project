@@ -1,0 +1,53 @@
+flowchart TB
+  Title["Bảo mật API trong FoxGo"]
+
+  subgraph Login["Luồng 1: Đăng nhập / đăng ký"]
+    direction LR
+    App1["Customer / Driver / Admin"]
+    GW1["API Gateway"]
+    Auth["Auth Service<br/>Gửi & kiểm tra OTP"]
+    Token["Cấp token<br/>Access Token + Refresh Token"]
+
+    App1 -->|"Số điện thoại"| GW1
+    GW1 --> Auth
+    Auth -->|"OTP đúng"| Token
+    Token -->|"Trả token về app"| App1
+  end
+
+  subgraph Request["Luồng 2: Gọi API sau khi đã đăng nhập"]
+    direction LR
+    App2["App gửi request<br/>kèm JWT"]
+    GW2["API Gateway<br/>Rate limit<br/>Verify JWT<br/>Routing"]
+    RBAC["RBAC<br/>Kiểm tra role<br/>CUSTOMER / DRIVER / ADMIN"]
+    Allow["Cho vào API<br/>đúng chức năng"]
+    Deny["Từ chối<br/>sai quyền"]
+
+    App2 --> GW2
+    GW2 --> RBAC
+    RBAC -->|"Đúng quyền"| Allow
+    RBAC -->|"Sai quyền"| Deny
+  end
+
+  Title --> Login
+  Login --> Request
+
+  Note["Quan hệ chính:<br/>API Gateway là cửa vào.<br/>OTP dùng để lấy token.<br/>JWT chứng minh đã đăng nhập.<br/>RBAC kiểm tra token đó có được phép làm chức năng này không."]
+  Request --> Note
+
+  classDef title fill:#ffffff,stroke:#ffffff,color:#0f172a,font-size:22px,font-weight:bold;
+  classDef gateway fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.8px;
+  classDef auth fill:#e0f2fe,stroke:#0284c7,color:#0f172a,stroke-width:1.5px;
+  classDef token fill:#fef3c7,stroke:#d97706,color:#0f172a,stroke-width:1.5px;
+  classDef ok fill:#dcfce7,stroke:#16a34a,color:#0f172a,stroke-width:1.5px;
+  classDef no fill:#fee2e2,stroke:#dc2626,color:#0f172a,stroke-width:1.5px;
+  classDef user fill:#f8fafc,stroke:#64748b,color:#0f172a,stroke-width:1.5px;
+  classDef note fill:#fff7ed,stroke:#f97316,color:#0f172a,stroke-width:1.5px;
+
+  class Title title;
+  class GW1,GW2,RBAC gateway;
+  class Auth auth;
+  class Token token;
+  class Allow ok;
+  class Deny no;
+  class App1,App2 user;
+  class Note note;
