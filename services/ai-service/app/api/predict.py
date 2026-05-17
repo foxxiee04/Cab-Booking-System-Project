@@ -220,23 +220,50 @@ async def internal_ai_refresh(
     return out
 
 
+_ALLOWED_ROLES = {"customer", "driver", "admin"}
+
+
+def _normalize_role(*candidates: str | None) -> str | None:
+    """Pick the first non-empty candidate, lowercased, restricted to allowed roles."""
+    for raw in candidates:
+        if not raw:
+            continue
+        norm = str(raw).strip().lower()
+        if norm in _ALLOWED_ROLES:
+            return norm
+        # Common aliases
+        if norm in {"rider", "passenger", "guest"}:
+            return "customer"
+        if norm in {"taixe", "driver-app", "drv"}:
+            return "driver"
+    return None
+
+
 @router.post("/chat", response_model=ChatResponse, tags=["rag"])
-async def chat(request: ChatRequest):
+async def chat(
+    request: ChatRequest,
+    x_user_role: str | None = Header(default=None, alias="x-user-role"),
+    x_user_id: str | None = Header(default=None, alias="x-user-id"),
+):
     """
-    RAG-powered customer support chatbot.
+    RAG-powered FoxGo support chatbot (role-aware).
 
-    Uses sentence-transformer embeddings + FAISS retrieval over a Vietnamese
-    knowledge base, with LLM generation prioritized as OpenAI → Gemini.
+    Resolution order for role: explicit `request.role` → `x-user-role` header
+    (forwarded by api-gateway after JWT verification) → auto-detect from text.
 
-    - Default RAG_LLM_PROVIDER=auto tries OPENAI_API_KEY first, then GEMINI_API_KEY.
-    - If both providers fail or no keys are configured, the service falls back to rulebase/RAG templates.
+    - Default RAG_LLM_PROVIDER=auto uses RAG_LLM_PROVIDER_ORDER (OpenAI → Gemini by default).
+    - OpenAI uses a tight timeout (RAG_LLM_TIMEOUT_OPENAI_S, default 3s); if it
+      fails or times out, Gemini is tried; if that also fails, rulebase/RAG
+      templates take over.
     - Set RAG_LLM_PROVIDER=none for pure retrieval-based answers.
     """
     try:
+        role = _normalize_role(request.role, x_user_role)
         result = await rag_service.chat(
             message=request.message,
             history=[m.model_dump() for m in request.history] if request.history else None,
             top_k=request.top_k,
+            role=role,
         )
         return ChatResponse(**result)
     except Exception as exc:

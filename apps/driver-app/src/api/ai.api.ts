@@ -9,6 +9,8 @@ export interface ChatRequest {
   message: string;
   history?: ChatMessage[];
   top_k?: number;
+  /** App role — driver-app should always send 'driver' so Mia bám đúng góc nhìn tài xế. */
+  role?: 'driver' | 'customer' | 'admin';
 }
 
 export interface ChatResponse {
@@ -25,6 +27,7 @@ export interface ChatResponse {
   rewrite_query?: string | null;
   rewrite_provider?: string | null;
   rewrite_model?: string | null;
+  role?: 'driver' | 'customer' | 'admin' | null;
 }
 
 export const aiApi = {

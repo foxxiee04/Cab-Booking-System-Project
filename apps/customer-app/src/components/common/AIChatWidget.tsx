@@ -232,7 +232,7 @@ const AIChatWidget: React.FC = () => {
 
     try {
       const history = foxgoToChatHistory(conversation);
-      const { data } = await aiApi.chat({ message: text, history, top_k: FOXGO_AI_CHAT_TOP_K });
+      const { data } = await aiApi.chat({ message: text, history, top_k: FOXGO_AI_CHAT_TOP_K, role: 'customer' });
       const answer = (data.answer || '').trim();
       if (answer) {
         setAiMessages((prev) => [...prev, { role: 'assistant', content: data.answer, sources: data.sources }]);
@@ -275,7 +275,7 @@ const AIChatWidget: React.FC = () => {
 
     const history = foxgoToChatHistory(conversation);
     aiApi
-      .chat({ message: text, history, top_k: FOXGO_AI_CHAT_TOP_K })
+      .chat({ message: text, history, top_k: FOXGO_AI_CHAT_TOP_K, role: 'customer' })
       .then(({ data }) => {
         const answer = (data.answer || '').trim();
         if (answer) {

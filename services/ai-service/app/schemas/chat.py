@@ -15,6 +15,13 @@ class ChatRequest(BaseModel):
         description="Previous conversation turns (up to 10 kept)"
     )
     top_k: int = Field(default=8, ge=1, le=16, description="Number of chunks to retrieve")
+    # Role of the user sending the message — used to bias retrieval and system prompt.
+    # Accepted: "customer" | "driver" | "admin" | None. Defaults to None (auto-detect from text).
+    # If the request comes through api-gateway, x-user-role header is also honored.
+    role: Optional[str] = Field(
+        default=None,
+        description="App role: 'customer' (rider app) | 'driver' (driver app) | 'admin'. Optional.",
+    )
 
 
 class ChatSource(BaseModel):
@@ -29,6 +36,10 @@ class ChatResponse(BaseModel):
     mode: str = Field(
         default="retrieval",
         description="Answer mode: llm_openai|llm_gemini|rulebase_fallback|retrieval|error",
+    )
+    role: Optional[str] = Field(
+        default=None,
+        description="Resolved role used to bias the answer (customer|driver|admin|None).",
     )
     latency_ms: int = Field(default=0, description="Total processing time in milliseconds")
     llm_provider: Optional[str] = Field(default=None, description="Actual provider used for this answer, or template")

@@ -9,6 +9,8 @@ export interface ChatRequest {
   message: string;
   history?: ChatMessage[];
   top_k?: number;
+  /** App role — customer-app should always send 'customer' để Mia trả lời từ góc nhìn khách. */
+  role?: 'customer' | 'driver' | 'admin';
 }
 
 export interface ChatResponse {
@@ -25,6 +27,7 @@ export interface ChatResponse {
   rewrite_query?: string | null;
   rewrite_provider?: string | null;
   rewrite_model?: string | null;
+  role?: 'customer' | 'driver' | 'admin' | null;
 }
 
 export const aiApi = {

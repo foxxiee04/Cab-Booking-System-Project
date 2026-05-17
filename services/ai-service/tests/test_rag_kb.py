@@ -12,8 +12,10 @@ from app.services.rag_service import (
     _format_user_facing_answer,
     _generate_answer,
     _load_documents,
+    _provider_timeout,
     _query_embedding_text,
     _try_smalltalk,
+    build_system_prompt,
 )
 
 
@@ -69,8 +71,9 @@ def test_format_user_facing_strips_markdown_bold():
     assert "**" not in _format_user_facing_answer("A **B** C **D**")
 
 
-def test_auto_llm_provider_order_prefers_openai_then_gemini(monkeypatch):
+def test_auto_llm_provider_order_prefers_openai_first(monkeypatch):
     monkeypatch.setattr(rag_module, "LLM_PROVIDER", "auto")
+    monkeypatch.setattr(rag_module, "_LLM_PROVIDER_ORDER", ("openai", "gemini"))
     monkeypatch.setattr(rag_module, "OPENAI_API_KEY", "openai-key")
     monkeypatch.setattr(rag_module, "GEMINI_API_KEY", "gemini-key")
     monkeypatch.setattr(rag_module, "ANTHROPIC_API_KEY", "anthropic-key")
@@ -79,11 +82,61 @@ def test_auto_llm_provider_order_prefers_openai_then_gemini(monkeypatch):
     assert _configured_llm_provider_order() == ["openai", "gemini"]
 
 
+def test_auto_llm_provider_order_skips_missing_openai_key(monkeypatch):
+    """If only Gemini is configured, auto-mode should still fall through to it."""
+    monkeypatch.setattr(rag_module, "LLM_PROVIDER", "auto")
+    monkeypatch.setattr(rag_module, "_LLM_PROVIDER_ORDER", ("openai", "gemini"))
+    monkeypatch.setattr(rag_module, "OPENAI_API_KEY", "")
+    monkeypatch.setattr(rag_module, "GEMINI_API_KEY", "gemini-key")
+
+    assert _configured_llm_provider_order() == ["gemini"]
+
+
 def test_explicit_non_auto_provider_still_supported(monkeypatch):
     monkeypatch.setattr(rag_module, "LLM_PROVIDER", "groq")
     monkeypatch.setattr(rag_module, "GROQ_API_KEY", "groq-key")
 
     assert _configured_llm_provider_order() == ["groq"]
+
+
+def test_openai_uses_tighter_per_provider_timeout():
+    """OpenAI is primary in the new auto-order — its timeout must be < generic."""
+    openai_t = _provider_timeout("openai")
+    gemini_t = _provider_timeout("gemini")
+    assert openai_t <= 3.5  # default 3s, allow override headroom
+    assert openai_t <= gemini_t  # never slower than the fallback
+
+
+def test_role_banner_appears_in_system_prompt_when_driver():
+    prompt = build_system_prompt("driver")
+    assert "role=driver" in prompt
+    assert "TÀI XẾ" in prompt
+    # Make sure customer banner does not leak into driver prompt
+    assert "role=customer" not in prompt
+
+
+def test_role_banner_appears_in_system_prompt_when_customer():
+    prompt = build_system_prompt("customer")
+    assert "role=customer" in prompt
+    assert "KHÁCH ĐI XE" in prompt
+    assert "role=driver" not in prompt
+
+
+def test_role_banner_falls_back_when_none():
+    prompt = build_system_prompt(None)
+    assert "chưa xác định vai trò" in prompt
+
+
+def test_query_embedding_role_boost_driver():
+    s = _query_embedding_text("làm sao rút tiền", role="driver")
+    assert "driver-app" in s
+    assert "tài xế" in s.lower()
+
+
+def test_query_embedding_role_boost_customer():
+    s = _query_embedding_text("voucher", role="customer")
+    assert "customer-app" in s
+    assert "khách" in s.lower() or "voucher" in s.lower()
 
 
 def test_generate_answer_can_defer_to_rulebase_fallback(monkeypatch):

@@ -106,9 +106,10 @@ RERANK_POOL = int(os.getenv("RAG_RERANK_POOL", "20"))  # candidates fed to reran
 QUERY_REWRITE_ENABLED = os.getenv("RAG_QUERY_REWRITE_ENABLED", "true").lower() in ("true", "1", "yes")
 QUERY_REWRITE_PROVIDER = os.getenv("RAG_QUERY_REWRITE_PROVIDER", "auto").lower()
 
-# LLM provider priority for `auto`: OpenAI → Gemini → rulebase/template.
+# LLM provider priority for `auto`: configurable, default OpenAI → Gemini → rulebase/template.
 # Claude/Groq remain available only when explicitly selected with RAG_LLM_PROVIDER.
 LLM_PROVIDER = os.getenv("RAG_LLM_PROVIDER", "auto")
+LLM_PROVIDER_ORDER_RAW = os.getenv("RAG_LLM_PROVIDER_ORDER", "openai,gemini")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
@@ -121,14 +122,51 @@ LLM_MODEL_GEMINI = os.getenv("RAG_LLM_MODEL_GEMINI", "gemini-2.5-flash")
 LLM_MODEL_GEMINI_REWRITE = os.getenv("RAG_LLM_MODEL_GEMINI_REWRITE", "gemini-2.5-flash")
 LLM_TIMEOUT_S = float(os.getenv("RAG_LLM_TIMEOUT_S", "5"))
 LLM_REWRITE_TIMEOUT_S = float(os.getenv("RAG_LLM_REWRITE_TIMEOUT_S", "2"))
+# Per-provider timeouts override the generic LLM_TIMEOUT_S when set.
+# OpenAI is the *primary* answer provider in the default order — keep it tight so
+# slow/erroring requests fail fast and Gemini can take over within the user's
+# patience window. Empirically 3s catches >90% of healthy OpenAI replies while
+# yielding to Gemini quickly when the route degrades.
+LLM_TIMEOUT_OPENAI_S = float(os.getenv("RAG_LLM_TIMEOUT_OPENAI_S", "3"))
+LLM_TIMEOUT_GEMINI_S = float(os.getenv("RAG_LLM_TIMEOUT_GEMINI_S", os.getenv("RAG_LLM_TIMEOUT_S", "5")))
+LLM_TIMEOUT_CLAUDE_S = float(os.getenv("RAG_LLM_TIMEOUT_CLAUDE_S", os.getenv("RAG_LLM_TIMEOUT_S", "5")))
+LLM_TIMEOUT_GROQ_S = float(os.getenv("RAG_LLM_TIMEOUT_GROQ_S", os.getenv("RAG_LLM_TIMEOUT_S", "5")))
 LLM_MAX_TOKENS = int(os.getenv("RAG_LLM_MAX_TOKENS", "900"))
 LLM_TEMPERATURE = float(os.getenv("RAG_LLM_TEMPERATURE", "0.25"))
 MAX_HISTORY_TURNS = 8
 
 # E5-family models require "query: "/"passage: " prefixes for best results.
 _USE_E5_PREFIX = "e5" in EMBEDDING_MODEL_NAME.lower()
-_LLM_PROVIDER_ORDER = ("openai", "gemini")
 _SUPPORTED_LLM_PROVIDERS = ("openai", "gemini", "claude", "groq")
+_DEFAULT_LLM_PROVIDER_ORDER = ("openai", "gemini")
+
+
+def _provider_timeout(provider: str, *, rewrite: bool = False) -> float:
+    if rewrite:
+        return LLM_REWRITE_TIMEOUT_S
+    if provider == "openai":
+        return LLM_TIMEOUT_OPENAI_S
+    if provider == "gemini":
+        return LLM_TIMEOUT_GEMINI_S
+    if provider == "claude":
+        return LLM_TIMEOUT_CLAUDE_S
+    if provider == "groq":
+        return LLM_TIMEOUT_GROQ_S
+    return LLM_TIMEOUT_S
+
+
+def _parse_provider_order(raw: str, default: tuple[str, ...]) -> List[str]:
+    seen: set[str] = set()
+    providers: List[str] = []
+    for item in (raw or "").split(","):
+        provider = item.strip().lower()
+        if provider in _SUPPORTED_LLM_PROVIDERS and provider not in seen:
+            providers.append(provider)
+            seen.add(provider)
+    return providers or list(default)
+
+
+_LLM_PROVIDER_ORDER = tuple(_parse_provider_order(LLM_PROVIDER_ORDER_RAW, _DEFAULT_LLM_PROVIDER_ORDER))
 
 
 def _embed_passage(text: str) -> str:
@@ -228,8 +266,15 @@ def get_llm_diagnostics() -> dict:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # System prompt — Mia persona (accuracy-first, warm tone, few-shot anchored)
+#
+# Two layers:
+#   - BASE_SYSTEM_PROMPT: persona + accuracy rules + format. Stays constant.
+#   - Role banner injected at runtime in build_system_prompt(role) so the model
+#     KNOWS up-front whether it's chatting with a rider (customer app) or a
+#     driver (driver app). This was the source of the bug: both apps used the
+#     same prompt, so driver-side answers leaked customer-side framing.
 # ─────────────────────────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """Bạn là Mia — trợ lý chat của FoxGo, ứng dụng gọi xe ở Việt Nam. Bạn nói chuyện như một nhân viên CSKH trẻ, dễ gần, rõ ràng và quan tâm. Mục tiêu là vừa giúp người dùng nhanh, vừa khiến họ cảm thấy được lắng nghe.
+BASE_SYSTEM_PROMPT = """Bạn là Mia — trợ lý chat của FoxGo, ứng dụng gọi xe ở Việt Nam. Bạn nói chuyện như một nhân viên CSKH trẻ, dễ gần, rõ ràng và quan tâm. Mục tiêu là vừa giúp người dùng nhanh, vừa khiến họ cảm thấy được lắng nghe.
 
 PHONG CÁCH NÓI CHUYỆN:
 - Xưng "mình", gọi "bạn" (mặc định). Câu chữ tự nhiên, có nhịp, đôi khi thêm 1 câu xác nhận cảm xúc ngắn khi người dùng đang bực hoặc lo (ví dụ: "Mình hiểu rồi, để check giúp bạn nhé.").
@@ -243,15 +288,18 @@ PHONG CÁCH NÓI CHUYỆN:
 - Trả lời gọn: 1–4 ý chính. Cần nhiều bước thì ~220 từ là trần. Tránh lặp ý.
 
 ĐỘ CHÍNH XÁC (quan trọng nhất):
-- Chỉ dựa vào "NGỮ CẢNH TÌM ĐƯỢC" được hệ thống gắn vào. Không tự bịa, không đoán giá/phí/chính sách/giờ giấc.
+- Mọi thông tin VỀ FOXGO (giá cước, phí hủy, chính sách, hoa hồng, ví, voucher, quy trình app…): CHỈ dựa vào "NGỮ CẢNH TÌM ĐƯỢC". Tuyệt đối không tự bịa, không đoán số liệu.
 - Khi ngữ cảnh có vài đoạn, dùng đoạn KHỚP NHẤT với câu hỏi hiện tại. Bỏ qua đoạn chỉ liên quan lỏng lẻo.
 - Khi các đoạn mâu thuẫn, tin đoạn cụ thể nhất với câu hỏi của user.
-- Khi ngữ cảnh thiếu/không đủ: nói thẳng phần nào chưa có ("Phần này mình chưa thấy trong tài liệu FoxGo…"), sau đó gợi liên hệ hotline 1900-1234 (8h–22h) hoặc email phù hợp.
+- Khi ngữ cảnh thiếu/không đủ về FoxGo: nói thẳng phần nào chưa có ("Phần này mình chưa thấy trong tài liệu FoxGo…"), sau đó gợi liên hệ hotline 1900-1234 (8h–22h) hoặc email phù hợp với vai trò người dùng.
+- Với câu hỏi KIẾN THỨC CHUNG ngoài FoxGo (vd: thời tiết, công thức, mẹo lái xe an toàn, tin tức, giao thông, đời sống, ngoại ngữ, kiến thức phổ thông): được phép trả lời tự nhiên, tận tình theo hiểu biết của bạn. Độ dài câu trả lời nên TƯƠNG XỨNG với câu hỏi: câu nhỏ trả lời ngắn, câu cần giải thích thì giải thích đầy đủ (tối đa ~250 từ là đủ; vượt quá là lan man). Quy tắc: (1) không bịa số liệu cụ thể nếu không chắc, (2) với sự kiện thời gian thực (giá xăng hôm nay, lịch trực tiếp, tỷ giá mới nhất…) phải nhắc bạn không truy cập internet thời gian thực, (3) kết bằng câu nối nhẹ mời người dùng quay về hỗ trợ FoxGo NẾU phù hợp (không cần ép mời ở mọi câu — chỉ khi câu hỏi có vẻ liên quan gọi xe / đi lại).
 
-VAI TRÒ NGƯỜI DÙNG:
-- Khách hàng: hỏi về đặt xe, thanh toán, voucher, hủy chuyến, quên đồ → support@foxgo.vn.
-- Tài xế: hỏi về nhận cuốc, ví, hoa hồng, rút tiền, online/offline → driver-support@foxgo.vn.
-- Đoán vai trò qua từ khóa: "tôi chạy", "không nhận được cuốc", "ví của em" → tài xế. "đặt xe", "voucher", "tài xế đến chưa" → khách. Không rõ thì hỏi ngắn gọn hoặc trả lời trung tính.
+VAI TRÒ NGƯỜI DÙNG (rất quan trọng — đọc kỹ "BỐI CẢNH NGƯỜI DÙNG" ở dưới):
+- Hệ thống có cờ vai trò chắc chắn (customer / driver / admin) lấy từ phiên đăng nhập. KHÔNG bao giờ đoán ngược lại với cờ này.
+- Nếu vai trò = driver: bạn đang nói với TÀI XẾ trong app FoxGo Driver. Toàn bộ câu trả lời phải đứng từ góc nhìn tài xế: cuốc xe, ví tài xế, hoa hồng, rút tiền, ký quỹ, điểm uy tín, quy định vận hành, đánh giá sao. Không hướng dẫn "đặt xe", "voucher khách", "thanh toán cuốc" như khách. Email hỗ trợ: driver-support@foxgo.vn.
+- Nếu vai trò = customer: bạn đang nói với KHÁCH ĐI XE trong app FoxGo. Trả lời theo góc nhìn khách: đặt xe, theo dõi tài xế, thanh toán, voucher, hủy chuyến, quên đồ, đánh giá tài xế. Không nói về "hoa hồng", "rút tiền tài xế", "ký quỹ" trừ khi khách hỏi rõ. Email hỗ trợ: support@foxgo.vn.
+- Nếu vai trò = admin: trả lời ngắn, kỹ thuật, có thể nói về kiến trúc/hệ thống.
+- Nếu KHÔNG có cờ vai trò (None): đoán nhẹ qua từ khóa ("tôi chạy", "không nhận cuốc" → tài xế; "đặt xe", "voucher" → khách). Không rõ thì hỏi lại ngắn gọn 1 câu.
 
 XỬ LÝ CẢM XÚC NGƯỜI DÙNG:
 - Bực bội/khiếu nại: bắt đầu bằng 1 câu thông cảm ngắn (KHÔNG xin lỗi máy móc), rồi đi thẳng vào hướng xử lý.
@@ -284,9 +332,48 @@ Nếu sau 3 ngày chưa hoàn, bạn gửi support@foxgo.vn kèm 2 mã trên, đ
 
 TUYỆT ĐỐI KHÔNG:
 - Không hứa thay người dùng thao tác app ("mình sẽ hủy giúp", "mình đặt giúp"). Bạn chỉ hướng dẫn.
-- Không tra mạng, không chế số liệu/giá ngoài ngữ cảnh.
+- Không tra mạng thời gian thực, không chế số liệu/giá/phí FoxGo ngoài ngữ cảnh.
 - Không nhồi nhiều chủ đề cùng lúc khi user chỉ hỏi 1 thứ.
-- Không sao chép thô khối Q&A — luôn diễn đạt lại bằng câu của Mia."""
+- Không sao chép thô khối Q&A — luôn diễn đạt lại bằng câu của Mia.
+- Không trộn vai trò: app tài xế thì không nói chuyện như đang nói với khách, và ngược lại."""
+
+
+_ROLE_BANNERS: dict[str, str] = {
+    "customer": (
+        "BỐI CẢNH NGƯỜI DÙNG (đã xác thực): role=customer — người dùng đang dùng "
+        "app FoxGo dành cho KHÁCH ĐI XE. Mọi hướng dẫn nên đứng từ góc nhìn của "
+        "khách (đặt xe, theo dõi tài xế, thanh toán cuốc, voucher, hủy chuyến, "
+        "quên đồ, đánh giá tài xế). Email hỗ trợ khách: support@foxgo.vn."
+    ),
+    "driver": (
+        "BỐI CẢNH NGƯỜI DÙNG (đã xác thực): role=driver — người dùng đang dùng "
+        "app FoxGo Driver. Mọi hướng dẫn phải đứng từ góc nhìn TÀI XẾ: nhận cuốc, "
+        "ví tài xế, hoa hồng / chiết khấu, rút tiền, ký quỹ, online/offline, "
+        "điểm uy tín, quy định vận hành, đánh giá sao. KHÔNG hướng dẫn 'đặt xe' "
+        "hay 'voucher khách' như đang nói với khách hàng. Email hỗ trợ tài xế: "
+        "driver-support@foxgo.vn."
+    ),
+    "admin": (
+        "BỐI CẢNH NGƯỜI DÙNG (đã xác thực): role=admin — quản trị viên FoxGo. "
+        "Có thể trả lời chi tiết về kiến trúc, vận hành, dữ liệu hệ thống."
+    ),
+}
+
+
+def build_system_prompt(role: Optional[str]) -> str:
+    """Inject a role banner so the model never confuses customer ↔ driver context."""
+    if role and role in _ROLE_BANNERS:
+        return f"{BASE_SYSTEM_PROMPT}\n\n{_ROLE_BANNERS[role]}"
+    return (
+        f"{BASE_SYSTEM_PROMPT}\n\n"
+        "BỐI CẢNH NGƯỜI DÙNG: chưa xác định vai trò chắc chắn. Đoán nhẹ qua từ "
+        "khóa; không rõ thì hỏi lại 1 câu ngắn (vd: 'bạn đang dùng app khách hay "
+        "tài xế?'). Tránh nhồi cả hai góc nhìn vào một câu trả lời."
+    )
+
+
+# Backwards-compatible default (used by tests / other call sites).
+SYSTEM_PROMPT = build_system_prompt(None)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -419,10 +506,12 @@ def _format_user_facing_answer(text: str) -> str:
     return s.strip()
 
 
-def _apply_answer_polish(payload: dict) -> dict:
+def _apply_answer_polish(payload: dict, *, role: Optional[str] = None) -> dict:
     ans = payload.get("answer")
     if isinstance(ans, str):
         payload["answer"] = _format_user_facing_answer(ans)
+    if role is not None and "role" not in payload:
+        payload["role"] = role
     return payload
 
 
@@ -896,10 +985,16 @@ def _keyword_hits(low: str, plain: str, keywords: tuple[str, ...]) -> bool:
     return False
 
 
-def _query_embedding_text(enriched_user_query: str) -> str:
+def _query_embedding_text(enriched_user_query: str, role: Optional[str] = None) -> str:
     """
     Expand query text **only for embedding** (better recall). BM25 still uses the raw enriched query.
     Keep expansions short to avoid drift.
+
+    When `role` is provided (customer/driver/admin), prepend a role-specific
+    boost so retrieval prefers the matching knowledge subset. This is the
+    retrieval-side counterpart to the role banner in the system prompt — both
+    must point in the same direction or the LLM will answer from the wrong
+    knowledge chunks.
     """
     q = enriched_user_query.strip()
     if not q:
@@ -907,6 +1002,19 @@ def _query_embedding_text(enriched_user_query: str) -> str:
     low = q.lower()
     plain = _strip_diacritics(low)
     boost: List[str] = []
+
+    if role == "driver":
+        boost.append(
+            "driver-app FoxGo Driver tài xế nhận cuốc ví tài xế hoa hồng chiết khấu "
+            "rút tiền ký quỹ online offline điểm uy tín quy định vận hành đánh giá sao "
+            "GPS không nhận được cuốc thu nhập tài xế"
+        )
+    elif role == "customer":
+        boost.append(
+            "customer-app FoxGo khách hành khách đặt xe điểm đón điểm đến voucher "
+            "thanh toán MoMo VNPay tiền mặt hủy chuyến tài xế đến chưa lịch sử "
+            "chuyến quên đồ đánh giá tài xế"
+        )
     if _keyword_hits(
         low,
         plain,
@@ -1200,47 +1308,55 @@ async def _call_llm_provider(
     provider: str,
     messages: List[dict],
     *,
-    system_prompt: str = SYSTEM_PROMPT,
+    system_prompt: Optional[str] = None,
     max_tokens: int = LLM_MAX_TOKENS,
     temperature: float = LLM_TEMPERATURE,
-    timeout_s: float = LLM_TIMEOUT_S,
+    timeout_s: Optional[float] = None,
     rewrite: bool = False,
 ) -> Optional[str]:
+    """Dispatch to a specific provider with per-provider timeout defaults.
+
+    If `timeout_s` is None, the per-provider timeout (e.g. LLM_TIMEOUT_OPENAI_S
+    for OpenAI) is used. This is how the OpenAI→Gemini failover stays tight on
+    the primary provider while giving Gemini a more generous budget.
+    """
+    sys_prompt = system_prompt if system_prompt is not None else SYSTEM_PROMPT
+    effective_timeout = timeout_s if timeout_s is not None else _provider_timeout(provider, rewrite=rewrite)
     model = _provider_model(provider, rewrite=rewrite)
     if provider == "claude":
         return await _call_llm_claude(
             messages,
-            system_prompt=system_prompt,
+            system_prompt=sys_prompt,
             max_tokens=max_tokens,
             temperature=temperature,
-            timeout_s=timeout_s,
+            timeout_s=effective_timeout,
             model=model,
         )
     if provider == "groq":
         return await _call_llm_groq(
             messages,
-            system_prompt=system_prompt,
+            system_prompt=sys_prompt,
             max_tokens=max_tokens,
             temperature=temperature,
-            timeout_s=timeout_s,
+            timeout_s=effective_timeout,
             model=model,
         )
     if provider == "gemini":
         return await _call_llm_gemini(
             messages,
-            system_prompt=system_prompt,
+            system_prompt=sys_prompt,
             max_tokens=max_tokens,
             temperature=temperature,
-            timeout_s=timeout_s,
+            timeout_s=effective_timeout,
             model=model,
         )
     if provider == "openai":
         return await _call_llm_openai(
             messages,
-            system_prompt=system_prompt,
+            system_prompt=sys_prompt,
             max_tokens=max_tokens,
             temperature=temperature,
-            timeout_s=timeout_s,
+            timeout_s=effective_timeout,
             model=model,
         )
     return None
@@ -1416,18 +1532,35 @@ async def _generate_answer(
     history: Optional[List[dict]] = None,
     *,
     allow_template_fallback: bool = True,
+    role: Optional[str] = None,
 ) -> Tuple[Optional[str], str, str, Optional[str]]:
     context = _format_context(retrieved)[:MAX_CONTEXT_CHARS] if retrieved else ""
+    system_prompt = build_system_prompt(role)
 
     llm_messages: List[dict] = []
     if history:
         for msg in history[-(MAX_HISTORY_TURNS * 2):]:
-            role = msg.get("role", "user")
-            if role in ("user", "assistant"):
-                llm_messages.append({"role": role, "content": msg["content"]})
+            role_msg = msg.get("role", "user")
+            if role_msg in ("user", "assistant"):
+                llm_messages.append({"role": role_msg, "content": msg["content"]})
+
+    role_hint = ""
+    if role == "driver":
+        role_hint = (
+            "[Vai trò xác thực: TÀI XẾ — trả lời từ góc nhìn tài xế. "
+            "Đừng giả định đây là khách hàng.] "
+        )
+    elif role == "customer":
+        role_hint = (
+            "[Vai trò xác thực: KHÁCH HÀNG — trả lời từ góc nhìn khách đi xe. "
+            "Đừng giả định đây là tài xế.] "
+        )
+    elif role == "admin":
+        role_hint = "[Vai trò xác thực: QUẢN TRỊ VIÊN.] "
 
     if context:
         user_content = (
+            f"{role_hint}"
             f"NGỮ CẢNH TÌM ĐƯỢC (ưu tiên từ trên xuống — đoạn đầu khớp nhất):\n{context}\n\n"
             f"CÂU HỎI HIỆN TẠI: {query}\n\n"
             "Viết câu đầu tiên trả lời thẳng vào CÂU HỎI HIỆN TẠI. "
@@ -1437,14 +1570,18 @@ async def _generate_answer(
         )
     else:
         user_content = (
+            f"{role_hint}"
             f"CÂU HỎI: {query}\n\n"
-            "(Lưu ý: không tìm được thông tin liên quan trong cơ sở dữ liệu — "
-            "hãy thành thật nói không biết và hướng dẫn liên hệ hỗ trợ)"
+            "(Hệ thống không tìm thấy đoạn tài liệu FoxGo nào khớp. "
+            "Nếu là câu hỏi VỀ FoxGo: nói thẳng chưa có trong tài liệu và "
+            "gợi liên hệ hotline / email phù hợp vai trò. Nếu là câu hỏi kiến "
+            "thức chung ngoài hệ thống: trả lời tự nhiên, ngắn 2–4 câu, "
+            "không bịa số liệu, rồi mời người dùng quay về vấn đề FoxGo nếu cần.)"
         )
     llm_messages.append({"role": "user", "content": user_content})
 
     for provider in _configured_llm_provider_order():
-        answer = await _call_llm_provider(provider, llm_messages)
+        answer = await _call_llm_provider(provider, llm_messages, system_prompt=system_prompt)
         if answer:
             return answer, f"llm_{provider}", provider, _provider_model(provider)
 
@@ -1619,9 +1756,14 @@ class RagService:
         message: str,
         history: Optional[List[dict]] = None,
         top_k: int = TOP_K,
+        role: Optional[str] = None,
     ) -> dict:
         t0 = time.time()
         stripped = message.strip()
+
+        def _finalize(payload: dict) -> dict:
+            """Stamp role + polish before returning — keeps every exit path consistent."""
+            return _apply_answer_polish(payload, role=role)
 
         small = _try_smalltalk(stripped)
         if small:
@@ -1630,7 +1772,7 @@ class RagService:
             small["llm_model"] = None
             small["reranker_active"] = False
             small["rewrite_used"] = False
-            return _apply_answer_polish(small)
+            return _finalize(small)
 
         if not self._ready:
             if not self.initialize():
@@ -1639,9 +1781,10 @@ class RagService:
                     [],
                     history=history,
                     allow_template_fallback=False,
+                    role=role,
                 )
                 if answer:
-                    return _apply_answer_polish({
+                    return _finalize({
                         "answer": answer,
                         "sources": [],
                         "retrieval_count": 0,
@@ -1658,7 +1801,7 @@ class RagService:
                         "error": self._init_error,
                     })
 
-                return _apply_answer_polish({
+                return _finalize({
                     "answer": "Hệ thống đang khởi động, bạn thử lại sau vài giây nhé! Hoặc liên hệ support@foxgo.vn.",
                     "sources": [], "retrieval_count": 0, "score_max": 0.0,
                     "mode": "error", "latency_ms": int((time.time() - t0) * 1000),
@@ -1720,7 +1863,7 @@ class RagService:
             # Step 2 — embed + hybrid retrieval. Always search a wider pool:
             # the cross-encoder uses it when active, and the lightweight
             # precision pass benefits from it when reranker is disabled.
-            embed_text = _embed_query(_query_embedding_text(enriched_query))
+            embed_text = _embed_query(_query_embedding_text(enriched_query, role=role))
             query_emb = model.encode([embed_text], normalize_embeddings=True)
             pool_k = max(top_k, RERANK_POOL)
             raw_hits = index.search_hybrid(query_emb[0], enriched_query, top_k=pool_k)
@@ -1737,13 +1880,14 @@ class RagService:
                 [],
                 history=history,
                 allow_template_fallback=False,
+                role=role,
             )
             if answer:
                 if rewrite_used:
                     mode = f"{mode}_no_context+rewrite"
                 else:
                     mode = f"{mode}_no_context"
-                return _apply_answer_polish({
+                return _finalize({
                     "answer": answer,
                     "sources": [],
                     "retrieval_count": 0,
@@ -1766,9 +1910,9 @@ class RagService:
                 fallback["rewrite_query"] = rewrite_used
                 fallback["rewrite_provider"] = rewrite_provider if rewrite_used else None
                 fallback["rewrite_model"] = rewrite_model if rewrite_used else None
-                return _apply_answer_polish(fallback)
+                return _finalize(fallback)
 
-            return _apply_answer_polish({
+            return _finalize({
                 "answer": (
                     "Mình chưa thấy thông tin về câu này trong tài liệu FoxGo bạn ơi. "
                     "Bạn thử mô tả cụ thể hơn xem nhé — ví dụ:\n"
@@ -1799,13 +1943,14 @@ class RagService:
                 [],
                 history=history,
                 allow_template_fallback=False,
+                role=role,
             )
             if answer:
                 if rewrite_used:
                     mode = f"{mode}_no_context+rewrite"
                 else:
                     mode = f"{mode}_no_context"
-                return _apply_answer_polish({
+                return _finalize({
                     "answer": answer,
                     "sources": [],
                     "retrieval_count": len(raw_hits),
@@ -1828,7 +1973,7 @@ class RagService:
                 fallback["rewrite_query"] = rewrite_used
                 fallback["rewrite_provider"] = rewrite_provider if rewrite_used else None
                 fallback["rewrite_model"] = rewrite_model if rewrite_used else None
-                return _apply_answer_polish(fallback)
+                return _finalize(fallback)
 
             # Surface top candidate sources as hints — helps the user reframe.
             hint_titles = []
@@ -1842,7 +1987,7 @@ class RagService:
                     + ", ".join(hint_titles[:3])
                     + ". Nếu trúng cái nào, bạn hỏi lại cụ thể hơn giúp mình nhé."
                 )
-            return _apply_answer_polish({
+            return _finalize({
                 "answer": (
                     "Mình chưa tìm được đoạn tài liệu FoxGo khớp đủ với câu hỏi, "
                     "nên không muốn đoán bừa kẻo sai bạn ạ."
@@ -1875,12 +2020,13 @@ class RagService:
                 retrieved,
                 history=history,
                 allow_template_fallback=False,
+                role=role,
             )
             if answer:
                 mode = f"{mode}_low_confidence"
                 if rewrite_used:
                     mode = f"{mode}+rewrite"
-                return _apply_answer_polish({
+                return _finalize({
                     "answer": answer,
                     "sources": list({chunk.title for _, chunk in retrieved}),
                     "retrieval_count": len(retrieved),
@@ -1903,10 +2049,10 @@ class RagService:
                 fallback["rewrite_query"] = rewrite_used
                 fallback["rewrite_provider"] = rewrite_provider if rewrite_used else None
                 fallback["rewrite_model"] = rewrite_model if rewrite_used else None
-                return _apply_answer_polish(fallback)
+                return _finalize(fallback)
 
             answer = _template_answer(stripped, retrieved)
-            return _apply_answer_polish({
+            return _finalize({
                 "answer": answer,
                 "sources": list({chunk.title for _, chunk in retrieved}),
                 "retrieval_count": len(retrieved),
@@ -1927,6 +2073,7 @@ class RagService:
             retrieved,
             history=history,
             allow_template_fallback=False,
+            role=role,
         )
         if answer and rewrite_used:
             mode = f"{mode}+rewrite"
@@ -1939,14 +2086,14 @@ class RagService:
                 fallback["rewrite_query"] = rewrite_used
                 fallback["rewrite_provider"] = rewrite_provider if rewrite_used else None
                 fallback["rewrite_model"] = rewrite_model if rewrite_used else None
-                return _apply_answer_polish(fallback)
+                return _finalize(fallback)
 
             answer = _template_answer(stripped, retrieved)
             mode = "retrieval"
             llm_provider = "template"
             llm_model = None
 
-        return _apply_answer_polish({
+        return _finalize({
             "answer": answer,
             "sources": list({chunk.title for _, chunk in retrieved}),
             "retrieval_count": len(retrieved),

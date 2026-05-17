@@ -215,7 +215,7 @@ const AIAssistWidget: React.FC = () => {
     setAiLoading(true);
     try {
       const history = foxgoToChatHistory(conversation);
-      const { data } = await aiApi.chat({ message: text, history, top_k: FOXGO_AI_CHAT_TOP_K });
+      const { data } = await aiApi.chat({ message: text, history, top_k: FOXGO_AI_CHAT_TOP_K, role: 'driver' });
       const answer = (data.answer || '').trim();
       if (answer) {
         setAiMessages((prev) => [...prev, { role: 'assistant', content: data.answer, sources: data.sources }]);
@@ -238,7 +238,7 @@ const AIAssistWidget: React.FC = () => {
     setAiMessages(conversation);
     setAiLoading(true);
     const history = foxgoToChatHistory(conversation);
-    aiApi.chat({ message: text, history, top_k: FOXGO_AI_CHAT_TOP_K })
+    aiApi.chat({ message: text, history, top_k: FOXGO_AI_CHAT_TOP_K, role: 'driver' })
       .then(({ data }) => {
         const answer = (data.answer || '').trim();
         if (answer) {
