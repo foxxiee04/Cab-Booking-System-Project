@@ -69,6 +69,13 @@ const ADMIN_2 = {
 const GATEWAY_BASE = process.env.GATEWAY_BASE_URL || 'http://localhost:3000';
 /** Dev OTP is proxied at /api/auth/* on the gateway when OTP_ENABLE_DEV_ENDPOINT is true — same base works for Compose and Swarm. */
 const AUTH_INTERNAL_BASE = process.env.AUTH_INTERNAL_URL || GATEWAY_BASE;
+/**
+ * Shared secret allowing the seed run to bypass the gateway's general rate
+ * limiter (100 req/min). Must match SEED_BYPASS_TOKEN in env/gateway.env.
+ * Local default matches the gateway's example value so `npm run db:seed`
+ * works out of the box; production deployments set a unique value.
+ */
+const SEED_BYPASS_TOKEN = process.env.SEED_BYPASS_TOKEN || 'local-seed-bypass';
 
 const POSTGRES_HOST = process.env.POSTGRES_HOST || 'localhost';
 const POSTGRES_PORT = process.env.POSTGRES_PORT || '5433';
@@ -123,6 +130,10 @@ async function http<T = any>(pathOrUrl: string, opts: RequestOptions = {}): Prom
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
+    // Bypass the gateway rate limiter — gated by SEED_BYPASS_TOKEN on the
+    // server side, so this only takes effect in dev/staging where the
+    // matching env var is configured. No-op in production.
+    'x-seed-token': SEED_BYPASS_TOKEN,
     ...opts.headers,
   };
   if (opts.body !== undefined && !['GET', 'HEAD'].includes(method)) {
@@ -2594,6 +2605,71 @@ async function waitForAuthThroughGateway() {
   );
 }
 
+/**
+ * Pre-flight: confirm the gateway will not 429 during the bulk seed.
+ *
+ * Two acceptable paths:
+ *  (1) RATE_LIMIT_MAX_REQUESTS on the gateway is already high enough (the
+ *      committed env defaults set it to 100000 for dev/server).
+ *  (2) SEED_BYPASS_TOKEN is configured AND the running gateway image knows
+ *      about the x-seed-token header bypass (only deployed images built after
+ *      the bypass commit).
+ *
+ * We send a burst of cheap GETs through `generalLimiter`; if any 429 comes
+ * back, we abort early with a remediation message tailored to the most
+ * likely cause (gateway running an older image vs. limits not yet reloaded).
+ */
+async function verifyRateLimitBypass() {
+  const PROBE_COUNT = 150; // above both old (100) and new defaults; cheap on the gateway
+  const burst = Array.from({ length: PROBE_COUNT }, async (_, i) => {
+    try {
+      const res = await fetch(`${GATEWAY_BASE}/health`, {
+        headers: { Accept: 'application/json', 'x-seed-token': SEED_BYPASS_TOKEN },
+      });
+      return { i, status: res.status };
+    } catch (err: any) {
+      return { i, status: 0, error: err?.message || String(err) };
+    }
+  });
+
+  const results = await Promise.all(burst);
+  const throttled = results.filter((r) => r.status === 429).length;
+  if (throttled === 0) {
+    console.log(`  [pre-flight] rate-limit OK (${PROBE_COUNT}/${PROBE_COUNT} probes passed)`);
+    return;
+  }
+
+  const isLocal = /(localhost|127\.0\.0\.1)/.test(GATEWAY_BASE);
+  console.error('');
+  console.error(`  [pre-flight] ✗ gateway throttled ${throttled}/${PROBE_COUNT} probes with 429.`);
+  console.error('  The running gateway either has a low rate limit OR is running an');
+  console.error('  older image that does not honour the x-seed-token bypass.');
+  console.error('');
+  if (isLocal) {
+    console.error('  ▶ Local Docker Compose — restart (env reload only, fast):');
+    console.error('        docker compose restart api-gateway auth-service');
+    console.error('');
+    console.error('  ▶ If env values were never picked up (still 429 after restart), the');
+    console.error('    image is stale. Rebuild + restart:');
+    console.error('        docker compose up -d --build api-gateway auth-service');
+    console.error('');
+    console.error('  ▶ Confirm new limits inside the running gateway:');
+    console.error('        docker exec cab-api-gateway env | grep -E "RATE_LIMIT|SEED_BYPASS"');
+  } else {
+    console.error('  ▶ Swarm production — redeploy with the updated env:');
+    console.error('        docker stack deploy -c docker-stack.thesis.yml \\');
+    console.error('          --with-registry-auth cab-booking');
+    console.error('');
+    console.error('  ▶ Confirm new limits inside the running gateway task:');
+    console.error('        docker service inspect cab-booking_api-gateway \\');
+    console.error('          --format "{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}" \\');
+    console.error('          | grep -E "RATE_LIMIT|SEED_BYPASS"');
+  }
+  console.error('');
+  console.error('  Then re-run: npm run db:seed');
+  throw new Error('Gateway rate limit still enforced — see remediation above');
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -2608,6 +2684,11 @@ async function main() {
   console.log('  [pre-flight] gateway healthy');
 
   await waitForAuthThroughGateway();
+
+  // Pre-flight: hammer the gateway with > general-limit requests in <1s using
+  // the seed bypass token. If even one comes back 429 we abort early with a
+  // clear remediation message — far better than failing at customer #22.
+  await verifyRateLimitBypass();
 
   // Step 1 — admin DB bootstrap (the ONLY DB-direct writes for users)
   await bootstrapAdmin();

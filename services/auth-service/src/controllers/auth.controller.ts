@@ -19,6 +19,15 @@ import { updateProfileSchema } from '../dto/auth.dto';
 import { UserRole, UserStatus } from '../generated/prisma-client';
 import { logger } from '../utils/logger';
 
+/** Read the gateway-forwarded `x-seed-token` header. Validation happens in
+ * otp.service.checkRateLimit — controller just plumbs the raw value through. */
+function extractBypassToken(req: Request): string | null {
+  const raw = req.headers['x-seed-token'];
+  if (!raw) return null;
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return typeof v === 'string' && v ? v : null;
+}
+
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -36,7 +45,11 @@ export class AuthController {
         });
       }
 
-      const result = await this.authService.startPhoneRegistration(value.phone, req.ip);
+      const result = await this.authService.startPhoneRegistration(
+        value.phone,
+        req.ip,
+        extractBypassToken(req),
+      );
 
       res.json({
         success: true,
@@ -243,6 +256,7 @@ export class AuthController {
       const result = await this.authService.sendOtp({
         phone: value.phone,
         ipAddress: req.ip,
+        bypassToken: extractBypassToken(req),
       });
 
       res.json({

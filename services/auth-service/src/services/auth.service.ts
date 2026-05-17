@@ -31,6 +31,8 @@ interface LoginInput {
 interface SendOtpInput {
   phone: string;
   ipAddress?: string;
+  /** When matching SEED_BYPASS_TOKEN, OTP rate-limit checks are skipped. */
+  bypassToken?: string | null;
 }
 
 interface OtpDeliveryResult {
@@ -120,13 +122,17 @@ export class AuthService {
   /**
    * New registration flow - Step 1: request OTP by phone first.
    */
-  async startPhoneRegistration(phone: string, ipAddress?: string): Promise<OtpDeliveryResult> {
+  async startPhoneRegistration(
+    phone: string,
+    ipAddress?: string,
+    bypassToken?: string | null,
+  ): Promise<OtpDeliveryResult> {
     const existing = await prisma.user.findUnique({ where: { phone } });
     if (existing) {
       throw new Error('Số điện thoại này đã được đăng ký.');
     }
 
-    return this.sendOtp({ phone, ipAddress }, 'register');
+    return this.sendOtp({ phone, ipAddress, bypassToken }, 'register');
   }
 
   /**
@@ -288,8 +294,8 @@ export class AuthService {
   ): Promise<OtpDeliveryResult> {
     const ip = input.ipAddress || 'unknown';
 
-    // Rate limit check
-    const rateLimitError = await this.otpService.checkRateLimit(input.phone, ip);
+    // Rate limit check (seed/bootstrap bypass when bypassToken matches env).
+    const rateLimitError = await this.otpService.checkRateLimit(input.phone, ip, input.bypassToken);
     if (rateLimitError) {
       await auditLog({
         action: 'RATE_LIMIT_HIT',

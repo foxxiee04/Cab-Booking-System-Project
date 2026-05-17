@@ -109,6 +109,12 @@ services:
       - NOTIFICATION_GRPC_ADDRESS=notification-service:50058
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-test-internal-token}
       - OTP_ENABLE_DEV_ENDPOINT=true
+      # Rate-limit configuration. Default 100/min is too tight for the bulk seed
+      # (100 customers × 3-4 calls each). Set very high for dev; production
+      # should lower this and rely on SEED_BYPASS_TOKEN for ad-hoc seed runs.
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100000}
+      - SEED_BYPASS_TOKEN=${SEED_BYPASS_TOKEN:-local-seed-bypass}
       - LOCATION_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/location_db
       - MATCHING_MAX_ATTEMPTS=${MATCHING_MAX_ATTEMPTS:-3}
       - MATCHING_RETRY_DELAY_MS=${MATCHING_RETRY_DELAY_MS:-2500}
@@ -177,10 +183,8 @@ services:
       - REDIS_URL=redis://redis:6379
       - OTP_TTL_SECONDS=120
       - OTP_MAX_ATTEMPTS=5
-      - OTP_RATE_MAX_PER_PHONE=3
-      - OTP_RATE_PHONE_WINDOW=600
-      - OTP_RATE_MAX_PER_IP=10
-      - OTP_RATE_IP_WINDOW=60
+      # OTP rate-limit values intentionally NOT pinned here so env/auth.env
+      # is the single source of truth (dev defaults raised to support bulk seed).
       - OTP_SMS_MODE=mock
       - OTP_ENABLE_DEV_ENDPOINT=true
     depends_on:

@@ -69,9 +69,16 @@ export class OtpService {
   /**
    * Check both per-phone and per-IP rate limits.
    * Returns null if allowed, an error string if blocked.
+   *
+   * `bypassToken`: when this matches `config.otp.rateLimit.bypassToken` (set via
+   * SEED_BYPASS_TOKEN env) the check is skipped entirely. Used by the seed
+   * script which legitimately needs to register many phones/IP in seconds.
    */
-  async checkRateLimit(phone: string, ip: string): Promise<string | null> {
+  async checkRateLimit(phone: string, ip: string, bypassToken?: string | null): Promise<string | null> {
     const { rateLimit } = config.otp;
+    if (rateLimit.bypassToken && bypassToken && bypassToken === rateLimit.bypassToken) {
+      return null;
+    }
 
     // --- Per-phone limit ---
     const phoneCount = await this.redis.incr(this.phoneLimitKey(phone));

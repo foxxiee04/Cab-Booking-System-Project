@@ -62,6 +62,9 @@ export const config = {
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'),
     maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
+    // Shared secret allowing the seed/bootstrap script to bypass the limiter.
+    // Empty string disables the bypass entirely (default in production).
+    bypassToken: (process.env.SEED_BYPASS_TOKEN || '').trim(),
   },
 
   map: {

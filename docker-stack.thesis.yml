@@ -177,6 +177,9 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - OTP_ENABLE_DEV_ENDPOINT=true
+      # Bypass token MUST be set in env/gateway.env (same value on auth-service
+      # and seed script). Empty disables the bypass — production-safe default.
+      - SEED_BYPASS_TOKEN=${SEED_BYPASS_TOKEN:-}
     env_file:
       - ./env/gateway.env
     networks:
@@ -217,6 +220,9 @@ services:
       - GRPC_PORT=50051
       - OTP_SMS_MODE=mock
       - OTP_ENABLE_DEV_ENDPOINT=true
+      # Must match SEED_BYPASS_TOKEN on api-gateway (gateway forwards header
+      # x-seed-token; this service validates against its own env).
+      - SEED_BYPASS_TOKEN=${SEED_BYPASS_TOKEN:-}
     env_file:
       - ./env/auth.env
     networks:
@@ -571,6 +577,9 @@ services:
       - SUGGESTED_SURGE_MIN=${SUGGESTED_SURGE_MIN:-1.0}
       - SUGGESTED_SURGE_MAX=${SUGGESTED_SURGE_MAX:-2.0}
       - RAG_LLM_PROVIDER=${RAG_LLM_PROVIDER:-auto}
+      # OpenAI first; Gemini takes over if OpenAI times out / errors;
+      # rulebase + retrieval template is the final layer when both fail.
+      - RAG_LLM_PROVIDER_ORDER=${RAG_LLM_PROVIDER_ORDER:-openai,gemini}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - RAG_LLM_MODEL_CLAUDE=${RAG_LLM_MODEL_CLAUDE:-claude-haiku-4-5-20251001}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
@@ -582,6 +591,9 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - RAG_LLM_MODEL_OPENAI=${RAG_LLM_MODEL_OPENAI:-gpt-4o-mini}
       - RAG_LLM_TIMEOUT_S=${RAG_LLM_TIMEOUT_S:-5}
+      # OpenAI is primary — kept tight so a stalled call yields to Gemini fast.
+      - RAG_LLM_TIMEOUT_OPENAI_S=${RAG_LLM_TIMEOUT_OPENAI_S:-3}
+      - RAG_LLM_TIMEOUT_GEMINI_S=${RAG_LLM_TIMEOUT_GEMINI_S:-5}
       - RAG_LLM_REWRITE_TIMEOUT_S=${RAG_LLM_REWRITE_TIMEOUT_S:-3}
       - RAG_LLM_MAX_TOKENS=${RAG_LLM_MAX_TOKENS:-900}
       - RAG_LLM_TEMPERATURE=${RAG_LLM_TEMPERATURE:-0.25}

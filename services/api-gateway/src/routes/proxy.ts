@@ -56,6 +56,16 @@ const getForwardHeaders = (req: Request) => {
     headers['Content-Type'] = contentType;
   }
 
+  // Forward the seed-bypass token so downstream services (e.g. auth-service's
+  // per-IP OTP rate-limit) can recognise the same trusted seed run. Without
+  // forwarding, the gateway is the only host they ever see and they'd throttle
+  // legitimate bulk seeding at ~10 OTP/min. Downstream still validates the
+  // token against its own SEED_BYPASS_TOKEN env — defense in depth.
+  const seedToken = req.headers['x-seed-token'];
+  if (seedToken) {
+    headers['x-seed-token'] = Array.isArray(seedToken) ? seedToken[0] : String(seedToken);
+  }
+
   return headers;
 };
 

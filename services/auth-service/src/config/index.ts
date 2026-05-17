@@ -37,6 +37,10 @@ export const config = {
       phoneWindowSeconds: parseInt(process.env.OTP_RATE_PHONE_WINDOW || '600', 10),
       maxPerIp: parseInt(process.env.OTP_RATE_MAX_PER_IP || '10', 10),              // max 10 req per min per IP
       ipWindowSeconds: parseInt(process.env.OTP_RATE_IP_WINDOW || '60', 10),
+      // Shared secret allowing scripts/seed-database.ts (forwarded by api-gateway)
+      // to skip BOTH per-phone and per-IP OTP rate limits. Must match
+      // SEED_BYPASS_TOKEN on the gateway side. Empty = no bypass (production).
+      bypassToken: (process.env.SEED_BYPASS_TOKEN || '').trim(),
     },
     resendDelays: [0, 30, 60], // seconds: 1st send immediately, 2nd after 30s, 3rd+ after 60s
     /** When true, `/api/auth/dev/otp` is registered even if NODE_ENV=production. Only for demo/staging + OTP_SMS_MODE=mock. */
