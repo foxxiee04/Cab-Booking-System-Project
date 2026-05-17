@@ -449,10 +449,6 @@ const GoogleBookingMapCanvas: React.FC<GoogleBookingMapCanvasProps> = ({
   );
 };
 
-function formatDistance(meters: number): string {
-  return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
-}
-
 function resolveColorMode(colorMode: BookingMapProps['colorMode']): 'light' | 'dark' {
   if (colorMode === 'light' || colorMode === 'dark') {
     return colorMode;
@@ -706,11 +702,18 @@ export const BookingMap: React.FC<BookingMapProps> = ({
           return;
         }
 
+        // Format MUST match pricing-service.estimateFare (Math.ceil minutes,
+        // 2-decimal km rounded the same way) so the preview card and the
+        // per-vehicle estimate card show identical numbers for CAR_4.
+        const distanceKm = Math.round((route.distance / 1000) * 100) / 100;
+        const durationMinutes = Math.max(1, Math.ceil(route.duration / 60));
         const summary: RouteSummary = {
           distanceMeters: route.distance,
           durationSeconds: route.duration,
-          distanceText: formatDistance(route.distance),
-          durationText: `${Math.max(1, Math.round(route.duration / 60))} phút`,
+          distanceText: distanceKm < 1
+            ? `${Math.round(distanceKm * 1000)} m`
+            : `${distanceKm >= 10 ? distanceKm.toFixed(0) : distanceKm.toFixed(1)} km`,
+          durationText: `${durationMinutes} phút`,
           polylinePath: (route.geometry?.coordinates || []).map(([lng, lat]) => ({ lat, lng })),
         };
 

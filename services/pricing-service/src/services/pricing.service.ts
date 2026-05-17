@@ -171,7 +171,12 @@ export class PricingService {
     // Surge / AI always keyed off car-route distance so every vehicle card shares the same multiplier.
     const aiResult = await this.getAIPrediction(baseRoute.distanceKm);
     const aiPrediction = aiResult.prediction;
-    const durationMinutes = aiPrediction?.eta_minutes ?? baseDurationMinutes;
+    // Displayed duration MUST come from the same source the BookingMap step uses
+    // (OSRM via /map/route). The AI eta_minutes is still useful for surge / matching
+    // signals but if we let it override the displayed duration the user sees a
+    // different number after picking a vehicle than they saw at the route-preview
+    // step. Keep AI ETA in operationalHints only.
+    const durationMinutes = baseDurationMinutes;
 
     const surgeCandidate = aiPrediction
       ? (aiPrediction.surge_hint ?? aiPrediction.price_multiplier)
@@ -241,6 +246,10 @@ export class PricingService {
         inferenceMs: aiPrediction?.inference_ms ?? aiResult.latencyMs,
         recommendedDriverRadiusKm: boundedRecommendedRadius,
         surgeReason: aiPrediction?.insights?.surge_reason || 'Deterministic pricing fallback is active',
+        // Internal-only: AI's ETA estimate. Not used for the user-visible duration
+        // anymore (would diverge from /map/route in the preview step). Still useful
+        // for dispatch / monitoring.
+        aiEtaMinutes: aiPrediction?.eta_minutes ?? null,
       },
       breakdown: {
         baseFare,

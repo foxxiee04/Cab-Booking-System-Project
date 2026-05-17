@@ -735,7 +735,13 @@ export class RideService {
         reason,
       }, rideId);
 
-      // Re-dispatch excluding the driver who just cancelled
+      // Re-dispatch excluding the driver who just cancelled.
+      // distance + duration MUST be included — gateway uses them to populate
+      // the NEW_RIDE_AVAILABLE socket payload. Omitting them caused the
+      // second-and-later drivers in a re-dispatch chain to show a haversine
+      // fallback (e.g. 7.2 km / 18 min) while the first driver — who got
+      // the original ride.finding_driver_requested event WITH the fields —
+      // saw the real OSRM distance (8.1 km / 9 min).
       const excludeDriverIds = ride.driverId ? [ride.driverId] : [];
       await this.eventPublisher.publish('ride.reassignment_requested', {
         rideId,
@@ -744,6 +750,8 @@ export class RideService {
         dropoff: { lat: ride.dropoffLat, lng: ride.dropoffLng, address: ride.dropoffAddress },
         vehicleType: ride.vehicleType,
         fare: ride.fare,
+        distance: ride.distance,
+        duration: ride.duration,
         excludeDriverIds,
         attempt: (ride.reassignAttempts ?? 0) + 1,
         matchingStartedAt: new Date().toISOString(),
@@ -1184,23 +1192,30 @@ export class RideService {
       },
     });
 
-    // Publish ride.offered event
+    // Publish ride.offered event.
+    // distance + duration MUST be included so gateway.handleRideOffered can
+    // forward them to the NEW_RIDE_AVAILABLE socket payload. Without duration,
+    // the driver-app falls back to a haversine-derived ETA (~18 phút for a
+    // 5.9 km trip) instead of the real OSRM value (~9 phút), producing the
+    // "lệch lệch" the user reported between sequential dispatch drivers.
     await this.eventPublisher.publish('ride.offered', {
       rideId,
       driverId,
       customerId: ride.customerId,
-      pickup: { 
+      pickup: {
         address: ride.pickupAddress,
-        lat: ride.pickupLat, 
-        lng: ride.pickupLng 
+        lat: ride.pickupLat,
+        lng: ride.pickupLng
       },
       dropoff: {
         address: ride.dropoffAddress,
         lat: ride.dropoffLat,
         lng: ride.dropoffLng
       },
+      vehicleType: ride.vehicleType,
       fare: ride.fare,
       distance: ride.distance,
+      duration: ride.duration,
       ttlSeconds,
       expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
     }, rideId);
@@ -1343,7 +1358,11 @@ export class RideService {
       ...ride.rejectedDriverIds,
     ];
 
-    // Request new driver suggestions with exclusion list
+    // Request new driver suggestions with exclusion list.
+    // distance + duration must be included so the gateway's NEW_RIDE_AVAILABLE
+    // payload to the next driver matches what the first driver saw (and what
+    // the customer saw on the booking screen). See the matching comment above
+    // in driverCancellation re-dispatch.
     await this.eventPublisher.publish('ride.reassignment_requested', {
       rideId: ride.id,
       customerId: ride.customerId,
@@ -1351,6 +1370,8 @@ export class RideService {
       dropoff: { lat: ride.dropoffLat, lng: ride.dropoffLng, address: ride.dropoffAddress },
       vehicleType: ride.vehicleType,
       fare: ride.fare,
+      distance: ride.distance,
+      duration: ride.duration,
       excludeDriverIds: excludedDrivers,
       attempt: ride.reassignAttempts + 1,
       maxAttempts: this.offerManager.getMaxReassignAttempts(),

@@ -146,7 +146,10 @@ describe('PricingService - Simple Test Suite', () => {
         }),
         expect.objectContaining({ timeout: 1500 })
       );
-      expect(result.durationMinutes).toBe(18);
+      // Displayed duration now comes from OSRM (or fallback) — NOT AI eta —
+      // so the route preview step and the per-vehicle estimate stay consistent.
+      // AI eta is still recorded for ops (operationalHints.aiEtaMinutes).
+      expect(result.durationMinutes).not.toBe(18);
       expect(result.surgeMultiplier).toBe(1.4);
       expect(result.aiPrediction).toEqual(
         expect.objectContaining({
@@ -160,6 +163,7 @@ describe('PricingService - Simple Test Suite', () => {
           demandLevel: 'MEDIUM',
           etaConfidence: 'HIGH',
           recommendedDriverRadiusKm: 4,
+          aiEtaMinutes: 18,
         })
       );
     });
@@ -247,7 +251,9 @@ describe('PricingService - Simple Test Suite', () => {
       });
 
       expect(result.surgeMultiplier).toBe(1.6);
-      expect(result.durationMinutes).toBe(14);
+      // Same as the earlier AI-enrichment test: durationMinutes is now decoupled
+      // from aiPrediction.eta_minutes so the value matches the OSRM/fallback path.
+      expect(result.operationalHints.aiEtaMinutes).toBe(14);
     });
 
     it('should apply surge multiplier', async () => {
