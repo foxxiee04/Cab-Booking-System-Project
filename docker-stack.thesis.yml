@@ -772,6 +772,12 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.54.1
+    # Run as root so the dockerswarm_sd config can read /var/run/docker.sock
+    # (host socket is owned by root:docker mode 660; the image's default
+    # "nobody" user gets EACCES and never registers any node-exporter or
+    # cadvisor target). The TSDB on /prometheus is owned by root either way
+    # since the named volume is host-managed by the daemon.
+    user: "0:0"
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
