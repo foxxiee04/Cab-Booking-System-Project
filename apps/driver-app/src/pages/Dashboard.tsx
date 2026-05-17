@@ -81,37 +81,27 @@ const normalizeDurationSeconds = (duration?: number, estimatedDuration?: number)
 };
 
 const getRideMetrics = (ride: Ride) => {
-  const distanceFromDriverMeters = typeof ride.distanceFromDriverMeters === 'number' && ride.distanceFromDriverMeters > 0
-    ? ride.distanceFromDriverMeters
-    : undefined;
-  const durationFromDriverSeconds = typeof ride.durationFromDriverSeconds === 'number' && ride.durationFromDriverSeconds > 0
-    ? ride.durationFromDriverSeconds
-    : undefined;
+  // Trip metrics (distance/duration of the ride itself, not driver→pickup ETA).
+  // Apply haversine × 1.22 fallback whenever the trip distance/duration is
+  // missing — even if driver→pickup ETA fields are present. Without this
+  // fallback the chips disappear from the offer card (the "thiếu cái quãng
+  // đường đi và thời gian" the user reported) AND the modal/card render
+  // different numbers for the same ride.
+  let distanceMeters = normalizeDistanceMeters(ride.distance);
+  let durationSeconds = normalizeDurationSeconds(ride.duration, ride.estimatedDuration);
 
-  // Trip metrics (distance/duration of the ride itself, not driver→pickup ETA)
-  const distanceMeters = normalizeDistanceMeters(ride.distance);
-  const durationSeconds = normalizeDurationSeconds(ride.duration, ride.estimatedDuration);
+  const canDerive =
+    (!distanceMeters || !durationSeconds)
+    && ride.pickupLocation?.lat
+    && ride.pickupLocation?.lng
+    && ride.dropoffLocation?.lat
+    && ride.dropoffLocation?.lng;
 
-  if (distanceFromDriverMeters || durationFromDriverSeconds) {
-    // Return trip metrics so the duration chip shows trip time, not driver ETA time.
-    // The ETA chip below uses distanceFromDriver / durationFromDriverSeconds directly.
-    return { distanceMeters, durationSeconds };
-  }
-
-  if (distanceMeters && durationSeconds) {
-    return { distanceMeters, durationSeconds };
-  }
-
-  if (ride.pickupLocation?.lat && ride.pickupLocation?.lng && ride.dropoffLocation?.lat && ride.dropoffLocation?.lng) {
+  if (canDerive) {
     const directKm = calculateDistance(ride.pickupLocation, ride.dropoffLocation);
     const routedKm = Math.max(directKm * 1.22, 0.2);
-    const estimatedDistanceMeters = Math.round(routedKm * 1000);
-    const estimatedDurationSeconds = Math.max(180, Math.round((routedKm / 24) * 3600));
-
-    return {
-      distanceMeters: distanceMeters || estimatedDistanceMeters,
-      durationSeconds: durationSeconds || estimatedDurationSeconds,
-    };
+    distanceMeters = distanceMeters || Math.round(routedKm * 1000);
+    durationSeconds = durationSeconds || Math.max(180, Math.round((routedKm / 24) * 3600));
   }
 
   return { distanceMeters, durationSeconds };
@@ -163,20 +153,38 @@ const Dashboard: React.FC = () => {
     }
   }, [browsingLocation, isOnline]);
 
+  // A ride is OFFERABLE only when it is still in FINDING_DRIVER state. Anything
+  // already CANCELLED / COMPLETED / ASSIGNED / IN_PROGRESS must not appear in
+  // the offer feed — otherwise drivers see stale cards (e.g. a customer cancels
+  // and re-books; the disconnected driver missed the `ride:taken_elsewhere`
+  // event so they still render the now-cancelled offer with mismatched
+  // distance/duration).
+  const TERMINAL_OR_ACTIVE_STATUSES = new Set([
+    'CANCELLED', 'COMPLETED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS', 'ASSIGNED',
+  ]);
+
+  const isOfferable = (ride: Ride | null | undefined): ride is Ride => {
+    if (!ride?.id) return false;
+    const status = (ride.status || '').toString().toUpperCase();
+    if (status && TERMINAL_OR_ACTIVE_STATUSES.has(status)) return false;
+    return true;
+  };
+
   const ridesToDisplay = useMemo(() => {
     const merged = new Map<string, Ride>();
 
-    if (pendingRide && !ignoredRideIdsRef.current.has(pendingRide.id) && !revokedFeedRideIds.includes(pendingRide.id)) {
+    if (pendingRide && isOfferable(pendingRide) && !ignoredRideIdsRef.current.has(pendingRide.id) && !revokedFeedRideIds.includes(pendingRide.id)) {
       merged.set(pendingRide.id, pendingRide);
     }
 
     availableRides.forEach((ride) => {
-      if (!ignoredRideIdsRef.current.has(ride.id) && !revokedFeedRideIds.includes(ride.id)) {
+      if (isOfferable(ride) && !ignoredRideIdsRef.current.has(ride.id) && !revokedFeedRideIds.includes(ride.id)) {
         merged.set(ride.id, ride);
       }
     });
 
     return Array.from(merged.values()).slice(0, 8);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableRides, pendingRide, revokedFeedRideIds]);
 
   useEffect(() => {
@@ -325,6 +333,15 @@ const Dashboard: React.FC = () => {
         if (!cancelled) {
           setAvailableRides((previousRides) => (hasSameRideList(previousRides, rides) ? previousRides : rides));
           hasInitialPollRef.current = true;
+
+          // Authoritative sweep: if the current pendingRide is NOT in the
+          // freshly-fetched available list, the ride has been cancelled /
+          // assigned elsewhere / completed — drop it so the offer card
+          // disappears instead of showing stale distance/duration.
+          const pendingId = pendingRide?.id;
+          if (pendingId && !rides.some((r) => r.id === pendingId)) {
+            dispatch(clearPendingRide());
+          }
         }
       } catch (pollError) {
         console.error('Failed to poll available rides:', pollError);

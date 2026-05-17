@@ -100,6 +100,15 @@ class DriverSocketService {
       this.pingInterval = setInterval(() => {
         if (this.socket?.connected) this.socket.emit('ping');
       }, 30_000);
+
+      // Re-sync state on reconnect. If the driver missed a `ride:taken_elsewhere`
+      // event while offline, their `pendingRide` could be a ride that's already
+      // CANCELLED in the DB. Clearing on reconnect forces the next /available
+      // poll (Dashboard) to repopulate from authoritative server state.
+      const pending = store.getState().ride.pendingRide;
+      if (pending?.id) {
+        store.dispatch(clearPendingRide());
+      }
     });
 
     this.socket.on('disconnect', (reason) => {

@@ -614,6 +614,31 @@ export class EventConsumer {
       const canonicalFare = Math.round(payload.fare ?? payload.estimatedFare ?? 0);
       const customer = await this.resolveRealtimeCustomerProfile(payload.customerId);
 
+      // Final safeguard: if the upstream payload is missing trip distance
+      // (e.g. legacy producer or partial event), derive a haversine × 1.22
+      // estimate from pickup/dropoff coords so EVERY driver sees the same
+      // numbers AND the customer's value cannot diverge silently. Same formula
+      // as the driver-app fallback — guarantees cross-screen consistency.
+      const tripDistanceKm = (() => {
+        const raw = Number(payload.distance);
+        if (Number.isFinite(raw) && raw > 0) return raw;
+        if (payload.pickup && payload.dropoff) {
+          const km = haversineKm(
+            payload.pickup.lat,
+            payload.pickup.lng,
+            payload.dropoff.lat,
+            payload.dropoff.lng,
+          );
+          return Math.max(0.2, Number((km * 1.22).toFixed(2)));
+        }
+        return 0;
+      })();
+      const tripDurationSeconds = (() => {
+        const raw = Number(payload.duration);
+        if (Number.isFinite(raw) && raw > 0) return raw;
+        return tripDistanceKm > 0 ? Math.max(180, Math.round((tripDistanceKm / 24) * 3600)) : 0;
+      })();
+
       const baseNotification = {
         rideId: payload.rideId,
         customerId: payload.customerId,
@@ -623,8 +648,8 @@ export class EventConsumer {
         estimatedFare: canonicalFare,
         surgeMultiplierHint: effectiveSurge,
         vehicleType: payload.vehicleType,
-        distance: payload.distance,
-        duration: payload.duration,
+        distance: tripDistanceKm,
+        duration: tripDurationSeconds,
         timeoutSeconds: DEFAULT_OFFER_TIMEOUT_SECONDS,
         searchAttempt: attempt,
         searchRadiusKm: effectiveRadiusKm,
@@ -1089,6 +1114,30 @@ export class EventConsumer {
 
     const customer = await this.resolveRealtimeCustomerProfile(payload.customerId);
 
+    // Same fallback chain as the broadcast dispatch path in handleMatchingRequested.
+    // ride-service has been updated to include both fields, but if an older
+    // producer or partial payload arrives we still emit a sensible value so
+    // sequential-offer drivers see the same numbers as the round-1 driver.
+    const tripDistanceKm = (() => {
+      const raw = Number(payload.distance);
+      if (Number.isFinite(raw) && raw > 0) return raw;
+      if (payload.pickup && payload.dropoff) {
+        const km = haversineKm(
+          payload.pickup.lat,
+          payload.pickup.lng,
+          payload.dropoff.lat,
+          payload.dropoff.lng,
+        );
+        return Math.max(0.2, Number((km * 1.22).toFixed(2)));
+      }
+      return 0;
+    })();
+    const tripDurationSeconds = (() => {
+      const raw = Number(payload.duration);
+      if (Number.isFinite(raw) && raw > 0) return raw;
+      return tripDistanceKm > 0 ? Math.max(180, Math.round((tripDistanceKm / 24) * 3600)) : 0;
+    })();
+
     this.socketServer.emitToDriver(driverUserId, 'NEW_RIDE_AVAILABLE', {
       rideId: payload.rideId,
       customerId: payload.customerId,
@@ -1096,8 +1145,8 @@ export class EventConsumer {
       pickup: payload.pickup,
       dropoff: payload.dropoff,
       estimatedFare: payload.fare,
-      distance: payload.distance,
-      duration: payload.duration,
+      distance: tripDistanceKm,
+      duration: tripDurationSeconds,
       timeoutSeconds: payload.ttlSeconds ?? DEFAULT_OFFER_TIMEOUT_SECONDS,
       expiresAt: payload.expiresAt,
     });
