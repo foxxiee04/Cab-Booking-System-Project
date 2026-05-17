@@ -110,6 +110,9 @@ const getRideMetrics = (ride: Ride) => {
 const Dashboard: React.FC = () => {
   const loggedGeoErrorCodesRef = useRef<Set<number>>(new Set());
   const ignoredRideIdsRef = useRef<Map<string, number>>(new Map());
+  // Mirror of pendingRide.id readable from the polling closure without
+  // re-creating the 4-second interval every time the offer card updates.
+  const pendingRideIdRef = useRef<string | null>(null);
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -131,6 +134,10 @@ const Dashboard: React.FC = () => {
   const [isListLoading, setIsListLoading] = useState(false);
   const [showGpsWarning, setShowGpsWarning] = useState(true);
   const hasInitialPollRef = useRef(false);
+
+  useEffect(() => {
+    pendingRideIdRef.current = pendingRide?.id || null;
+  }, [pendingRide?.id]);
 
   const dismissPendingRide = (rideId: string) => {
     const holdUntil = Date.now() + 30_000;
@@ -338,7 +345,9 @@ const Dashboard: React.FC = () => {
           // freshly-fetched available list, the ride has been cancelled /
           // assigned elsewhere / completed — drop it so the offer card
           // disappears instead of showing stale distance/duration.
-          const pendingId = pendingRide?.id;
+          // Read via ref so the 4-second poll always sees the latest
+          // pendingRide without re-creating the interval each render.
+          const pendingId = pendingRideIdRef.current;
           if (pendingId && !rides.some((r) => r.id === pendingId)) {
             dispatch(clearPendingRide());
           }
@@ -359,7 +368,7 @@ const Dashboard: React.FC = () => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [browsingLocation, currentRide, isOnline, profile?.vehicleType, revokedFeedRideIds]);
+  }, [browsingLocation, currentRide, isOnline, profile?.vehicleType, revokedFeedRideIds, dispatch]);
 
   // Handle go online/offline
   const handleToggleOnline = async () => {
