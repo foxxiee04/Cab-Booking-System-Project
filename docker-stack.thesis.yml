@@ -211,6 +211,18 @@ services:
       - SEED_BYPASS_TOKEN=${SEED_BYPASS_TOKEN:-}
     env_file:
       - ./env/gateway.env
+    healthcheck:
+      # Wait until /health returns 200 — keeps Swarm from marking the container
+      # "running" before the app finishes booting (avoids ingress sending traffic
+      # to a half-started gateway and the rolling-update swap completing too early).
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3000)+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     networks:
       - frontend
       - backend
@@ -245,6 +257,12 @@ services:
 
   auth-service:
     image: ${DOCKERHUB_USERNAME}/cab-auth-service:${IMAGE_TAG:-latest}
+    # Skip Prisma db push in entrypoint — its `can-connect-to-database`
+    # pre-flight has a hardcoded short timeout that ignores connect_timeout
+    # in the URL, so any DNS/overlay race during cold start kills the container.
+    # Schema migrations are run separately by scripts/reset-database-swarm.sh
+    # using docker run --network host on the manager (postgres local at :5433).
+    command: ["node", "dist/index.js"]
     environment:
       - NODE_ENV=production
       - PORT=3001
@@ -256,6 +274,15 @@ services:
       - SEED_BYPASS_TOKEN=${SEED_BYPASS_TOKEN:-}
     env_file:
       - ./env/auth.env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3001)+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     networks:
       - backend
     deploy:
@@ -283,12 +310,22 @@ services:
 
   ride-service:
     image: ${DOCKERHUB_USERNAME}/cab-ride-service:${IMAGE_TAG:-latest}
+    command: ["node", "dist/index.js"]
     environment:
       - NODE_ENV=production
       - PORT=3002
       - GRPC_PORT=50054
     env_file:
       - ./env/ride.env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3002)+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     networks:
       - backend
     deploy:
@@ -316,12 +353,22 @@ services:
 
   driver-service:
     image: ${DOCKERHUB_USERNAME}/cab-driver-service:${IMAGE_TAG:-latest}
+    command: ["node", "dist/index.js"]
     environment:
       - NODE_ENV=production
       - PORT=3003
       - GRPC_PORT=50055
     env_file:
       - ./env/driver.env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3003)+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     networks:
       - backend
     deploy:
@@ -349,6 +396,7 @@ services:
 
   payment-service:
     image: ${DOCKERHUB_USERNAME}/cab-payment-service:${IMAGE_TAG:-latest}
+    command: ["node", "dist/index.js"]
     environment:
       - NODE_ENV=production
       - PORT=3004
@@ -356,6 +404,15 @@ services:
       - ALLOW_SANDBOX_ENDPOINT=true
     env_file:
       - ./env/payment.env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3004)+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     networks:
       - frontend
       - backend
@@ -384,11 +441,21 @@ services:
 
   wallet-service:
     image: ${DOCKERHUB_USERNAME}/cab-wallet-service:${IMAGE_TAG:-latest}
+    command: ["node", "dist/index.js"]
     environment:
       - NODE_ENV=production
       - PORT=3006
     env_file:
       - ./env/wallet.env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3006)+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     networks:
       - backend
     deploy:
@@ -416,12 +483,22 @@ services:
 
   user-service:
     image: ${DOCKERHUB_USERNAME}/cab-user-service:${IMAGE_TAG:-latest}
+    command: ["node", "dist/index.js"]
     environment:
       - NODE_ENV=production
       - PORT=3007
       - GRPC_PORT=50052
     env_file:
       - ./env/user.env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3007)+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     networks:
       - backend
     deploy:
@@ -449,12 +526,22 @@ services:
 
   booking-service:
     image: ${DOCKERHUB_USERNAME}/cab-booking-service:${IMAGE_TAG:-latest}
+    command: ["node", "dist/index.js"]
     environment:
       - NODE_ENV=production
       - PORT=3008
       - GRPC_PORT=50053
     env_file:
       - ./env/booking.env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3008)+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     networks:
       - backend
     deploy:
@@ -489,6 +576,15 @@ services:
       - AI_SERVICE_URL=http://ai-service:8000
     env_file:
       - ./env/pricing.env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3009)+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     networks:
       - backend
     deploy:
@@ -521,6 +617,15 @@ services:
       - PORT=3005
     env_file:
       - ./env/notification.env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3005)+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     networks:
       - backend
     deploy:
@@ -553,6 +658,15 @@ services:
       - PORT=3010
     env_file:
       - ./env/review.env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3010)+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     networks:
       - backend
     deploy:
@@ -828,6 +942,7 @@ services:
         mode: host
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
       # Docker socket: lets Prometheus auto-discover all Swarm nodes
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -915,6 +1030,41 @@ services:
           cpus: '0.1'
           memory: 128M
 
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --cluster.listen-address=
+    ports:
+      - target: 9093
+        published: 9093
+        protocol: tcp
+        mode: host
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    secrets:
+      - telegram_bot_token
+    networks:
+      - backend
+      - frontend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.infra == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
 # ══════════════════════════════════════════════════════════════════════════
 # VOLUMES — all on Manager (local driver, not replicated)
 # ══════════════════════════════════════════════════════════════════════════
@@ -939,6 +1089,9 @@ volumes:
     driver: local
   loki_data:
     name: cab-booking-loki-data
+    driver: local
+  alertmanager_data:
+    name: cab-booking-alertmanager-data
     driver: local
   promtail_positions:
     name: cab-booking-promtail-positions
@@ -969,6 +1122,8 @@ secrets:
   mongo_user:
     external: true
   mongo_password:
+    external: true
+  telegram_bot_token:
     external: true
 
 # ══════════════════════════════════════════════════════════════════════════

@@ -1,6 +1,12 @@
-# BPMN Large Text
+# BPMN Tiếng Việt Chữ Lớn
 
-Bản này giữ bố cục BPMN ngang như bộ ảnh gốc nhưng tăng cỡ chữ, node và lane để khi chèn vào Word dễ đọc hơn.
+Bộ ảnh này dùng canvas rộng 2400px, bố cục swimlane dọc, ký hiệu BPMN cơ bản và nhãn tiếng Việt chữ lớn để khi chèn vào Word không bị co nhỏ hoặc cắt ngang.
+
+Render lại bằng:
+
+```powershell
+python scripts\render-bpmn-processes.py
+```
 
 | File | Tên sơ đồ |
 | --- | --- |

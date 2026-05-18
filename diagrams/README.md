@@ -6,7 +6,7 @@ The folder tree is split into two high-level categories:
 - `01_system_architecture`: system overview, service architecture, AI pipelines, CI/CD, AWS, Docker Swarm HA, scaling, and monitoring.
 - `02_analysis_design`: use cases, activity diagrams, sequence diagrams, database/event design, DDD design, state machines, and algorithms.
 
-Each diagram folder keeps the `.mmd` source and rendered `.png` together. Most PNG files are normalized to a white 2400x1600 canvas with a diagram-type caption at the bottom. Activity diagrams use a wider 3600px swimlane canvas with dynamic height so validation, error, retry, and timeout branches remain readable without leaving a large blank area below the flow.
+Each diagram folder keeps the `.mmd` source and rendered `.png` together. Most PNG files are normalized to a white 2400x1600 canvas with a diagram-type caption at the bottom. Activity diagrams use a 2400px report-friendly swimlane canvas with dynamic height, larger Vietnamese labels, and enough padding so validation, error, retry, and timeout branches remain readable. BPMN diagrams use the same report-friendly 2400px approach with vertical swimlanes, BPMN event/task/gateway symbols, and larger Vietnamese text.
 
 ## Render
 
@@ -18,6 +18,12 @@ Activity diagrams use a custom UML swimlane renderer to keep the layout close to
 
 ```powershell
 python scripts\render-activity-swimlanes.py
+```
+
+BPMN diagrams use a custom renderer because the original folder only stores PNG outputs.
+
+```powershell
+python scripts\render-bpmn-processes.py
 ```
 
 ## Diagram Index

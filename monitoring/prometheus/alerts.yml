@@ -1,0 +1,140 @@
+groups:
+  - name: services
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: |
+          (sum by (container_label_com_docker_swarm_service_name) (
+            rate(container_last_seen{container_label_com_docker_swarm_service_name=~"cab-booking_.+"}[2m])
+          )) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Swarm service {{ $labels.container_label_com_docker_swarm_service_name }} has no running tasks"
+          description: "No cAdvisor heartbeat trong 2 phút."
+
+      - alert: GatewayScrapeDown
+        expr: up{job="api-gateway"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API Gateway scrape thất bại"
+          description: "Prometheus không scrape được api-gateway:3000/metrics — gateway có thể down hoặc unhealthy."
+
+      - alert: ContainerRestarting
+        expr: |
+          increase(container_start_time_seconds{name=~"cab-booking_.+"}[10m]) > 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.name }} restart liên tục"
+          description: "Container restart >2 lần trong 10 phút — crash loop."
+
+  - name: host
+    interval: 30s
+    rules:
+      - alert: HostHighCPU
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} CPU > 85%"
+          description: "Current: {{ $value | humanize }}%."
+
+      - alert: HostHighMemory
+        expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} RAM > 90%"
+          description: "MemAvailable dưới 10% — sắp OOM."
+
+      - alert: HostDiskAlmostFull
+        expr: |
+          100 - (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+                 / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} * 100) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} disk > 85%"
+          description: "Dọn: docker system prune -af"
+
+      - alert: HostDiskCritical
+        expr: |
+          100 - (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+                 / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} * 100) > 92
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} disk > 92%"
+          description: "Còn dưới 8% trống — service sẽ crash."
+
+      - alert: HostDown
+        expr: up{job="node-exporter"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node {{ $labels.instance }} không phản hồi"
+          description: "node-exporter scrape thất bại 3 phút."
+
+  - name: containers
+    interval: 30s
+    rules:
+      - alert: ContainerHighCPU
+        expr: |
+          (sum by (name) (rate(container_cpu_usage_seconds_total{name=~"cab-booking_.+"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.name }} CPU > 85% (5m)"
+          description: "{{ $value | humanize }}%"
+
+      - alert: ContainerHighMemory
+        expr: |
+          (container_memory_working_set_bytes{name=~"cab-booking_.+"}
+            / on(name) container_spec_memory_limit_bytes{name=~"cab-booking_.+"} > 0) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.name }} mem > 90% limit"
+          description: "Gần OOM-kill — xem xét tăng limit hoặc rò rỉ bộ nhớ."
+
+  - name: rabbitmq
+    interval: 30s
+    rules:
+      - alert: RabbitMQQueueBackup
+        expr: rabbitmq_queue_messages_ready > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue {{ $labels.queue }} backed up ({{ $value }})"
+          description: "Consumer chậm hoặc lỗi — kiểm tra log service tương ứng."
+
+      - alert: RabbitMQNoConsumers
+        expr: rabbitmq_queue_messages_ready > 0 and rabbitmq_queue_consumers == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Queue {{ $labels.queue }} không có consumer"
+          description: "Có message chờ nhưng 0 consumer — domain-events sẽ ngắt."
+
+      - alert: RabbitMQDown
+        expr: up{job="rabbitmq"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RabbitMQ scrape thất bại"
+          description: "Broker có thể down — toàn bộ event bus dừng."

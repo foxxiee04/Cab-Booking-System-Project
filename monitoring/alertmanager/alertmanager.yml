@@ -1,0 +1,68 @@
+# Alertmanager — Telegram receiver
+#
+# Trước khi deploy:
+#   1. Tạo bot ở @BotFather trên Telegram, lấy BOT_TOKEN.
+#   2. Lấy CHAT_ID (group hoặc cá nhân) qua @userinfobot hoặc @raw_data_bot.
+#      Group thường có ID âm (vd: -1001234567890).
+#   3. Trên Primary Manager:
+#         echo "<BOT_TOKEN>" | docker secret create telegram_bot_token -
+#   4. Sửa hai chỗ __CHAT_ID__ bên dưới thành ID thật, hoặc dùng sed:
+#         sed -i 's/__CHAT_ID__/-1001234567890/g' \
+#           ~/cab-booking/monitoring/alertmanager/alertmanager.yml
+#   5. Deploy stack lại.
+#
+# Lưu ý: file này có placeholder, KHÔNG commit chat_id thật vào git nếu group là riêng.
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: telegram-default
+  group_by: ['alertname', 'severity']
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: telegram-critical
+      group_wait: 5s
+      repeat_interval: 1h
+
+receivers:
+  - name: telegram-default
+    telegram_configs:
+      - bot_token_file: /run/secrets/telegram_bot_token
+        chat_id: __CHAT_ID__
+        parse_mode: HTML
+        send_resolved: true
+        message: |
+          {{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} <b>{{ .GroupLabels.alertname }}</b> ({{ .Status }})
+          {{ range .Alerts }}
+          <b>Severity:</b> {{ .Labels.severity }}
+          <b>Summary:</b> {{ .Annotations.summary }}
+          {{ if .Annotations.description }}<b>Details:</b> {{ .Annotations.description }}{{ end }}
+          {{ if .Labels.instance }}<b>Instance:</b> {{ .Labels.instance }}{{ end }}
+          {{ if .Labels.name }}<b>Container:</b> {{ .Labels.name }}{{ end }}
+          {{ end }}
+
+  - name: telegram-critical
+    telegram_configs:
+      - bot_token_file: /run/secrets/telegram_bot_token
+        chat_id: __CHAT_ID__
+        parse_mode: HTML
+        send_resolved: true
+        message: |
+          🚨 <b>CRITICAL</b> — {{ .GroupLabels.alertname }} ({{ .Status }})
+          {{ range .Alerts }}
+          <b>{{ .Annotations.summary }}</b>
+          {{ .Annotations.description }}
+          {{ if .Labels.instance }}Instance: {{ .Labels.instance }}{{ end }}
+          {{ end }}
+
+inhibit_rules:
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ['alertname']

@@ -201,46 +201,15 @@ wait_for_wallet_proxy_ready() {
 migrate_one() {
   local svc="$1"
   local db="$2"
-  local nf="${STACK_NAME}_${svc}"
-  local cid=""
-  cid="$(docker ps -q -f name="$nf" | head -1)"
-
-  if [[ -n "$cid" ]]; then
-    echo "  → $svc (manager/local $cid)"
-    docker exec "$cid" npx prisma db push --accept-data-loss
-    return 0
-  fi
-
-  # Task chạy trên worker → thử SSH vào từng node nếu có key.
-  local key_path=""
-  local user="${SWARM_NODES_SSH_USER:-ubuntu}"
-  if key_path="$(resolve_swarm_ssh_key 2>/dev/null)"; then
-    echo "  → $nf: đang SSH swarm nodes (user=$user key=${key_path})..."
-    local nid=""
-    for nid in $(docker node ls -q 2>/dev/null); do
-      [[ -z "$nid" ]] && continue
-      local addr
-      addr="$(docker node inspect "$nid" -f '{{.Status.Addr}}' 2>/dev/null)"
-      [[ -z "$addr" ]] && continue
-      cid=""
-      cid="$(ssh -i "$key_path" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-        "${user}@${addr}" "docker ps -q -f name=$nf" 2>/dev/null | head -1 || true)"
-      if [[ -n "$cid" ]]; then
-        echo "  → $svc trên $addr ($cid)"
-        ssh -i "$key_path" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-          "${user}@${addr}" "docker exec $cid npx prisma db push --accept-data-loss"
-        return 0
-      fi
-    done
-  fi
-
-  # Fallback: docker run với image từ registry (không cần container đang chạy).
-  # Overlay `backend` trong stack thesis là internal + không attachable → không gắn được từ
-  # docker run bên ngoài. Postgres đã publish 5433:5432 trên Manager → dùng --network host.
+  # ALWAYS use docker run --network host on the manager — bypasses overlay
+  # entirely, postgres reachable at 127.0.0.1:5433 (host-port published).
+  # Previously this function tried docker exec (local + SSH to workers) first,
+  # but those paths hit overlay DNS races on Prisma's can-connect-to-database
+  # preflight and hung. Direct host-network migration is deterministic.
   local img="${DOCKERHUB_USERNAME:-foxxiee04}/cab-${svc}:${IMAGE_TAG:-latest}"
-  echo "  → $svc: fallback docker run --network host ($img → $db @127.0.0.1:5433)"
+  echo "  → $svc via host network ($img → $db @127.0.0.1:5433)"
   docker run --rm --network host \
-    -e DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5433/${db}" \
+    -e DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5433/${db}?connect_timeout=60" \
     "$img" npx prisma db push --accept-data-loss
 }
 
