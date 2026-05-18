@@ -65,7 +65,15 @@ services:
         target: /docker-entrypoint-initdb.d/init.sql
         mode: 0444
     networks:
+      # `backend` is `internal: true` — containers on internal-only overlay
+      # silently fail to register host port bindings (mode=host route needs a
+      # non-internal interface to traverse docker_gwbridge). Adding `frontend`
+      # gives each stateful/monitoring service the non-internal endpoint that
+      # makes the host port actually listen. Without this, `mode=host` in the
+      # Swarm task spec is honoured at API level but the engine never opens
+      # 0.0.0.0:5433 on the host.
       - backend
+      - frontend
     ports:
       # mode=host: bypass Swarm ingress routing mesh, bind directly on the
       # Manager's host network namespace. Required on this single-Manager
@@ -107,7 +115,9 @@ services:
     volumes:
       - mongo_data:/data/db
     networks:
+      # See postgres comment — mode=host needs a non-internal network.
       - backend
+      - frontend
     ports:
       # mode=host: bypass Swarm ingress (see postgres comment above).
       # Host seed (scripts/seed-database.ts hist + reviews): bootstrap-runner --network host cần Mongo tại localhost.
@@ -813,7 +823,9 @@ services:
       # Docker socket: lets Prometheus auto-discover all Swarm nodes
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
+      # See postgres comment — mode=host needs a non-internal network.
       - backend
+      - frontend
     deploy:
       replicas: 1
       placement:
@@ -876,7 +888,9 @@ services:
       - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki_data:/loki
     networks:
+      # See postgres comment — mode=host needs a non-internal network.
       - backend
+      - frontend
     deploy:
       replicas: 1
       placement:
