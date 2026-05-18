@@ -31,6 +31,8 @@ Usage: $0 <command>
 Commands:
   init          Init swarm on this manager, create secrets, show join token
   join-worker   Print join-token for worker nodes (run on manager)
+  label-nodes   Apply labels from deploy/swarm-labels.conf to all nodes
+  preflight     Verify overlay DNS + Postgres reachable from every node
   deploy        Deploy / update the stack
   status        Show stack services and node list
   promote       Promote a worker to secondary manager (for HA)
@@ -97,6 +99,117 @@ cmd_join_worker() {
   echo ""
   warn "Each worker must have Docker installed first:"
   warn "  curl -fsSL https://get.docker.com | sh"
+}
+
+# ============================================================
+cmd_label_nodes() {
+  local repo_root; repo_root="$(cd "${SCRIPT_DIR}/.." && pwd)"
+  local conf="${repo_root}/deploy/swarm-labels.conf"
+  [[ ! -f "${conf}" ]] && error "Label config not found: ${conf}"
+
+  info "Reading label assignments from: ${conf}"
+  echo
+
+  declare -A WANT  # hostname -> "k1=v1 k2=v2"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%%#*}"  # strip inline comments
+    line="${line#"${line%%[![:space:]]*}"}"  # ltrim
+    [[ -z "${line// }" ]] && continue
+    local host; host="${line%%:*}"
+    local rest; rest="${line#*:}"
+    host="${host//[[:space:]]/}"
+    rest="${rest// /}"
+    WANT["${host}"]="${rest//,/ }"
+  done <"${conf}"
+
+  local node_id host current_labels desired_labels
+  local applied=0 skipped=0 unknown=0
+
+  while read -r node_id; do
+    [[ -z "${node_id}" ]] && continue
+    host=$(docker node inspect "${node_id}" --format '{{.Description.Hostname}}')
+    current_labels=$(docker node inspect "${node_id}" --format '{{range $k,$v := .Spec.Labels}}{{$k}}={{$v}} {{end}}')
+
+    desired_labels="${WANT[${host}]:-}"
+    if [[ -z "${desired_labels}" ]]; then
+      warn "  ${host}  → no entry in conf file (skipping; add it before deploy)"
+      unknown=$((unknown+1))
+      continue
+    fi
+
+    # Remove labels NOT in desired set (clean slate per node)
+    local k v existing_keys=""
+    for kv in ${current_labels}; do
+      k="${kv%%=*}"; existing_keys+="${k} "
+    done
+    for k in ${existing_keys}; do
+      local keep=0
+      for kv in ${desired_labels}; do
+        [[ "${kv%%=*}" == "${k}" ]] && { keep=1; break; }
+      done
+      [[ "${keep}" == 0 ]] && \
+        docker node update --label-rm "${k}" "${node_id}" >/dev/null
+    done
+
+    # Apply desired
+    local update_args=""
+    for kv in ${desired_labels}; do
+      update_args+=" --label-add ${kv}"
+    done
+    # shellcheck disable=SC2086
+    docker node update ${update_args} "${node_id}" >/dev/null
+    info "  ${host}  ← ${desired_labels}"
+    applied=$((applied+1))
+  done < <(docker node ls -q)
+
+  echo
+  info "Applied: ${applied}, skipped: ${skipped}, unknown: ${unknown}"
+  [[ "${unknown}" -gt 0 ]] && warn "Edit deploy/swarm-labels.conf to add missing hostnames, then re-run."
+}
+
+# ============================================================
+cmd_preflight() {
+  info "Pre-flight check: every node must reach 'postgres' via overlay DNS."
+  echo
+
+  # Ensure the backend overlay network exists (created by stack deploy).
+  local net="cab-booking_backend"
+  if ! docker network inspect "${net}" >/dev/null 2>&1; then
+    warn "Overlay '${net}' not found — deploy the stack first, then re-run preflight."
+    warn "Skipping DNS test; only checking node reachability."
+    docker node ls
+    return 0
+  fi
+
+  local fail=0
+  local node_id host addr
+  while read -r node_id; do
+    [[ -z "${node_id}" ]] && continue
+    host=$(docker node inspect "${node_id}" --format '{{.Description.Hostname}}')
+    addr=$(docker node inspect "${node_id}" --format '{{.Status.Addr}}')
+    echo -n "  ${host} (${addr}) … "
+
+    # Run busybox in the overlay network on THIS node (constraint) → test DNS
+    local out
+    out=$(docker run --rm \
+      --network "${net}" \
+      --constraint "node.hostname==${host}" \
+      busybox:latest sh -c 'getent hosts postgres && nc -zvw3 postgres 5432' 2>&1 | tail -3)
+
+    if echo "${out}" | grep -q "open"; then
+      echo -e "${GREEN}OK${NC}"
+    else
+      echo -e "${RED}FAIL${NC}"
+      echo "${out}" | sed 's/^/      /'
+      fail=$((fail+1))
+    fi
+  done < <(docker node ls -q)
+
+  echo
+  if [[ "${fail}" -gt 0 ]]; then
+    error "${fail} node(s) failed overlay DNS check. Fix: restart docker daemon on the failing node — sudo systemctl restart docker"
+  fi
+  info "All nodes can resolve and connect to postgres via overlay. ✔"
 }
 
 # ============================================================
@@ -188,6 +301,8 @@ cmd_teardown() {
 case "${1:-}" in
   init)          cmd_init ;;
   join-worker)   cmd_join_worker ;;
+  label-nodes)   cmd_label_nodes ;;
+  preflight)     cmd_preflight ;;
   deploy)        cmd_deploy ;;
   status)        cmd_status ;;
   promote)       cmd_promote ;;

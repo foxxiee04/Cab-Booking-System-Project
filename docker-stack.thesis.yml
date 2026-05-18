@@ -222,7 +222,9 @@ services:
       update_config:
         parallelism: 1
         delay: 10s
-        order: start-first
+        # mode=host on port 3000: new task cannot bind while old task holds the
+        # port on the same node → start-first deadlocks. Must stop-first.
+        order: stop-first
         failure_action: rollback
       restart_policy:
         condition: on-failure

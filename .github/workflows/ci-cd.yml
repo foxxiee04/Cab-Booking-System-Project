@@ -485,7 +485,7 @@ jobs:
           port: ${{ secrets.DEPLOY_PORT || 22 }}
           timeout: 60s
           command_timeout: 10m
-          source: "docker-stack.thesis.yml,monitoring,env,scripts,deploy/nginx"
+          source: "docker-stack.thesis.yml,monitoring,env,scripts,deploy"
           target: "~/cab-booking/"
           strip_components: 0
 
@@ -511,7 +511,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
-          command_timeout: 60m
+          command_timeout: 30m
           script: |
             set -e
             cd ~/cab-booking
@@ -526,51 +526,19 @@ jobs:
             fi
 
             # Authenticate to Docker Hub (prevents anonymous pull rate-limits).
-            # Requires DOCKERHUB_TOKEN in ~/cab-booking/.env on the server.
             echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin 2>/dev/null || true
 
-            echo "▶ Cleaning up disk BEFORE pulling (unused images older than 6h, all nodes)..."
-            for node_ip in $(docker node inspect $(docker node ls -q) --format '{{.Status.Addr}}' 2>/dev/null); do
-              ssh -i ~/.ssh/swarm_key -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$node_ip \
-                "docker image prune -af --filter 'until=6h' 2>/dev/null || true; docker builder prune -af 2>/dev/null || true" 2>/dev/null || true
-            done
+            # ── 1. Apply node labels from deploy/swarm-labels.conf ─────────────
+            # This is idempotent and self-heals after node replacement.
+            echo "▶ Applying node labels from deploy/swarm-labels.conf..."
+            bash scripts/swarm-setup.sh label-nodes
 
-            echo "▶ Pre-pulling service images on manager..."
-            for svc in api-gateway auth-service ride-service driver-service payment-service \
-                       wallet-service user-service booking-service pricing-service \
-                       notification-service review-service ai-service autoscaler bootstrap-runner; do
-              docker pull "${DOCKERHUB_USERNAME}/cab-${svc}:${IMAGE_TAG}" &
-            done
-            wait
-
-            echo "▶ Pre-pulling service images on worker nodes..."
-            for node_ip in $(docker node inspect \
-                $(docker node ls -q --filter role=worker) \
-                --format '{{.Status.Addr}}' 2>/dev/null); do
-              ssh -i ~/.ssh/swarm_key -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@$node_ip "
-                for svc in api-gateway auth-service ride-service driver-service payment-service \
-                           wallet-service user-service booking-service pricing-service \
-                           notification-service review-service ai-service autoscaler bootstrap-runner; do
-                  docker pull ${DOCKERHUB_USERNAME}/cab-\${svc}:${IMAGE_TAG} &
-                done
-                wait
-              " 2>/dev/null || true
-            done
-
-            echo "▶ Setting node labels on Primary Manager..."
-            SELF_ID=$(docker info --format '{{.Swarm.NodeID}}')
-            docker node update --label-add infra=true  "$SELF_ID" 2>/dev/null || true
-            docker node update --label-add nginx=true  "$SELF_ID" 2>/dev/null || true
-            echo "  Manager $SELF_ID labelled (infra=true, nginx=true)"
-
-            # Parallel pulls + immediate stack deploy can trigger transient "update out of sequence" on Raft.
-            echo "▶ Cool-down before stack deploy (45s)..."
-            sleep 45
-
+            # ── 2. Deploy stack ────────────────────────────────────────────────
+            # Swarm pulls images on each node lazily — no need to pre-pull from CI.
+            # Retry up to 4× on transient Raft "update out of sequence".
             echo "▶ Deploying stack (tag=$IMAGE_TAG)..."
-            # Swarm may return "update out of sequence" — retry with backoff.
             deploy_ok=0
-            for attempt in 1 2 3 4 5 6 7 8; do
+            for attempt in 1 2 3 4; do
               if docker stack deploy \
                 --detach \
                 -c docker-stack.thesis.yml \
@@ -581,14 +549,12 @@ jobs:
                 deploy_ok=1
                 break
               fi
-              echo "  stack deploy failed (attempt ${attempt}/8), sleeping 30s before retry..."
-              sleep 30
+              echo "  stack deploy failed (attempt ${attempt}/4), sleeping 15s..."
+              sleep 15
             done
-            if [ "$deploy_ok" != 1 ]; then
-              echo "::error::docker stack deploy failed after 8 attempts (e.g. rpc update out of sequence)"
-              exit 1
-            fi
+            [ "$deploy_ok" != 1 ] && { echo "::error::stack deploy failed"; exit 1; }
 
+            # ── 3. Wait for postgres + ensure databases ────────────────────────
             echo "▶ Waiting for postgres to be ready..."
             PGID=""
             for i in $(seq 1 36); do
@@ -597,7 +563,6 @@ jobs:
                 echo "  postgres ready (attempt $i)"
                 break
               fi
-              echo "  waiting... ($i/36)"
               sleep 5
             done
 
@@ -608,15 +573,14 @@ jobs:
                   | grep -q 1 || docker exec "$PGID" psql -U postgres -c "CREATE DATABASE $db;"
               done
               echo "  databases OK"
-            else
-              echo "⚠ postgres not reachable after 180s — run manually: docker exec <postgres-id> psql -U postgres -f /docker-entrypoint-initdb.d/init.sql"
             fi
 
-            echo "▶ Post-deploy prune (all Swarm nodes): stopped containers + unused images/networks; KHÔNG xóa volume (--volumes không bật)..."
-            for node_ip in $(docker node inspect $(docker node ls -q) --format '{{.Status.Addr}}' 2>/dev/null); do
-              ssh -i ~/.ssh/swarm_key -o StrictHostKeyChecking=no -o ConnectTimeout=12 ubuntu@$node_ip \
-                "docker system prune -af 2>/dev/null || true; df -h / | tail -1" 2>/dev/null || true
-            done
+            # ── 4. Pre-flight overlay DNS check (non-blocking, advisory) ──────
+            # If overlay is unhealthy on a node, payment-service etc. will fail
+            # to connect to postgres. preflight prints which node is broken.
+            echo "▶ Pre-flight overlay check (advisory, non-blocking)..."
+            bash scripts/swarm-setup.sh preflight || \
+              echo "::warning::Pre-flight overlay check reported issues — see log above."
 
             echo "✅ Swarm deployment complete"
 
