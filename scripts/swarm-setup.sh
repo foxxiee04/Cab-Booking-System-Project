@@ -37,6 +37,9 @@ Commands:
   status        Show stack services and node list
   promote       Promote a worker to secondary manager (for HA)
   scale         Scale a service  (e.g. $0 scale auth-service 2)
+  recover       Un-drain nodes, reset labels, pause autoscaler,
+                force-redeploy stack, resume autoscaler. Use this when the
+                server has been "set lung tung" — config drifted from repo.
   teardown      Remove stack and leave swarm (destructive!)
 EOF
 }
@@ -301,6 +304,89 @@ cmd_teardown() {
 }
 
 # ============================================================
+# Recover from a "set lung tung" server state: drifted node labels,
+# leftover service updates from a broken deploy, autoscaler racing
+# rolling updates, drained nodes. Brings everything back in line
+# with the repo (deploy/swarm-labels.conf + docker-stack.thesis.yml).
+#
+# Idempotent — safe to run multiple times. Does NOT touch volumes.
+cmd_recover() {
+  cd "${PROJECT_DIR}" 2>/dev/null || error "Repo not found at ${PROJECT_DIR}"
+
+  info "═══ STEP 1/7  Show current state ════════════════════════════"
+  docker node ls || true
+  echo
+  docker stack services "${STACK_NAME}" 2>/dev/null | head -30 || true
+  echo
+
+  info "═══ STEP 2/7  Un-drain any drained nodes ═══════════════════"
+  while read -r node_id; do
+    [[ -z "${node_id}" ]] && continue
+    avail=$(docker node inspect "${node_id}" --format '{{.Spec.Availability}}')
+    host=$(docker node inspect "${node_id}" --format '{{.Description.Hostname}}')
+    if [[ "${avail}" != "active" ]]; then
+      warn "  ${host} is '${avail}' — setting back to active"
+      docker node update --availability active "${node_id}" >/dev/null
+    fi
+  done < <(docker node ls -q)
+  info "All nodes set to availability=active."
+  echo
+
+  info "═══ STEP 3/7  Re-apply node labels from swarm-labels.conf ══"
+  cmd_label_nodes
+  echo
+
+  info "═══ STEP 4/7  Pause autoscaler ═════════════════════════════"
+  local autoscaler="${STACK_NAME}_autoscaler"
+  local autoscaler_prev=""
+  if docker service ls --format '{{.Name}}' | grep -qx "${autoscaler}"; then
+    autoscaler_prev=$(docker service inspect "${autoscaler}" \
+      --format '{{.Spec.Mode.Replicated.Replicas}}' 2>/dev/null || echo 1)
+    info "  Was ${autoscaler_prev} replica → scaling to 0"
+    docker service scale "${autoscaler}=0" >/dev/null 2>&1 || true
+    sleep 5
+  else
+    info "  Autoscaler not running — skipping pause"
+  fi
+  echo
+
+  info "═══ STEP 5/7  Pull latest images (optional) ═══════════════"
+  if [[ -f "${PROJECT_DIR}/.env" ]]; then
+    # shellcheck source=scripts/load-dotenv.sh
+    source "${SCRIPT_DIR}/load-dotenv.sh"
+    load_dotenv "${PROJECT_DIR}/.env"
+  fi
+  DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-foxxiee04}"
+  IMAGE_TAG="${IMAGE_TAG:-latest}"
+  if [[ -n "${DOCKERHUB_TOKEN:-}" ]]; then
+    echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin >/dev/null 2>&1 || \
+      warn "  Docker Hub login failed — will pull anonymously"
+  fi
+  echo
+
+  info "═══ STEP 6/7  Force-redeploy stack (foreground, single pass) ═"
+  info "  This converges every service to the spec in docker-stack.thesis.yml"
+  DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME}" \
+  IMAGE_TAG="${IMAGE_TAG}" \
+  docker stack deploy \
+    --with-registry-auth \
+    --resolve-image always \
+    --prune \
+    -c "${STACK_FILE}" \
+    "${STACK_NAME}"
+  echo
+
+  info "═══ STEP 7/7  Resume autoscaler ════════════════════════════"
+  if [[ -n "${autoscaler_prev}" ]] && [[ "${autoscaler_prev}" != "0" ]]; then
+    info "  Restoring ${autoscaler} to ${autoscaler_prev} replica"
+    docker service scale "${autoscaler}=${autoscaler_prev}" >/dev/null 2>&1 || true
+  fi
+  echo
+  info "Done. To verify: $0 status   |   bash scripts/reset-and-seed.sh"
+  warn "If services still show 0/1 after 2 minutes, check: docker service ps ${STACK_NAME}_<svc> --no-trunc"
+}
+
+# ============================================================
 case "${1:-}" in
   init)          cmd_init ;;
   join-worker)   cmd_join_worker ;;
@@ -310,6 +396,7 @@ case "${1:-}" in
   status)        cmd_status ;;
   promote)       cmd_promote ;;
   scale)         cmd_scale "${2:-}" "${3:-}" ;;
+  recover)       cmd_recover ;;
   teardown)      cmd_teardown ;;
   *)             usage; exit 1 ;;
 esac

@@ -506,55 +506,86 @@ jobs:
 
       - name: Deploy Swarm stack
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
           command_timeout: 30m
+          # appleboy/ssh-action only forwards env vars listed here, so the
+          # script below sees DOCKERHUB_TOKEN (login was silently anonymous
+          # before, which broke --resolve-image's digest lookup).
+          envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
           script: |
             set -e
             cd ~/cab-booking
             rm -f reset-and-seed.sh
 
             export IMAGE_TAG=latest
-            export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
 
             if [ -f .env ]; then
               . scripts/load-dotenv.sh
               load_dotenv .env
             fi
 
-            # Authenticate to Docker Hub (prevents anonymous pull rate-limits).
-            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin 2>/dev/null || true
+            # Authenticate to Docker Hub (prevents anonymous pull rate-limits
+            # and lets --resolve-image always read digests for postgres etc.).
+            if [ -n "$DOCKERHUB_TOKEN" ] && [ -n "$DOCKERHUB_USERNAME" ]; then
+              echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            else
+              echo "::warning::DOCKERHUB_USERNAME/DOCKERHUB_TOKEN not set — pulling anonymously (may hit rate limits)."
+            fi
 
             # ── 1. Apply node labels from deploy/swarm-labels.conf ─────────────
             # This is idempotent and self-heals after node replacement.
             echo "▶ Applying node labels from deploy/swarm-labels.conf..."
             bash scripts/swarm-setup.sh label-nodes
 
-            # ── 2. Deploy stack ────────────────────────────────────────────────
-            # Swarm pulls images on each node lazily — no need to pre-pull from CI.
-            # Retry up to 4× on transient Raft "update out of sequence".
-            echo "▶ Deploying stack (tag=$IMAGE_TAG)..."
-            deploy_ok=0
-            for attempt in 1 2 3 4; do
-              if docker stack deploy \
-                --detach \
-                -c docker-stack.thesis.yml \
-                --with-registry-auth \
-                --resolve-image always \
-                --prune \
-                cab-booking; then
-                deploy_ok=1
-                break
+            # ── 2. Pause autoscaler before deploy ──────────────────────────────
+            # The autoscaler runs `docker service update/scale` every 30s. If a
+            # `stack deploy` is rolling updates through services at the same time,
+            # both compete for the same Raft sequence number on each service
+            # spec and Docker fails the loser with
+            #   "update out of sequence"
+            # cascading errors across half the stack. Pause it for the duration
+            # of the deploy, then restore.
+            AUTOSCALER_SVC="cab-booking_autoscaler"
+            AUTOSCALER_PREV=""
+            if docker service ls --format '{{.Name}}' | grep -qx "$AUTOSCALER_SVC"; then
+              AUTOSCALER_PREV="$(docker service inspect "$AUTOSCALER_SVC" \
+                --format '{{.Spec.Mode.Replicated.Replicas}}' 2>/dev/null || echo 1)"
+              echo "▶ Pausing $AUTOSCALER_SVC (was $AUTOSCALER_PREV replica) to avoid Raft contention..."
+              docker service scale "${AUTOSCALER_SVC}=0" >/dev/null 2>&1 || true
+              # Give Raft a moment to settle the scale-to-0 before piling on
+              # ~20 more service updates from `stack deploy`.
+              sleep 5
+            fi
+            restore_autoscaler() {
+              if [ -n "$AUTOSCALER_PREV" ] && [ "$AUTOSCALER_PREV" != "0" ]; then
+                echo "▶ Restoring $AUTOSCALER_SVC to $AUTOSCALER_PREV replica..."
+                docker service scale "${AUTOSCALER_SVC}=${AUTOSCALER_PREV}" >/dev/null 2>&1 || true
               fi
-              echo "  stack deploy failed (attempt ${attempt}/4), sleeping 15s..."
-              sleep 15
-            done
-            [ "$deploy_ok" != 1 ] && { echo "::error::stack deploy failed"; exit 1; }
+            }
+            trap restore_autoscaler EXIT
 
-            # ── 3. Wait for postgres + ensure databases ────────────────────────
+            # ── 3. Deploy stack (foreground, single attempt) ───────────────────
+            # NO --detach: we want the command to block until rollout completes,
+            # otherwise the retry loop below would start a second deploy on top
+            # of an in-flight one (which is exactly what caused the historical
+            # cascade of "update out of sequence" errors). Without autoscaler
+            # in the loop, a single foreground deploy is now deterministic.
+            echo "▶ Deploying stack (tag=$IMAGE_TAG)..."
+            docker stack deploy \
+              -c docker-stack.thesis.yml \
+              --with-registry-auth \
+              --resolve-image always \
+              --prune \
+              cab-booking
+
+            # ── 4. Wait for postgres + ensure databases ────────────────────────
             echo "▶ Waiting for postgres to be ready..."
             PGID=""
             for i in $(seq 1 36); do
@@ -575,7 +606,7 @@ jobs:
               echo "  databases OK"
             fi
 
-            # ── 4. Pre-flight overlay DNS check (non-blocking, advisory) ──────
+            # ── 5. Pre-flight overlay DNS check (non-blocking, advisory) ──────
             # If overlay is unhealthy on a node, payment-service etc. will fail
             # to connect to postgres. preflight prints which node is broken.
             echo "▶ Pre-flight overlay check (advisory, non-blocking)..."

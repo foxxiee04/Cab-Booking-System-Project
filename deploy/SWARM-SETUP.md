@@ -312,11 +312,14 @@ To add a manager to this swarm, run 'docker swarm join-token manager' and follow
 
 > Vẫn trên **Primary Manager** — phải làm TRƯỚC khi deploy stack
 
-Stack file dùng constraints để quyết định service chạy trên node nào:
-- `node.labels.infra == true` → postgres, mongodb, redis, rabbitmq, monitoring (Prometheus/Grafana/Loki), autoscaler, … — **không** gồm `ai-service` (file thesis: AI chạy trên `node.role == worker` để tránh tranh RAM với DB)
-- `node.labels.nginx == true` → api-gateway (public entry point, cần IP cố định)
-- `node.role == worker` + `node.labels.app.half == 1|2` → **`docker-stack.thesis.yml`**: chia microservices lên **hai worker app** có label tương ứng (`spread` một mình không đảm bảo đều)
+Stack file dùng constraints để quyết định service chạy trên node nào (xem `docker-stack.thesis.yml` cho nguồn sự thật):
+
+- `node.labels.infra == true` → postgres, mongodb, rabbitmq, autoscaler. (Cần ≥1 manager có label này; có 3 managers cùng nhãn để chịu lỗi.)
+- `node.labels.nginx == true` → **api-gateway** + **toàn bộ monitoring** (prometheus, grafana, loki, alertmanager). Pin về Primary Manager vì các volume `prometheus_data`/`grafana_data`/`loki_data`/`alertmanager_data` là **local** — nếu Swarm reschedule sang node khác thì dữ liệu lịch sử coi như mất.
+- `node.role == worker` + `node.labels.ml != true` → **tất cả** microservices ứng dụng (auth, user, ride, driver, payment, booking, pricing, wallet, notification, review). Không có constraint `app.half` — chỉ cần là worker không phải worker AI.
 - `node.role == worker` + `node.labels.ml == true` → chỉ chạy **`ai-service`** trên worker AI riêng.
+
+**Nguồn nhãn:** `deploy/swarm-labels.conf` (đọc bởi `scripts/swarm-setup.sh label-nodes`, CI/CD chạy tự động trước mỗi deploy). Sửa file này khi thay hostname EC2 (sau khi recreate instance).
 
 **Nếu thiếu labels, các service bị stuck ở `0/1` — KHÔNG BAO GIỜ start.**
 
@@ -333,20 +336,22 @@ docker node inspect "$SELF_ID" --format '{{json .Spec.Labels}}'
 # Output: {"infra":"true","nginx":"true"}
 ```
 
-**Thesis — cân hai worker app + một worker AI (bắt buộc trước `stack deploy`):**
+**Thesis — gán nhãn worker (bắt buộc trước `stack deploy`):**
 
 ```bash
 docker node ls
 
-# Gán mỗi worker app một nửa (thay <ID> bằng cột ID từ docker node ls)
-docker node update --label-add app.half=1 <WORKER_NODE_ID_FOR_HALF_1>
-docker node update --label-add app.half=2 <WORKER_NODE_ID_FOR_HALF_2>
-
-# Gán worker AI riêng cho ai-service
+# Worker AI: chỉ node này nhận ai-service (constraint node.labels.ml == true).
 docker node update --label-add ml=true <WORKER_NODE_ID_FOR_AI>
+
+# Hai worker app KHÔNG cần label thêm — stack chỉ yêu cầu `node.role == worker`
+# và `node.labels.ml != true`. Swarm sẽ tự spread các service ứng dụng.
+# (Cách đơn giản nhất: đảm bảo cả hai worker app đều KHÔNG có nhãn ml.)
 ```
 
-> Manager **không** gán `app.half` hoặc `ml`. Worker AI **không** gán `app.half`. Hai worker app giữ `app.half=1/2`, worker AI giữ `ml=true`.
+> **Lưu ý:** Stack file thật **không dùng `node.labels.app.half`** — đó là tài liệu cũ, đã bỏ. Hai worker app phân chia load qua `placement.spread` + autoscaler. Đừng tự thêm `app.half=1/2`, không có service nào match, không có hại nhưng gây hiểu nhầm.
+>
+> Khi recreate worker (Spot bị terminate, hostname mới), nhớ cập nhật `deploy/swarm-labels.conf` và chạy `bash scripts/swarm-setup.sh label-nodes` lại (CI/CD cũng gọi tự động ở đầu mỗi deploy).
 
 **Nếu đã join nhầm manager thứ 3 như worker:** promote trực tiếp từ primary manager:
 
@@ -470,9 +475,13 @@ echo "INTERNAL_SERVICE_TOKEN=$(openssl rand -hex 16)"
 
 ## PHASE 11 — Cập nhật env/ files (service-level)
 
-> Các file trong `env/` đã có sẵn trong repo nhưng cần cập nhật password cho production.
+> **Cập nhật 2026-05:** Tất cả `env/*.env` trong repo đã hardcoded production password (URL-encoded `FoxGo%40Postgres2025%21` cho PG, `FoxGo%40Mongo2025%21` cho Mongo, `FoxGo%40Redis2025%21` cho Redis, `FoxGo%40Rabbit2025%21` cho RabbitMQ). CI/CD scp `env/` qua server mỗi lần deploy → **không** chỉnh thủ công nữa.
+>
+> Đổi password? Sửa file trong repo (NOT trên server) → commit → push. CI sẽ propagate. Đồng thời sửa `.env` trên Manager (biến `${REDIS_PASSWORD}`, `${RABBITMQ_PASS}` để Redis/Rabbit container chạy với password mới) và đổi Docker secrets cho Postgres/Mongo (`docker secret rm postgres_password && echo "newpass" | docker secret create postgres_password -`).
+>
+> Bên dưới chỉ liệt kê **WALLET_SERVICE_URL** (bắt buộc) và các secret cần đảm bảo khớp `.env`. Không cần nano edit thủ công nếu file repo đã đúng.
 
-**gateway.env** — cập nhật các dòng sau (JWT / Rabbit / Redis / DB location + **bắt buộc có `WALLET_SERVICE_URL`** — nếu thiếu, gateway trong container fallback `http://localhost:3006` → mọi route `/api/admin/wallet/*` và phần lớn `/api/wallet/*` trả **502** trong khi `/api/voucher` vẫn OK vì đi qua payment):
+**gateway.env** — kiểm tra (đã đúng trong repo, chỉ list ra để verify):
 ```bash
 nano ~/cab-booking/env/gateway.env
 ```
@@ -646,6 +655,18 @@ docker stack deploy \
   cab-booking
 ```
 
+> ⚠️ **Redeploy khi stack đã có autoscaler:** scale autoscaler về 0 **trước** rồi mới deploy. Nếu để autoscaler chạy, nó sẽ phát `docker service update` lên service stateless cùng lúc Swarm đang rolling-update từ `stack deploy` → Raft báo `update out of sequence` trên một loạt service (booking-service, auth-service, …) và cascade lỗi `image postgres:16-alpine could not be accessed on a registry` ở các attempt sau. CI/CD pipeline đã được sửa để tự pause/resume autoscaler; nếu deploy thủ công:
+>
+> ```bash
+> PREV=$(docker service inspect cab-booking_autoscaler --format '{{.Spec.Mode.Replicated.Replicas}}' 2>/dev/null || echo 1)
+> docker service scale cab-booking_autoscaler=0 2>/dev/null || true
+> sleep 5
+> docker stack deploy --with-registry-auth --compose-file docker-stack.thesis.yml cab-booking
+> docker service scale cab-booking_autoscaler=${PREV:-1}
+> ```
+>
+> **Không** dùng `--detach` ở lệnh `stack deploy` khi vẫn cần biết khi nào rollout xong (mặc định block đến khi xong là an toàn hơn cho retry).
+
 **Output:**
 ```
 Creating network cab-booking_frontend
@@ -738,6 +759,24 @@ docker exec $(docker ps -q -f name=cab-booking_ride-service) \
 - **Nguồn trong repo:** `bash scripts/reset-database-swarm.sh` (drop DB → `prisma db push` qua exec / SSH / `docker run --network host` + `127.0.0.1:5433` → restart service (stagger) → **chờ replica X/X + /health** → seed qua host `npx` hoặc **`cab-bootstrap-runner`** → **verify** lại).
 
 > **Sau PHASE 18 (auto-scaler):** replica của gateway/auth/… có thể >1 trên worker; **postgres vẫn trên Primary Manager**. Reset/seed **luôn** chạy trên Manager. Lỗi kiểu `users` không tồn tại (P2021) thường do `prisma db push` chưa chạy cho **auth_db** / **user_db** vì task service nằm trên worker — script `reset-database-swarm.sh` mới xử lý SSH + fallback image, **không** dùng `docker run --network <stack>_backend` (overlay `backend` trong `docker-stack.thesis.yml` là **`internal: true`**, không attachable → Docker từ chối gắn mạng đó cho container one-off).
+
+> ⚠️ **Bắt buộc: tạm dừng autoscaler trước khi reset/seed.** Autoscaler chạy `docker service update`/`scale` **mỗi 30s**. Nếu nó scale trong khi script đang `service update --force` từng service thì:
+> - Raft báo `update out of sequence` → một số service stuck ở revision cũ.
+> - Replica nhảy giữa `1/1` ↔ `0/1` ↔ `2/2` → `wait_for_stack_replicas_ready` timeout sau 6 phút.
+> - Seed gọi API qua gateway gặp 502 random vì task đang restart.
+>
+> Script `scripts/reset-database-swarm.sh` (đã cập nhật) **tự** scale autoscaler về 0 ở đầu và restore lại ở cuối (qua `trap EXIT` — kể cả khi script lỗi nửa chừng). Nếu chạy bằng bộ lệnh thủ công (không qua script), tự làm:
+>
+> ```bash
+> # Trước reset
+> PREV=$(docker service inspect cab-booking_autoscaler --format '{{.Spec.Mode.Replicated.Replicas}}')
+> docker service scale cab-booking_autoscaler=0
+>
+> # …chạy reset/migrate/seed…
+>
+> # Sau khi xong
+> docker service scale cab-booking_autoscaler=${PREV:-1}
+> ```
 
 ### Điều kiện
 
@@ -998,6 +1037,49 @@ docker service scale \
 - `REACT_APP_SOCKET_URL` = `http://18.136.250.236:3000`
 
 CI/CD pipeline sẽ tự chạy `docker stack deploy` lên Manager mới — hoàn toàn tự động.
+
+---
+
+## Khôi phục khi server đã set lung tung (drift / lỗi cascade)
+
+> Dùng khi: node bị `drain`/`pause`, label không khớp `swarm-labels.conf`, service stuck `0/1`, autoscaler đua với rolling update, hoặc deploy CI/CD báo `update out of sequence` lặp lại.
+
+SSH vào **Primary Manager**, đảm bảo repo cập nhật rồi chạy 1 lệnh:
+
+```bash
+cd ~/cab-booking
+git fetch && git checkout main && git pull
+bash scripts/swarm-setup.sh recover
+```
+
+Lệnh `recover` sẽ (idempotent, **không** chạm dữ liệu volume):
+
+1. In trạng thái node + service hiện tại
+2. Set `availability=active` cho mọi node đang `drain`/`pause`
+3. Re-apply nhãn từ `deploy/swarm-labels.conf` (xóa nhãn lạ, đặt lại đúng)
+4. Pause `autoscaler` (`replicas=0`) — chặn vòng đua Raft
+5. Pull image mới (nếu có `DOCKERHUB_TOKEN` trong `.env`)
+6. Foreground `docker stack deploy --resolve-image always --prune` — **không `--detach`, không retry loop**
+7. Resume `autoscaler` về số replica cũ
+
+Chờ ~2 phút rồi:
+
+```bash
+bash scripts/swarm-setup.sh status   # tất cả service phải 1/1 (hoặc N/N)
+bash scripts/reset-and-seed.sh       # nếu cần reset + seed lại data
+```
+
+Nếu **vẫn còn service `0/1` sau 2 phút**, debug đúng service đó:
+
+```bash
+docker service ps cab-booking_<svc> --no-trunc | head -5
+docker service logs cab-booking_<svc> --tail 80
+```
+
+Thường gặp 3 loại lỗi:
+- **`no suitable node (scheduling constraints not satisfied)`** → nhãn sai. Kiểm tra `docker node inspect <node>` và so với `deploy/swarm-labels.conf`.
+- **`task: non-zero exit (137)` / `OOMKilled`** → node hết RAM. `free -h` trên node đó; tăng instance hoặc giảm `resources.limits.memory`.
+- **`connection refused` / `ECONNREFUSED postgres:5432`** → DB chưa healthy. Healthcheck (mới thêm) cho phép Swarm gate dependency; chờ thêm 30s. Nếu kéo dài: `docker service logs cab-booking_postgres --tail 30`.
 
 ---
 

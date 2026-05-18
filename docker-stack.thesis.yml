@@ -65,6 +65,15 @@ services:
       - source: postgres_init_db
         target: /docker-entrypoint-initdb.d/init.sql
         mode: 0444
+    # Without a healthcheck Swarm marks postgres "running" the moment the
+    # container starts, before pg lets connections in. App services on other
+    # nodes then crash-loop trying to connect during initial deploy.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres -h 127.0.0.1 -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
     networks:
       # `backend` is `internal: true` — containers on internal-only overlay
       # silently fail to register host port bindings (mode=host route needs a
@@ -115,6 +124,12 @@ services:
       MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_password
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'db.runCommand({ping:1}).ok' | mongosh --quiet 127.0.0.1:27017/admin --norc | grep -q 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       # See postgres comment — mode=host needs a non-internal network.
       - backend
@@ -153,6 +168,14 @@ services:
     networks:
       - backend
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
     deploy:
       replicas: 1
       placement:
@@ -177,6 +200,12 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     deploy:
       replicas: 1
       placement:
@@ -959,8 +988,11 @@ services:
     deploy:
       replicas: 1
       placement:
+        # Pin to PRIMARY manager (nginx=true). prometheus_data is a local
+        # volume — if Swarm reschedules to a different `infra=true` manager,
+        # the TSDB is empty and metrics history disappears. Single node = stable.
         constraints:
-          - node.labels.infra == true
+          - node.labels.nginx == true
       restart_policy:
         condition: on-failure
       resources:
@@ -993,8 +1025,9 @@ services:
     deploy:
       replicas: 1
       placement:
+        # Pin to PRIMARY manager — grafana_data (dashboards/users) is local.
         constraints:
-          - node.labels.infra == true
+          - node.labels.nginx == true
       restart_policy:
         condition: on-failure
       resources:
@@ -1024,8 +1057,9 @@ services:
     deploy:
       replicas: 1
       placement:
+        # Pin to PRIMARY manager — loki_data is a local volume with log history.
         constraints:
-          - node.labels.infra == true
+          - node.labels.nginx == true
       restart_policy:
         condition: on-failure
       resources:
@@ -1058,8 +1092,9 @@ services:
     deploy:
       replicas: 1
       placement:
+        # Pin to PRIMARY manager — alertmanager_data (silences/state) is local.
         constraints:
-          - node.labels.infra == true
+          - node.labels.nginx == true
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -1115,7 +1150,14 @@ networks:
     attachable: true
   backend:
     driver: overlay
+    # internal: true blocks outbound internet from this overlay. Combined with
+    # attachable: true so operational scripts (scripts/swarm-setup.sh preflight,
+    # bootstrap-runner one-off containers) can attach for in-cluster diagnostics
+    # without rebuilding the network. Note: attachable does NOT remove the
+    # internal restriction — attached containers still can't reach the internet
+    # via this network.
     internal: true
+    attachable: true
 
 # ══════════════════════════════════════════════════════════════════════════
 # SECRETS (must be created manually before deploy — see setup commands above)

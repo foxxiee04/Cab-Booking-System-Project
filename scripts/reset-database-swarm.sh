@@ -41,6 +41,26 @@ echo " Swarm DB reset + seed (${STACK_NAME})"
 echo "============================================"
 echo ""
 
+# Autoscaler chạy `docker service update/scale` mỗi 30s. Khi reset/seed gọi
+# `service update --force` từng service, hai luồng đua nhau trên Raft →
+# "update out of sequence" + replica nhảy lung tung khiến wait_for_stack_replicas_ready
+# timeout. Tạm scale 0 trước, khôi phục lại cuối script (hoặc khi exit lỗi).
+AUTOSCALER_SVC="${STACK_NAME}_autoscaler"
+AUTOSCALER_PREV_REPLICAS=""
+if docker service ls --format '{{.Name}}' | grep -qx "$AUTOSCALER_SVC"; then
+  AUTOSCALER_PREV_REPLICAS="$(docker service inspect "$AUTOSCALER_SVC" \
+    --format '{{.Spec.Mode.Replicated.Replicas}}' 2>/dev/null || echo 1)"
+  echo "[autoscaler] Tạm dừng $AUTOSCALER_SVC (đang $AUTOSCALER_PREV_REPLICAS replica) để tránh tranh service-update..."
+  docker service scale "${AUTOSCALER_SVC}=0" >/dev/null 2>&1 || true
+fi
+restore_autoscaler() {
+  if [[ -n "$AUTOSCALER_PREV_REPLICAS" ]] && [[ "$AUTOSCALER_PREV_REPLICAS" != "0" ]]; then
+    echo "[autoscaler] Khôi phục $AUTOSCALER_SVC về $AUTOSCALER_PREV_REPLICAS replica..."
+    docker service scale "${AUTOSCALER_SVC}=${AUTOSCALER_PREV_REPLICAS}" >/dev/null 2>&1 || true
+  fi
+}
+trap restore_autoscaler EXIT
+
 pg_cid="$(docker ps -q -f name="${STACK_NAME}_postgres" | head -1)"
 if [[ -z "$pg_cid" ]]; then
   echo "❌ Không thấy task postgres (${STACK_NAME}_postgres). Deploy stack trước."
