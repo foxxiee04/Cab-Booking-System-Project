@@ -263,7 +263,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-          - node.labels.app.half == 1
+          - node.labels.ml != true
       update_config:
         parallelism: 1
         delay: 10s
@@ -296,7 +296,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-          - node.labels.app.half == 1
+          - node.labels.ml != true
       update_config:
         parallelism: 1
         delay: 10s
@@ -329,7 +329,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-          - node.labels.app.half == 2
+          - node.labels.ml != true
       update_config:
         parallelism: 1
         delay: 10s
@@ -364,7 +364,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-          - node.labels.app.half == 2
+          - node.labels.ml != true
       update_config:
         parallelism: 1
         delay: 10s
@@ -396,7 +396,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-          - node.labels.app.half == 1
+          - node.labels.ml != true
       update_config:
         parallelism: 1
         delay: 10s
@@ -429,7 +429,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-          - node.labels.app.half == 2
+          - node.labels.ml != true
       update_config:
         parallelism: 1
         delay: 10s
@@ -462,7 +462,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-          - node.labels.app.half == 1
+          - node.labels.ml != true
       update_config:
         parallelism: 1
         delay: 10s
@@ -496,7 +496,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-          - node.labels.app.half == 2
+          - node.labels.ml != true
       update_config:
         parallelism: 1
         delay: 10s
@@ -528,7 +528,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-          - node.labels.app.half == 2
+          - node.labels.ml != true
       update_config:
         parallelism: 1
         delay: 10s
@@ -560,7 +560,7 @@ services:
       placement:
         constraints:
           - node.role == worker
-          - node.labels.app.half == 1
+          - node.labels.ml != true
       update_config:
         parallelism: 1
         delay: 10s
