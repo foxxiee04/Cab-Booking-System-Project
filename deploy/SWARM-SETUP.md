@@ -304,7 +304,7 @@ To add a worker to this swarm, run the following command:
 To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
 ```
 
-> ✅ Copy và lưu lệnh `docker swarm join --token ...` lại — dùng ở bước sau.
+> ✅ Copy và lưu lệnh `docker swarm join --token ...` lại — dùng ở bước sau. Khi chạy trên node khác, luôn thêm `--advertise-addr <PRIVATE_IP_CỦA_NODE_ĐANG_JOIN>` để Swarm lưu đúng IP nội bộ; nếu để Docker tự đoán, node có thể hiện `0.0.0.0` và Prometheus sẽ scrape sai target.
 
 ---
 
@@ -531,8 +531,9 @@ docker swarm join-token manager
 # Từ máy local
 ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@52.77.233.34
 
-# Chạy lệnh join (copy từ output trên — token lấy ở bước trên)
-docker swarm join --token SWMTKN-1-aaa...bbb <MANAGER_PRIVATE_IP>:2377
+# Chạy lệnh join (token lấy ở bước trên; target là private IP của Primary Manager)
+PRIVATE_IP=$(hostname -I | awk '{print $1}')
+docker swarm join --advertise-addr "$PRIVATE_IP" --token SWMTKN-1-aaa...bbb <PRIMARY_MANAGER_PRIVATE_IP>:2377
 # Output: This node joined a swarm as a manager.
 ```
 
@@ -540,7 +541,8 @@ docker swarm join --token SWMTKN-1-aaa...bbb <MANAGER_PRIVATE_IP>:2377
 ```bash
 ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@<MANAGER_3_PUBLIC_IP>
 
-docker swarm join --token SWMTKN-1-aaa...bbb <MANAGER_PRIVATE_IP>:2377
+PRIVATE_IP=$(hostname -I | awk '{print $1}')
+docker swarm join --advertise-addr "$PRIVATE_IP" --token SWMTKN-1-aaa...bbb <PRIMARY_MANAGER_PRIVATE_IP>:2377
 # Output: This node joined a swarm as a manager.
 ```
 
@@ -576,7 +578,8 @@ docker swarm join-token worker
 ```bash
 ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@52.221.209.1
 
-docker swarm join --token SWMTKN-1-zzz...yyy <MANAGER_PRIVATE_IP>:2377
+PRIVATE_IP=$(hostname -I | awk '{print $1}')
+docker swarm join --advertise-addr "$PRIVATE_IP" --token SWMTKN-1-zzz...yyy <PRIMARY_MANAGER_PRIVATE_IP>:2377
 # Output: This node joined a swarm as a worker.
 ```
 
@@ -584,7 +587,8 @@ docker swarm join --token SWMTKN-1-zzz...yyy <MANAGER_PRIVATE_IP>:2377
 ```bash
 ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@13.212.196.192
 
-docker swarm join --token SWMTKN-1-zzz...yyy <MANAGER_PRIVATE_IP>:2377
+PRIVATE_IP=$(hostname -I | awk '{print $1}')
+docker swarm join --advertise-addr "$PRIVATE_IP" --token SWMTKN-1-zzz...yyy <PRIMARY_MANAGER_PRIVATE_IP>:2377
 # Output: This node joined a swarm as a worker.
 ```
 
@@ -592,7 +596,8 @@ docker swarm join --token SWMTKN-1-zzz...yyy <MANAGER_PRIVATE_IP>:2377
 ```bash
 ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@<AI_WORKER_PUBLIC_IP>
 
-docker swarm join --token SWMTKN-1-zzz...yyy <MANAGER_PRIVATE_IP>:2377
+PRIVATE_IP=$(hostname -I | awk '{print $1}')
+docker swarm join --advertise-addr "$PRIVATE_IP" --token SWMTKN-1-zzz...yyy <PRIMARY_MANAGER_PRIVATE_IP>:2377
 # Output: This node joined a swarm as a worker.
 ```
 
@@ -607,6 +612,14 @@ docker node ls
 # jkl012          foxgo-worker-2     Ready     Active
 # pqr678          foxgo-worker-ai    Ready     Active
 ```
+
+**Kiểm tra advertised address sau khi join:**
+```bash
+docker node ls -q | xargs -I{} docker node inspect {} --format '{{.Description.Hostname}} status={{.Status.Addr}} manager={{if .ManagerStatus}}{{.ManagerStatus.Addr}}{{end}}'
+# Không được có status=0.0.0.0 hoặc manager=0.0.0.0.
+```
+
+**Nếu một manager/worker đã join nhầm `0.0.0.0`:** trên node đó chạy `docker swarm leave` (manager thì demote/remove từ Primary Manager trước nếu cần giữ quorum), rồi join lại bằng lệnh có `--advertise-addr "$PRIVATE_IP"` như trên.
 
 ---
 
@@ -814,21 +827,18 @@ Mở browser: http://18.136.250.236:9090/targets
 Phải thấy:
 ```
 node-exporter (6 targets):
-  http://172.31.xx.xx:9100  → UP   (manager-1)
-  http://172.31.xx.xx:9100  → UP   (manager-2)
-  http://172.31.xx.xx:9100  → UP   (manager-3)
-  http://172.31.xx.xx:9100  → UP   (worker-1)
-  http://172.31.xx.xx:9100  → UP   (worker-2)
-  http://172.31.xx.xx:9100  → UP   (worker-ai)
+  instance=ip-172-31-39-11   → UP   (manager-1)
+  instance=ip-172-31-14-171  → UP   (manager-2)
+  instance=ip-172-31-43-201  → UP   (manager-3)
+  instance=ip-172-31-39-167  → UP   (worker-1)
+  instance=ip-172-31-40-191  → UP   (worker-2)
+  instance=ip-172-31-27-208  → UP   (worker-ai)
 
 cadvisor (6 targets):
-  http://172.31.xx.xx:8081  → UP
-  http://172.31.xx.xx:8081  → UP
-  http://172.31.xx.xx:8081  → UP
-  http://172.31.xx.xx:8081  → UP
-  http://172.31.xx.xx:8081  → UP
-  http://172.31.xx.xx:8081  → UP
+  6 targets → UP
 ```
+
+> Prometheus scrapes exporter **tasks** over `cab-booking_backend`, so `scrapeUrl` may show overlay IPs like `10.0.1.x`. Use the `instance` label to map each target back to its Swarm node.
 
 **2. Mở Grafana:**
 ```

@@ -28,7 +28,8 @@
 #  3. On Manager — get worker join token:
 #       docker swarm join-token worker
 #
-#  4. On each Spot Worker — join swarm (run the command from step 3)
+#  4. On each Spot Worker — join swarm with this node's private IP:
+#       docker swarm join --advertise-addr <THIS_NODE_PRIVATE_IP> --token <TOKEN> <MANAGER_PRIVATE_IP>:2377
 #
 #  5. Deploy:
 #       export DOCKERHUB_USERNAME=foxxiee04
@@ -764,6 +765,9 @@ services:
       - /var/lib/docker:/var/lib/docker:ro
     networks:
       - backend
+      # mode=host published ports need a non-internal network on every node.
+      # Prometheus still scrapes the host-published 8081 port.
+      - frontend
     deploy:
       mode: global          # container metrics from every node
       restart_policy:
@@ -787,6 +791,9 @@ services:
       - /:/host:ro,rslave
     networks:
       - backend
+      # mode=host published ports need a non-internal network on every node.
+      # Prometheus still scrapes the host-published 9100 port.
+      - frontend
     deploy:
       mode: global          # host metrics from every node
       restart_policy:

@@ -91,6 +91,10 @@ cmd_join_worker() {
   echo ""
   docker swarm join-token worker
   echo ""
+  warn "When running the join command, add this node's private IP:"
+  warn "  PRIVATE_IP=\$(hostname -I | awk '{print \$1}')"
+  warn "  docker swarm join --advertise-addr \"\$PRIVATE_IP\" --token <TOKEN> <MANAGER_PRIVATE_IP>:2377"
+  echo ""
   warn "Each worker must have Docker installed first:"
   warn "  curl -fsSL https://get.docker.com | sh"
 }
@@ -135,6 +139,9 @@ cmd_status() {
   echo ""
   info "═══ Swarm Nodes ═══════════════════════════════"
   docker node ls
+  echo ""
+  info "═══ Node Advertised Addresses ════════════════"
+  docker node ls -q | xargs -I{} docker node inspect {} --format '{{.Description.Hostname}} status={{.Status.Addr}} manager={{if .ManagerStatus}}{{.ManagerStatus.Addr}}{{end}}' || true
   echo ""
   info "═══ Stack Services ════════════════════════════"
   docker stack services "${STACK_NAME}" 2>/dev/null || warn "Stack '${STACK_NAME}' not running."
