@@ -67,9 +67,19 @@ services:
     networks:
       - backend
     ports:
-      # Host seed (npm run db:seed on Primary Manager): Prisma INSERT bootstrap admin connects here.
-      # Restrict port 5433 in the security group to your IP in production unless you tunnel.
-      - "5433:5432"
+      # mode=host: bypass Swarm ingress routing mesh, bind directly on the
+      # Manager's host network namespace. Required on this single-Manager
+      # setup because the Swarm overlay+ingress mesh has intermittent routing
+      # failures (dockerd accepts the TCP handshake but cannot forward bytes
+      # to the container — verified via tcpdump). mode=host removes that hop
+      # entirely. Trade-off: published ports can only ever land on whichever
+      # node runs the task; with restart_policy + placement-on-infra this is
+      # fine. If you scale to a multi-Manager HA setup later, revert these
+      # back to short syntax ("X:Y") so ingress load-balances across nodes.
+      - target: 5432
+        published: 5433
+        protocol: tcp
+        mode: host
     secrets:
       - postgres_user
       - postgres_password
@@ -99,9 +109,13 @@ services:
     networks:
       - backend
     ports:
+      # mode=host: bypass Swarm ingress (see postgres comment above).
       # Host seed (scripts/seed-database.ts hist + reviews): bootstrap-runner --network host cần Mongo tại localhost.
       # Giới hạn SG: không mở 27017 ra 0.0.0.0/0 nếu không cần; chỉ SSH vào Manager là đủ cho seed.
-      - "27017:27017"
+      - target: 27017
+        published: 27017
+        protocol: tcp
+        mode: host
     secrets:
       - mongo_user
       - mongo_password
@@ -172,7 +186,11 @@ services:
   api-gateway:
     image: ${DOCKERHUB_USERNAME}/cab-api-gateway:${IMAGE_TAG:-latest}
     ports:
-      - "3000:3000"
+      # mode=host: pin to Manager via nginx=true label; bypass ingress mesh.
+      - target: 3000
+        published: 3000
+        protocol: tcp
+        mode: host
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -784,7 +802,11 @@ services:
       - --storage.tsdb.retention.time=15d
       - --web.enable-lifecycle
     ports:
-      - "9090:9090"
+      # mode=host: pin to Manager via infra=true label; bypass ingress mesh.
+      - target: 9090
+        published: 9090
+        protocol: tcp
+        mode: host
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -810,7 +832,11 @@ services:
   grafana:
     image: grafana/grafana:11.1.4
     ports:
-      - "3030:3000"
+      # mode=host: pin to Manager via infra=true label; bypass ingress mesh.
+      - target: 3000
+        published: 3030
+        protocol: tcp
+        mode: host
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
@@ -840,7 +866,11 @@ services:
   loki:
     image: grafana/loki:3.1.1
     ports:
-      - "3100:3100"
+      # mode=host: pin to Manager via infra=true label; bypass ingress mesh.
+      - target: 3100
+        published: 3100
+        protocol: tcp
+        mode: host
     command: ["-config.file=/etc/loki/loki-config.yml"]
     volumes:
       - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
