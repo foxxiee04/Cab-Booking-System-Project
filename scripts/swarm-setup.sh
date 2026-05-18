@@ -164,7 +164,10 @@ cmd_label_nodes() {
 
   echo
   info "Applied: ${applied}, skipped: ${skipped}, unknown: ${unknown}"
-  [[ "${unknown}" -gt 0 ]] && warn "Edit deploy/swarm-labels.conf to add missing hostnames, then re-run."
+  if [[ "${unknown}" -gt 0 ]]; then
+    warn "Edit deploy/swarm-labels.conf to add missing hostnames, then re-run."
+  fi
+  return 0
 }
 
 # ============================================================
