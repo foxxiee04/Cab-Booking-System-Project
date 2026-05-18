@@ -18,6 +18,7 @@
  *   6. Mỗi driver: POST /api/drivers/register (vehicle + license)
  *   7. Admin approve 12 driver đầu (3 cuối để PENDING demo flow)
  *   8. Mỗi driver được approve: top-up ví 300k qua /api/wallet/top-up/init
+ *      (MOMO hoặc VNPAY; trên Swarm nên dùng SEED_WALLET_TOPUP_PROVIDER=VNPAY nếu MoMo API bị chặn)
  *      + sandbox-confirm để kích hoạt wallet
  *   9. Mỗi driver được approve: goOnline + updateLocation theo cụm
  *  10. Tạo 12 ride: 8 CASH completed, 2 MOMO completed (mock webhook),
@@ -83,6 +84,9 @@ const POSTGRES_USER = process.env.POSTGRES_USER || 'postgres';
 const POSTGRES_PASSWORD = process.env.POSTGRES_PASSWORD || 'postgres';
 
 const ACTIVATION_BALANCE = 300_000;
+/** MOMO = gọi API MoMo (cần egress HTTPS). VNPAY = chỉ build payUrl local (ổn trên Swarm/VPC hạn chế). */
+const SEED_WALLET_TOPUP_PROVIDER =
+  String(process.env.SEED_WALLET_TOPUP_PROVIDER || 'MOMO').toUpperCase() === 'VNPAY' ? 'VNPAY' : 'MOMO';
 const SEED_REFERENCE_OUTPUT = path.resolve(process.cwd(), 'docs', 'seed-accounts-reference.md');
 const DEMO_IDENTITY_ASSET_DIR = path.resolve(process.cwd(), 'assets', 'avt', 'cccd');
 const DEMO_AVATAR_ASSET = path.join(DEMO_IDENTITY_ASSET_DIR, 'avt.jpg');
@@ -1044,7 +1048,7 @@ async function topUpDriverWallet(driverToken: string, phone: string) {
     token: driverToken,
     body: {
       amount: ACTIVATION_BALANCE,
-      provider: 'MOMO',
+      provider: SEED_WALLET_TOPUP_PROVIDER,
       returnUrl: 'http://localhost:4001/wallet/top-up/return',
     },
     expectedStatuses: [200, 201],

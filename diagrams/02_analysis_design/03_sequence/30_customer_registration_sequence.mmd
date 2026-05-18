@@ -1,0 +1,43 @@
+%%{init: {"themeVariables": {"fontSize": "20px"}, "sequence": {"actorFontSize": 18, "messageFontSize": 18, "noteFontSize": 16}}}%%
+sequenceDiagram
+  autonumber
+  actor Customer as Khách hàng
+  participant App as Customer App
+  participant Gateway as API Gateway
+  participant Auth as Auth Service
+  participant Otp as OTP Redis
+  participant Sms as SMS/Mock OTP
+  participant DB as auth_db
+
+  Customer->>App: Nhập số điện thoại
+  App->>Gateway: POST /api/auth/register-phone/start
+  Gateway->>Auth: Yêu cầu gửi OTP đăng ký
+  Auth->>DB: Kiểm tra trùng số điện thoại
+  alt Số điện thoại chưa đăng ký
+    Auth->>Otp: Tạo OTP, TTL và cooldown
+    Auth->>Sms: Gửi mã OTP
+    Auth-->>App: OTP đã gửi
+  else Số điện thoại đã tồn tại
+    Auth-->>App: Từ chối đăng ký
+  end
+
+  Customer->>App: Nhập OTP 6 số
+  App->>Gateway: POST /api/auth/register-phone/verify
+  Gateway->>Auth: Xác thực OTP
+  Auth->>Otp: Kiểm tra OTP và số lần thử
+  alt OTP hợp lệ
+    Auth->>Otp: Đánh dấu SĐT đã xác thực
+    Auth-->>App: Cho phép nhập hồ sơ
+  else OTP sai hoặc hết hạn
+    Auth-->>App: Báo lỗi OTP
+  end
+
+  Customer->>App: Nhập họ tên và mật khẩu
+  App->>Gateway: POST /api/auth/register-phone/complete
+  Gateway->>Auth: Hoàn tất tài khoản CUSTOMER
+  Auth->>Otp: Kiểm tra SĐT đã xác thực
+  Auth->>DB: Tạo user ACTIVE role=CUSTOMER
+  Auth->>DB: Lưu refresh token
+  Auth-->>Gateway: User + JWT
+  Gateway-->>App: Đăng ký thành công
+  App-->>Customer: Vào trang chủ

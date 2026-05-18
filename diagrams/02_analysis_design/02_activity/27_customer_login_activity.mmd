@@ -1,0 +1,37 @@
+flowchart LR
+  subgraph Customer["Tác nhân: Khách hàng"]
+    direction TB
+    Start([Start]):::user
+    EnterLogin["Nhập số điện thoại và mật khẩu"]:::service
+    FixLogin["Sửa thông tin đăng nhập"]:::risk
+  end
+
+  subgraph Auth["Hệ thống: Customer App / Auth Service"]
+    direction TB
+    InputValid{"SĐT và mật khẩu hợp lệ?"}:::infra
+    FindAccount["Tìm tài khoản bằng phone/email/identifier"]:::data
+    AccountOk{"Tài khoản tồn tại và ACTIVE?"}:::security
+    PasswordOk{"Mật khẩu đúng?"}:::security
+    IssueToken["Tạo refresh token và cấp JWT"]:::ok
+    SaveSession["Lưu phiên và chuyển tới trang chủ"]:::service
+    Reject["Báo lỗi đăng nhập"]:::risk
+    Done([End]):::ok
+  end
+
+  Start --> EnterLogin --> InputValid
+  InputValid -- Không --> FixLogin --> EnterLogin
+  InputValid -- Có --> FindAccount --> AccountOk
+  AccountOk -- Không --> Reject --> Done
+  AccountOk -- Có --> PasswordOk
+  PasswordOk -- Không --> Reject
+  PasswordOk -- Có --> IssueToken --> SaveSession --> Done
+classDef user fill:#dbeafe,stroke:#60a5fa,color:#0f172a,stroke-width:1.5px;
+classDef service fill:#ccfbf1,stroke:#14b8a6,color:#0f172a,stroke-width:1.5px;
+classDef data fill:#dcfce7,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef ai fill:#fef3c7,stroke:#f59e0b,color:#0f172a,stroke-width:1.5px;
+classDef infra fill:#e0e7ff,stroke:#818cf8,color:#0f172a,stroke-width:1.5px;
+classDef external fill:#ffedd5,stroke:#fb923c,color:#0f172a,stroke-width:1.5px;
+classDef risk fill:#fee2e2,stroke:#ef4444,color:#0f172a,stroke-width:1.5px;
+classDef ok fill:#bbf7d0,stroke:#22c55e,color:#0f172a,stroke-width:1.5px;
+classDef pattern fill:#f5d0fe,stroke:#d946ef,color:#0f172a,stroke-width:1.5px;
+classDef security fill:#dbeafe,stroke:#2563eb,color:#0f172a,stroke-width:1.5px;

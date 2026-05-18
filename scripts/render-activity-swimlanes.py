@@ -469,6 +469,10 @@ VI_CAPTIONS = {
     "23_forgot_password_activity": "Hoạt động quên mật khẩu",
     "24_logout_activity": "Hoạt động đăng xuất",
     "25_cash_payment_debt_activity": "Hoạt động thanh toán tiền mặt và công nợ",
+    "26_customer_registration_activity": "Hoạt động đăng ký tài khoản khách hàng",
+    "27_customer_login_activity": "Hoạt động đăng nhập khách hàng",
+    "28_driver_login_activity": "Hoạt động đăng nhập tài xế",
+    "29_admin_login_activity": "Hoạt động đăng nhập quản trị viên",
 }
 
 

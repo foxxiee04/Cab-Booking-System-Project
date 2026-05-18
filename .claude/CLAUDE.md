@@ -117,12 +117,12 @@ Some services also make direct internal HTTP calls with `x-internal-token` heade
 | ride-service | 3002 | 50054 | `ride_db` (PG) |
 | driver-service | 3003 | 50055 | `driver_db` (PG) |
 | payment-service | 3004 | 50056 | `payment_db` (PG) |
-| notification-service | 3005 | — | `notification_db` (Mongo) |
+| notification-service | 3005 | 50058 | `notification_db` (Mongo) |
 | wallet-service | 3006 | — | `wallet_db` (PG) |
 | user-service | 3007 | 50052 | `user_db` (PG) |
 | booking-service | 3008 | 50053 | `booking_db` (PG) |
 | pricing-service | 3009 | 50057 | — (stateless) |
-| review-service | 3010 | — | `review_db` (Mongo) |
+| review-service | 3010 | 50059 | `review_db` (Mongo) |
 | ai-service | 8000 | — | — (stateless, Python) |
 
 PostgreSQL runs on host port **5433** (not 5432). All 7 PG databases share one Postgres instance.

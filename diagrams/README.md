@@ -82,6 +82,10 @@ python scripts\render-bpmn-processes.py
 | [02_analysis_design/02_activity/23_forgot_password_activity.png](./02_analysis_design/02_activity/23_forgot_password_activity.png) | Activity Diagram | Forgot Password Activity |
 | [02_analysis_design/02_activity/24_logout_activity.png](./02_analysis_design/02_activity/24_logout_activity.png) | Activity Diagram | Logout Activity |
 | [02_analysis_design/02_activity/25_cash_payment_debt_activity.png](./02_analysis_design/02_activity/25_cash_payment_debt_activity.png) | Activity Diagram | Cash Payment and Debt Activity |
+| [02_analysis_design/02_activity/26_customer_registration_activity.png](./02_analysis_design/02_activity/26_customer_registration_activity.png) | Activity Diagram | Customer Registration Activity |
+| [02_analysis_design/02_activity/27_customer_login_activity.png](./02_analysis_design/02_activity/27_customer_login_activity.png) | Activity Diagram | Customer Login Activity |
+| [02_analysis_design/02_activity/28_driver_login_activity.png](./02_analysis_design/02_activity/28_driver_login_activity.png) | Activity Diagram | Driver Login Activity |
+| [02_analysis_design/02_activity/29_admin_login_activity.png](./02_analysis_design/02_activity/29_admin_login_activity.png) | Activity Diagram | Admin Login Activity |
 | [02_analysis_design/03_sequence/07_auth_otp_sequence.png](./02_analysis_design/03_sequence/07_auth_otp_sequence.png) | Sequence Diagram | OTP Authentication Sequence |
 | [02_analysis_design/03_sequence/08_booking_dispatch_sequence.png](./02_analysis_design/03_sequence/08_booking_dispatch_sequence.png) | Sequence Diagram | Booking Dispatch Sequence |
 | [02_analysis_design/03_sequence/09_ride_tracking_sequence.png](./02_analysis_design/03_sequence/09_ride_tracking_sequence.png) | Sequence Diagram | Ride Tracking Sequence |
@@ -105,6 +109,10 @@ python scripts\render-bpmn-processes.py
 | [02_analysis_design/03_sequence/27_forgot_password_sequence.png](./02_analysis_design/03_sequence/27_forgot_password_sequence.png) | Sequence Diagram | Forgot Password Sequence |
 | [02_analysis_design/03_sequence/28_logout_sequence.png](./02_analysis_design/03_sequence/28_logout_sequence.png) | Sequence Diagram | Logout Sequence |
 | [02_analysis_design/03_sequence/29_cash_payment_debt_sequence.png](./02_analysis_design/03_sequence/29_cash_payment_debt_sequence.png) | Sequence Diagram | Cash Payment and Debt Sequence |
+| [02_analysis_design/03_sequence/30_customer_registration_sequence.png](./02_analysis_design/03_sequence/30_customer_registration_sequence.png) | Sequence Diagram | Customer Registration Sequence |
+| [02_analysis_design/03_sequence/31_customer_login_sequence.png](./02_analysis_design/03_sequence/31_customer_login_sequence.png) | Sequence Diagram | Customer Login Sequence |
+| [02_analysis_design/03_sequence/32_driver_login_sequence.png](./02_analysis_design/03_sequence/32_driver_login_sequence.png) | Sequence Diagram | Driver Login Sequence |
+| [02_analysis_design/03_sequence/33_admin_login_sequence.png](./02_analysis_design/03_sequence/33_admin_login_sequence.png) | Sequence Diagram | Admin Login Sequence |
 | [02_analysis_design/04_database/19_core_erd.png](./02_analysis_design/04_database/19_core_erd.png) | Database Diagram | Core Entity Relationship Diagram |
 | [02_analysis_design/04_database/20_rabbitmq_event_flow.png](./02_analysis_design/04_database/20_rabbitmq_event_flow.png) | Event Flow Diagram | RabbitMQ Domain Event Flow |
 | [02_analysis_design/05_ddd/21_bounded_context_map.png](./02_analysis_design/05_ddd/21_bounded_context_map.png) | DDD Diagram | Bounded Context Map |

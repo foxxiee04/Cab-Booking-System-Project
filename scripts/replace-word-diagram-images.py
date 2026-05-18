@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DOCX = Path(r"E:\Nam4 - Ki 2\KLTN2025\KLTN_IS_TranQuocSang_DuongDucQuy.docx")
 BPMN_DIR = ROOT / "diagrams" / "02_analysis_design" / "00_bpmn"
 ACTIVITY_DIR = ROOT / "diagrams" / "02_analysis_design" / "02_activity"
+SEQUENCE_DIR = ROOT / "diagrams" / "02_analysis_design" / "03_sequence"
 
 NS = {
     "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
@@ -28,6 +29,7 @@ NS = {
     "pic": "http://schemas.openxmlformats.org/drawingml/2006/picture",
     "rel": "http://schemas.openxmlformats.org/package/2006/relationships",
     "ct": "http://schemas.openxmlformats.org/package/2006/content-types",
+    "v": "urn:schemas-microsoft-com:vml",
 }
 
 for prefix, uri in NS.items():
@@ -41,6 +43,7 @@ MAX_IMAGE_WIDTH_IN = 6.10
 MAX_IMAGE_HEIGHT_IN = 8.65
 IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
 CODEX_MEDIA_PREFIX = "media/codex_replacement_"
+MIN_DRAWING_EMU = 635  # 0.05pt: invisible for straight connectors, valid for Word extents.
 
 
 @dataclass(frozen=True)
@@ -59,8 +62,8 @@ BPMN_REPLACEMENTS = (
 )
 
 ACTIVITY_REPLACEMENTS = (
-    Replacement("Activity Diagram - Đăng ký tài khoản khách hàng", ACTIVITY_DIR / "07_auth_otp_activity.png"),
-    Replacement("Activity Diagram - Đăng nhập khách hàng", ACTIVITY_DIR / "07_auth_otp_activity.png"),
+    Replacement("Activity Diagram - Đăng ký tài khoản khách hàng", ACTIVITY_DIR / "26_customer_registration_activity.png"),
+    Replacement("Activity Diagram - Đăng nhập khách hàng", ACTIVITY_DIR / "27_customer_login_activity.png"),
     Replacement("Activity Diagram - Quản lý hồ sơ cá nhân", ACTIVITY_DIR / "08_profile_management_activity.png"),
     Replacement("Activity Diagram - Ước tính giá chuyến đi", ACTIVITY_DIR / "09_fare_estimation_activity.png"),
     Replacement("Activity Diagram - Đặt xe và tìm tài xế", ACTIVITY_DIR / "02_customer_booking_activity.png"),
@@ -73,7 +76,7 @@ ACTIVITY_REPLACEMENTS = (
     Replacement("Activity Diagram - Xem lịch sử chuyến đi", ACTIVITY_DIR / "13_ride_lifecycle_activity.png"),
     Replacement("Activity Diagram - Sử dụng AI chatbot hỗ trợ", ACTIVITY_DIR / "21_ai_support_activity.png"),
     Replacement("Activity Diagram - Đăng ký tài xế", ACTIVITY_DIR / "03_driver_onboarding_activity.png"),
-    Replacement("Activity Diagram - Đăng nhập tài xế", ACTIVITY_DIR / "07_auth_otp_activity.png"),
+    Replacement("Activity Diagram - Đăng nhập tài xế", ACTIVITY_DIR / "28_driver_login_activity.png"),
     Replacement("Activity Diagram - Bật/tắt trạng thái nhận chuyến", ACTIVITY_DIR / "12_driver_availability_activity.png"),
     Replacement("Activity Diagram - Cập nhật vị trí tài xế", ACTIVITY_DIR / "14_realtime_tracking_activity.png"),
     Replacement("Activity Diagram - Nhận và chấp nhận chuyến", ACTIVITY_DIR / "11_driver_acceptance_activity.png"),
@@ -81,7 +84,7 @@ ACTIVITY_REPLACEMENTS = (
     Replacement("Activity Diagram - Nạp tiền ví tài xế", ACTIVITY_DIR / "17_driver_wallet_topup_activity.png"),
     Replacement("Activity Diagram - Yêu cầu rút tiền ví tài xế", ACTIVITY_DIR / "18_driver_withdrawal_activity.png"),
     Replacement("Activity Diagram - Xem doanh thu và lịch sử giao dịch", ACTIVITY_DIR / "04_payment_wallet_activity.png"),
-    Replacement("Activity Diagram - Đăng nhập quản trị viên", ACTIVITY_DIR / "07_auth_otp_activity.png"),
+    Replacement("Activity Diagram - Đăng nhập quản trị viên", ACTIVITY_DIR / "29_admin_login_activity.png"),
     Replacement("Activity Diagram - Duyệt hồ sơ tài xế", ACTIVITY_DIR / "03_driver_onboarding_activity.png"),
     Replacement("Activity Diagram - Quản lý khách hàng, tài xế và chuyến đi", ACTIVITY_DIR / "05_admin_operations_activity.png"),
     Replacement("Activity Diagram - Quản lý bảng giá và voucher", ACTIVITY_DIR / "06_voucher_review_activity.png"),
@@ -93,6 +96,15 @@ ACTIVITY_REPLACEMENTS = (
     Replacement("Activity Diagram - Đăng xuất", ACTIVITY_DIR / "24_logout_activity.png"),
     Replacement("Activity Diagram - Thanh toán tiền mặt và ghi công nợ tài xế", ACTIVITY_DIR / "25_cash_payment_debt_activity.png"),
 )
+
+SEQUENCE_REPLACEMENTS = (
+    Replacement("Sequence Diagram - Đăng ký tài khoản khách hàng", SEQUENCE_DIR / "30_customer_registration_sequence.png"),
+    Replacement("Sequence Diagram - Đăng nhập khách hàng", SEQUENCE_DIR / "31_customer_login_sequence.png"),
+    Replacement("Sequence Diagram - Đăng nhập tài xế", SEQUENCE_DIR / "32_driver_login_sequence.png"),
+    Replacement("Sequence Diagram - Đăng nhập quản trị viên", SEQUENCE_DIR / "33_admin_login_sequence.png"),
+)
+
+ALL_REPLACEMENTS = BPMN_REPLACEMENTS + ACTIVITY_REPLACEMENTS + SEQUENCE_REPLACEMENTS
 
 
 def qn(prefix: str, name: str) -> str:
@@ -120,7 +132,7 @@ def next_nonempty_text(paragraphs: list[ET.Element], index: int) -> str:
 
 
 def find_replacement(caption: str) -> Replacement | None:
-    for replacement in BPMN_REPLACEMENTS + ACTIVITY_REPLACEMENTS:
+    for replacement in ALL_REPLACEMENTS:
         if replacement.caption_key in caption:
             return replacement
     return None
@@ -218,6 +230,29 @@ def set_update_fields(settings_xml: bytes | None) -> bytes | None:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
+def fix_nonpositive_drawing_extents(document_root: ET.Element) -> int:
+    fixed = 0
+    for extent in document_root.findall(".//wp:extent", NS) + document_root.findall(".//a:xfrm/a:ext", NS):
+        for attr in ("cx", "cy"):
+            try:
+                value = int(extent.attrib.get(attr, "0"))
+            except ValueError:
+                value = 0
+            if value <= 0:
+                extent.set(attr, str(MIN_DRAWING_EMU))
+                fixed += 1
+
+    for shape in document_root.findall(".//v:shape", NS):
+        style = shape.attrib.get("style", "")
+        next_style = re.sub(r"(?i)(^|;)height:0(?=;|$)", r"\1height:.05pt", style)
+        next_style = re.sub(r"(?i)(^|;)width:0(?=;|$)", r"\1width:.05pt", next_style)
+        if next_style != style:
+            shape.set("style", next_style)
+            fixed += 1
+
+    return fixed
+
+
 def has_toc(document_xml: bytes) -> bool:
     root = ET.fromstring(document_xml)
     for instr in root.findall(".//w:instrText", NS):
@@ -226,13 +261,13 @@ def has_toc(document_xml: bytes) -> bool:
     return False
 
 
-def update_docx(docx_path: Path) -> tuple[Path, list[str], bool, bool]:
+def update_docx(docx_path: Path) -> tuple[Path, list[str], bool, bool, int]:
     if not docx_path.exists():
         raise FileNotFoundError(docx_path)
     if docx_path.suffix.lower() != ".docx":
         raise ValueError(f"Expected .docx file, got {docx_path}")
 
-    for replacement in BPMN_REPLACEMENTS + ACTIVITY_REPLACEMENTS:
+    for replacement in ALL_REPLACEMENTS:
         if not replacement.image_path.exists():
             raise FileNotFoundError(replacement.image_path)
 
@@ -253,6 +288,7 @@ def update_docx(docx_path: Path) -> tuple[Path, list[str], bool, bool]:
         document_root = ET.fromstring(document_xml)
         rels_root = ET.fromstring(rels_xml)
         content_types_root = ET.fromstring(content_types_xml)
+        fixed_drawings = fix_nonpositive_drawing_extents(document_root)
         remove_old_codex_relationships(rels_root)
         next_rid = next_rid_factory(rels_root)
         old_media = existing_media_relationships(rels_root)
@@ -297,7 +333,7 @@ def update_docx(docx_path: Path) -> tuple[Path, list[str], bool, bool]:
                 )
 
         if not logs:
-            raise ValueError("No matching BPMN or Activity captions found")
+            raise ValueError("No matching BPMN, Activity, or Sequence captions found")
 
         ensure_png_content_type(content_types_root)
         updated_document_xml = ET.tostring(document_root, encoding="utf-8", xml_declaration=True)
@@ -339,17 +375,18 @@ def update_docx(docx_path: Path) -> tuple[Path, list[str], bool, bool]:
             if tmp_path.exists():
                 tmp_path.unlink()
 
-    return backup, logs, text_unchanged, toc_present
+    return backup, logs, text_unchanged, toc_present, fixed_drawings
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Replace BPMN and Activity images inside a Word document.")
+    parser = argparse.ArgumentParser(description="Replace BPMN, Activity, and selected Sequence images inside a Word document.")
     parser.add_argument("--docx", type=Path, default=DEFAULT_DOCX)
     args = parser.parse_args()
 
-    backup, logs, text_unchanged, toc_present = update_docx(args.docx)
+    backup, logs, text_unchanged, toc_present, fixed_drawings = update_docx(args.docx)
     print(f"BACKUP={backup}")
     print(f"REPLACED={len(logs)}")
+    print(f"DRAWING_EXTENTS_REPAIRED={fixed_drawings}")
     print(f"TEXT_UNCHANGED={text_unchanged}")
     print(f"TOC_FIELD_PRESENT={toc_present}")
     print("UPDATE_FIELDS_ON_OPEN=True")

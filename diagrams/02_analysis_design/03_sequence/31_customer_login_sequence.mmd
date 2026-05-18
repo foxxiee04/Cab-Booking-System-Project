@@ -1,0 +1,29 @@
+%%{init: {"themeVariables": {"fontSize": "20px"}, "sequence": {"actorFontSize": 18, "messageFontSize": 18, "noteFontSize": 16}}}%%
+sequenceDiagram
+  autonumber
+  actor Customer as Khách hàng
+  participant App as Customer App
+  participant Gateway as API Gateway
+  participant Auth as Auth Service
+  participant DB as auth_db
+
+  Customer->>App: Nhập SĐT và mật khẩu
+  App->>App: Kiểm tra định dạng SĐT
+  alt Dữ liệu hợp lệ
+    App->>Gateway: POST /api/auth/login
+    Gateway->>Auth: Login(identifier, password)
+    Auth->>DB: Tìm user bằng phone/email/identifier
+    alt ACTIVE và mật khẩu đúng
+      Auth->>DB: Lưu refresh token
+      Auth-->>Gateway: User + JWT
+      Gateway-->>App: Phiên đăng nhập
+      App->>App: Lưu token và thông tin user
+      App-->>Customer: Chuyển tới /home
+    else Sai tài khoản, khóa hoặc chưa xác thực
+      Auth-->>Gateway: LOGIN_FAILED
+      Gateway-->>App: Trả lỗi đăng nhập
+      App-->>Customer: Hiển thị thông báo lỗi
+    end
+  else Dữ liệu không hợp lệ
+    App-->>Customer: Yêu cầu sửa SĐT hoặc mật khẩu
+  end

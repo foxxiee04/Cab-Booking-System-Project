@@ -413,9 +413,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+    # Backend only (like wallet). Dual overlay (frontend+backend) can break Swarm routing
+    # so TCP to postgres:5432 hangs from this task despite working from single-network peers.
     networks:
-      - frontend
       - backend
+    # External MoMo/VNPay calls need stable DNS. Swarm's resolver can return EAI_AGAIN
+    # for public names. First = AWS VPC DNS (172.31.0.2 for default 172.31.0.0/16); second = fallback.
+    dns:
+      - 172.31.0.2
+      - 8.8.8.8
     deploy:
       replicas: 1
       placement:
