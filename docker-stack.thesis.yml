@@ -238,6 +238,11 @@ services:
       # Bypass token MUST be set in env/gateway.env (same value on auth-service
       # and seed script). Empty disables the bypass — production-safe default.
       - SEED_BYPASS_TOKEN=${SEED_BYPASS_TOKEN:-}
+      # Secrets từ .env root — single source of truth. Docker expand ở deploy time
+      # nên env files trong git không cần biết password thật của Redis/Rabbit/PG.
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASS}@rabbitmq:5672
+      - LOCATION_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/ride_db?connect_timeout=30&pool_timeout=30&keepalives=1&keepalives_idle=30
     env_file:
       - ./env/gateway.env
     healthcheck:
@@ -301,6 +306,8 @@ services:
       # Must match SEED_BYPASS_TOKEN on api-gateway (gateway forwards header
       # x-seed-token; this service validates against its own env).
       - SEED_BYPASS_TOKEN=${SEED_BYPASS_TOKEN:-}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASS}@rabbitmq:5672
     env_file:
       - ./env/auth.env
     healthcheck:
@@ -344,6 +351,8 @@ services:
       - NODE_ENV=production
       - PORT=3002
       - GRPC_PORT=50054
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASS}@rabbitmq:5672
     env_file:
       - ./env/ride.env
     healthcheck:
@@ -387,6 +396,8 @@ services:
       - NODE_ENV=production
       - PORT=3003
       - GRPC_PORT=50055
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASS}@rabbitmq:5672
     env_file:
       - ./env/driver.env
     healthcheck:
@@ -431,6 +442,7 @@ services:
       - PORT=3004
       - GRPC_PORT=50056
       - ALLOW_SANDBOX_ENDPOINT=true
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASS}@rabbitmq:5672
     env_file:
       - ./env/payment.env
     healthcheck:
@@ -480,6 +492,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3006
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASS}@rabbitmq:5672
     env_file:
       - ./env/wallet.env
     healthcheck:
@@ -566,6 +579,7 @@ services:
       - NODE_ENV=production
       - PORT=3008
       - GRPC_PORT=50053
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASS}@rabbitmq:5672
     env_file:
       - ./env/booking.env
     healthcheck:
@@ -609,6 +623,8 @@ services:
       - PORT=3009
       - GRPC_PORT=50057
       - AI_SERVICE_URL=http://ai-service:8000
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASS}@rabbitmq:5672
     env_file:
       - ./env/pricing.env
     healthcheck:
@@ -650,6 +666,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3005
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASS}@rabbitmq:5672
     env_file:
       - ./env/notification.env
     healthcheck:

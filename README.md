@@ -7,6 +7,7 @@
 [![Docker](https://img.shields.io/badge/Docker-Compose%20%7C%20Swarm-blue)](https://www.docker.com/)
 [![Monitoring](https://img.shields.io/badge/Observability-Prometheus%20%7C%20Grafana%20%7C%20Loki-orange)](monitoring/README.md)
 
+
 FoxGo là hệ thống đặt xe công nghệ được xây dựng theo kiến trúc microservices, mô phỏng đầy đủ ba vai trò chính: khách hàng, tài xế và quản trị viên. Dự án bao gồm 3 ứng dụng React, 11 service Node.js/TypeScript, 1 AI service FastAPI, cơ sở dữ liệu tách theo service, realtime Socket.IO, event bus RabbitMQ, Redis GEO cho ghép tài xế và bộ monitoring Prometheus/Grafana/Loki.
 
 README này là tài liệu tổng quan trung tâm của dự án: mô tả kiến trúc, domain, luồng nghiệp vụ, cách chạy local, kiểm thử, seed dữ liệu, triển khai và các tài liệu liên quan.

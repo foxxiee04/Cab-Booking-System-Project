@@ -475,13 +475,30 @@ echo "INTERNAL_SERVICE_TOKEN=$(openssl rand -hex 16)"
 
 ## PHASE 11 — Cập nhật env/ files (service-level)
 
-> **Cập nhật 2026-05:** Tất cả `env/*.env` trong repo đã hardcoded production password (URL-encoded `FoxGo%40Postgres2025%21` cho PG, `FoxGo%40Mongo2025%21` cho Mongo, `FoxGo%40Redis2025%21` cho Redis, `FoxGo%40Rabbit2025%21` cho RabbitMQ). CI/CD scp `env/` qua server mỗi lần deploy → **không** chỉnh thủ công nữa.
+> **Cập nhật 2026-05 (kiến trúc mới):** Secret kết nối **không còn hardcode** trong `env/*.env`. Chúng được Docker interpolate từ **`.env` ở root server** thông qua block `environment:` trong `docker-stack.thesis.yml`. Cụ thể:
 >
-> Đổi password? Sửa file trong repo (NOT trên server) → commit → push. CI sẽ propagate. Đồng thời sửa `.env` trên Manager (biến `${REDIS_PASSWORD}`, `${RABBITMQ_PASS}` để Redis/Rabbit container chạy với password mới) và đổi Docker secrets cho Postgres/Mongo (`docker secret rm postgres_password && echo "newpass" | docker secret create postgres_password -`).
+> - `REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379`
+> - `RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASS}@rabbitmq:5672`
+> - `LOCATION_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/ride_db?...`
 >
-> Bên dưới chỉ liệt kê **WALLET_SERVICE_URL** (bắt buộc) và các secret cần đảm bảo khớp `.env`. Không cần nano edit thủ công nếu file repo đã đúng.
+> **Hệ quả tốt:** `.env` server là **single source of truth** cho mật khẩu Redis/Rabbit. Đổi password sau này chỉ sửa 1 nơi.
+>
+> **Bắt buộc trên Primary Manager:** `.env` phải có `REDIS_PASSWORD`, `RABBITMQ_USER`, `RABBITMQ_PASS`, `POSTGRES_USER`, `POSTGRES_PASSWORD`. Trước khi deploy, mọi script (CI/CD + `swarm-setup.sh`) đều `source scripts/load-dotenv.sh && load_dotenv .env` để export ra shell — Docker mới expand được.
+>
+> **Postgres/Mongo password vẫn dùng Docker secret** (file-based) cho container DB, nhưng URL kết nối service → DB dùng biến `${POSTGRES_PASSWORD}` từ `.env`. **2 nơi này phải khớp**:
+>
+> ```bash
+> # Verify chúng khớp nhau (chạy trên Manager):
+> echo "$POSTGRES_PASSWORD"   # từ .env (sau khi source load-dotenv)
+> docker secret inspect postgres_password   # giá trị không in được (vì secret), nhưng test bằng:
+> docker exec $(docker ps -q -f name=cab-booking_postgres) psql -U postgres -c '\l' >/dev/null && echo OK
+> # Nếu OK fail: secret và .env lệch nhau → reset secret:
+> #   docker secret rm postgres_password
+> #   printf '%s' "$POSTGRES_PASSWORD" | docker secret create postgres_password -
+> #   docker stack deploy ... (để service mount secret mới)
+> ```
 
-**gateway.env** — kiểm tra (đã đúng trong repo, chỉ list ra để verify):
+**gateway.env** — chỉ chứa giá trị không-secret (đã đúng trong repo, list ra để verify):
 ```bash
 nano ~/cab-booking/env/gateway.env
 ```
