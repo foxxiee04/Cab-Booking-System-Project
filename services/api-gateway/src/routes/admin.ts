@@ -13,6 +13,34 @@ const getPaging = (req: Request) => {
   return { limit, offset, page };
 };
 
+/** `days` query: 7|30|365 or omit/`all` = lifetime stats. */
+const parseStatsDays = (req: Request): number | undefined => {
+  const raw = req.query.days;
+  if (raw === undefined || raw === '' || raw === 'all') return undefined;
+  const n = parseInt(String(raw), 10);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return Math.min(n, 730);
+};
+
+const driverRideCount = (
+  rideCounts: Record<string, number>,
+  profileId: string,
+  userId?: string,
+): number => (rideCounts[profileId] ?? 0) + (userId ? rideCounts[userId] ?? 0 : 0);
+
+/** Sum earnings whether stored under profile id or legacy auth userId. */
+const driverEarningsTotal = (
+  earningsMap: Record<string, number>,
+  profileId: string,
+  userId?: string,
+): number => {
+  let total = Number(earningsMap[profileId] ?? 0);
+  if (userId && userId !== profileId) {
+    total += Number(earningsMap[userId] ?? 0);
+  }
+  return total;
+};
+
 const getAuthHeaders = (req: Request) => ({
   Authorization: req.header('authorization') || '',
   'x-user-id': req.headers['x-user-id'] as string || '',
@@ -192,6 +220,7 @@ router.get('/drivers', async (req: Request, res: Response) => {
   try {
     const { limit, page } = getPaging(req);
     const status = req.query.status as string | undefined;
+    const days = parseStatsDays(req);
 
     const driverResponse = await callHttpService<any>('driver', req, '/api/drivers', { page, limit, status });
 
@@ -249,10 +278,19 @@ router.get('/drivers', async (req: Request, res: Response) => {
       }
       return ids;
     }, []);
-    const driverStatsResponse = driverActorIds.length > 0
-      ? await callInternalHttpService<any>('ride', '/internal/drivers/stats', { ids: driverActorIds.join(',') })
-      : null;
+    const statsQuery: Record<string, unknown> = { ids: driverActorIds.join(',') };
+    if (days) statsQuery.days = days;
+
+    const [driverStatsResponse, earningsResponse] = await Promise.all([
+      driverActorIds.length > 0
+        ? callInternalHttpService<any>('ride', '/internal/drivers/stats', statsQuery)
+        : Promise.resolve(null),
+      driverActorIds.length > 0
+        ? callInternalHttpService<any>('payment', '/internal/drivers/earnings', statsQuery).catch(() => null)
+        : Promise.resolve(null),
+    ]);
     const driverRideCounts = driverStatsResponse ? unwrapPayload<any>(driverStatsResponse)?.counts || {} : {};
+    const earningsMap = earningsResponse ? unwrapPayload<any>(earningsResponse)?.earnings || {} : {};
 
     const drivers = rawDrivers.map((driver: any) => {
       const mergedUser = usersById.get(driver.userId) || null;
@@ -279,7 +317,8 @@ router.get('/drivers', async (req: Request, res: Response) => {
       licenseExpiryDate: driver.licenseExpiryDate,
       reviewCount: driver.ratingCount ?? driver.reviewCount ?? 0,
       rating: (driver.ratingCount ?? driver.reviewCount ?? 0) > 0 ? (driver.ratingAverage ?? driver.rating ?? 0) : 0,
-      totalRides: (driverRideCounts[driver.id] ?? 0) + (driver.userId ? driverRideCounts[driver.userId] ?? 0 : 0),
+      totalRides: driverRideCount(driverRideCounts, driver.id, driver.userId),
+      totalEarnings: driverEarningsTotal(earningsMap, driver.id, driver.userId),
       isOnline: ['ONLINE', 'BUSY'].includes(driver.availabilityStatus),
       isAvailable: driver.availabilityStatus === 'ONLINE',
       currentLocation:
@@ -303,7 +342,7 @@ router.get('/drivers', async (req: Request, res: Response) => {
 
     const total = payload.total ?? driverResponse?.meta?.total ?? drivers.length;
 
-    res.json({ success: true, data: { drivers, total } });
+    res.json({ success: true, data: { drivers, total, statsDays: days ?? null } });
   } catch (error: any) {
     res.status(error.statusCode || error.response?.status || 500).json({
       success: false,
@@ -341,6 +380,7 @@ router.post('/drivers/:driverId/reject', async (req: Request, res: Response) => 
 router.get('/customers', async (req: Request, res: Response) => {
   try {
     const { limit, page } = getPaging(req);
+    const days = parseStatsDays(req);
 
     const response = await callHttpService<any>('auth', req, '/api/auth/users', { page, limit, role: 'CUSTOMER' });
 
@@ -349,8 +389,11 @@ router.get('/customers', async (req: Request, res: Response) => {
     const customerIds = users
       .map((user: any) => typeof user.id === 'string' ? user.id : '')
       .filter(Boolean);
+    const statsQuery: Record<string, unknown> = { ids: customerIds.join(',') };
+    if (days) statsQuery.days = days;
+
     const customerStatsResponse = customerIds.length > 0
-      ? await callInternalHttpService<any>('ride', '/internal/customers/stats', { ids: customerIds.join(',') })
+      ? await callInternalHttpService<any>('ride', '/internal/customers/stats', statsQuery)
       : null;
     const customerRideCounts = customerStatsResponse ? unwrapPayload<any>(customerStatsResponse)?.counts || {} : {};
 
@@ -369,7 +412,7 @@ router.get('/customers', async (req: Request, res: Response) => {
 
     const total = response?.meta?.total ?? customers.length;
 
-    res.json({ success: true, data: { customers, total } });
+    res.json({ success: true, data: { customers, total, statsDays: days ?? null } });
   } catch (error: any) {
     res.status(error.statusCode || error.response?.status || 500).json({
       success: false,
@@ -524,6 +567,8 @@ router.get('/analytics/vehicles', async (req: Request, res: Response) => {
 router.get('/analytics/top-drivers', async (req: Request, res: Response) => {
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
+    const days = parseStatsDays(req);
+    const sortBy = String(req.query.sortBy || 'rides');
     const response = await callHttpService<any>('driver', req, '/api/drivers', { page: 1, limit: 500 });
     const drivers = unwrapPayload<any>(response)?.drivers || [];
     const userResponse = await callHttpService<any>('auth', req, '/api/auth/users', { page: 1, limit: 1000, role: 'DRIVER' });
@@ -531,14 +576,15 @@ router.get('/analytics/top-drivers', async (req: Request, res: Response) => {
     const usersById = new Map(users.map((u: any) => [u.id, u]));
     const driverActorIds = drivers.flatMap((d: any) => [d.id, d.userId].filter(Boolean));
 
-    // Parallel: rides count (ride-service) + earnings sum (payment-service).
-    // The Drivers admin page uses earnings to rank top earners.
+    const statsQuery: Record<string, unknown> = { ids: driverActorIds.join(',') };
+    if (days) statsQuery.days = days;
+
     const [statsResponse, earningsResponse] = await Promise.all([
       driverActorIds.length > 0
-        ? callInternalHttpService<any>('ride', '/internal/drivers/stats', { ids: driverActorIds.join(',') })
+        ? callInternalHttpService<any>('ride', '/internal/drivers/stats', statsQuery)
         : Promise.resolve(null),
       driverActorIds.length > 0
-        ? callInternalHttpService<any>('payment', '/internal/drivers/earnings', { ids: driverActorIds.join(',') }).catch(() => null)
+        ? callInternalHttpService<any>('payment', '/internal/drivers/earnings', statsQuery).catch(() => null)
         : Promise.resolve(null),
     ]);
     const rideCounts = statsResponse ? unwrapPayload<any>(statsResponse)?.counts || {} : {};
@@ -546,8 +592,8 @@ router.get('/analytics/top-drivers', async (req: Request, res: Response) => {
 
     const enriched = drivers.map((d: any) => {
       const u = usersById.get(d.userId) as any;
-      const totalRides = (rideCounts[d.id] ?? 0) + (d.userId ? rideCounts[d.userId] ?? 0 : 0);
-      const totalEarnings = Number(earningsMap[d.userId] ?? earningsMap[d.id] ?? 0);
+      const totalRides = driverRideCount(rideCounts, d.id, d.userId);
+      const totalEarnings = driverEarningsTotal(earningsMap, d.id, d.userId);
       return {
         id: d.id,
         name: u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : 'N/A',
@@ -560,11 +606,15 @@ router.get('/analytics/top-drivers', async (req: Request, res: Response) => {
       };
     });
 
-    const top = enriched
-      .sort((a: any, b: any) => b.totalRides - a.totalRides)
-      .slice(0, limit);
+    const sortFn = sortBy === 'rating'
+      ? (a: any, b: any) => (b.rating || 0) - (a.rating || 0) || (b.reviewCount || 0) - (a.reviewCount || 0)
+      : sortBy === 'earnings'
+        ? (a: any, b: any) => b.totalEarnings - a.totalEarnings
+        : (a: any, b: any) => b.totalRides - a.totalRides;
 
-    res.json({ success: true, data: { drivers: top } });
+    const top = enriched.sort(sortFn).slice(0, limit);
+
+    res.json({ success: true, data: { drivers: top, statsDays: days ?? null, sortBy } });
   } catch (error: any) {
     res.status(error.statusCode || 500).json({
       success: false,
@@ -577,11 +627,15 @@ router.get('/analytics/top-drivers', async (req: Request, res: Response) => {
 router.get('/analytics/top-customers', async (req: Request, res: Response) => {
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
+    const days = parseStatsDays(req);
     const response = await callHttpService<any>('auth', req, '/api/auth/users', { page: 1, limit: 500, role: 'CUSTOMER' });
     const users = unwrapPayload<any>(response)?.users || [];
     const customerIds = users.map((u: any) => u.id).filter(Boolean);
+    const statsQuery: Record<string, unknown> = { ids: customerIds.join(',') };
+    if (days) statsQuery.days = days;
+
     const statsResponse = customerIds.length > 0
-      ? await callInternalHttpService<any>('ride', '/internal/customers/stats', { ids: customerIds.join(',') })
+      ? await callInternalHttpService<any>('ride', '/internal/customers/stats', statsQuery)
       : null;
     const rideCounts = statsResponse ? unwrapPayload<any>(statsResponse)?.counts || {} : {};
 
@@ -597,7 +651,7 @@ router.get('/analytics/top-customers', async (req: Request, res: Response) => {
       .sort((a: any, b: any) => b.totalRides - a.totalRides)
       .slice(0, limit);
 
-    res.json({ success: true, data: { customers: top } });
+    res.json({ success: true, data: { customers: top, statsDays: days ?? null } });
   } catch (error: any) {
     res.status(error.statusCode || 500).json({
       success: false,

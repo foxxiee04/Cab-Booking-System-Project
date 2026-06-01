@@ -104,12 +104,15 @@ export function createApp({ rideService, getReadiness }: RideAppOptions) {
   app.get('/internal/drivers/stats', async (req, res) => {
     try {
       const driverIds = parseIdsQuery(req.query.ids);
-      const counts = await rideService.countCompletedRidesForDrivers(driverIds);
+      const daysRaw = parseInt(String(req.query.days ?? ''), 10);
+      const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 730) : undefined;
+      const counts = await rideService.countCompletedRidesForDrivers(driverIds, { days });
 
       return res.json({
         success: true,
         data: {
           counts,
+          days: days ?? null,
         },
       });
     } catch (err) {
@@ -124,12 +127,15 @@ export function createApp({ rideService, getReadiness }: RideAppOptions) {
   app.get('/internal/customers/stats', async (req, res) => {
     try {
       const customerIds = parseIdsQuery(req.query.ids);
-      const counts = await rideService.countCompletedRidesForCustomers(customerIds);
+      const daysRaw = parseInt(String(req.query.days ?? ''), 10);
+      const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 730) : undefined;
+      const counts = await rideService.countCompletedRidesForCustomers(customerIds, { days });
 
       return res.json({
         success: true,
         data: {
           counts,
+          days: days ?? null,
         },
       });
     } catch (err) {

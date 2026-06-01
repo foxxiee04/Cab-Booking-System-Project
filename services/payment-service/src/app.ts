@@ -57,16 +57,30 @@ export function createApp({ prisma, eventPublisher, getReadiness }: PaymentAppOp
       if (ids.length === 0) {
         return res.json({ success: true, data: { earnings: {} } });
       }
+      const daysRaw = parseInt(String(req.query.days ?? ''), 10);
+      const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 730) : undefined;
+      const since = days
+        ? (() => {
+            const d = new Date();
+            d.setHours(0, 0, 0, 0);
+            d.setDate(d.getDate() - days + 1);
+            return d;
+          })()
+        : undefined;
+
       const rows = await prisma.driverEarnings.groupBy({
         by: ['driverId'],
-        where: { driverId: { in: ids } },
+        where: {
+          driverId: { in: ids },
+          ...(since ? { createdAt: { gte: since } } : {}),
+        },
         _sum: { netEarnings: true },
       });
       const earnings: Record<string, number> = {};
       rows.forEach((r) => {
         earnings[r.driverId] = Number(r._sum.netEarnings || 0);
       });
-      res.json({ success: true, data: { earnings } });
+      res.json({ success: true, data: { earnings, days: days ?? null } });
     } catch (err) {
       logger.error('internal/drivers/earnings failed:', err);
       res.status(500).json({

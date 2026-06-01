@@ -1069,7 +1069,19 @@ export class RideService {
     });
   }
 
-  async countCompletedRidesForDrivers(driverIds: string[]): Promise<Record<string, number>> {
+  /** Optional `days` limits counts to completed rides since start of (today - days + 1). */
+  private completedSinceDate(days?: number): Date | undefined {
+    if (!days || days <= 0) return undefined;
+    const since = new Date();
+    since.setHours(0, 0, 0, 0);
+    since.setDate(since.getDate() - days + 1);
+    return since;
+  }
+
+  async countCompletedRidesForDrivers(
+    driverIds: string[],
+    options?: { days?: number },
+  ): Promise<Record<string, number>> {
     const normalizedDriverIds = [...new Set(
       driverIds
         .map((driverId) => driverId?.trim())
@@ -1080,11 +1092,13 @@ export class RideService {
       return {};
     }
 
+    const since = this.completedSinceDate(options?.days);
     const groupedCounts = await this.prisma.ride.groupBy({
       by: ['driverId'],
       where: {
         driverId: { in: normalizedDriverIds },
         status: RideStatus.COMPLETED,
+        ...(since ? { completedAt: { gte: since } } : {}),
       },
       _count: {
         _all: true,
@@ -1099,7 +1113,10 @@ export class RideService {
     }, {});
   }
 
-  async countCompletedRidesForCustomers(customerIds: string[]): Promise<Record<string, number>> {
+  async countCompletedRidesForCustomers(
+    customerIds: string[],
+    options?: { days?: number },
+  ): Promise<Record<string, number>> {
     const normalizedCustomerIds = [...new Set(
       customerIds
         .map((customerId) => customerId?.trim())
@@ -1110,11 +1127,13 @@ export class RideService {
       return {};
     }
 
+    const since = this.completedSinceDate(options?.days);
     const groupedCounts = await this.prisma.ride.groupBy({
       by: ['customerId'],
       where: {
         customerId: { in: normalizedCustomerIds },
         status: RideStatus.COMPLETED,
+        ...(since ? { completedAt: { gte: since } } : {}),
       },
       _count: {
         _all: true,

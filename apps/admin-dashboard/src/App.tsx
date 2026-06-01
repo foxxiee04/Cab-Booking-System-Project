@@ -125,6 +125,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     { text: t('menu.dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
     { text: t('menu.rides'), icon: <DirectionsCar />, path: '/rides' },
     { text: t('menu.drivers'), icon: <DriveEta />, path: '/drivers' },
+    { text: t('menu.customers'), icon: <People />, path: '/customers' },
     {
       text: t('menu.approvals'),
       icon: (
@@ -134,11 +135,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       ),
       path: '/driver-approvals',
     },
-    { text: t('menu.customers'), icon: <People />, path: '/customers' },
-    { text: 'Báo cáo', icon: <Assessment />, path: '/reports' },
     { text: 'Khuyến mãi', icon: <LocalOffer />, path: '/vouchers' },
     { text: 'Giá cước', icon: <TrendingUp />, path: '/pricing' },
     { text: 'Tài chính', icon: <AccountBalanceWallet />, path: '/merchant-wallet' },
+    { text: 'Báo cáo', icon: <Assessment />, path: '/reports' },
   ];
 
   return (

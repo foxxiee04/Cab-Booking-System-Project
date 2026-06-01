@@ -1978,13 +1978,12 @@ function histPick<T>(arr: T[]): T {
  *   review_db   · reviews (Mongo, both directions ~85% of rides)
  *   driver_db   · drivers.rating_average, drivers.rating_count
  *
- * Key IDs used across all stores (auth userId throughout):
- *   - ride_db "Ride"."driverId"         = driver auth userId
- *   - payment_db "Payment"."driverId"   = driver auth userId
- *   - payment_db "DriverEarnings"."driverId" = driver auth userId
- *   - wallet_db  "driverId"             = driver auth userId
- *   - review_db  reviewerId/revieweeId  = userId (driver: auth userId; customer: userId)
- *   - driver_db.driver.userId           = driver auth userId (rating updated by userId)
+ * Key IDs used across stores:
+ *   - ride_db / payment_db "driverId"     = driver profile UUID (drivers.id)
+ *   - wallet_db "driverId"                 = driver auth userId (users.id)
+ *   - review_db revieweeId (→ driver)      = driver profile UUID (same as ride driverId)
+ *   - review_db revieweeId (→ customer)    = customer auth userId
+ *   - driver_db rating update              = drivers.id (profile UUID)
  *
  * Distribution: ~40% of rides in last 7 days (denser, for driver weekly chart),
  * ~60% spread across days 8–30 (for admin Reports 30-day chart). Demo drivers
@@ -2149,12 +2148,22 @@ async function seedWalletEarningsHistory(
     walletPendingBalances.set(p.userId, 0);
   }
 
-  // Per-driver rating accumulator → drivers.rating_average / rating_count
-  const ratingSum = new Map<string, number>();   // sum of ratings received
+  // Per-driver rating accumulator (key = driver profile id) → merged with API-seeded ratings
+  const ratingSum = new Map<string, number>();
   const ratingCount = new Map<string, number>();
+  const existingRatings = new Map<string, { avg: number; count: number }>();
   for (const { p } of approved) {
-    ratingSum.set(p.userId, 0);
-    ratingCount.set(p.userId, 0);
+    ratingSum.set(p.driverId, 0);
+    ratingCount.set(p.driverId, 0);
+    const r = await drvDb.query<{ rating_average: string; rating_count: number }>(
+      `SELECT rating_average, rating_count FROM drivers WHERE id = $1`, [p.driverId],
+    );
+    if (r.rows[0]) {
+      existingRatings.set(p.driverId, {
+        avg: Number(r.rows[0].rating_average ?? 0),
+        count: Number(r.rows[0].rating_count ?? 0),
+      });
+    }
   }
 
   // Merchant balance accumulator
@@ -2442,15 +2451,15 @@ async function seedWalletEarningsHistory(
           type: 'CUSTOMER_TO_DRIVER',
           reviewerId: customer.userId,
           reviewerName: customerName,
-          revieweeId: driverUserId,
+          revieweeId: driverProfileId,
           revieweeName: driverName,
           rating: customerRating,
           comment: pickReviewComment(customerRating),
           createdAt: doneAt,
           updatedAt: doneAt,
         });
-        ratingSum.set(driverUserId, (ratingSum.get(driverUserId) || 0) + customerRating);
-        ratingCount.set(driverUserId, (ratingCount.get(driverUserId) || 0) + 1);
+        ratingSum.set(driverProfileId, (ratingSum.get(driverProfileId) || 0) + customerRating);
+        ratingCount.set(driverProfileId, (ratingCount.get(driverProfileId) || 0) + 1);
       } catch { /* duplicate or transient — skip */ }
       try {
         await reviewCol.insertOne({
@@ -2492,16 +2501,20 @@ async function seedWalletEarningsHistory(
     } catch { /* skip */ }
   }
 
-  // 2) driver_db rating_average + rating_count (only drivers who got reviews)
+  // 2) driver_db rating_average + rating_count — merge historical with API-seeded reviews
   let driversWithRating = 0;
-  for (const [driverUserId, count] of ratingCount) {
-    if (count === 0) continue;
-    const sum = ratingSum.get(driverUserId) || 0;
-    const avg = sum / count;
+  for (const { p } of approved) {
+    const histCount = ratingCount.get(p.driverId) || 0;
+    if (histCount === 0) continue;
+    const histSum = ratingSum.get(p.driverId) || 0;
+    const existing = existingRatings.get(p.driverId) || { avg: 0, count: 0 };
+    const totalCount = existing.count + histCount;
+    const totalSum = existing.avg * existing.count + histSum;
+    const avg = totalSum / totalCount;
     try {
       await drvDb.query(
-        `UPDATE drivers SET rating_average = $1, rating_count = $2, updated_at = NOW() WHERE user_id = $3`,
-        [Number(avg.toFixed(2)), count, driverUserId],
+        `UPDATE drivers SET rating_average = $1, rating_count = $2, updated_at = NOW() WHERE id = $3`,
+        [Number(avg.toFixed(2)), totalCount, p.driverId],
       );
       driversWithRating++;
     } catch { /* skip */ }
@@ -2535,6 +2548,150 @@ async function seedWalletEarningsHistory(
   console.log(`  [hist]   ride_db ✓ · payment_db ✓ · wallet_db (transactions+ledger+balance) ✓`);
   console.log(`  [hist]   review_db ${reviewCol ? '✓' : '✗'} · driver ratings updated for ${driversWithRating} drivers`);
   console.log(`  [hist]   merchant_balance: IN=${merchantTotalIn.toLocaleString('vi-VN')}đ OUT=${merchantTotalOut.toLocaleString('vi-VN')}đ`);
+}
+
+/**
+ * Post-seed sanity checks across ride_db, payment_db, wallet_db, driver_db, review_db.
+ * Logs mismatches so "each table written to a different corner" is visible immediately.
+ */
+async function verifySeedCrossDbConsistency(): Promise<void> {
+  console.log('  [verify] Cross-DB consistency checks...');
+  let issues = 0;
+
+  const rideDb = pgConnect('ride_db');
+  const payDb = pgConnect('payment_db');
+  const walDb = pgConnect('wallet_db');
+  const drvDb = pgConnect('driver_db');
+  await Promise.all([rideDb.connect(), payDb.connect(), walDb.connect(), drvDb.connect()]);
+
+  let mongoClient: MongoClient | null = null;
+
+  try {
+    const rideCount = Number((await rideDb.query(
+      `SELECT COUNT(*)::int AS c FROM "Ride" WHERE status = 'COMPLETED'`,
+    )).rows[0]?.c ?? 0);
+    const payCount = Number((await payDb.query(
+      `SELECT COUNT(*)::int AS c FROM "Payment" WHERE status = 'COMPLETED'`,
+    )).rows[0]?.c ?? 0);
+    const earnCount = Number((await payDb.query(
+      `SELECT COUNT(*)::int AS c FROM "DriverEarnings"`,
+    )).rows[0]?.c ?? 0);
+
+    if (rideCount !== payCount || rideCount !== earnCount) {
+      console.log(`    ! count mismatch: rides=${rideCount} payments=${payCount} earnings=${earnCount}`);
+      issues++;
+    } else {
+      console.log(`    ✓ ride/payment/earnings counts aligned (${rideCount})`);
+    }
+
+    const profileRows = await drvDb.query<{ id: string; user_id: string }>(
+      `SELECT id, user_id FROM drivers WHERE status = 'APPROVED'`,
+    );
+    const profileIds = new Set(profileRows.rows.map((r) => r.id));
+    const userToProfile = new Map(profileRows.rows.map((r) => [r.user_id, r.id]));
+
+    const sampleRides = await rideDb.query<{
+      id: string; driverId: string; customerId: string; fare: string; paymentMethod: string;
+    }>(
+      `SELECT id, "driverId", "customerId", fare, "paymentMethod"
+         FROM "Ride"
+        WHERE status = 'COMPLETED'
+        ORDER BY "completedAt" DESC
+        LIMIT 25`,
+    );
+
+    let sampleIssues = 0;
+    for (const row of sampleRides.rows) {
+      if (!profileIds.has(row.driverId)) {
+        console.log(`    ! ride ${row.id.slice(0, 8)} driverId not in drivers.id`);
+        sampleIssues++;
+        continue;
+      }
+
+      const pay = await payDb.query<{ amount: string; driverId: string }>(
+        `SELECT amount, "driverId" FROM "Payment" WHERE "rideId" = $1`, [row.id],
+      );
+      if (pay.rows.length === 0) {
+        console.log(`    ! ride ${row.id.slice(0, 8)} missing Payment row`);
+        sampleIssues++;
+        continue;
+      }
+      if (pay.rows[0].driverId !== row.driverId) {
+        console.log(`    ! ride/payment driverId mismatch on ${row.id.slice(0, 8)}`);
+        sampleIssues++;
+      }
+      if (Math.abs(Number(pay.rows[0].amount) - Number(row.fare)) > 1) {
+        console.log(`    ! fare mismatch ride=${row.fare} payment=${pay.rows[0].amount}`);
+        sampleIssues++;
+      }
+
+      const earn = await payDb.query<{ driverId: string; netEarnings: string }>(
+        `SELECT "driverId", "netEarnings" FROM "DriverEarnings" WHERE "rideId" = $1`, [row.id],
+      );
+      if (earn.rows.length === 0) {
+        console.log(`    ! ride ${row.id.slice(0, 8)} missing DriverEarnings row`);
+        sampleIssues++;
+      } else if (earn.rows[0].driverId !== row.driverId) {
+        console.log(`    ! ride/earnings driverId mismatch on ${row.id.slice(0, 8)}`);
+        sampleIssues++;
+      }
+
+      const driverUserId = [...userToProfile.entries()].find(([, pid]) => pid === row.driverId)?.[0];
+      if (driverUserId) {
+        const wtx = await walDb.query<{ c: number }>(
+          `SELECT COUNT(*)::int AS c FROM wallet_transactions WHERE "referenceId" = $1`, [row.id],
+        );
+        const txCount = Number(wtx.rows[0]?.c ?? 0);
+        const isCash = row.paymentMethod === 'CASH';
+        if (txCount === 0) {
+          console.log(`    ! ride ${row.id.slice(0, 8)} has no wallet_transactions (method=${row.paymentMethod})`);
+          sampleIssues++;
+        } else if (!isCash && txCount < 1) {
+          sampleIssues++;
+        }
+      }
+    }
+    issues += sampleIssues;
+    if (sampleIssues === 0) {
+      console.log(`    ✓ sampled ${sampleRides.rows.length} rides — IDs, fare, wallet refs OK`);
+    }
+
+    try {
+      mongoClient = await MongoClient.connect(reviewMongoUri(), { serverSelectionTimeoutMS: 5_000 });
+      const reviewCol = mongoClient.db('review_db').collection('reviews');
+      const driverProfileIdList = [...profileIds];
+      const badDriverReviews = await reviewCol.countDocuments({
+        type: 'CUSTOMER_TO_DRIVER',
+        revieweeId: { $nin: driverProfileIdList },
+      });
+      if (badDriverReviews > 0) {
+        console.log(`    ! ${badDriverReviews} CUSTOMER_TO_DRIVER reviews with revieweeId ∉ drivers.id`);
+        issues++;
+      } else {
+        const reviewCount = await reviewCol.countDocuments({ type: 'CUSTOMER_TO_DRIVER' });
+        console.log(`    ✓ driver reviews use profile id (${reviewCount} CUSTOMER_TO_DRIVER)`);
+      }
+    } catch (err: any) {
+      console.log(`    · review_db check skipped (${err.message?.slice(0, 60)})`);
+    }
+
+    const histLedger = Number((await walDb.query(
+      `SELECT COUNT(*)::int AS c FROM merchant_ledger WHERE "idempotencyKey" LIKE 'hd%'`,
+    )).rows[0]?.c ?? 0);
+    const histWalTx = Number((await walDb.query(
+      `SELECT COUNT(*)::int AS c FROM wallet_transactions WHERE "idempotencyKey" LIKE 'hd%'`,
+    )).rows[0]?.c ?? 0);
+    console.log(`    · historical wallet txs=${histWalTx}, merchant_ledger rows=${histLedger}`);
+  } finally {
+    await Promise.all([rideDb.end(), payDb.end(), walDb.end(), drvDb.end()]);
+    if (mongoClient) await mongoClient.close();
+  }
+
+  if (issues > 0) {
+    console.log(`  [verify] ⚠ ${issues} consistency issue(s) — see logs above`);
+  } else {
+    console.log('  [verify] ✓ cross-DB checks passed');
+  }
 }
 
 // ─── Wait for services healthy ───────────────────────────────────────────────
@@ -2743,6 +2900,8 @@ async function main() {
   // review_db, and driver_db ratings. This is what makes admin Reports +
   // driver Earnings dashboards have meaningful chart data.
   await seedWalletEarningsHistory(customers, driverProfiles, driverUsers);
+
+  await verifySeedCrossDbConsistency();
 
   const elapsed = Math.round((Date.now() - startTime) / 1000);
 

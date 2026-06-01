@@ -328,8 +328,8 @@ const Reports: React.FC = () => {
       const [revRes, vehiclesRes, driversRes, customersRes] = await Promise.all([
         adminApi.getRevenueAnalytics(days * 2),
         adminApi.getVehicleBreakdown(days),
-        adminApi.getTopDrivers(10),
-        adminApi.getTopCustomers(10),
+        adminApi.getTopDrivers(10, { days }),
+        adminApi.getTopCustomers(10, { days }),
       ]);
 
       const fullDaily = revRes.data?.dailyRevenue || [];

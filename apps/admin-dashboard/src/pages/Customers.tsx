@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -12,6 +12,7 @@ import {
   DialogContent,
   DialogTitle,
   InputAdornment,
+  MenuItem,
   Snackbar,
   Stack,
   TextField,
@@ -22,25 +23,17 @@ import {
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { SearchRounded, TrendingUp } from '@mui/icons-material';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { adminApi } from '../api/admin.api';
 import { Customer } from '../types';
 import { formatDate, formatNumber } from '../utils/format.utils';
 import { useTranslation } from 'react-i18next';
-
-const VEHICLE_LABELS: Record<string, string> = {
-  MOTORBIKE: 'Xe máy',
-  SCOOTER: 'Xe ga',
-  CAR_4: 'Ô tô 4 chỗ',
-  CAR_7: 'Ô tô 7 chỗ',
-};
-
-const VEHICLE_COLOR: Record<string, string> = {
-  MOTORBIKE: '#5a7fb8',
-  SCOOTER:   '#06b6d4',
-  CAR_4:     '#5ca38a',
-  CAR_7:     '#f59e0b',
-};
+import {
+  ADMIN_PERIOD_OPTIONS,
+  AdminStatsPeriod,
+  periodLabel,
+  periodToQueryDays,
+} from '../constants/adminPeriods';
 
 const PAGE_SIZE = 10;
 
@@ -52,6 +45,8 @@ const Customers: React.FC = () => {
   const [error, setError] = useState('');
   const [keyword, setKeyword] = useState('');
   const [sortBy, setSortBy] = useState<'rides' | 'created'>('rides');
+  const [statsPeriod, setStatsPeriod] = useState<AdminStatsPeriod>(30);
+  const [topCustomers, setTopCustomers] = useState<Array<{ id: string; name: string; totalRides: number }>>([]);
   const [statusTarget, setStatusTarget] = useState<Customer | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const [snackbar, setSnackbar] = useState('');
@@ -60,14 +55,18 @@ const Customers: React.FC = () => {
     customers: number;
     completedRides: number;
   } | null>(null);
-  const [vehicleBreakdown, setVehicleBreakdown] = useState<Array<{ vehicleType: string; count: number; revenue: number }>>([]);
   const { t } = useTranslation();
+  const statsDays = periodToQueryDays(statsPeriod);
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await adminApi.getCustomers({ limit: PAGE_SIZE, offset: page * PAGE_SIZE });
+      const response = await adminApi.getCustomers({
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        ...(statsDays ? { days: statsDays } : {}),
+      });
       setRows(response.data?.customers || []);
       setTotal(response.data?.total || 0);
     } catch (err: any) {
@@ -75,19 +74,18 @@ const Customers: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, statsDays, t]);
 
   useEffect(() => {
     void fetchCustomers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, [fetchCustomers]);
 
   useEffect(() => {
     const fetchAggregates = async () => {
       try {
-        const [statsRes, vehiclesRes] = await Promise.all([
+        const [statsRes, topRes] = await Promise.all([
           adminApi.getStats(),
-          adminApi.getVehicleBreakdown(365),
+          adminApi.getTopCustomers(10, statsDays ? { days: statsDays } : {}),
         ]);
         const stats = statsRes.data?.stats;
         if (stats) {
@@ -96,13 +94,13 @@ const Customers: React.FC = () => {
             completedRides: stats.rides?.completed || 0,
           });
         }
-        setVehicleBreakdown(vehiclesRes.data?.breakdown || []);
+        setTopCustomers(topRes.data?.customers || []);
       } catch {
         /* non-critical */
       }
     };
     fetchAggregates();
-  }, []);
+  }, [statsDays]);
 
   const filteredRows = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
@@ -121,16 +119,6 @@ const Customers: React.FC = () => {
     return result;
   }, [keyword, rows, sortBy]);
 
-  const vehicleChartData = useMemo(
-    () =>
-      vehicleBreakdown.map((b) => ({
-        name: VEHICLE_LABELS[b.vehicleType] || b.vehicleType,
-        type: b.vehicleType,
-        rides: b.count,
-      })),
-    [vehicleBreakdown],
-  );
-
   const handleStatusConfirm = async () => {
     if (!statusTarget) return;
     setStatusLoading(true);
@@ -148,7 +136,7 @@ const Customers: React.FC = () => {
     }
   };
 
-  const columns: GridColDef<Customer>[] = [
+  const columns: GridColDef<Customer>[] = useMemo(() => [
     {
       field: 'id',
       headerName: t('columns.customerId'),
@@ -175,7 +163,7 @@ const Customers: React.FC = () => {
       width: 140,
       valueFormatter: (params) => params.value || t('labels.na'),
     },
-    { field: 'totalRides', headerName: t('columns.rides'), width: 90 },
+    { field: 'totalRides', headerName: `${t('columns.rides')} (${periodLabel(statsPeriod)})`, width: 130 },
     {
       field: 'status',
       headerName: 'Trạng thái',
@@ -220,13 +208,14 @@ const Customers: React.FC = () => {
         );
       },
     },
-  ];
+  ], [statsPeriod, t]);
 
   return (
     <Box sx={{ p: 3, minHeight: '100%', background: 'radial-gradient(circle at top left, rgba(14,165,233,0.1), transparent 32%), linear-gradient(180deg, #f8fafc 0%, #eef4fb 100%)' }}>
       <Typography variant="h4" fontWeight={900}>{t('tables.customers')}</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
         Quản lý khách hàng, theo dõi trạng thái tài khoản và lịch sử sử dụng dịch vụ.
+        Cột chuyến và biểu đồ Top 10 theo khoảng thời gian đã chọn; thẻ KPI là toàn hệ thống.
       </Typography>
 
       {error && <Alert severity="error" sx={{ mt: 2, borderRadius: 3 }}>{error}</Alert>}
@@ -246,38 +235,53 @@ const Customers: React.FC = () => {
         ))}
       </Box>
 
-      {/* Vehicle preference chart (last 365 days, system-wide) */}
+      {/* Top customers */}
       <Card elevation={0} sx={{ mt: 2, borderRadius: 4, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.06)' }}>
-        <CardContent sx={{ p: 2.5 }}>
-          <Typography variant="subtitle1" fontWeight={800}>Khách hàng đặt loại xe nào nhiều nhất</Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            Số chuyến hoàn tất 365 ngày qua, theo loại xe
-          </Typography>
-          {vehicleChartData.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>Chưa có dữ liệu</Typography>
-          ) : (
-            <Box sx={{ height: 220 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={vehicleChartData} margin={{ top: 5, right: 16, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#334155' }} tickLine={false} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
-                  <RechartsTooltip formatter={(v: number) => [formatNumber(v), 'Số chuyến']} />
-                  <Bar dataKey="rides" name="Số chuyến" radius={[6, 6, 0, 0]}>
-                    {vehicleChartData.map((d) => (
-                      <Cell key={d.type} fill={VEHICLE_COLOR[d.type] || '#5a7fb8'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </Box>
+          <CardContent sx={{ p: 2.5 }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1}>
+              <Box>
+                <Typography variant="subtitle1" fontWeight={800}>Top 10 khách hàng</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Theo số chuyến hoàn tất — {periodLabel(statsPeriod)}
+                </Typography>
+              </Box>
+              <TextField
+                select
+                size="small"
+                label="Khoảng thời gian"
+                value={statsPeriod}
+                onChange={(e) => {
+                  setStatsPeriod(e.target.value as AdminStatsPeriod);
+                  setPage(0);
+                }}
+                sx={{ minWidth: 140 }}
+              >
+                {ADMIN_PERIOD_OPTIONS.map((o) => (
+                  <MenuItem key={String(o.value)} value={o.value}>{o.label}</MenuItem>
+                ))}
+              </TextField>
+            </Stack>
+            {topCustomers.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>Chưa có dữ liệu</Typography>
+            ) : (
+              <Box sx={{ height: 280, mt: 2 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topCustomers} layout="vertical" margin={{ top: 0, right: 24, left: 16, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                    <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11, fill: '#334155' }} tickLine={false} axisLine={false} />
+                    <RechartsTooltip formatter={(v: number) => [formatNumber(v), 'Số chuyến']} />
+                    <Bar dataKey="totalRides" name="Số chuyến" radius={[0, 4, 4, 0]} fill="#0f766e" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
           )}
         </CardContent>
       </Card>
 
       <Card elevation={0} sx={{ mt: 2, borderRadius: 4, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.06)' }}>
         <CardContent sx={{ p: 2 }}>
-          <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: '1fr auto' } }}>
+          <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: '1fr 140px auto' } }}>
             <TextField
               fullWidth
               size="small"
@@ -292,6 +296,17 @@ const Customers: React.FC = () => {
                 ),
               }}
             />
+            <TextField
+              select
+              size="small"
+              label="Thời gian"
+              value={statsPeriod}
+              onChange={(e) => { setPage(0); setStatsPeriod(e.target.value as AdminStatsPeriod); }}
+            >
+              {ADMIN_PERIOD_OPTIONS.map((o) => (
+                <MenuItem key={String(o.value)} value={o.value}>{o.label}</MenuItem>
+              ))}
+            </TextField>
             <ToggleButtonGroup
               value={sortBy}
               exclusive

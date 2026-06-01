@@ -245,16 +245,16 @@ foxgo-worker-ai  Public: <AI_WORKER_PUBLIC_IP>
 ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@18.136.250.236
 
 # Secondary Manager
-ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@52.77.233.34
+ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@<MANAGER_2_PUBLIC_IP>
 
 # Third Manager
 ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@<MANAGER_3_PUBLIC_IP>
 
 # Worker 1
-ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@52.221.209.1
+ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@<WORKER_1_PUBLIC_IP>
 
 # Worker 2
-ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@13.212.196.192
+ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@<WORKER_2_PUBLIC_IP>
 
 # Worker AI
 ssh -i C:\Users\sangt\.ssh\cab-key.pem ubuntu@<AI_WORKER_PUBLIC_IP>
@@ -303,8 +303,6 @@ To add a worker to this swarm, run the following command:
 
 To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
 ```
-
-> ✅ Copy và lưu lệnh `docker swarm join --token ...` lại — dùng ở bước sau. Khi chạy trên node khác, luôn thêm `--advertise-addr <PRIVATE_IP_CỦA_NODE_ĐANG_JOIN>` để Swarm lưu đúng IP nội bộ; nếu để Docker tự đoán, node có thể hiện `0.0.0.0` và Prometheus sẽ scrape sai target.
 
 ---
 
@@ -910,6 +908,104 @@ Vào **Dashboards** → chọn **"System Overview"** → thấy metrics từ c�
 curl http://18.136.250.236:3000/health
 # {"status":"ok","uptime":...}
 ```
+
+**4. Healthcheck toàn diện monitoring (một block, chạy trên Primary):**
+
+```bash
+. ~/cab-booking/scripts/load-dotenv.sh && load_dotenv ~/cab-booking/.env
+
+# Prometheus — targets phải UP hết
+echo "═══ Prometheus targets ═══"
+curl -s http://127.0.0.1:9090/api/v1/targets?state=active | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+groups = {}
+for t in data['data']['activeTargets']:
+    job = t['labels'].get('job', 'unknown')
+    inst = t['labels'].get('instance', '?')
+    groups.setdefault(job, []).append((inst, t['health'], t.get('lastError','')))
+for job, lst in sorted(groups.items()):
+    up = sum(1 for _,h,_ in lst if h=='up')
+    print(f'  {job}: {up}/{len(lst)} up')
+    for inst, h, err in lst:
+        if h != 'up':
+            print(f'    ❌ {inst} → {err[:80]}')
+"
+
+# Grafana — health + số dashboard
+echo; echo "═══ Grafana ═══"
+curl -s http://127.0.0.1:3030/api/health
+echo
+curl -s -u "${GRAFANA_ADMIN_USER:-admin}:${GRAFANA_ADMIN_PASSWORD:-admin123}" \
+  http://127.0.0.1:3030/api/search?type=dash-db | python3 -c "
+import sys, json
+ds = json.load(sys.stdin)
+print(f'  Dashboards: {len(ds)}')
+for d in ds[:10]:
+    print(f'    - {d[\"title\"]}')
+"
+
+# Alertmanager — chat_ids + active alerts
+echo; echo "═══ Alertmanager ═══"
+curl -s http://127.0.0.1:9093/api/v2/status | python3 -c "
+import sys, json, re
+s = json.load(sys.stdin)
+cfg = s.get('config', {}).get('original', '')
+print(f'  Cluster: {s.get(\"cluster\", {}).get(\"status\", \"?\")}')
+m = re.findall(r'chat_id:\s*(-?\d+)', cfg)
+print(f'  Telegram chat_ids: {set(m)}')
+"
+echo "  Active alerts:"
+curl -s http://127.0.0.1:9093/api/v2/alerts | python3 -c "
+import sys, json
+a = json.load(sys.stdin)
+print(f'    Total: {len(a)}')
+for x in a[:10]:
+    print(f'    - [{x[\"labels\"].get(\"severity\",\"?\")}] {x[\"labels\"].get(\"alertname\",\"?\")} ({x[\"status\"][\"state\"]})')
+"
+
+# Prometheus rules — bao nhiêu fire
+echo; echo "═══ Prometheus rules ═══"
+curl -s http://127.0.0.1:9090/api/v1/rules | python3 -c "
+import sys, json
+groups = json.load(sys.stdin).get('data', {}).get('groups', [])
+for g in groups:
+    rules = g.get('rules', [])
+    firing = [r['name'] for r in rules if r.get('state')=='firing']
+    print(f'  {g[\"name\"]}: {len(rules)} rules, {len(firing)} firing {firing}')
+"
+
+# Loki — có log trong 5 phút gần nhất không
+echo; echo "═══ Loki ═══"
+END=$(date +%s%N)
+START=$((END - 300*10**9))
+LOKI_RESP=$(curl -s "http://127.0.0.1:3100/loki/api/v1/query_range?query=%7Bcontainer%3D~%22cab-booking_.*%22%7D&start=$START&end=$END&limit=1")
+if echo "$LOKI_RESP" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
+  echo "$LOKI_RESP" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+streams = d.get('data', {}).get('result', [])
+print(f'  Streams: {len(streams)}')
+if streams:
+    s = streams[0]['stream']
+    print(f'  Sample container: {s.get(\"container\",\"?\")}')
+"
+else
+  echo "  ⚠ Loki không trả JSON. Raw: ${LOKI_RESP:0:120}..."
+  echo "  Debug: docker service logs cab-booking_loki --tail 30"
+fi
+```
+
+**Kỳ vọng output khoẻ:**
+- Prometheus: api-gateway 1/1, cadvisor 6/6, node-exporter 6/6, prometheus 1/1, rabbitmq 1/1 đều up
+- Grafana: `database: ok`, 4+ dashboards (System Overview, Application Metrics, Container Resources, Service Logs)
+- Alertmanager: `Cluster: disabled` (single instance OK), `Telegram chat_ids: {'…'}` (set của bạn)
+- Prometheus rules: 4 groups (containers, host, rabbitmq, services), firing = 0 lúc bình thường
+- Loki: ≥1 stream trong 5 phút gần nhất
+
+**Nếu có target DOWN / rule firing bất thường:** xem PHASE 19 (disk) và section "Khôi phục server set lung tung".
+
+> **Lưu ý:** microservices riêng (auth/user/ride/...) chưa expose `/metrics` Prometheus mặc định. Để add, sửa `monitoring/prometheus/prometheus.yml` thêm scrape config với `dockerswarm_sd_configs` filter theo label `prometheus_scrape=true`, rồi gán label đó cho từng service trong stack file. Lúc đó số `services:` job trong Prometheus mới có 10+ targets thay vì chỉ `api-gateway: 1/1`.
 
 ---
 

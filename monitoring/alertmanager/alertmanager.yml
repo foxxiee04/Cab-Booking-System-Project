@@ -33,7 +33,12 @@ receivers:
   - name: telegram-default
     telegram_configs:
       - bot_token_file: /run/secrets/telegram_bot_token
-        chat_id: __CHAT_ID__
+        # Placeholder = 0 → alertmanager start được nhưng KHÔNG gửi được notification.
+        # Đổi thành chat_id thật (số nguyên, group có thể âm như -1001234567890)
+        # bằng: sed -i 's/chat_id: 0/chat_id: -100xxx/' monitoring/alertmanager/alertmanager.yml
+        # rồi docker service update --force cab-booking_alertmanager.
+        # KHÔNG để literal __CHAT_ID__ — alertmanager parse fail và exit 1.
+        chat_id: 0
         parse_mode: HTML
         send_resolved: true
         message: |
@@ -49,7 +54,12 @@ receivers:
   - name: telegram-critical
     telegram_configs:
       - bot_token_file: /run/secrets/telegram_bot_token
-        chat_id: __CHAT_ID__
+        # Placeholder = 0 → alertmanager start được nhưng KHÔNG gửi được notification.
+        # Đổi thành chat_id thật (số nguyên, group có thể âm như -1001234567890)
+        # bằng: sed -i 's/chat_id: 0/chat_id: -100xxx/' monitoring/alertmanager/alertmanager.yml
+        # rồi docker service update --force cab-booking_alertmanager.
+        # KHÔNG để literal __CHAT_ID__ — alertmanager parse fail và exit 1.
+        chat_id: 0
         parse_mode: HTML
         send_resolved: true
         message: |

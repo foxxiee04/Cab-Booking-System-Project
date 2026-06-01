@@ -104,8 +104,14 @@ services:
     deploy:
       replicas: 1
       placement:
+        # Pin to PRIMARY manager (nginx=true). postgres_data is a local Docker
+        # volume tied to whichever node first claimed it — if Swarm reschedules
+        # to a different infra=true manager the new node has an empty volume,
+        # init.sql re-runs, but in practice this causes split-brain data and
+        # makes CI/CD's "ensure databases exist" step skip (it docker-execs on
+        # Primary only). Single node = single source of truth.
         constraints:
-          - node.labels.infra == true
+          - node.labels.nginx == true
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -148,8 +154,11 @@ services:
     deploy:
       replicas: 1
       placement:
+        # Pin to PRIMARY manager — mongo_data is local; seed scripts assume
+        # mongodb on Primary (publishes 27017 via mode=host for host-network
+        # seed via cab-bootstrap-runner).
         constraints:
-          - node.labels.infra == true
+          - node.labels.nginx == true
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -179,8 +188,9 @@ services:
     deploy:
       replicas: 1
       placement:
+        # Pin to PRIMARY manager — redis_data is a local volume.
         constraints:
-          - node.labels.infra == true
+          - node.labels.nginx == true
       resources:
         limits:
           cpus: '0.5'
@@ -209,8 +219,9 @@ services:
     deploy:
       replicas: 1
       placement:
+        # Pin to PRIMARY manager — rabbitmq_data (queues/exchanges) is local.
         constraints:
-          - node.labels.infra == true
+          - node.labels.nginx == true
       resources:
         limits:
           cpus: '0.5'
@@ -1058,8 +1069,15 @@ services:
 
   loki:
     image: grafana/loki:3.1.1
+    # Run as root so /loki (compactor working_directory + tsdb cache) is always
+    # writable on the named volume. The default 10001:10001 user gets EACCES on
+    # the first boot of a fresh local volume (initially root-owned) and the
+    # process exits cleanly (status 0), which restart_policy=on-failure ignores
+    # — Swarm leaves the service at 0/1 forever. user=0 + restart_policy=any
+    # ensures Loki always comes back.
+    user: "0:0"
     ports:
-      # mode=host: pin to Manager via infra=true label; bypass ingress mesh.
+      # mode=host: pin to Primary via nginx=true; bypass ingress mesh.
       - target: 3100
         published: 3100
         protocol: tcp
@@ -1079,7 +1097,8 @@ services:
         constraints:
           - node.labels.nginx == true
       restart_policy:
-        condition: on-failure
+        condition: any
+        delay: 10s
       resources:
         limits:
           cpus: '0.5'

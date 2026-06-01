@@ -13,7 +13,7 @@
       "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 },
       "targets": [{
         "datasource": "Loki",
-        "expr": "{job=\"docker-containers\"} |~ \"(?i)error|exception|failed\"",
+        "expr": "{swarm_service=~\"cab-booking_.*\"} |~ \"(?i)error|exception|failed|fatal\"",
         "legendFormat": ""
       }],
       "options": { "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true }
@@ -25,10 +25,10 @@
       "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
       "targets": [{
         "datasource": "Loki",
-        "expr": "{service=~\".*api-gateway.*\"}",
+        "expr": "{swarm_service=\"cab-booking_api-gateway\"}",
         "legendFormat": ""
       }],
-      "options": { "showTime": true, "sortOrder": "Descending" }
+      "options": { "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true }
     },
     {
       "id": 3,
@@ -37,10 +37,10 @@
       "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
       "targets": [{
         "datasource": "Loki",
-        "expr": "{service=~\".*auth-service.*\"}",
+        "expr": "{swarm_service=\"cab-booking_auth-service\"}",
         "legendFormat": ""
       }],
-      "options": { "showTime": true, "sortOrder": "Descending" }
+      "options": { "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true }
     },
     {
       "id": 4,
@@ -49,10 +49,10 @@
       "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
       "targets": [{
         "datasource": "Loki",
-        "expr": "{service=~\".*ride-service.*\"}",
+        "expr": "{swarm_service=\"cab-booking_ride-service\"}",
         "legendFormat": ""
       }],
-      "options": { "showTime": true, "sortOrder": "Descending" }
+      "options": { "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true }
     },
     {
       "id": 5,
@@ -61,20 +61,44 @@
       "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
       "targets": [{
         "datasource": "Loki",
-        "expr": "{service=~\".*payment-service.*\"}",
+        "expr": "{swarm_service=\"cab-booking_payment-service\"}",
         "legendFormat": ""
       }],
-      "options": { "showTime": true, "sortOrder": "Descending" }
+      "options": { "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true }
     },
     {
       "id": 6,
-      "title": "Log Rate by Service",
-      "type": "timeseries",
-      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 7 },
+      "title": "Driver Service Logs",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
       "targets": [{
         "datasource": "Loki",
-        "expr": "sum by (service) (rate({job=\"docker-containers\"}[5m]))",
-        "legendFormat": "{{service}}"
+        "expr": "{swarm_service=\"cab-booking_driver-service\"}",
+        "legendFormat": ""
+      }],
+      "options": { "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true }
+    },
+    {
+      "id": 7,
+      "title": "Wallet Service Logs",
+      "type": "logs",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "targets": [{
+        "datasource": "Loki",
+        "expr": "{swarm_service=\"cab-booking_wallet-service\"}",
+        "legendFormat": ""
+      }],
+      "options": { "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true }
+    },
+    {
+      "id": 8,
+      "title": "Log Rate by Service",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 32, "w": 24, "h": 7 },
+      "targets": [{
+        "datasource": "Loki",
+        "expr": "sum by (swarm_service) (rate({swarm_service=~\"cab-booking_.*\"}[5m]))",
+        "legendFormat": "{{swarm_service}}"
       }],
       "fieldConfig": { "defaults": { "unit": "short" } }
     }

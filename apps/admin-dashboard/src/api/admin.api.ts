@@ -39,7 +39,9 @@ export const adminApi = {
     status?: string;
     limit?: number;
     offset?: number;
-  }): Promise<ApiResponse<{ drivers: Driver[]; total: number }>> => {
+    /** Last N days for ride/earnings stats; omit = lifetime */
+    days?: number;
+  }): Promise<ApiResponse<{ drivers: Driver[]; total: number; statsDays?: number | null }>> => {
     const response = await axiosInstance.get('/admin/drivers', { params });
     return response.data;
   },
@@ -58,7 +60,8 @@ export const adminApi = {
   getCustomers: async (params?: {
     limit?: number;
     offset?: number;
-  }): Promise<ApiResponse<{ customers: Customer[]; total: number }>> => {
+    days?: number;
+  }): Promise<ApiResponse<{ customers: Customer[]; total: number; statsDays?: number | null }>> => {
     const response = await axiosInstance.get('/admin/customers', { params });
     return response.data;
   },
@@ -135,7 +138,10 @@ export const adminApi = {
   },
 
   // Top drivers by ride count (also includes rating + earnings for sortable charts)
-  getTopDrivers: async (limit = 10): Promise<ApiResponse<{
+  getTopDrivers: async (
+    limit = 10,
+    params?: { days?: number; sortBy?: 'rides' | 'rating' | 'earnings' },
+  ): Promise<ApiResponse<{
     drivers: Array<{
       id: string;
       name: string;
@@ -145,8 +151,12 @@ export const adminApi = {
       totalEarnings?: number;
       vehicleType: string;
     }>;
+    statsDays?: number | null;
+    sortBy?: string;
   }>> => {
-    const response = await axiosInstance.get('/admin/analytics/top-drivers', { params: { limit } });
+    const response = await axiosInstance.get('/admin/analytics/top-drivers', {
+      params: { limit, ...params },
+    });
     return response.data;
   },
 
@@ -160,10 +170,16 @@ export const adminApi = {
   },
 
   // Top customers by ride count
-  getTopCustomers: async (limit = 10): Promise<ApiResponse<{
+  getTopCustomers: async (
+    limit = 10,
+    params?: { days?: number },
+  ): Promise<ApiResponse<{
     customers: Array<{ id: string; name: string; email: string; totalRides: number }>;
+    statsDays?: number | null;
   }>> => {
-    const response = await axiosInstance.get('/admin/analytics/top-customers', { params: { limit } });
+    const response = await axiosInstance.get('/admin/analytics/top-customers', {
+      params: { limit, ...params },
+    });
     return response.data;
   },
 

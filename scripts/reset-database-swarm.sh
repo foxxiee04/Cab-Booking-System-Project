@@ -61,35 +61,96 @@ restore_autoscaler() {
 }
 trap restore_autoscaler EXIT
 
-pg_cid="$(docker ps -q -f name="${STACK_NAME}_postgres" | head -1)"
-if [[ -z "$pg_cid" ]]; then
-  echo "❌ Không thấy task postgres (${STACK_NAME}_postgres). Deploy stack trước."
-  exit 1
+# ─────────────────────────────────────────────────────────────────────────────
+# Node-aware helpers: postgres và mongodb có thể landing trên BẤT KỲ infra=true
+# manager nào (không phải lúc nào cũng Primary). Detect node thật rồi SSH nếu
+# cần — script chạy được kể cả khi DB ở node khác.
+# ─────────────────────────────────────────────────────────────────────────────
+
+SSH_KEY=""
+for p in "${SWARM_SSH_KEY:-}" "${HOME}/.ssh/swarm_key" "${HOME}/.ssh/id_rsa"; do
+  [[ -n "$p" && -f "$p" ]] && SSH_KEY="$p" && break
+done
+SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes)
+[[ -n "$SSH_KEY" ]] && SSH_OPTS+=(-i "$SSH_KEY")
+SELF_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+
+# Derive private IP from Swarm hostname (ip-172-31-43-201 → 172.31.43.201).
+# Fallback to Status.Addr if hostname doesn't match the pattern.
+node_ip_for() {
+  local svc_name="$1"
+  local node
+  node=$(docker stack ps "${STACK_NAME}" --filter name="${STACK_NAME}_${svc_name}" \
+    --filter desired-state=running --format '{{.Node}}' 2>/dev/null | head -1)
+  [[ -z "$node" ]] && return 1
+  if [[ "$node" =~ ^ip-[0-9-]+$ ]]; then
+    echo "$node" | sed 's/^ip-//;s/-/./g'
+  else
+    docker node inspect "$node" --format '{{.Status.Addr}}' 2>/dev/null
+  fi
+}
+
+# Run a command on the node hosting <svc_name>. If that node = current node,
+# run locally; else SSH. Args: <svc_name> <bash_command_string>.
+run_on_node_with_svc() {
+  local svc="$1"; shift
+  local ip
+  ip="$(node_ip_for "$svc")" || { echo "❌ Không tìm thấy node cho $svc"; return 1; }
+  if [[ "$ip" == "$SELF_IP" ]] || [[ "$ip" == "127.0.0.1" ]] || [[ "$ip" == "0.0.0.0" ]]; then
+    bash -c "$*"
+  else
+    if [[ -z "$SSH_KEY" ]]; then
+      echo "❌ $svc ở node khác ($ip) nhưng không có SSH key. Set SWARM_SSH_KEY hoặc ~/.ssh/swarm_key."
+      return 1
+    fi
+    ssh "${SSH_OPTS[@]}" ubuntu@"$ip" "$*"
+  fi
+}
+
+PG_IP="$(node_ip_for postgres)" || { echo "❌ postgres không chạy"; exit 1; }
+MG_IP="$(node_ip_for mongodb)" || MG_IP=""
+echo "[detect] postgres @ $PG_IP, mongodb @ ${MG_IP:-<missing>}, primary @ $SELF_IP"
+echo ""
+
+# Ensure docker login trên node chạy postgres — migrate_one sẽ docker run image
+# foxxiee04/cab-*. Pull anonymously OK nếu image public + chưa rate-limit, nhưng
+# login giúp ổn định hơn (200 pulls/6h thay vì 100).
+if [[ -n "${DOCKERHUB_TOKEN:-}" && -n "${DOCKERHUB_USERNAME:-}" ]]; then
+  echo "[auth] docker login trên $PG_IP..."
+  run_on_node_with_svc postgres "echo '${DOCKERHUB_TOKEN}' | docker login -u '${DOCKERHUB_USERNAME}' --password-stdin >/dev/null" || \
+    echo "  ⚠ docker login fail — pull sẽ anonymous"
 fi
 
-mongo_cid="$(docker ps -q -f name="${STACK_NAME}_mongodb" | head -1)"
-
-echo "[1/5] PostgreSQL — drop + create logical DBs..."
-for db in auth_db booking_db driver_db payment_db ride_db user_db wallet_db; do
-  echo "  → $db"
-  docker exec "$pg_cid" psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 \
-    -c "DROP DATABASE IF EXISTS $db WITH (FORCE);" 2>/dev/null || true
-  docker exec "$pg_cid" psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 \
-    -c "CREATE DATABASE $db;"
-done
+echo "[1/5] PostgreSQL — drop + create logical DBs (trên $PG_IP)..."
+run_on_node_with_svc postgres '
+  set -e
+  PG=$(docker ps -q -f name='"${STACK_NAME}"'_postgres | head -1)
+  [ -z "$PG" ] && { echo "❌ no postgres container"; exit 1; }
+  for db in auth_db booking_db driver_db payment_db ride_db user_db wallet_db; do
+    docker exec "$PG" psql -U '"$POSTGRES_USER"' -d postgres -v ON_ERROR_STOP=1 \
+      -c "DROP DATABASE IF EXISTS $db WITH (FORCE);" >/dev/null 2>&1 || true
+    docker exec "$PG" psql -U '"$POSTGRES_USER"' -d postgres -v ON_ERROR_STOP=1 \
+      -c "CREATE DATABASE $db;" >/dev/null
+    echo "  ✓ $db"
+  done
+'
 
 echo ""
 echo "[2/5] MongoDB — drop notification_db, review_db..."
-if [[ -n "$mongo_cid" ]]; then
-  docker exec "$mongo_cid" mongosh --quiet \
-    -u "$MONGO_USER" -p "$MONGO_PASSWORD" --authenticationDatabase admin \
-    --eval "
-      db.getSiblingDB('notification_db').dropDatabase();
-      db.getSiblingDB('review_db').dropDatabase();
-      print('MongoDB dropped');
-    " || echo "  ⚠ Mongosh báo lỗi hoặc DB chưa tồn tại — bỏ qua nếu sạch"
+if [[ -n "$MG_IP" ]]; then
+  run_on_node_with_svc mongodb '
+    set -e
+    MG=$(docker ps -q -f name='"${STACK_NAME}"'_mongodb | head -1)
+    [ -z "$MG" ] && { echo "❌ no mongo container"; exit 1; }
+    PASS=$(docker exec "$MG" cat /run/secrets/mongo_password 2>/dev/null || echo "'"$MONGO_PASSWORD"'")
+    docker exec "$MG" mongosh --quiet -u '"$MONGO_USER"' -p "$PASS" --authenticationDatabase admin --eval "
+      db.getSiblingDB(\"notification_db\").dropDatabase();
+      db.getSiblingDB(\"review_db\").dropDatabase();
+      print(\"  ✓ mongo dropped\");
+    "
+  ' || echo "  ⚠ mongo drop báo lỗi — bỏ qua nếu DB chưa tồn tại"
 else
-  echo "  ⚠ Không có task mongodb — bỏ qua"
+  echo "  ⚠ mongodb không chạy — bỏ qua"
 fi
 
 echo ""
@@ -221,16 +282,17 @@ wait_for_wallet_proxy_ready() {
 migrate_one() {
   local svc="$1"
   local db="$2"
-  # ALWAYS use docker run --network host on the manager — bypasses overlay
-  # entirely, postgres reachable at 127.0.0.1:5433 (host-port published).
-  # Previously this function tried docker exec (local + SSH to workers) first,
-  # but those paths hit overlay DNS races on Prisma's can-connect-to-database
-  # preflight and hung. Direct host-network migration is deterministic.
+  # `docker run --network host` cần được chạy TRÊN node có postgres — vì
+  # postgres publish 5433 mode=host, port chỉ bind trên node-of-postgres.
+  # Nếu postgres ở Primary thì local; nếu ở manager khác thì SSH.
   local img="${DOCKERHUB_USERNAME:-foxxiee04}/cab-${svc}:${IMAGE_TAG:-latest}"
-  echo "  → $svc via host network ($img → $db @127.0.0.1:5433)"
-  docker run --rm --network host \
-    -e DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5433/${db}?connect_timeout=60" \
-    "$img" npx prisma db push --accept-data-loss
+  echo "  → $svc via host network ($img → $db @ $PG_IP:5433)"
+  run_on_node_with_svc postgres '
+    set -e
+    docker run --rm --network host \
+      -e DATABASE_URL="postgresql://'"${POSTGRES_USER}"':'"${POSTGRES_PASSWORD}"'@127.0.0.1:5433/'"$db"'?connect_timeout=60" \
+      '"$img"' npx prisma db push --accept-data-loss 2>&1 | tail -3
+  '
 }
 
 migrate_one "auth-service"     "auth_db"
@@ -300,8 +362,13 @@ if ! timeout 2 bash -c 'exec 3<>/dev/tcp/127.0.0.1/5433' 2>/dev/null; then
 fi
 
 export AUTH_INTERNAL_URL="${AUTH_INTERNAL_URL:-$GATEWAY_BASE_URL}"
-export POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}"
+# POSTGRES/MONGO_HOST mặc định = node thật của postgres/mongo (detected above).
+# Trên Primary: nếu db ở local thì $PG_IP = $SELF_IP, kết nối tới $PG_IP:5433
+# vẫn ok (port host-mode bound trên interface). Nếu db ở manager khác thì
+# Primary connect ra qua VPC + SG rule (yêu cầu mở port 5433/27017 same-SG).
+export POSTGRES_HOST="${POSTGRES_HOST:-$PG_IP}"
 export POSTGRES_PORT="${POSTGRES_PORT:-5433}"
+export SEED_MONGO_HOST="${SEED_MONGO_HOST:-${MG_IP:-127.0.0.1}}"
 export REDIS_PASSWORD
 
 # Sau rolling restart + auto-scaler, auth qua gateway có thể cần >25s — tăng mặc định khi chạy từ script này.

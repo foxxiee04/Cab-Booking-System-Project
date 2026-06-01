@@ -27,6 +27,12 @@ import { adminApi } from '../api/admin.api';
 import { Driver } from '../types';
 import { useTranslation } from 'react-i18next';
 import { formatCurrency, formatNumber } from '../utils/format.utils';
+import {
+  ADMIN_PERIOD_OPTIONS,
+  AdminStatsPeriod,
+  periodLabel,
+  periodToQueryDays,
+} from '../constants/adminPeriods';
 
 interface TopDriverRow {
   id: string;
@@ -50,7 +56,9 @@ const Drivers: React.FC = () => {
   const [error, setError] = useState('');
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [sortBy, setSortBy] = useState<'rides' | 'rating'>('rides');
+  const [sortBy, setSortBy] = useState<'rides' | 'rating' | 'earnings'>('rides');
+  const [statsPeriod, setStatsPeriod] = useState<AdminStatsPeriod>(30);
+  const [onlineOnly, setOnlineOnly] = useState(false);
   const [suspendTarget, setSuspendTarget] = useState<Driver | null>(null);
   const [suspendLoading, setSuspendLoading] = useState(false);
   const [snackbar, setSnackbar] = useState('');
@@ -63,6 +71,8 @@ const Drivers: React.FC = () => {
   const [topMetric, setTopMetric] = useState<'rides' | 'rating' | 'earnings'>('rides');
   const { t } = useTranslation();
 
+  const statsDays = periodToQueryDays(statsPeriod);
+
   const fetchDrivers = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -71,6 +81,7 @@ const Drivers: React.FC = () => {
         status: statusFilter === 'ALL' ? undefined : statusFilter,
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
+        ...(statsDays ? { days: statsDays } : {}),
       });
       setRows(response.data?.drivers || []);
       setTotal(response.data?.total || 0);
@@ -79,7 +90,7 @@ const Drivers: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, t]);
+  }, [page, statusFilter, statsDays, t]);
 
   useEffect(() => {
     void fetchDrivers();
@@ -91,7 +102,10 @@ const Drivers: React.FC = () => {
       try {
         const [statsRes, topRes] = await Promise.all([
           adminApi.getStats(),
-          adminApi.getTopDrivers(10),
+          adminApi.getTopDrivers(10, {
+            ...(statsDays ? { days: statsDays } : {}),
+            sortBy: topMetric,
+          }),
         ]);
         const stats = statsRes.data?.stats?.drivers;
         if (stats) {
@@ -108,7 +122,7 @@ const Drivers: React.FC = () => {
       }
     };
     fetchAggregates();
-  }, []);
+  }, [statsDays, topMetric]);
 
   // Sort top-10 by the selected metric. Earnings come from the extended
   // top-drivers endpoint; if missing on a driver we treat as 0.
@@ -151,13 +165,18 @@ const Drivers: React.FC = () => {
           .includes(kw)
       );
     }
+    if (onlineOnly) {
+      result = result.filter((d) => d.isOnline);
+    }
     if (sortBy === 'rides') {
       result = [...result].sort((a, b) => (b.totalRides || 0) - (a.totalRides || 0));
+    } else if (sortBy === 'earnings') {
+      result = [...result].sort((a, b) => (b.totalEarnings || 0) - (a.totalEarnings || 0));
     } else {
       result = [...result].sort((a, b) => (b.rating || 0) - (a.rating || 0));
     }
     return result;
-  }, [keyword, rows, sortBy]);
+  }, [keyword, onlineOnly, rows, sortBy]);
 
   const handleSuspendConfirm = async () => {
     if (!suspendTarget) return;
@@ -175,14 +194,14 @@ const Drivers: React.FC = () => {
     }
   };
 
-  const getApprovalMeta = (status: Driver['status']) => {
+  const getApprovalMeta = useCallback((status: Driver['status']) => {
     if (status === 'APPROVED') return { label: t('labels.approved'), color: 'success' as const };
     if (status === 'REJECTED') return { label: t('labels.rejected'), color: 'error' as const };
     if (status === 'SUSPENDED') return { label: 'Tạm khóa', color: 'warning' as const };
     return { label: t('labels.pending'), color: 'default' as const };
-  };
+  }, [t]);
 
-  const columns: GridColDef<Driver>[] = [
+  const columns: GridColDef<Driver>[] = useMemo(() => [
     {
       field: 'id',
       headerName: t('columns.driverId'),
@@ -246,7 +265,17 @@ const Drivers: React.FC = () => {
         />
       ),
     },
-    { field: 'totalRides', headerName: t('columns.rides'), width: 90 },
+    { field: 'totalRides', headerName: `${t('columns.rides')} (${periodLabel(statsPeriod)})`, width: 130 },
+    {
+      field: 'totalEarnings',
+      headerName: `Thu nhập (${periodLabel(statsPeriod)})`,
+      width: 140,
+      renderCell: (params) => (
+        <Typography variant="body2" fontWeight={600}>
+          {formatCurrency(Number(params.row.totalEarnings ?? 0))}
+        </Typography>
+      ),
+    },
     {
       field: 'isOnline',
       headerName: t('columns.online'),
@@ -281,13 +310,14 @@ const Drivers: React.FC = () => {
         );
       },
     },
-  ];
+  ], [getApprovalMeta, statsPeriod, t]);
 
   return (
     <Box sx={{ p: 3, minHeight: '100%', background: 'radial-gradient(circle at top left, rgba(34,197,94,0.1), transparent 30%), linear-gradient(180deg, #f8fafc 0%, #eef4fb 100%)' }}>
       <Typography variant="h4" fontWeight={900}>{t('tables.drivers')}</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
         Theo dõi đội ngũ tài xế theo trạng thái duyệt, mức độ online và chất lượng vận hành.
+        Cột chuyến / thu nhập phản ánh khoảng thời gian đã chọn; thẻ KPI phía trên là toàn hệ thống.
       </Typography>
 
       {error && <Alert severity="error" sx={{ mt: 2, borderRadius: 3 }}>{error}</Alert>}
@@ -316,10 +346,26 @@ const Drivers: React.FC = () => {
             <Box>
               <Typography variant="subtitle1" fontWeight={800}>Top 10 tài xế</Typography>
               <Typography variant="caption" color="text.secondary">
-                Xếp hạng theo chỉ số được chọn — dữ liệu cộng dồn toàn bộ vòng đời
+                Xếp hạng theo chỉ số được chọn — {periodLabel(statsPeriod)}
               </Typography>
             </Box>
-            <ToggleButtonGroup
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <TextField
+                select
+                size="small"
+                label="Khoảng thời gian"
+                value={statsPeriod}
+                onChange={(e) => {
+                  setStatsPeriod(e.target.value as AdminStatsPeriod);
+                  setPage(0);
+                }}
+                sx={{ minWidth: 140 }}
+              >
+                {ADMIN_PERIOD_OPTIONS.map((o) => (
+                  <MenuItem key={String(o.value)} value={o.value}>{o.label}</MenuItem>
+                ))}
+              </TextField>
+              <ToggleButtonGroup
               size="small"
               exclusive
               value={topMetric}
@@ -334,7 +380,8 @@ const Drivers: React.FC = () => {
               <ToggleButton value="earnings" sx={{ px: 1.5, fontSize: 11 }}>
                 <AttachMoney sx={{ mr: 0.5, fontSize: 14 }} />Thu nhập
               </ToggleButton>
-            </ToggleButtonGroup>
+              </ToggleButtonGroup>
+            </Stack>
           </Stack>
           {topDriversSorted.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>Chưa có dữ liệu</Typography>
@@ -373,7 +420,7 @@ const Drivers: React.FC = () => {
 
       <Card elevation={0} sx={{ mt: 2, borderRadius: 4, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.06)' }}>
         <CardContent sx={{ p: 2 }}>
-          <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: '1fr 180px auto' } }}>
+          <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: '1fr 140px 120px auto auto' } }}>
             <TextField
               fullWidth
               size="small"
@@ -391,6 +438,17 @@ const Drivers: React.FC = () => {
             <TextField
               select
               size="small"
+              label="Thời gian"
+              value={statsPeriod}
+              onChange={(e) => { setPage(0); setStatsPeriod(e.target.value as AdminStatsPeriod); }}
+            >
+              {ADMIN_PERIOD_OPTIONS.map((o) => (
+                <MenuItem key={String(o.value)} value={o.value}>{o.label}</MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              size="small"
               label="Trạng thái"
               value={statusFilter}
               onChange={(e) => { setPage(0); setStatusFilter(e.target.value); }}
@@ -401,12 +459,24 @@ const Drivers: React.FC = () => {
               <MenuItem value="REJECTED">Từ chối</MenuItem>
               <MenuItem value="SUSPENDED">Tạm khóa</MenuItem>
             </TextField>
+            <ToggleButtonGroup
+              value={onlineOnly ? 'online' : 'all'}
+              exclusive
+              size="small"
+              onChange={(_, v) => { if (v) setOnlineOnly(v === 'online'); }}
+            >
+              <ToggleButton value="all" sx={{ px: 1.5, fontSize: 11 }}>Tất cả</ToggleButton>
+              <ToggleButton value="online" sx={{ px: 1.5, fontSize: 11 }}>Online</ToggleButton>
+            </ToggleButtonGroup>
             <ToggleButtonGroup value={sortBy} exclusive size="small" onChange={(_, v) => { if (v) setSortBy(v); }}>
               <ToggleButton value="rides" sx={{ px: 1.5, fontSize: 11 }}>
-                <TrendingUp sx={{ mr: 0.5, fontSize: 14 }} />Cuốc nhiều
+                <TrendingUp sx={{ mr: 0.5, fontSize: 14 }} />Chuyến
               </ToggleButton>
               <ToggleButton value="rating" sx={{ px: 1.5, fontSize: 11 }}>
-                <Star sx={{ mr: 0.5, fontSize: 14 }} />Đánh giá
+                <Star sx={{ mr: 0.5, fontSize: 14 }} />Rating
+              </ToggleButton>
+              <ToggleButton value="earnings" sx={{ px: 1.5, fontSize: 11 }}>
+                <AttachMoney sx={{ mr: 0.5, fontSize: 14 }} />Thu nhập
               </ToggleButton>
             </ToggleButtonGroup>
           </Box>

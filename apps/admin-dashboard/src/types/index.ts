@@ -119,6 +119,7 @@ export interface Driver {
   rating: number;
   reviewCount: number;
   totalRides: number;
+  totalEarnings?: number;
   isOnline: boolean;
   isAvailable: boolean;
   currentLocation: Location | null;
