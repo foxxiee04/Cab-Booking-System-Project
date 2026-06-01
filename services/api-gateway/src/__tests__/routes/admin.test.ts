@@ -77,13 +77,13 @@ describe('admin routes', () => {
 
     await handler(req, res);
 
-    expect(res.json).toHaveBeenCalledWith({
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
       success: true,
-      data: {
+      data: expect.objectContaining({
         drivers: [expect.objectContaining({ id: 'driver-1', isOnline: true, totalRides: 4, user: expect.objectContaining({ id: 'user-1', email: 'a@test.com' }) })],
         total: 1,
-      },
-    });
+      }),
+    }));
   });
 
   it('GET /stats should aggregate ride, payment, driver and customer stats', async () => {

@@ -42,11 +42,12 @@ interface ChatSendPayload extends ChatRoomPayload {
 
 export class SocketServer {
   private io: Server;
-  private pubClient: Redis;
-  private subClient: Redis;
+  private pubClient: Redis | null = null;
+  private subClient: Redis | null = null;
 
   // Track online users: userId -> socketId[]
   private onlineUsers: Map<string, Set<string>> = new Map();
+  private onlineUserRoles: Map<string, string> = new Map();
   // Track socket -> userId mapping
   private socketToUser: Map<string, string> = new Map();
 
@@ -140,16 +141,19 @@ export class SocketServer {
       transports: ['websocket', 'polling'],
     });
 
-    // Setup Redis adapter for scaling
-    this.pubClient = new Redis(config.redisUrl);
-    this.subClient = this.pubClient.duplicate();
+    // Setup Redis adapter for scaling. Tests use the in-memory Socket.IO adapter
+    // so Jest does not depend on a live Redis instance or background retries.
+    if (process.env.NODE_ENV !== 'test') {
+      this.pubClient = new Redis(config.redisUrl);
+      this.subClient = this.pubClient.duplicate();
 
-    this.io.adapter(createAdapter(this.pubClient, this.subClient));
+      this.io.adapter(createAdapter(this.pubClient, this.subClient));
+    }
 
     this.setupAuthentication();
     this.setupConnectionHandlers();
 
-    logger.info('Socket.io server initialized with Redis adapter');
+    logger.info(`Socket.io server initialized with ${this.pubClient ? 'Redis' : 'in-memory'} adapter`);
   }
 
   private setupAuthentication(): void {
@@ -193,6 +197,7 @@ export class SocketServer {
         this.onlineUsers.set(userId, new Set());
       }
       this.onlineUsers.get(userId)!.add(socket.id);
+      this.onlineUserRoles.set(userId, role);
       this.socketToUser.set(socket.id, userId);
 
       // Join user-specific room
@@ -201,7 +206,7 @@ export class SocketServer {
       logger.info(`Socket ${socket.id} joined room: ${roomName}`);
 
       // Publish online presence to Redis (survives across pods)
-      this.pubClient.setex(`user:online:${userId}`, this.PRESENCE_TTL_S, role).catch(() => {});
+      this.pubClient?.setex(`user:online:${userId}`, this.PRESENCE_TTL_S, role).catch(() => {});
 
       // Handle disconnect
       socket.on('disconnect', () => {
@@ -213,8 +218,9 @@ export class SocketServer {
           userSockets.delete(socket.id);
           if (userSockets.size === 0) {
             this.onlineUsers.delete(userId);
+            this.onlineUserRoles.delete(userId);
             // Remove Redis presence only when the LAST socket for this user disconnects
-            this.pubClient.del(`user:online:${userId}`).catch(() => {});
+            this.pubClient?.del(`user:online:${userId}`).catch(() => {});
           }
         }
         this.socketToUser.delete(socket.id);
@@ -225,7 +231,7 @@ export class SocketServer {
       socket.on('ping', () => {
         socket.emit('pong');
         // Renew Redis presence TTL on each client heartbeat
-        this.pubClient.setex(`user:online:${userId}`, this.PRESENCE_TTL_S, role).catch(() => {});
+        this.pubClient?.setex(`user:online:${userId}`, this.PRESENCE_TTL_S, role).catch(() => {});
       });
 
       // Subscribe customer/driver socket into a ride-scoped room for realtime tracking.
@@ -409,6 +415,10 @@ export class SocketServer {
    * Works correctly in multi-pod / horizontally-scaled deployments.
    */
   public async isUserOnlineRedis(userId: string): Promise<boolean> {
+    if (!this.pubClient) {
+      return this.isUserOnline(userId);
+    }
+
     const exists = await this.pubClient.exists(`user:online:${userId}`);
     return exists === 1;
   }
@@ -418,6 +428,10 @@ export class SocketServer {
    * Returns null if the user is offline or the key has expired.
    */
   public async getUserRoleRedis(userId: string): Promise<string | null> {
+    if (!this.pubClient) {
+      return this.onlineUserRoles.get(userId) ?? null;
+    }
+
     return this.pubClient.get(`user:online:${userId}`);
   }
 
@@ -481,6 +495,10 @@ export class SocketServer {
   }
 
   public isReady(): boolean {
+    if (!this.pubClient || !this.subClient) {
+      return true;
+    }
+
     return this.pubClient.status === 'ready' && this.subClient.status === 'ready';
   }
 
@@ -489,8 +507,8 @@ export class SocketServer {
    */
   public async close(): Promise<void> {
     await this.io.close();
-    await this.pubClient.quit();
-    await this.subClient.quit();
+    await this.pubClient?.quit();
+    await this.subClient?.quit();
     logger.info('Socket.io server closed');
   }
 }
