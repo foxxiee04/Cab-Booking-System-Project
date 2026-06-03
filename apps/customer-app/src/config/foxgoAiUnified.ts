@@ -95,7 +95,7 @@ export const FOXGO_QUICK_PATTERNS: FoxgoQuickPattern[] = [
   {
     re: /quên đồ|bỏ quên/i,
     answer:
-      'Quên đồ: vào Lịch sử chuyến → liên hệ tài xế. Nếu không liên hệ được: support@foxgo.vn hoặc hotline.',
+      'Nếu bạn quên đồ trên xe, hiện app chưa có mục riêng "Quên đồ" hay nút báo cáo tự động. Cách đúng là liên hệ FoxGo qua support@foxgo.vn hoặc hotline 1900-1234, kèm mã chuyến, mô tả món đồ và thời gian chuyến. FoxGo sẽ hỗ trợ kết nối trong phạm vi có thể, nhưng không đảm bảo tìm lại được đồ.',
   },
   {
     re: /đăng ký tài xế|lái xe|trở thành tài xế|app tài xế/i,
@@ -143,5 +143,5 @@ export function miaOfflineFallbackReply(text: string): string | null {
   return null;
 }
 
-/** RAG top_k — khớp backend (mặc định 8). */
-export const FOXGO_AI_CHAT_TOP_K = 8;
+/** Keep RAG small enough for mobile chat latency while preserving relevant context. */
+export const FOXGO_AI_CHAT_TOP_K = 5;

@@ -1,36 +1,35 @@
-TIÊU ĐỀ: Câu hỏi thường gặp về FoxGo
-DANH MỤC: FAQ, câu hỏi thường gặp, FoxGo là gì, ứng dụng gọi xe, khu vực hoạt động, đặt xe cho người khác, hỗ trợ iOS Android, cập nhật app, hóa đơn biên lai, điện thoại yếu pin, kết nối internet, đặt xe không cần internet
-
-FoxGo là ứng dụng gọi xe công nghệ Việt Nam, kết nối hành khách với tài xế xe máy và ô tô. Hỗ trợ 4 loại xe: Xe máy số, Xe tay ga, Ô tô 4 chỗ, Ô tô 7 chỗ. Mục tiêu của FoxGo là mang lại trải nghiệm đặt xe nhanh, an toàn và giá minh bạch cho người Việt.
+TIÊU ĐỀ: FAQ FoxGo theo app hiện tại
+DANH MỤC: FAQ, FoxGo là gì, đặt xe, đặt cho người khác, lịch sử chuyến, voucher, hóa đơn, app chậm, internet, điện thoại yếu pin
 
 ---
-Hỏi: FoxGo hoạt động ở những khu vực nào?
-Đáp: FoxGo đang mở rộng dần. Khi mở app và nhập điểm đến, bạn sẽ thấy loại xe nào có sẵn trong khu vực của mình. Nếu không có xe nào hiển thị giá thì khu vực đó chưa được phủ sóng. Xe máy thường có ở nhiều khu vực hơn ô tô.
+Hỏi: FoxGo là gì?
+Đáp: FoxGo là hệ thống/app gọi xe trong repo này, gồm customer app để đặt/theo dõi chuyến, driver app để nhận/chạy chuyến, admin dashboard và các microservice backend.
 
 ---
-Hỏi: Tại sao tôi không tìm được tài xế?
-Đáp: Một số lý do phổ biến: không có tài xế trực tuyến gần bạn lúc đó, giờ cao điểm cầu vượt cung, hoặc khu vực chưa có nhiều tài xế. Mẹo nhỏ: thử chọn xe máy thay vì ô tô — xe máy dễ tìm hơn nhiều. Hoặc đợi vài phút rồi thử lại.
+Hỏi: Tôi có thể đặt xe cho người khác không?
+Đáp: Có thể nếu bạn nhập đúng điểm đón/điểm đến cho người đó và thanh toán bằng tài khoản của bạn. Khi có tài xế/đang chạy, bạn có thể chia sẻ link tracking cho người đi hoặc người thân.
 
 ---
-Hỏi: App FoxGo chạy trên điện thoại nào?
-Đáp: FoxGo hỗ trợ iOS 12 trở lên và Android 6.0 trở lên. Nếu app bị lỗi hoặc crash, thử cập nhật lên phiên bản mới nhất trên App Store hoặc Google Play. Cài lại app không làm mất dữ liệu tài khoản vì tất cả lưu trên server.
+Hỏi: Có cần internet để đặt xe không?
+Đáp: Có. App cần mạng để tìm địa điểm, tính giá, tạo chuyến, thanh toán và nhận realtime. Nếu mất mạng, tracking/socket/payment có thể chậm hoặc lỗi.
 
 ---
-Hỏi: Tôi có thể lấy hóa đơn/biên lai chuyến không?
-Đáp: Sau mỗi chuyến hoàn thành, FoxGo tự gửi biên lai điện tử về email đã đăng ký. Bạn cũng xem lại được trong "Lịch sử chuyến" → chọn chuyến bất kỳ. Nếu cần hóa đơn VAT chính thức cho công ty, liên hệ support@foxgo.vn kèm thông tin chuyến và thông tin công ty.
+Hỏi: Tôi có thể lấy biên lai/hóa đơn không?
+Đáp: Bạn xem thông tin chuyến và payment trong lịch sử chuyến/RideTracking. Không thấy app tự gửi biên lai email hay nút xuất hóa đơn VAT. Nếu cần giấy tờ chính thức, liên hệ support@foxgo.vn kèm mã chuyến và thông tin công ty.
 
 ---
-Hỏi: Tôi thấy tài xế ở gần trên bản đồ nhưng app báo không tìm được?
-Đáp: Tài xế nhìn thấy trên bản đồ có thể đang bận chuyến khác hoặc đã offline. Hệ thống chỉ dispatch đến tài xế đang trực tuyến và thực sự rảnh. Thử lại sau 1–2 phút — tài xế đó có thể xong chuyến ngay thôi.
+Hỏi: App có voucher không?
+Đáp: Có route /vouchers. Bạn xem voucher public, thu thập/lưu voucher, xem voucher của tôi, copy mã và dùng khi đặt xe nếu còn hợp lệ.
 
 ---
-Hỏi: Đặt xe FoxGo có cần internet suốt chuyến không?
-Đáp: Cần internet để đặt xe, theo dõi tài xế và thanh toán online. Nhưng khi đã lên xe và chọn tiền mặt, bạn không cần internet nữa — cứ để điện thoại yên là được. Tất nhiên tài xế vẫn cần mạng để cập nhật trạng thái chuyến.
+Hỏi: App có chat/gọi với tài xế không?
+Đáp: Có chat/gọi trong app khi có active ride với tài xế. Chat/gọi sau chuyến không thấy là tính năng riêng.
 
 ---
-Hỏi: FoxGo có hỗ trợ người khuyết tật không?
-Đáp: Hiện tại bạn có thể nhắn tin cho tài xế qua chat trong app để thông báo nhu cầu đặc biệt (cần ghế xe lăn, cần hỗ trợ lên xuống xe...). FoxGo đang phát triển thêm tính năng hỗ trợ người khuyết tật trong các bản cập nhật tới.
+Hỏi: App có báo cáo vấn đề trong lịch sử chuyến không?
+Đáp: Hiện không thấy route/nút báo cáo vấn đề riêng. Với khiếu nại, dùng support@foxgo.vn/hotline kèm mã chuyến và bằng chứng.
 
 ---
-Hỏi: Tôi đặt xe cho người khác, họ có thể theo dõi tài xế không?
-Đáp: Được. Sau khi đặt thành công, trong màn hình theo dõi chuyến có nút "Chia sẻ hành trình" — nhấn vào để lấy link chia sẻ. Gửi link đó cho người kia, họ dùng browser mở link là xem được vị trí tài xế theo thời gian thực mà không cần cài app.
+Hỏi: Điện thoại yếu pin giữa chuyến thì sao?
+Đáp: Chia sẻ hành trình cho người thân nếu còn pin, giữ màn hình vừa đủ sáng, sạc nếu có thể. Nếu mất kết nối, tài xế vẫn có chuyến trên app của họ; sau đó mở lại app để xem trạng thái.
+

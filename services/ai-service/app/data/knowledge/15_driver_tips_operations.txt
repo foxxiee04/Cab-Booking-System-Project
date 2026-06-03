@@ -1,32 +1,40 @@
 TIÊU ĐỀ: Mẹo vận hành và tối ưu thu nhập cho tài xế FoxGo
-DANH MỤC: mẹo tài xế, tối ưu thu nhập, giờ vàng, khu vực nhiều khách, dispatch thuật toán, nhận nhiều chuyến, tăng thu nhập, offline khi nào, bật online lúc nào, tips tài xế, hành trình hiệu quả, tài xế mới, bắt đầu lái
+DANH MỤC: mẹo tài xế, tối ưu thu nhập, giờ cao điểm, khu vực nhiều khách, nhận cuốc, GPS, ví tài xế, vận hành thực tế
 
-Là tài xế mới của FoxGo, điều quan trọng là hiểu cách hệ thống ghép chuyến để tối ưu thu nhập. FoxGo không ghép chuyến ngẫu nhiên — thuật toán tính điểm dựa trên: khoảng cách đến điểm đón (40%), điểm rating (25%), thời gian chờ không có chuyến (15%), tỉ lệ chấp nhận (15%), và phạt nếu tỉ lệ hủy cao (-5%).
-
----
-Hỏi: Giờ nào thì nhiều chuyến nhất?
-Đáp: Cao điểm nhất thường là: sáng 7–9h (giờ đi làm/đi học), chiều 17–20h (tan làm). Ngoài ra sau mưa to thường bùng chuyến vì mọi người không muốn đi bộ. Cuối tuần tối 21–23h cũng nhiều chuyến từ quán ăn, quán nhậu. Cân nhắc bật online đúng những khung giờ này để hiệu quả hơn.
+Mục tiêu của tài liệu này là giúp tài xế chạy hiệu quả mà không bịa chính sách. Mia không đưa con số hoa hồng, tỷ lệ chấp nhận tối thiểu, công thức ghép chuyến hoặc cam kết thu nhập nếu hệ thống không hiển thị rõ. Hãy dùng ngôn ngữ "có thể ảnh hưởng", "nên kiểm tra trên app", "liên hệ driver-support@foxgo.vn khi cần đối soát".
 
 ---
-Hỏi: Nên đứng ở đâu để nhận nhiều chuyến hơn?
-Đáp: Những khu vực hiệu quả: gần trung tâm thương mại, bệnh viện, trường đại học, ga tàu/bến xe, khu văn phòng đông người. Tránh đứng mãi một chỗ — di chuyển đến khu có nhu cầu cao là tốt nhất. FoxGo không có tính năng "heatmap" công khai nhưng sau vài tuần chạy bạn sẽ tự cảm nhận được khu vực tốt.
+Hỏi: Giờ nào thường nhiều chuyến?
+Đáp: Thường là sáng đi làm/đi học, chiều tan làm, lúc mưa, cuối tuần buổi tối hoặc gần khu mua sắm/ăn uống. Tuy vậy nhu cầu thay đổi theo khu vực, thời tiết và số tài xế online. Bạn nên quan sát lịch sử chạy của mình để chọn khung giờ hiệu quả.
+
+---
+Hỏi: Nên đứng ở đâu để dễ có chuyến?
+Đáp: Ưu tiên nơi có nhu cầu thật: trung tâm thương mại, bệnh viện, trường học, khu văn phòng, bến xe, khu dân cư đông. Tránh đứng ở nơi cấm dừng/đỗ hoặc điểm GPS khó bắt. Nếu lâu không có chuyến, di chuyển nhẹ sang khu khác thay vì chờ quá lâu một chỗ.
 
 ---
 Hỏi: Tôi nên từ chối những chuyến nào?
-Đáp: Không có công thức chung, nhưng tỉ lệ từ chối cao ảnh hưởng đến điểm ưu tiên của bạn. Nên tránh từ chối nhiều liên tiếp. Nếu chuyến quá xa điểm đón hoặc vào khu vực bạn không quen, cân nhắc có chấp nhận không. Chuyến ngắn trong nội thành thường hiệu quả hơn chuyến xa ngoại ô (trừ khi surge cao).
+Đáp: Không có công thức chung. Bạn có thể cân nhắc khoảng cách tới điểm đón, khu vực đến, thời tiết, an toàn và chi phí quay đầu. Nhưng từ chối liên tục có thể làm hệ thống đánh giá chất lượng vận hành thấp hơn, nên chỉ từ chối khi thật sự không phù hợp.
 
 ---
-Hỏi: Surge hoạt động như thế nào với tài xế?
-Đáp: Khi surge xảy ra (nhiều người đặt xe cùng lúc), giá tự động tăng theo hệ số surge — và phần tài xế nhận cũng tăng theo. Ví dụ surge 1.5x: cuốc bình thường 60.000đ → 90.000đ, bạn nhận 72.000đ (với xe máy 20% hoa hồng) thay vì 48.000đ. Bật online lúc surge rất có lợi.
+Hỏi: Surge có lợi cho tài xế không?
+Đáp: Surge làm giá chuyến thay đổi khi cầu vượt cung, nhưng phần tài xế nhận còn phụ thuộc chính sách doanh thu, khuyến mãi và hoa hồng hiện hành. Hãy xem số thu nhập hiển thị trong popup/chi tiết chuyến thay vì tự tính theo một tỷ lệ cố định.
 
 ---
-Hỏi: Cần duy trì tỉ lệ chấp nhận bao nhiêu là ổn?
-Đáp: FoxGo khuyến nghị trên 70%. Dưới mức này ảnh hưởng đến điểm ưu tiên ghép chuyến. Tuy nhiên không cần ép đạt 100% — từ chối những chuyến thực sự không phù hợp là bình thường, miễn không thành thói quen từ chối liên tục.
+Hỏi: Cần giữ tỷ lệ chấp nhận bao nhiêu?
+Đáp: Mia không nên bịa một mốc cứng nếu app không hiển thị chính sách. Cách an toàn là giữ thói quen nhận chuyến ổn định, tránh hủy/từ chối liên tiếp không lý do, và theo dõi cảnh báo hoặc chỉ số chất lượng nếu driver-app có hiển thị.
 
 ---
-Hỏi: Tôi mới bắt đầu lái, nên làm gì để có nhiều chuyến?
-Đáp: Tài xế mới thường được hệ thống ưu tiên một chút ở giai đoạn đầu để giúp xây dựng profile. Tập trung vào: (1) Đón đúng giờ — đây là yếu tố khách đánh giá nhiều nhất. (2) Thái độ thân thiện ngay từ đầu để rating cao. (3) Bật online vào giờ cao điểm và khu vực đông người. (4) Chấp nhận nhiều chuyến để xây tỉ lệ chấp nhận cao.
+Hỏi: Tài xế mới nên làm gì để có nhiều chuyến?
+Đáp: Bật online ở khung giờ có nhu cầu, đứng ở vị trí dễ đón, giữ GPS/mạng ổn định, đón đúng giờ, giao tiếp lịch sự và hoàn thành chuyến đúng quy trình. Những điều này giúp hồ sơ vận hành sạch và giảm khả năng bị khiếu nại.
 
 ---
-Hỏi: Tài xế có được biết điểm đến của khách trước khi chấp nhận không?
-Đáp: Có — popup nhận chuyến hiển thị điểm đón, điểm đến, quãng đường chuyến, thời gian ước tính, và số tiền bạn nhận được. Bạn có đủ thông tin để quyết định nhận hay từ chối trong 20 giây đếm ngược.
+Hỏi: Tài xế có biết điểm đến trước khi nhận không?
+Đáp: Hãy dựa vào popup nhận chuyến/chi tiết cuốc mà app hiển thị. Nếu phiên bản app cho thấy điểm đón, điểm đến, quãng đường hoặc thu nhập dự kiến thì dùng thông tin đó để quyết định. Mia không nên khẳng định mọi phiên bản đều hiển thị đủ cùng một bộ thông tin.
+
+---
+Hỏi: Làm sao giảm chuyến bị khách hủy?
+Đáp: Di chuyển tới điểm đón ngay sau khi nhận, nhắn ngắn gọn nếu kẹt xe hoặc khó tìm vị trí, giữ ETA thực tế và không yêu cầu khách hủy thay mình. Nếu điểm đón sai, trao đổi qua chat/gọi trong chuyến để có bằng chứng rõ ràng.
+
+---
+Hỏi: Khi nào nên offline?
+Đáp: Khi mệt, buồn ngủ, trời quá nguy hiểm, xe có vấn đề kỹ thuật, điện thoại/GPS không ổn định hoặc bạn không thể nhận chuyến trong thời gian ngắn. Offline chủ động tốt hơn nhận rồi hủy vì không đủ điều kiện chạy.

@@ -33,7 +33,7 @@ import { clearPendingRide, setCurrentRide, clearCurrentRide, revokeRideFromFeed 
 import { driverApi } from '../api/driver.api';
 import { rideApi } from '../api/ride.api';
 import { driverSocketService } from '../socket/driver.socket';
-import { watchPosition, clearWatch, calculateDistance, formatDistance, formatDuration, getDemoFallbackLocation } from '../utils/map.utils';
+import { watchPosition, clearWatch, calculateDistance, formatDistance, formatDuration, getCurrentLocation, getDemoFallbackLocation } from '../utils/map.utils';
 import { formatCurrency, getVehicleTypeLabel } from '../utils/format.utils';
 import DriverTripMap from '../features/trip/components/DriverTripMap';
 import { DriverPortraitAvatar } from '../components/common/DriverPortraitFrame';
@@ -203,6 +203,34 @@ const Dashboard: React.FC = () => {
       Notification.requestPermission().catch(() => undefined);
     }
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void getCurrentLocation()
+      .then((location) => {
+        if (cancelled) {
+          return;
+        }
+
+        dispatch(setCurrentLocation(location));
+      })
+      .catch((locationError) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (locationError?.code !== 1 && !loggedGeoErrorCodesRef.current.has(locationError?.code)) {
+          loggedGeoErrorCodesRef.current.add(locationError.code);
+          console.error('Initial location error:', locationError);
+        }
+        setError(t('dashboard.gpsError'));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, t]);
 
   // Fetch driver profile
   useEffect(() => {

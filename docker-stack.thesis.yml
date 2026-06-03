@@ -768,7 +768,7 @@ services:
       # Persist HuggingFace model cache across container restarts — eliminates
       # re-download of vietnamese-bi-encoder + bge-reranker-v2-m3 (~1GB) on each deploy.
       # First start still downloads; subsequent restarts skip network fetch entirely.
-      - hf_model_cache:/root/.cache/huggingface
+      - hf_model_cache:/app/.sentence_transformers
     # Do not set extra_hosts for huggingface.co here: a pinned CDN IP often yields
     # Errno 101 "Network is unreachable" inside Swarm overlay while host/docker0 works.
     # If you only ever see DNS -3 (not 101), temporarily: docker service update --host-add "huggingface.co:<dig-ip>" cab-booking_ai-service
@@ -828,7 +828,7 @@ services:
       # set HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 in .env to skip network on restart.
       - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0}
       - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-0}
-      - HF_HOME=/root/.cache/huggingface
+      - SENTENCE_TRANSFORMERS_HOME=/app/.sentence_transformers
     # Swarm: image HEALTHCHECK start_period=60s can be too short on small CPUs (RAG + reranker load).
     networks:
       - backend

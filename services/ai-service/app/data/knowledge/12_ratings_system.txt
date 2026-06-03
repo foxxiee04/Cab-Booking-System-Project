@@ -1,34 +1,41 @@
-TIÊU ĐỀ: Hệ thống đánh giá và xếp hạng FoxGo
-DANH MỤC: đánh giá, rating, sao, điểm, xếp hạng, đánh giá tài xế, tài xế bị đánh giá thấp, cải thiện rating, tỉ lệ chấp nhận, tỉ lệ hoàn thành, khách hàng đánh giá tài xế, tài xế đánh giá khách, điểm bị ảnh hưởng
+TIÊU ĐỀ: Đánh giá, rating và review FoxGo
+DANH MỤC: đánh giá, rating, sao, review, đánh giá tài xế, tài xế xem review, reviewCount, customer-to-driver, driver reviews, khiếu nại đánh giá
 
-Hệ thống đánh giá của FoxGo hoạt động 2 chiều: khách đánh giá tài xế và tài xế cũng đánh giá khách. Cả hai phía đều có điểm rating từ 1–5 sao.
-
-Với khách hàng: sau mỗi chuyến hoàn thành, màn hình đánh giá xuất hiện tự động. Bạn chọn 1–5 sao và để lại nhận xét tùy ý. Đánh giá của bạn ảnh hưởng trực tiếp đến thu nhập và cơ hội nhận chuyến của tài xế — hãy đánh giá trung thực.
+Review service và app hiện hỗ trợ khách đánh giá tài xế sau chuyến hoàn thành. Driver app có màn reviews và các nơi hiển thị rating/reviewCount. Không thấy chắc chức năng tài xế đánh giá khách, khiếu nại đánh giá trong app, hoặc công thức khóa/hạn chế theo rating cụ thể.
 
 ---
-Hỏi: Rating tài xế được tính như thế nào?
-Đáp: Rating tài xế là trung bình cộng của tất cả đánh giá trong 30 ngày gần nhất — không phải tổng từ trước đến nay. Nghĩa là tài xế có thể cải thiện hoặc bị ảnh hưởng rating tương đối nhanh. Rating dưới 4.5 bắt đầu bị hạn chế nhận chuyến giờ cao điểm, dưới 4.0 có thể bị khóa tài khoản tạm thời.
+Hỏi: Khách đánh giá tài xế ở đâu?
+Đáp: Sau chuyến COMPLETED, customer app có form đánh giá trong RideTracking nếu có driverId. RideHistory cũng có nút/dialog đánh giá cho chuyến đã hoàn thành nếu chưa review. Khách chọn số sao và có thể nhập nhận xét.
 
 ---
-Hỏi: Tôi là tài xế, làm sao tăng rating?
-Đáp: Mấy điều quan trọng nhất: đến đón đúng giờ (khách ghét chờ nhất), thái độ lịch sự và thân thiện, giữ xe sạch và có mùi dễ chịu, không nghe điện thoại khi lái, hỏi khách có cần điều chỉnh điều hòa không. Những chi tiết nhỏ như vậy hay tạo ra đánh giá 5 sao lắm.
+Hỏi: Review gửi qua đâu?
+Đáp: Customer app gọi review API để tạo ride review, với rideId, revieweeId là driverId, revieweeName, rating và comment. App cũng kiểm tra review đã tồn tại để tránh đánh giá trùng.
 
 ---
-Hỏi: Tỉ lệ chấp nhận chuyến là gì? Ảnh hưởng thế nào?
-Đáp: Tỉ lệ chấp nhận là phần trăm cuốc bạn nhận so với tổng cuốc hệ thống gửi đến. Tỉ lệ thấp ảnh hưởng đến thứ tự ưu tiên ghép chuyến — tài xế có tỉ lệ cao được ghép cuốc trước. FoxGo không phạt nặng việc từ chối chuyến, nhưng từ chối liên tục sẽ giảm cơ hội nhận cuốc tốt.
+Hỏi: Tài xế xem đánh giá ở đâu?
+Đáp: Driver app có route /reviews. Account/Profile cũng hiển thị rating và reviewCount nếu API trả dữ liệu. Nếu chưa có review, app có thể hiển thị trạng thái chưa có đánh giá.
 
 ---
-Hỏi: Tỉ lệ hoàn thành chuyến là gì?
-Đáp: Là tỉ lệ chuyến hoàn thành trên tổng chuyến đã nhận. Hủy sau khi nhận làm giảm chỉ số này. Dưới 80% bắt đầu ảnh hưởng đến xếp hạng và ưu tiên ghép chuyến. Dưới 70% có thể bị hạn chế nhận chuyến.
+Hỏi: Rating tài xế tính như thế nào?
+Đáp: Driver service có ratingAverage/ratingCount hoặc rating/reviewCount tùy payload. Knowledge không xác nhận công thức 30 ngày hay ngưỡng khóa. Mia nên nói rating là dữ liệu tổng hợp từ đánh giá đã lưu, chi tiết phụ thuộc backend hiện hành.
 
 ---
-Hỏi: Khách cho tôi đánh giá xấu vô lý, tôi có khiếu nại được không?
-Đáp: Được. Vào "Lịch sử chuyến" → chọn chuyến → "Khiếu nại đánh giá" (hoặc liên hệ support@foxgo.vn kèm mã chuyến). FoxGo xem xét từng trường hợp — đánh giá có dấu hiệu spam hoặc không liên quan đến chuyến thực tế có thể được gỡ. Tuy nhiên FoxGo cũng không gỡ mọi đánh giá thấp — chỉ những trường hợp rõ ràng không hợp lý.
+Hỏi: Rating ảnh hưởng nhận cuốc không?
+Đáp: Hệ thống matching/reference có dùng tín hiệu chất lượng như rating trong scoring, nhưng Mia không nên nêu ngưỡng phạt cụ thể nếu không có policy chính thức. Có thể khuyên tài xế giữ thái độ tốt, đón đúng điểm, lái an toàn, hạn chế hủy sau khi nhận.
 
 ---
-Hỏi: Tài xế có biết ai đánh giá thấp họ không?
-Đáp: Không. Đánh giá là ẩn danh — tài xế chỉ thấy điểm số tổng hợp và nhận xét text (nếu có), không biết cụ thể khách nào cho đánh giá đó. Điều này giúp khách đánh giá trung thực mà không lo bị tài xế "trả thù".
+Hỏi: Tài xế có thể khiếu nại đánh giá xấu không?
+Đáp: Không thấy nút "Khiếu nại đánh giá" trong driver app. Nếu tài xế cho rằng review sai hoặc có bằng chứng, liên hệ driver-support@foxgo.vn kèm mã chuyến, thời gian và nội dung review.
 
 ---
-Hỏi: Khách hàng có bị đánh giá không?
-Đáp: Có — tài xế cũng đánh giá khách sau mỗi chuyến. Rating khách ảnh hưởng đến khả năng được tài xế chấp nhận chuyến. Khách có rating thấp (hay hủy, thái độ không tốt) có thể bị tài xế từ chối dù chuyến gần. Đây là cách FoxGo duy trì chất lượng dịch vụ cho cả 2 phía.
+Hỏi: Khách có bị tài xế đánh giá không?
+Đáp: Chưa thấy rõ chức năng tài xế đánh giá khách trong app hiện tại. Mia không nên khẳng định hệ thống đánh giá 2 chiều nếu code không thể hiện. Có thể nói hiện phần chắc chắn là khách đánh giá tài xế và tài xế xem review/rating.
+
+---
+Hỏi: Khách bỏ qua đánh giá thì sau này đánh giá được không?
+Đáp: RideHistory có logic mở dialog đánh giá cho chuyến đã hoàn thành nếu chưa review. Vì vậy khách có thể vào lịch sử chuyến để đánh giá nếu app còn hiển thị nút. Không nêu thời hạn 24 giờ nếu chưa có policy.
+
+---
+Hỏi: Review có ẩn danh không?
+Đáp: Không thấy policy ẩn danh rõ trong code. Mia không nên khẳng định tài xế không biết ai đánh giá. Có thể nói tài xế thấy review/rating theo dữ liệu app hiển thị; nếu lo ngại an toàn, liên hệ support.
+

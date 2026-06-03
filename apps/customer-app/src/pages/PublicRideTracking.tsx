@@ -103,7 +103,7 @@ const PublicRideTracking: React.FC = () => {
 
     const socket: Socket = io(SOCKET_URL, {
       auth: { shareToken: token },
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
       upgrade: true,
       reconnection: true,
       reconnectionDelay: 1000,

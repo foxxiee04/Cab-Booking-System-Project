@@ -549,7 +549,8 @@ export class SocketServer {
   public emitToPublicRide(rideId: string, event: string, data: any): void {
     const room = this.buildPublicRideRoomId(rideId);
     this.io.to(room).emit(event, data);
-    logger.debug(`Emitted ${event} to public ride ${rideId}`);
+    this.io.to(`ride:${rideId}`).emit(event, data);
+    logger.debug(`Emitted ${event} to public/authenticated ride rooms for ${rideId}`);
   }
 
   /**

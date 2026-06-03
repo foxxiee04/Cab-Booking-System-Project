@@ -1,0 +1,229 @@
+TIÊU ĐỀ: Nguồn sự thật tính năng FoxGo hiện có trong repo
+DANH MỤC: nguồn sự thật, tính năng thật, không bịa chức năng, customer-app, driver-app, admin, booking, ride tracking, thanh toán, ví tài xế, voucher, review, chat, gọi, chia sẻ hành trình, quên đồ, hỗ trợ, troubleshooting
+
+Tài liệu này là anchor để Mia trả lời sát hệ thống đang triển khai trong repo. Khi có mâu thuẫn giữa tài liệu cũ và tài liệu này, ưu tiên tài liệu này. Mia không được khẳng định có tính năng nếu không thấy trong app/API. Nếu chưa chắc, nói "hiện app chưa có/không thấy mô tả chắc chắn" và hướng dẫn email/hotline.
+
+---
+Hỏi: Quy tắc quan trọng nhất khi Mia trả lời về chức năng FoxGo là gì?
+Đáp: Chỉ nói chắc các chức năng đang có trong repo hoặc tài liệu này. Không tự tạo nút, màn hình, SLA, chính sách phạt, thời hạn xử lý hay quy trình hỗ trợ nếu code/tài liệu không thể hiện. Nếu người dùng hỏi chức năng chưa có, trả lời thẳng: "Hiện app chưa có chức năng này" rồi đưa cách thay thế qua support@foxgo.vn, driver-support@foxgo.vn hoặc hotline 1900-1234.
+
+---
+Hỏi: Customer app hiện có những màn hình chính nào?
+Đáp: Customer app có đăng nhập, đăng ký, quên mật khẩu, trang home đặt xe trên bản đồ, activity, profile, lịch sử chuyến, voucher/ưu đãi, theo dõi chuyến theo ride id, thanh toán online cho chuyến, callback thanh toán, public tracking link /track/:token và một trang demo. Không thấy route riêng "Trung tâm hỗ trợ", "Báo cáo vấn đề", "Quên đồ", "SOS" hay "Xuất hóa đơn VAT".
+
+---
+Hỏi: Driver app hiện có những màn hình chính nào?
+Đáp: Driver app có đăng nhập, đăng ký, quên mật khẩu, thiết lập hồ sơ tài xế, dashboard nhận cuốc, active ride, account, earnings, history, reviews, profile, wallet, callback nạp ví và trang demo. Không thấy route riêng "SOS", "Khiếu nại đánh giá", "Báo cáo ví" hay "Trung tâm hỗ trợ".
+
+---
+Hỏi: Customer đặt xe như thế nào trong app hiện tại?
+Đáp: Khách đăng nhập, vào Home, chọn điểm đón và điểm đến trên bản đồ/ô nhập, chọn loại xe, xem giá ước tính, chọn phương thức thanh toán và xác nhận đặt xe. Sau đó hệ thống tạo ride và chuyển sang luồng tìm tài xế/theo dõi chuyến tùy trạng thái.
+
+---
+Hỏi: Customer có những phương thức thanh toán nào?
+Đáp: App và API đang hỗ trợ CASH, MOMO và VNPAY cho chuyến đi. Với MoMo/VNPay, app có màn hình thanh toán online, tạo payment URL/deeplink/QR, nhận callback và kiểm tra trạng thái payment theo ride. Với tiền mặt, khách trả trực tiếp cho tài xế theo số app hiển thị.
+
+---
+Hỏi: Customer có thể retry payment không?
+Đáp: Backend hiện chưa có endpoint retry payment theo payment id. Trong code customer, `retryPayment` được ghi rõ là chưa hỗ trợ và sẽ báo "Payment retry is not supported". Nếu thanh toán lỗi, hướng dẫn khách quay lại màn thanh toán của chuyến nếu app còn hiển thị nút tiếp tục thanh toán, hoặc liên hệ support@foxgo.vn kèm mã chuyến/giao dịch.
+
+---
+Hỏi: Customer xem hóa đơn/biên lai ở đâu?
+Đáp: App có màn hình RideTracking và RideHistory hiển thị thông tin chuyến, cước phí, phương thức thanh toán, trạng thái thanh toán, mã giao dịch nếu có và thông tin hoàn tiền nếu có. Không thấy chức năng tự gửi biên lai email hay xuất hóa đơn VAT trong app. Nếu cần hóa đơn công ty/VAT, hướng dẫn email support@foxgo.vn kèm mã chuyến và thông tin công ty, không khẳng định app có nút xuất hóa đơn.
+
+---
+Hỏi: Customer xem lịch sử chuyến như thế nào?
+Đáp: Vào route /history hoặc mục lịch sử chuyến trong shell. Lịch sử lấy từ API `/rides/customer/history`, có dữ liệu chuyến và app còn nạp payment history để hiển thị trạng thái thanh toán/hoàn tiền. Nếu lịch sử trống, thử làm mới, đăng xuất đăng nhập lại, rồi liên hệ support nếu vẫn lỗi.
+
+---
+Hỏi: Customer đánh giá tài xế ở đâu?
+Đáp: App có đánh giá sau chuyến trong RideTracking khi chuyến COMPLETED và có driverId; RideHistory cũng có dialog đánh giá cho chuyến đã hoàn thành nếu chưa đánh giá. Review gửi qua review API với type customer-to-driver. Không khẳng định có thời hạn 24 giờ nếu code/chính sách không ghi rõ.
+
+---
+Hỏi: Customer có voucher/ưu đãi không?
+Đáp: Có. Customer app có route /vouchers. Người dùng xem voucher public, thu thập/lưu voucher bằng mã, xem tab voucher của tôi, copy mã và dùng khi đặt xe nếu voucher còn usable. Voucher có audience type, discount type, discount value, max discount, min fare, end time và trạng thái như usable/used/expired tùy API.
+
+---
+Hỏi: Customer áp dụng voucher lúc nào?
+Đáp: Voucher được dùng trong luồng đặt xe/thanh toán khi app gửi voucherCode theo ride/payment. Nếu voucher không hợp lệ, hết hạn, không đủ min fare hoặc không đúng nhóm người dùng, backend có thể từ chối. Mia nên bảo khách kiểm tra điều kiện voucher trên thẻ ưu đãi và thử mã khác.
+
+---
+Hỏi: Customer có thể chia sẻ hành trình không?
+Đáp: Có. Trong RideTracking, khi chuyến đang ở trạng thái ASSIGNED, ACCEPTED, PICKING_UP hoặc IN_PROGRESS, khách có thể bấm chia sẻ. App gọi `POST /rides/:rideId/share`, tạo link dạng `/track/:token`, rồi dùng Web Share API hoặc copy link. Người nhận mở link public để xem tracking mà không cần đăng nhập.
+
+---
+Hỏi: Khi nào không chia sẻ hành trình được?
+Đáp: Chỉ active assigned rides mới chia sẻ được. Nếu ride chưa có tài xế, đã hủy, đã hoàn thành hoặc không thuộc đúng customer đang đăng nhập, backend có thể báo lỗi. Nếu báo Access denied, thường là token không có quyền với ride đó hoặc link/API đang bị chặn auth; sau bản sửa, public `/api/public/ride-shares/:token` được mở auth.
+
+---
+Hỏi: Public tracking link hiển thị gì?
+Đáp: Public tracking link dùng token để lấy dữ liệu `/api/public/ride-shares/:token` và socket auth bằng shareToken. Link hiển thị snapshot chuyến và nhận cập nhật realtime theo ride public room. Token có thời hạn, có thể hết hạn hoặc bị invalid.
+
+---
+Hỏi: Theo dõi realtime của customer hoạt động thế nào?
+Đáp: Customer RideTracking mở socket tới gateway, gửi token, subscribe `ride:subscribe` và `subscribe_ride_tracking` với rideId. App nghe `driver_location_update`, `driver:location`, `RIDE_STATUS_UPDATE`, và cập nhật UI. Ngoài socket, app vẫn poll `getRide` định kỳ để dự phòng, nhưng socket là đường nhanh hơn.
+
+---
+Hỏi: Vì sao trạng thái có thể bị delay vài giây?
+Đáp: Trạng thái tài xế đổi qua backend rồi gateway phát RabbitMQ/socket. Nếu socket đang rớt, đang fallback polling, hoặc response `getRide` cũ về sau event mới, UI có thể chậm hoặc giật. Bản sửa ưu tiên websocket, emit thêm vào room `ride:{rideId}`, và bỏ qua response hydrate cũ để giảm delay.
+
+---
+Hỏi: Customer chat/gọi tài xế được khi nào?
+Đáp: App có ContactBox và useRideChat/useWebRTCCall trên màn RideTracking. Chat/gọi khả dụng khi có active ride với driver và trạng thái chưa terminal. Chat dùng endpoint `/rides/:rideId/messages` và socket room; gọi dùng WebRTC signaling qua socket trong room ride. Không nói là gọi qua "số ẩn" nếu code đang dùng WebRTC trong app, không phải number masking thật.
+
+---
+Hỏi: FoxGo có ẩn số điện thoại thật bằng call masking không?
+Đáp: Trong code hiện tại, customer/driver có thể gọi qua WebRTC trong app. Không thấy tích hợp telco number masking/số ảo. Vì vậy Mia không được khẳng định "số ẩn" hay "tổng đài che số" như một chức năng viễn thông thật. Có thể nói: app hỗ trợ gọi/chat trong app để hạn chế phải trao đổi số cá nhân.
+
+---
+Hỏi: FoxGo có nút SOS không?
+Đáp: Không thấy route/component SOS rõ ràng trong customer-app hoặc driver-app. Khi người dùng hỏi an toàn khẩn cấp, Mia phải hướng dẫn gọi 113/115 trực tiếp, dừng ở nơi an toàn, chia sẻ hành trình nếu đang có link, và liên hệ FoxGo qua hotline/email sau khi an toàn. Không nói "nhấn nút SOS trong app".
+
+---
+Hỏi: FoxGo có chức năng báo cáo vấn đề trong app không?
+Đáp: Không thấy route/màn hình "Báo cáo vấn đề" trong customer-app hoặc driver-app. Vì vậy Mia không được hướng dẫn "Lịch sử chuyến -> Báo cáo vấn đề" như chức năng chắc chắn. Thay vào đó hướng dẫn gửi support@foxgo.vn hoặc driver-support@foxgo.vn kèm mã chuyến, thời gian, ảnh/bằng chứng nếu có.
+
+---
+Hỏi: Customer quên đồ trên xe thì làm sao?
+Đáp: Hiện app chưa có mục riêng "Quên đồ" hay nút báo cáo tự động được xác nhận trong code. Hướng dẫn đúng: liên hệ support@foxgo.vn hoặc hotline 1900-1234, gửi mã chuyến, thời gian, mô tả món đồ, vị trí nghi để quên và số liên hệ. FoxGo hỗ trợ kết nối trong phạm vi có thể nhưng không đảm bảo tìm lại được đồ. Không nói có nút "Liên hệ tài xế 30 phút" hay SLA phản hồi 2 giờ.
+
+---
+Hỏi: Customer bị tài xế yêu cầu tiền ngoài app thì sao?
+Đáp: Khách nên đối chiếu số tiền app hiển thị. Nếu tài xế yêu cầu khoản ngoài app mà không rõ lý do, khách nên từ chối khi an toàn và liên hệ support@foxgo.vn/hotline kèm mã chuyến, số tiền bị yêu cầu và bằng chứng. Không hứa chắc hoàn tiền/điều chỉnh nếu chưa có policy hoặc chức năng xử lý tự động trong code.
+
+---
+Hỏi: Customer bị tài xế lái nguy hiểm thì sao?
+Đáp: Ưu tiên an toàn: yêu cầu dừng ở nơi an toàn, gọi 113/115 nếu nguy hiểm, chia sẻ hành trình cho người thân nếu đang trong chuyến. Sau đó liên hệ support@foxgo.vn hoặc hotline 1900-1234 kèm mã chuyến, thời gian và bằng chứng nếu có. Không hướng dẫn nút SOS hoặc báo cáo trong app nếu app chưa có.
+
+---
+Hỏi: Customer hủy chuyến như thế nào?
+Đáp: RideTracking có nút hủy khi trạng thái cho phép, ví dụ CREATED, PENDING/FINDING_DRIVER, ASSIGNED, ACCEPTED. App mở dialog chọn lý do hủy rồi gọi `/rides/:rideId/cancel`. Sau hủy, nếu là thanh toán online, app poll receipt/payment để xem hoàn tiền.
+
+---
+Hỏi: Khi nào customer không hủy được?
+Đáp: App không cho hủy khi trạng thái PICKING_UP, IN_PROGRESS, COMPLETED, CANCELLED hoặc NO_DRIVER_AVAILABLE theo metadata UI. Nếu cần xử lý ngoại lệ khi chuyến đã bắt đầu, liên hệ support/hotline thay vì bảo có nút hủy.
+
+---
+Hỏi: Hoàn tiền online hoạt động thế nào?
+Đáp: Khi hủy chuyến đã thanh toán online MoMo/VNPay, backend/payment có luồng refund và customer app hiển thị trạng thái payment/refund trong RideTracking/RideHistory. Với MoMo, app ghi estimate "vài phút đến 1 giờ"; với VNPay, estimate "3-5 ngày làm việc qua ngân hàng" trong UI. Mia nên nói đây là ước tính hiển thị trong app, không cam kết tuyệt đối.
+
+---
+Hỏi: Driver đăng ký như thế nào?
+Đáp: Driver đăng ký tài khoản, sau đó vào profile setup để nộp/thêm thông tin hồ sơ tài xế và xe. Hồ sơ có trạng thái PENDING/APPROVED/REJECTED/SUSPENDED. Driver cần được duyệt mới có thể hoạt động bình thường. Admin dashboard có màn DriverApprovals để duyệt/từ chối.
+
+---
+Hỏi: Driver bật online/offline ở đâu?
+Đáp: Driver dashboard/shell có trạng thái online/offline. Driver app gọi API `/drivers/me/online` và `/drivers/me/offline`, gửi vị trí khi online và lắng nghe cuốc realtime qua socket. Nếu chưa được duyệt, bị suspend/rejected hoặc ví không đủ điều kiện, app có thể không cho nhận cuốc.
+
+---
+Hỏi: Driver nhận cuốc như thế nào?
+Đáp: Gateway phát `NEW_RIDE_AVAILABLE` qua socket cho tài xế phù hợp. Driver dashboard hiển thị popup/yêu cầu cuốc với điểm đón, điểm đến, loại xe, giá ước tính, khoảng cách/thời gian nếu có. Tài xế bấm nhận thì gọi ride API accept/driver-accept; nếu cuốc bị người khác nhận, app nhận `ride:taken_elsewhere` hoặc timeout.
+
+---
+Hỏi: Driver chuyển trạng thái chuyến như thế nào?
+Đáp: ActiveRide cho tài xế xử lý các bước: đến điểm đón/PICKING_UP, bắt đầu chuyến/IN_PROGRESS, hoàn tất chuyến/COMPLETED. Các action gọi `/rides/:rideId/pickup`, `/rides/:rideId/start`, `/rides/:rideId/complete`. Sau khi backend cập nhật, gateway phát `RIDE_STATUS_UPDATE` cho customer/public tracking và `ride:status` cho driver.
+
+---
+Hỏi: Driver có lịch sử chuyến không?
+Đáp: Có. Driver app có route /history, lấy lịch sử chuyến theo driver, lọc trạng thái như completed/cancelled và hiển thị chi tiết chuyến, khách, thanh toán, đánh giá nếu có.
+
+---
+Hỏi: Driver có màn thu nhập không?
+Đáp: Có route /earnings. App hiển thị thống kê thu nhập/chuyến theo dữ liệu driver/payment/wallet tùy API. Không nói chắc thu nhập về "đúng 24 giờ" nếu không đối chiếu payment/wallet service cụ thể; có thể nói online earnings có pending/available trong ví tài xế nếu API trả các trường này.
+
+---
+Hỏi: Driver wallet có các số dư nào?
+Đáp: Wallet API trả balance, operationalBalance/availableBalance, pendingBalance, lockedBalance, withdrawableBalance, debt, status, activationRequired, activationThreshold, warningThreshold, debtLimit, canAcceptRide, business account top-up/payout nếu có. Driver app dùng các trường này để hiển thị ví, cảnh báo ký quỹ/nợ và khả năng nhận cuốc.
+
+---
+Hỏi: Driver nạp ví như thế nào?
+Đáp: Driver wallet hỗ trợ init top-up qua MoMo hoặc VNPay, trả về payUrl, sau đó callback `/wallet/topup/return` xác nhận và app poll top-up status. Ngoài ra còn legacy simulated top-up fallback. Mia nên hướng dẫn trong app tài xế vào Ví -> Nạp tiền nếu UI hiển thị, chọn MoMo/VNPay, hoàn tất ở cổng thanh toán rồi quay lại app.
+
+---
+Hỏi: Driver rút tiền như thế nào?
+Đáp: Wallet API có `POST /wallet/withdraw` với amount và bankInfo, trả withdrawalId, newBalance, status PENDING/SUCCESS và bankInfo. Driver chỉ rút được từ withdrawableBalance; lockedBalance/ký quỹ và pendingBalance không phải số tiền rút ngay. Nếu lỗi, kiểm tra số dư khả dụng, thông tin ngân hàng và trạng thái ví.
+
+---
+Hỏi: Driver có ký quỹ/ngưỡng kích hoạt không?
+Đáp: Wallet balance có activationRequired, activationThreshold mặc định UI fallback 300.000, warningThreshold và debtLimit. Driver app có cảnh báo nếu ví chưa đủ điều kiện kích hoạt hoặc nợ vượt ngưỡng. Mia nên nói theo dữ liệu app hiển thị, không bịa chính sách ngoài số/ngưỡng trả từ API.
+
+---
+Hỏi: Driver có nợ/công nợ chuyến tiền mặt không?
+Đáp: Wallet API có debt, debt records và canAcceptCash(commission). Driver app/shell có thông báo khi ví bị khấu trừ công nợ chuyến tiền mặt. Nếu tài xế không nhận được cuốc tiền mặt hoặc ví bị block, hướng dẫn kiểm tra Ví, công nợ, canAcceptRide và nạp/settle theo app.
+
+---
+Hỏi: Driver deactivate ví/tài khoản ví được không?
+Đáp: Wallet API có `/wallet/deactivate`, trả refundedAmount, depositRefunded, availableRefunded, debtSettled và status INACTIVE. Mia chỉ nên nói có luồng deactivate ví nếu UI đang hiển thị ở app tài xế; nếu người dùng không thấy nút, liên hệ driver-support@foxgo.vn.
+
+---
+Hỏi: Driver có review/rating không?
+Đáp: Driver app có route /reviews và profile/account hiển thị rating, reviewCount nếu có. Review service lưu đánh giá theo ride. Driver có thể xem đánh giá, nhưng không thấy chức năng tự khiếu nại/gỡ đánh giá trong app; nếu cần tranh chấp đánh giá, liên hệ driver-support@foxgo.vn kèm mã chuyến.
+
+---
+Hỏi: Customer có thể đặt xe cho người khác không?
+Đáp: Có thể đặt bằng tài khoản của mình nếu nhập đúng điểm đón/điểm đến của người đi và thanh toán theo app. Sau khi có tài xế/đang chạy, có thể chia sẻ link tracking cho người đi hoặc người thân. Không nên hứa có tính năng "người đi không cần tài khoản" ngoài public tracking link.
+
+---
+Hỏi: Mia có xem được chuyến hiện tại của người dùng không?
+Đáp: Không. Mia trong chat RAG không tự truy cập live ride/payment/wallet của người dùng, trừ khi sau này có tool riêng. Mia chỉ trả lời theo kho tri thức. Với trạng thái live, hướng dẫn người dùng xem màn hình chuyến, ví, lịch sử hoặc liên hệ support.
+
+---
+Hỏi: Mia có tính giá live tuyến A-B không?
+Đáp: Không. Mia không gọi Pricing Service live trong chat. Giá chính xác phải nhập điểm đón/đến trong app để Pricing Service tính theo tuyến, loại xe, phụ phí và surge. Mia chỉ giải thích cách giá được tính hoặc nói giá tham khảo nếu tài liệu có.
+
+---
+Hỏi: Pricing Service tính giá dựa trên gì?
+Đáp: Pricing dùng lộ trình/ước lượng khoảng cách, thời gian, loại xe, bảng giá, phụ phí và surge. Customer app hiển thị giá ước tính trước khi đặt. Giá/chi phí cuối có thể phụ thuộc trạng thái thanh toán, voucher, hủy/hoàn tiền và dữ liệu backend.
+
+---
+Hỏi: Nếu bản đồ không tải hoặc vị trí sai thì làm gì?
+Đáp: Kiểm tra mạng, GPS/quyền vị trí, tắt VPN nếu có, thử làm mới app. Customer app và driver app có fallback/cached location logic, nhưng nếu quyền vị trí bị denied thì app không thể lấy GPS thật. Với tài xế, cần bật vị trí chính xác để nhận cuốc và cập nhật tracking.
+
+---
+Hỏi: Nếu app customer chậm cập nhật trạng thái thì làm gì?
+Đáp: Kiểm tra kết nối, để app mở lại vài giây, thử reload màn ride. Hệ thống có WebSocket và polling dự phòng. Nếu vẫn kẹt trạng thái ảnh hưởng tiền/chuyến, gửi support@foxgo.vn kèm mã chuyến, trạng thái đang thấy, ảnh màn hình và thời gian.
+
+---
+Hỏi: Nếu app driver bấm trạng thái nhưng customer chưa đổi ngay thì giải thích sao?
+Đáp: Driver action cập nhật DB rồi event đi qua gateway/socket tới customer. Bình thường nên gần realtime. Nếu trễ vài giây có thể do socket fallback polling, mạng, RabbitMQ/gateway hoặc request cũ ghi đè UI. Sau bản sửa, hệ thống ưu tiên websocket và room ride để giảm trễ. Nếu vẫn lặp lại, cần kiểm tra log gateway/ride-service theo rideId.
+
+---
+Hỏi: Nếu link chia sẻ hành trình báo Access denied thì làm gì?
+Đáp: Nếu lỗi khi tạo link, kiểm tra ride đang active và đúng customer sở hữu ride. Nếu lỗi khi mở link public, kiểm tra token/link còn hạn và gateway đã whitelist `/api/public`. Sau bản sửa, public route không cần đăng nhập. Nếu vẫn lỗi, gửi support/dev mã ride và token thời gian tạo để kiểm tra.
+
+---
+Hỏi: Nếu customer hỏi "có chức năng liên hệ tài xế sau chuyến không?"
+Đáp: Hiện app có chat/gọi trong active ride, nhưng không thấy chức năng liên hệ tài xế sau chuyến như một nút riêng. Nếu cần tìm đồ hoặc trao đổi sau chuyến, liên hệ support@foxgo.vn/hotline kèm mã chuyến; FoxGo sẽ hỗ trợ kết nối nếu phù hợp.
+
+---
+Hỏi: Nếu customer hỏi "có báo cáo tài xế trong app không?"
+Đáp: Hiện không thấy route "Báo cáo vấn đề". Có đánh giá tài xế sau chuyến. Với khiếu nại nghiêm trọng, hướng dẫn email/hotline kèm mã chuyến và bằng chứng thay vì bảo bấm nút báo cáo.
+
+---
+Hỏi: Nếu driver hỏi "tôi bị khách quên đồ trên xe thì làm gì?"
+Đáp: Giữ đồ an toàn, không tự ý liên hệ ngoài app nếu không cần, báo driver-support@foxgo.vn hoặc hotline 1900-1234 kèm mã chuyến, mô tả đồ và cách liên hệ. Nếu khách liên hệ qua kênh app trong lúc chuyến còn active, phản hồi lịch sự và thống nhất cách bàn giao an toàn.
+
+---
+Hỏi: Nếu driver hỏi "khách không trả tiền mặt" thì sao?
+Đáp: Giữ bình tĩnh, không tranh cãi nguy hiểm. Ghi nhận mã chuyến, số tiền, thời gian và bằng chứng nếu có, rồi liên hệ driver-support@foxgo.vn. Không tự ý thu thêm hoặc xử lý ngoài quy trình an toàn.
+
+---
+Hỏi: Nếu customer hỏi "tôi muốn đổi điểm đến sau khi tài xế nhận"?
+Đáp: App không thấy chức năng đổi điểm đến tự động trong ride đang chạy. Khách có thể chat/gọi tài xế để trao đổi nếu thay đổi nhỏ và an toàn; nếu thay đổi lớn hoặc ảnh hưởng giá, nên hủy khi còn được phép và đặt chuyến mới, hoặc liên hệ support nếu đã phát sinh tranh chấp.
+
+---
+Hỏi: Nếu customer hỏi "tôi muốn tip tài xế"?
+Đáp: Không thấy tính năng tip điện tử riêng trong app. Nếu khách muốn tip, đó là thỏa thuận/thiện chí ngoài luồng app; FoxGo không bắt buộc và Mia không nên mô tả như tính năng chính thức.
+
+---
+Hỏi: Nếu hỏi "FoxGo có push notification không?"
+Đáp: Code có notification UI và socket notifications, nhưng không thấy chắc tích hợp push notification native. Có thể nói app hiển thị thông báo trong ứng dụng/realtime; không khẳng định có push notification hệ điều hành nếu chưa xác nhận.
+
+---
+Hỏi: Nếu hỏi "Mia trả lời sai chức năng thì phải làm sao?"
+Đáp: Báo lại câu hỏi và câu trả lời sai cho đội phát triển để cập nhật knowledge base. Mia dùng RAG từ các file tri thức; nếu file cũ ghi chức năng chưa có, Mia có thể trả lời sai. Sau khi sửa knowledge, cần restart/reload AI service hoặc rebuild index nếu service không tự reload.
+
+---
+Hỏi: Sau khi sửa file knowledge, có cần làm gì để Mia nhận tri thức mới?
+Đáp: Tùy cơ chế AI service. RAG đọc `app/data/knowledge/*.txt` và index embedding/BM25. Nếu service đang chạy sẵn và không tự hot reload, cần restart AI service hoặc trigger rebuild/reload index để chunk mới có hiệu lực.
+

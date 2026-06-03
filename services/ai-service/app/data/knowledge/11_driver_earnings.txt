@@ -1,87 +1,61 @@
-TIÊU ĐỀ: Thu nhập, hoa hồng và ví tiền tài xế FoxGo
-DANH MỤC: thu nhập tài xế, hoa hồng, commission, tiền mặt cuốc, chuyến online, ví tài xế, nạp ký quỹ, rút tiền, pending balance, thu nhập chờ duyệt, debt limit, nợ nền tảng, lịch sử thu nhập, báo cáo thu nhập, tài xế bị trừ tiền, không nhận được chuyến do ví, thu nhập trung bình
+TIÊU ĐỀ: Thu nhập, hoa hồng và ví tài xế FoxGo
+DANH MỤC: thu nhập tài xế, commission, ví tài xế, pending balance, withdrawable balance, locked balance, ký quỹ, nợ, cash ride, online ride, nạp ví, rút tiền, canAcceptRide
 
-Cơ chế thu nhập tài xế FoxGo hoạt động khác nhau tùy loại thanh toán của khách. Quan trọng nhất cần hiểu là: FoxGo thu hoa hồng từ mỗi chuyến, phần còn lại là của tài xế.
-
-Tỷ lệ hoa hồng: Xe máy/ga 20% · Ô tô 4 chỗ 18% · Ô tô 7 chỗ 15%
-
-Ví dụ cụ thể:
-Cuốc 80.000đ bằng xe máy → bạn nhận 64.000đ, FoxGo 16.000đ
-Cuốc 150.000đ bằng ô tô 4 chỗ → bạn nhận 123.000đ, FoxGo 27.000đ
-Cuốc 200.000đ bằng ô tô 7 chỗ → bạn nhận 170.000đ, FoxGo 30.000đ
+Driver app có route /earnings và /wallet. Wallet API trả nhiều trường động: balance, operationalBalance/availableBalance, pendingBalance, lockedBalance, withdrawableBalance, debt, status, activationRequired, activationThreshold, warningThreshold, debtLimit, canAcceptRide và businessAccounts. Mia phải nói theo dữ liệu app hiển thị, không bịa số ngưỡng/thời gian nếu API không nêu trong câu hỏi.
 
 ---
-Hỏi: Chuyến tiền mặt tôi nhận tiền thế nào?
-Đáp: Khách trả bạn trực tiếp toàn bộ tiền mặt. Sau khi hoàn thành chuyến, FoxGo tự động trừ phần hoa hồng vào số dư ví của bạn. Ví dụ: cuốc 100.000đ xe máy — bạn nhận 100.000đ từ khách, ví bị trừ 20.000đ. Nếu ví không đủ để bị trừ, số âm đó ghi vào nợ — khi nạp tiền sau thì trừ trước.
+Hỏi: Tài xế xem thu nhập ở đâu?
+Đáp: Vào app tài xế, mục Thu nhập hoặc Ví. Mục Thu nhập hiển thị thống kê/chuyến theo dữ liệu backend. Mục Ví hiển thị số dư, giao dịch, pending/locked/withdrawable nếu API trả.
 
 ---
-Hỏi: Chuyến online (MoMo/VNPay) tôi nhận tiền khi nào?
-Đáp: Với chuyến online, khách thanh toán qua cổng điện tử trước. Sau khi chuyến hoàn thành, FoxGo ghi nhận doanh thu và chuyển thu nhập của bạn (sau khi trừ hoa hồng) vào ví FoxGo Driver trong vòng 24 giờ. Bạn thấy khoản "Chờ xử lý" trước, sau 24 giờ nó chuyển thành số dư thực.
+Hỏi: Chuyến tiền mặt xử lý thu nhập thế nào?
+Đáp: Khách trả tiền mặt trực tiếp cho tài xế theo app. Hệ thống có thể ghi nhận hoa hồng/công nợ qua ví tài xế tùy backend. Nếu ví bị trừ hoặc có debt record, xem lịch sử giao dịch/debt records trong Ví.
 
 ---
-Hỏi: Thu nhập "Đang chờ" (pending) là gì?
-Đáp: Là thu nhập từ các chuyến online chưa được quyết toán — FoxGo giữ tạm 24 giờ để đảm bảo không có tranh chấp hoặc yêu cầu hoàn tiền từ khách. Sau 24 giờ, số tiền đó tự động vào số dư ví thật của bạn và rút được. Đây là quy trình chuẩn của fintech.
+Hỏi: Chuyến online MoMo/VNPay tài xế nhận tiền thế nào?
+Đáp: Khách thanh toán online qua Payment Service. Thu nhập tài xế có thể thể hiện trong ví dưới dạng pendingBalance/available/withdrawable tùy trạng thái đối soát. Mia không nên khẳng định luôn đúng 24 giờ nếu app/API không hiển thị rõ.
 
 ---
-Hỏi: Tại sao không nhận được chuyến dù đang online — có phải do số dư ví?
-Đáp: Đúng rồi — nếu số dư ví của bạn xuống dưới ngưỡng tối thiểu (50.000đ), hệ thống tự khóa chế độ online và bạn không nhận được chuyến mới. Giải pháp: nạp thêm tiền vào ví qua MoMo hoặc VNPay trong mục "Ví" → "Nạp tiền". Sau khi nạp thành công, bật lại trực tuyến là nhận chuyến được ngay.
+Hỏi: Pending balance là gì?
+Đáp: Là số dư đang chờ xử lý/đối soát, thường chưa rút được ngay. Khi nào chuyển sang withdrawable phụ thuộc backend và trạng thái payment/ride. Tài xế nên xem thông tin ngay trong Ví.
 
 ---
-Hỏi: Nạp tiền ký quỹ vào ví FoxGo Driver như thế nào?
-Đáp: Vào mục "Ví" trong app FoxGo Driver → "Nạp tiền" → chọn MoMo hoặc VNPay → nhập số tiền cần nạp → xác nhận thanh toán. Tiền vào ví ngay sau khi thanh toán thành công.
+Hỏi: Withdrawable balance là gì?
+Đáp: Là số tiền có thể rút hiện tại theo Wallet API. Nó khác balance tổng vì balance có thể gồm pendingBalance, lockedBalance/ký quỹ hoặc phần bị giữ do nợ.
 
 ---
-Hỏi: Rút tiền từ ví về ngân hàng như thế nào?
-Đáp: Vào "Ví" → "Rút tiền" → nhập số tiền muốn rút (tối thiểu 50.000đ) → chọn tài khoản ngân hàng đã liên kết → xác nhận. Tiền về trong 1–3 ngày làm việc. Phải giữ lại đủ 50.000đ trong ví sau khi rút để tiếp tục nhận chuyến.
+Hỏi: Locked balance/ký quỹ là gì?
+Đáp: Là phần tiền bị khóa theo chính sách ví/kích hoạt, không rút ngay được. Driver app hiển thị lockedBalance hoặc activationRequired/activationThreshold nếu backend trả.
 
 ---
-Hỏi: Xem lịch sử thu nhập ở đâu?
-Đáp: Trong app FoxGo Driver, mục "Thu nhập" hoặc "Ví" → "Lịch sử giao dịch". Bạn thấy được từng chuyến, khoản hoa hồng, nạp/rút tiền. Nếu cần báo cáo thu nhập để khai thuế, liên hệ support@foxgo.vn — đội hỗ trợ xuất file chi tiết cho bạn.
+Hỏi: Driver không nhận được cuốc có thể do ví không?
+Đáp: Có thể. Wallet API có `canAcceptRide`, activationRequired, debt, debtLimit và status. Nếu app báo ví chưa đủ điều kiện, cần nạp ví/giải quyết nợ theo hướng dẫn trong mục Ví.
 
 ---
-Hỏi: Hoa hồng FoxGo là bao nhiêu phần trăm?
-Đáp: Tùy loại xe bạn chạy nhé: xe máy và xe ga là 20%, ô tô 4 chỗ là 18%, ô tô 7 chỗ là 15%. Phần còn lại sau khi trừ hoa hồng là thu nhập của bạn.
+Hỏi: Nạp ví tài xế như thế nào?
+Đáp: Vào Ví trong driver app, chọn nạp tiền nếu UI hiển thị, chọn MoMo hoặc VNPay, nhập số tiền, thanh toán qua cổng và quay lại app. API có `/wallet/top-up/init` và callback `/wallet/topup/return`.
 
 ---
-Hỏi: Thu nhập trung bình của tài xế FoxGo khoảng bao nhiêu?
-Đáp: Thu nhập phụ thuộc vào số giờ chạy, khu vực, và loại xe. Tài xế chạy toàn thời gian có thể đạt 8–15 triệu/tháng tùy khu vực và hiệu suất. Tài xế bán thời gian thường 3–6 triệu/tháng. Con số thực tế của bạn phụ thuộc nhiều vào giờ online và tỷ lệ chấp nhận chuyến.
+Hỏi: Rút tiền từ ví như thế nào?
+Đáp: Driver app/API hỗ trợ withdraw với amount và bankInfo. Chỉ rút được phần withdrawableBalance. Nếu lỗi, kiểm tra số dư khả dụng, thông tin ngân hàng, trạng thái ví và nợ.
 
 ---
-Hỏi: Tôi bị trừ tiền oan, phản ánh ở đâu?
-Đáp: Vào "Ví" → "Lịch sử giao dịch" → chọn giao dịch có vấn đề → nhấn "Báo cáo". Hoặc liên hệ support@foxgo.vn với ảnh chụp màn hình lịch sử giao dịch và mô tả vấn đề. Đội hỗ trợ sẽ kiểm tra và phản hồi trong 24–48 giờ.
+Hỏi: Ví bị âm/nợ thì xử lý sao?
+Đáp: Xem mục Ví và debt records. Nợ có thể phát sinh từ công nợ/commission chuyến tiền mặt hoặc điều chỉnh ví. Nạp tiền hoặc xử lý theo hướng dẫn app; nếu không rõ, gửi driver-support@foxgo.vn kèm ảnh lịch sử giao dịch.
 
 ---
-Hỏi: Pending balance bao giờ thì release vào ví thật?
-Đáp: Đúng 24 giờ sau khi chuyến hoàn thành bạn nhé. Hệ thống tự động chuyển — bạn không cần làm gì. Nếu sau 24 giờ vẫn thấy "Đang chờ" và không chuyển, liên hệ support@foxgo.vn để kiểm tra.
+Hỏi: Tôi bị trừ tiền ví không hiểu lý do?
+Đáp: Xem lịch sử giao dịch ví: loại giao dịch, amount, balanceAfter, description, rideId. Nếu vẫn không rõ, liên hệ driver-support@foxgo.vn kèm transaction id, rideId nếu có và ảnh màn hình. Không thấy nút báo cáo giao dịch riêng trong app, nên không hướng dẫn "nhấn Báo cáo".
 
 ---
-Hỏi: Ví bị âm (nợ) thì xử lý như thế nào?
-Đáp: Số dư âm xảy ra khi bạn chạy nhiều cuốc tiền mặt mà không nạp ký quỹ đủ. Khi nạp tiền, hệ thống sẽ tự động bù trừ phần nợ trước rồi cộng phần còn lại vào số dư. Nạp đủ để dư ít nhất 50.000đ là bật online được lại.
+Hỏi: Hoa hồng FoxGo là bao nhiêu?
+Đáp: Nếu trong app/hợp đồng/merchant hiển thị tỷ lệ hoa hồng thì đọc theo đó. Knowledge cũ có ví dụ tỷ lệ theo loại xe, nhưng nếu hệ thống thực tế cấu hình khác thì app/hợp đồng là nguồn đúng. Mia không nên cam kết tỷ lệ cố định nếu người dùng cần thông tin pháp lý.
 
 ---
-Hỏi: Ví tài xế bị âm thì có nhận chuyến được không?
-Đáp: Không bạn ơi — khi số dư ví âm hoặc dưới 50.000đ, hệ thống tự khóa chế độ online và bạn không nhận được chuyến mới. Cần nạp tiền vào ví trước: vào "Ví" → "Nạp tiền" → chọn MoMo hoặc VNPay. Sau khi nạp đủ (số dư ≥ 50.000đ), bật online lại là nhận chuyến được ngay.
+Hỏi: Thu nhập trung bình tài xế bao nhiêu?
+Đáp: Không có dữ liệu chắc trong app để cam kết. Thu nhập phụ thuộc số giờ online, khu vực, loại xe, nhu cầu, tỉ lệ nhận/hủy, chi phí vận hành và trạng thái ví. Mia nên tránh nêu con số tháng nếu không có báo cáo thật.
 
 ---
-Hỏi: Nạp tiền vào ví FoxGo Driver như thế nào?
-Đáp: Vào mục "Ví" trong app FoxGo Driver → nhấn "Nạp tiền" → chọn MoMo hoặc VNPay → nhập số tiền muốn nạp → xác nhận thanh toán. Tiền vào ví ngay lập tức sau khi thanh toán thành công. Nạp tối thiểu 50.000đ để đủ điều kiện bật online nhận chuyến.
+Hỏi: Khách không trả tiền mặt thì tài xế làm gì?
+Đáp: Giữ an toàn, ghi nhận mã chuyến, số tiền, thời gian và bằng chứng nếu có. Liên hệ driver-support@foxgo.vn hoặc hotline. Không tự ý gây áp lực hoặc xử lý ngoài quy trình.
 
----
-Hỏi: Tôi chạy cuốc 50km thì được bao nhiêu tiền?
-Đáp: Mình cần biết loại xe và giá cước cụ thể để tính chính xác. Nhưng ví dụ: giả sử cuốc đó tính 200.000đ — nếu chạy xe máy thì bạn nhận 160.000đ (trừ 20% hoa hồng), ô tô 4 chỗ thì nhận 164.000đ (trừ 18%). Giá cuốc chính xác phụ thuộc lộ trình, thời điểm, và hệ số surge.
-
----
-Hỏi: Khách đánh giá 1 sao có ảnh hưởng thu nhập không?
-Đáp: Đánh giá thấp không ảnh hưởng trực tiếp đến thu nhập từng chuyến. Tuy nhiên, nếu điểm đánh giá trung bình của bạn xuống quá thấp (dưới 3.5 sao), hệ thống có thể giảm ưu tiên ghép chuyến cho bạn, gián tiếp ảnh hưởng đến số chuyến nhận được.
-
----
-Hỏi: Khách không trả tiền mặt thì tôi làm sao?
-Đáp: Trường hợp này hiếm gặp nhưng nếu xảy ra, bạn báo cáo ngay qua app sau chuyến hoặc liên hệ hotline 1900-1234. FoxGo sẽ xem xét từng trường hợp cụ thể. Để tránh rủi ro, với chuyến giá trị lớn bạn có thể nhắc khách chuẩn bị tiền mặt trước.
-
----
-Hỏi: Tôi mới đăng ký, rút tiền được ngay không?
-Đáp: Được, nhưng trước tiên cần liên kết tài khoản ngân hàng trong mục "Ví" → "Ngân hàng liên kết". Sau khi liên kết xong và có số dư, rút tiền bình thường — tiền về trong 1–3 ngày làm việc.
-
----
-Hỏi: Hoa hồng FoxGo có thay đổi không?
-Đáp: Tỷ lệ hoa hồng hiện tại là cố định: xe máy/ga 20%, ô tô 4 chỗ 18%, ô tô 7 chỗ 15%. Nếu có thay đổi, FoxGo sẽ thông báo trước trong app và qua email. Bạn yên tâm — mọi thay đổi đều được thông báo rõ ràng trước khi áp dụng.

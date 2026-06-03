@@ -38,6 +38,7 @@ import {
   FOXGO_AI_CHAT_TOP_K,
   FOXGO_AI_WELCOME_ASSISTANT,
   FOXGO_QUICK_REPLIES,
+  findFoxgoQuickAnswer,
   miaOfflineFallbackReply,
 } from '../../config/foxgoAiUnified';
 
@@ -228,6 +229,13 @@ const AIChatWidget: React.FC = () => {
     const userMsg: AIMessage = { role: 'user', content: text };
     const conversation = [...aiMessages, userMsg];
     setAiMessages(conversation);
+
+    const quickAnswer = findFoxgoQuickAnswer(text);
+    if (quickAnswer) {
+      setAiMessages([...conversation, { role: 'assistant', content: quickAnswer }]);
+      return;
+    }
+
     setAiLoading(true);
 
     try {
@@ -271,6 +279,13 @@ const AIChatWidget: React.FC = () => {
     const userMsg: AIMessage = { role: 'user', content: text };
     const conversation = [...aiMessages, userMsg];
     setAiMessages(conversation);
+
+    const quickAnswer = findFoxgoQuickAnswer(text);
+    if (quickAnswer) {
+      setAiMessages([...conversation, { role: 'assistant', content: quickAnswer }]);
+      return;
+    }
+
     setAiLoading(true);
 
     const history = foxgoToChatHistory(conversation);

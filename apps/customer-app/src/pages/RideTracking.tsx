@@ -235,6 +235,7 @@ const RideTracking: React.FC = () => {
   const [retryingPayment, setRetryingPayment] = useState(false);
   const [refundPollTimedOut, setRefundPollTimedOut] = useState(false);
   const refundPollRef = useRef<number | null>(null);
+  const hydrateRideRequestRef = useRef(0);
 
   // Cancel reason dialog state
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -252,7 +253,14 @@ const RideTracking: React.FC = () => {
       return;
     }
 
+    const requestId = hydrateRideRequestRef.current + 1;
+    hydrateRideRequestRef.current = requestId;
+
     const response = await rideApi.getRide(rideId);
+    if (hydrateRideRequestRef.current !== requestId) {
+      return;
+    }
+
     const ride = response.data.ride;
     dispatch(setCurrentRide(ride));
     if ((ride as any).driver) {

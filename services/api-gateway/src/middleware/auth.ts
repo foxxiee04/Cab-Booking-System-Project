@@ -55,6 +55,7 @@ const PUBLIC_PATHS = [
   '/health',
   '/api/ai/ride/estimate',
   '/api/geo',
+  '/api/public',
   '/api/voucher/public',  // public discovery — no auth required
 ];
 

@@ -11,6 +11,8 @@ ENV PYTHONUNBUFFERED=1 \
     SENTENCE_TRANSFORMERS_HOME=/app/.sentence_transformers \
     HF_HUB_DISABLE_XET=1
 
+ARG PRELOAD_RAG_MODELS=false
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
@@ -23,15 +25,18 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt
 
-# Pre-download embedding model + cross-encoder reranker into the image layer so
-# container startup is instant (no HuggingFace download on each Spot restart).
-# Models match RAG_EMBEDDING_MODEL / RAG_RERANKER_MODEL defaults in .env.example.
-# Layer is cached independently of app code — code-only rebuilds skip this step.
-RUN python -c "\
+# Optional: pre-download embedding model + cross-encoder reranker into the image
+# layer. CI leaves this off because HuggingFace/network timeouts make Docker
+# builds flaky; production can opt in with --build-arg PRELOAD_RAG_MODELS=true.
+RUN if [ "$PRELOAD_RAG_MODELS" = "true" ]; then \
+      python -c "\
 from sentence_transformers import SentenceTransformer, CrossEncoder; \
 SentenceTransformer('bkai-foundation-models/vietnamese-bi-encoder'); \
 CrossEncoder('BAAI/bge-reranker-v2-m3'); \
-print('Models baked into image')"
+print('Models baked into image')"; \
+    else \
+      echo "Skipping RAG model preload during Docker build"; \
+    fi
 
 # Copy application code
 COPY app/ ./app/

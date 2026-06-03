@@ -1,32 +1,41 @@
-TIÊU ĐỀ: Tính năng theo dõi thời gian thực và chat trong FoxGo
-DANH MỤC: theo dõi chuyến, track chuyến, bản đồ thời gian thực, chat tài xế, nhắn tin tài xế, gọi điện tài xế, chia sẻ hành trình, link theo dõi, ETA, thời gian đến, vị trí tài xế, call tài xế, số điện thoại ẩn
+TIÊU ĐỀ: Theo dõi chuyến, chat, gọi và chia sẻ hành trình FoxGo
+DANH MỤC: realtime, theo dõi chuyến, socket, chat, gọi trong app, WebRTC, chia sẻ hành trình, public tracking, driver location, ETA
 
-Một trong những tính năng hữu ích nhất của FoxGo là theo dõi chuyến thời gian thực. Khi tài xế nhận chuyến, bạn thấy vị trí tài xế trên bản đồ cập nhật liên tục, cùng thời gian ước tính đến điểm đón. Trong chuyến, bạn cũng thấy lộ trình và thời gian đến điểm đến.
+FoxGo có realtime tracking qua Socket.IO. Customer RideTracking subscribe ride room, nghe vị trí tài xế và trạng thái chuyến. Driver app gửi vị trí khi online/active. Chat/gọi dùng socket/WebRTC trong app. Chia sẻ hành trình tạo public link `/track/:token`. Không gọi đây là number masking/số ẩn telco.
 
 ---
-Hỏi: Làm sao liên hệ với tài xế đang trên đường đến?
-Đáp: Trong màn hình theo dõi chuyến có 2 nút: điện thoại và chat. Nhấn nút điện thoại để gọi qua hệ thống ẩn số — cuộc gọi đi qua server FoxGo nên cả 2 không thấy số thật của nhau. Nhấn nút chat để nhắn tin text — tiện hơn khi tài xế đang lái mà bạn muốn gửi ghi chú nhỏ.
+Hỏi: Khi nào màn theo dõi chuyến xuất hiện?
+Đáp: Sau khi tạo/đặt chuyến, customer vào `/ride/:rideId`. Màn này hiển thị trạng thái tìm tài xế, tài xế đã nhận, đang đón, đã tới, đang chạy, hoàn thành/hủy tùy dữ liệu ride.
+
+---
+Hỏi: Vị trí tài xế cập nhật thế nào?
+Đáp: Driver app gửi location qua socket. Gateway phát `driver_location_update` và `driver:location` vào room ride/public. Customer app nhận và cập nhật bản đồ. Nếu socket lỗi, app vẫn có polling dự phòng nhưng có thể chậm hơn.
+
+---
+Hỏi: Vì sao trạng thái chuyến chậm vài giây?
+Đáp: Trạng thái đi qua driver action -> ride-service -> event/gateway -> socket -> customer UI. Nếu mạng yếu, socket fallback polling, RabbitMQ/gateway chậm hoặc request cũ về sau event mới, UI có thể delay. Hệ thống đã ưu tiên websocket và phát vào room ride để giảm trễ.
+
+---
+Hỏi: Làm sao liên hệ tài xế đang đến?
+Đáp: Khi chuyến active và có tài xế, customer app có ContactBox để chat/gọi trong app. Chat lưu/lấy qua `/rides/:rideId/messages`; gọi dùng WebRTC signaling qua socket. Nếu tài xế đang lái, họ có thể trả lời chậm.
+
+---
+Hỏi: Sau chuyến có liên hệ lại tài xế được không?
+Đáp: Hiện không thấy nút liên hệ lại tài xế sau chuyến như tính năng riêng. Nếu cần tìm đồ hoặc xử lý sự cố sau chuyến, liên hệ support@foxgo.vn/hotline kèm mã chuyến.
 
 ---
 Hỏi: Chia sẻ hành trình với người thân như thế nào?
-Đáp: Trong màn hình theo dõi chuyến, tìm nút "Chia sẻ hành trình" (thường ở góc màn hình). Nhấn vào tạo ra một link — gửi link đó cho người thân qua Zalo, Facebook, tin nhắn... Người nhận link mở bằng browser là xem được vị trí bạn và tài xế theo thời gian thực, không cần cài app FoxGo.
+Đáp: Trong RideTracking, nếu trạng thái ASSIGNED, ACCEPTED, PICKING_UP hoặc IN_PROGRESS, bấm chia sẻ. App tạo token và link `/track/:token`; có thể mở share sheet hoặc copy link.
 
 ---
-Hỏi: ETA (thời gian đến) có chính xác không?
-Đáp: ETA khá chính xác trong điều kiện giao thông bình thường, sai số thường ±2 phút. Kẹt xe đột ngột hoặc tắc đường lớn có thể làm ETA sai lệch nhiều hơn — hệ thống cập nhật liên tục khi tài xế di chuyển.
+Hỏi: Người nhận link cần đăng nhập không?
+Đáp: Không. Public tracking dùng token riêng và route `/track/:token`. Nếu link hết hạn/invalid, người nhận sẽ không xem được.
 
 ---
-Hỏi: Tôi nhắn tin tài xế nhưng họ không trả lời?
-Đáp: Tài xế đang lái xe nên có thể không đọc tin nhắn ngay. Nếu cần thông báo gấp (như thay đổi điểm đón nhỏ), gọi điện trực tiếp sẽ hiệu quả hơn. Sau chuyến, chat bị đóng — bạn không thể nhắn tin cho tài xế nữa (trừ trong 30 phút để hỏi về đồ bỏ quên qua hotline).
+Hỏi: Link chia sẻ bị Access denied?
+Đáp: Nếu lỗi khi tạo link, kiểm tra người tạo có đúng là khách sở hữu ride và ride đang active không. Nếu lỗi khi mở public link, kiểm tra token còn hạn và gateway public route. Khi cần debug, gửi mã ride, thời gian tạo link và ảnh lỗi.
 
 ---
-Hỏi: Sau chuyến tôi có liên hệ lại tài xế được không?
-Đáp: Không — sau 30 phút khi chuyến kết thúc, kênh liên lạc ẩn số bị đóng. Đây là thiết kế cố ý để bảo vệ quyền riêng tư của cả 2 bên. Nếu cần liên lạc vì quên đồ, phải làm trong 30 phút đó hoặc báo cáo qua app.
+Hỏi: ETA có luôn chính xác không?
+Đáp: ETA/distance là ước tính từ dữ liệu bản đồ/location. GPS yếu, tài xế vào hẻm/tòa nhà, mạng chậm hoặc thay đổi lộ trình có thể làm ETA lệch. Xem trạng thái và vị trí live là chính.
 
----
-Hỏi: Tôi thấy vị trí tài xế nhảy lung tung trên bản đồ?
-Đáp: Thường do GPS của tài xế bị nhiễu (trong hẻm nhỏ, dưới cầu, gần tòa nhà cao). Vị trí sẽ ổn định lại khi tài xế ra chỗ thoáng hơn. Nếu ETA vẫn hợp lý thì không có vấn đề gì — tài xế vẫn đang đến bình thường.
-
----
-Hỏi: Khi nào thì màn hình theo dõi chuyến xuất hiện?
-Đáp: Ngay sau khi tài xế nhận chuyến, app tự động chuyển sang màn hình theo dõi. Trước đó (đang tìm tài xế) bạn thấy màn hình "Đang tìm tài xế" với vòng tròn loading. Bạn có thể minimize app — khi tài xế nhận chuyến, app gửi thông báo đẩy ngay.

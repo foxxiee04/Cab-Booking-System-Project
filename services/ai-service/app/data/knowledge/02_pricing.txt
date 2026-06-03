@@ -1,7 +1,7 @@
 TIÊU ĐỀ: Bảng giá và cách tính cước FoxGo
 DANH MỤC: giá cước, cách tính giá, cước phí, tiền, phí, bao nhiêu tiền, giá bao nhiêu, tính tiền, chi phí, fare, surge, tăng giá, giờ cao điểm, giá ước tính, phí ẩn
 
-Giá cước FoxGo tính theo 3 thành phần chính: giá khởi điểm (cố định khi lên xe) + cước theo km + cước theo thời gian di chuyển. Thêm vào đó có phụ phí dịch vụ và phí chuyến ngắn với một số loại xe. Giá hiển thị trên app đã bao gồm tất cả, không có phí ẩn nào cả.
+Giá cước FoxGo tính theo các thành phần trong Pricing Service: giá khởi điểm + cước theo km + cước theo thời gian di chuyển + phụ phí dịch vụ theo loại xe + phí chuyến ngắn với một số loại xe + surge nếu có. Giá chính xác tại thời điểm đặt phải xem trong app.
 
 Bảng giá chi tiết:
 
@@ -24,7 +24,7 @@ Xe máy ≈ 48.000đ · Xe ga ≈ 68.000đ · Ô tô 4 chỗ ≈ 133.000đ · Ô
 
 ---
 Hỏi: Surge là gì? Khi nào bị tính giá cao hơn?
-Đáp: Surge là hệ số tăng giá tự động khi có nhiều người đặt xe cùng lúc mà ít tài xế — giống Uber/Grab hay làm vậy. Hệ số từ 1.0 (bình thường) đến 2.0 (gấp đôi giá). Thường xảy ra vào 7–9h sáng, 17–20h chiều, ngày lễ Tết, mưa to. Giá app hiển thị đã nhân hệ số rồi, bạn thấy bao nhiêu thì đúng bấy nhiêu — không bị tính thêm sau.
+Đáp: Surge là hệ số tăng giá khi nhu cầu cao hoặc nguồn tài xế ít. Pricing Service có surge thresholds và có thể dùng dữ liệu Redis/AI prediction. App hiển thị giá ước tính đã tính surge nếu có. Mia không xem được surge live, nên muốn biết chính xác phải nhập điểm đón/đến trong app.
 
 ---
 Hỏi: Tôi hỏi Mia/chat "chuyến từ điểm A tới điểm B hiện tại bao nhiêu tiền" được không?
@@ -32,7 +32,7 @@ Hỏi: Tôi hỏi Mia/chat "chuyến từ điểm A tới điểm B hiện tại
 
 ---
 Hỏi: Tại sao giá thực tế khác giá ước tính khi đặt?
-Đáp: Giá ước tính dựa trên tuyến đường ngắn nhất lúc đặt xe. Nếu trên đường tài xế phải đi đường khác vì tắc hay cấm đường, quãng đường/thời gian thực tế thay đổi nên giá cuối cũng thay đổi nhẹ. Chênh lệch thường không nhiều, và giá đã bao gồm VAT rồi.
+Đáp: Giá ước tính dựa trên dữ liệu lộ trình/khoảng cách/thời gian lúc đặt. Nếu đường đi, thời gian, voucher, surge hoặc dữ liệu thanh toán thay đổi, số tiền cuối trong chi tiết chuyến/payment có thể khác. Nếu chênh lệch bất thường, gửi support mã chuyến và ảnh màn hình để đối soát.
 
 ---
 Hỏi: Phí chuyến ngắn là gì?
@@ -40,7 +40,7 @@ Hỏi: Phí chuyến ngắn là gì?
 
 ---
 Hỏi: FoxGo có thu phí ẩn hay phí đặt xe không?
-Đáp: Không, FoxGo không thu bất kỳ phí nào ngoài giá hiển thị. Giá trên app đã bao gồm tất cả (kể cả VAT). Nếu tài xế yêu cầu trả thêm tiền ngoài app, đó là vi phạm — bạn từ chối và báo cáo ngay cho FoxGo nhé.
+Đáp: Người dùng nên trả theo số app hiển thị. Nếu tài xế yêu cầu khoản ngoài app không rõ lý do, hãy từ chối khi an toàn và liên hệ support@foxgo.vn kèm mã chuyến/bằng chứng. Mia không nên khẳng định về VAT nếu app không hiển thị.
 
 ---
 Hỏi: Xe máy và xe tay ga khác nhau thế nào về giá và loại xe?
@@ -48,4 +48,4 @@ Hỏi: Xe máy và xe tay ga khác nhau thế nào về giá và loại xe?
 
 ---
 Hỏi: Giá ước tính trên app có chính xác không?
-Đáp: Khá chính xác trong điều kiện bình thường. Sai lệch thường chỉ ±10% do tắc đường thực tế khác dự báo. Bạn có thể tin vào giá ước tính để tham khảo — nếu chênh lớn hơn nhiều, liên hệ hỗ trợ FoxGo để kiểm tra.
+Đáp: Giá ước tính dùng để tham khảo trước khi xác nhận. Độ lệch phụ thuộc lộ trình, GPS, thời gian, surge và dữ liệu payment. Nếu chênh lớn so với app hiển thị, liên hệ support@foxgo.vn kèm mã chuyến.

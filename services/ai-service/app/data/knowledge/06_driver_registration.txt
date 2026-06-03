@@ -1,34 +1,45 @@
-TIÊU ĐỀ: Đăng ký và vận hành tài xế FoxGo
-DANH MỤC: tài xế, đăng ký tài xế, yêu cầu tài xế, driver, hoa hồng, thu nhập tài xế, lái xe, trở thành tài xế, đối tác, partner, ký quỹ, số dư ví tài xế, nhận chuyến, online, offline, bật trực tuyến
+TIÊU ĐỀ: Đăng ký, duyệt hồ sơ và vận hành tài xế FoxGo
+DANH MỤC: đăng ký tài xế, driver app, profile setup, duyệt hồ sơ, approved, pending, rejected, suspended, online, offline, nhận cuốc, ví tài xế
 
-Trở thành tài xế FoxGo không khó — thường chỉ mất 1–3 ngày làm việc từ lúc nộp hồ sơ đến khi được duyệt. Yêu cầu cơ bản: từ 21 tuổi, có bằng lái phù hợp với loại xe (A2 cho xe máy/ga, B2 cho ô tô 4 chỗ, D cho ô tô 7 chỗ), phương tiện không quá 8 năm tuổi và còn đăng kiểm/bảo hiểm hợp lệ.
-
-Quy trình đăng ký: Tải app FoxGo Driver → đăng ký tài khoản → điền thông tin cá nhân → tải ảnh CCCD (2 mặt), bằng lái, ảnh xe và giấy tờ xe → chờ admin xét duyệt → sau khi duyệt, bật "Trực tuyến" là có thể nhận chuyến.
+Driver app có đăng ký, profile setup, dashboard, active ride, account/profile, wallet, earnings, history và reviews. Tài xế cần hồ sơ được duyệt để vận hành ổn định. Admin dashboard có DriverApprovals để duyệt/từ chối. Không thấy policy chắc về tuổi, loại bằng lái, đời xe, thời gian duyệt 1-3 ngày trong code, nên Mia không cam kết các chi tiết đó.
 
 ---
-Hỏi: Hoa hồng FoxGo tính như thế nào?
-Đáp: FoxGo tính hoa hồng theo loại xe: xe máy và xe ga là 20%, ô tô 4 chỗ là 18%, ô tô 7 chỗ là 15%. Ví dụ cuốc 100.000đ bằng ô tô 4 chỗ → bạn nhận 82.000đ, FoxGo giữ 18.000đ. Với chuyến tiền mặt, khách trả trực tiếp toàn bộ cho bạn, FoxGo sẽ trừ phần hoa hồng vào số dư ví.
+Hỏi: Muốn trở thành tài xế FoxGo cần làm gì?
+Đáp: Tải/dùng FoxGo Driver, đăng ký tài khoản, hoàn tất profile setup theo các trường app yêu cầu, gửi thông tin cá nhân/xe/giấy tờ nếu UI yêu cầu, rồi chờ admin duyệt. Khi trạng thái APPROVED và ví/điều kiện vận hành ổn, tài xế có thể online nhận cuốc.
 
 ---
-Hỏi: Tôi muốn đăng ký tài xế cần chuẩn bị gì?
-Đáp: Bạn cần có: CCCD/CMND còn hạn, bằng lái phù hợp, đăng ký xe, giấy đăng kiểm còn hiệu lực, bảo hiểm xe còn hạn, và ảnh xe chụp rõ biển số. Tất cả upload lên app FoxGo Driver — không cần nộp bản cứng. Nếu hồ sơ đầy đủ và rõ ràng thì thường được duyệt trong 1–2 ngày.
+Hỏi: Hồ sơ tài xế có trạng thái nào?
+Đáp: App/backend dùng các trạng thái như PENDING, APPROVED, REJECTED, SUSPENDED. PENDING là chờ duyệt; APPROVED có thể hoạt động; REJECTED/SUSPENDED cần xem lý do và liên hệ driver-support nếu cần.
 
 ---
-Hỏi: Tại sao đã bật trực tuyến mà không nhận được chuyến?
-Đáp: Có mấy lý do: (1) Số dư ví dưới 50.000đ — hệ thống tạm dừng nhận chuyến khi số dư quá thấp, bạn cần nạp thêm. (2) GPS không chính xác — đứng ở chỗ thoáng, tắt rồi bật lại GPS. (3) Kết nối mạng yếu. (4) Khu vực bạn đang đứng không có khách. Thử di chuyển đến khu vực đông người hơn.
+Hỏi: Đăng ký tài xế mất bao lâu được duyệt?
+Đáp: Chưa thấy SLA duyệt hồ sơ chắc trong code. Mia nên nói thời gian phụ thuộc admin và độ đầy đủ hồ sơ. Nếu chờ lâu, liên hệ driver-support@foxgo.vn kèm số điện thoại đăng ký.
 
 ---
-Hỏi: Cơ chế ví tài xế hoạt động thế nào?
-Đáp: Bạn cần duy trì số dư ví tối thiểu 50.000đ để tiếp tục nhận chuyến. Với chuyến online (MoMo/VNPay), tiền về ví sau khi trừ hoa hồng. Với chuyến tiền mặt, bạn thu toàn bộ từ khách, FoxGo trừ hoa hồng vào ví sau. Khi ví âm quá giới hạn, hệ thống tự khóa chế độ online — bạn cần nạp tiền để tiếp tục.
+Hỏi: Cần chuẩn bị giấy tờ gì?
+Đáp: Chuẩn bị các thông tin/ảnh mà màn Profile Setup yêu cầu. Thông thường có thông tin cá nhân, xe và giấy phép/giấy tờ liên quan, nhưng Mia không nên liệt kê bắt buộc pháp lý cụ thể nếu app không hiển thị trong ngữ cảnh.
 
 ---
-Hỏi: Tài xế rút tiền từ ví như thế nào?
-Đáp: Vào mục "Ví" trong app FoxGo Driver → "Rút tiền" → nhập số tiền (tối thiểu 50.000đ) → chọn tài khoản ngân hàng đã liên kết → xác nhận. Tiền về trong 1–3 ngày làm việc.
+Hỏi: Bật online rồi nhưng không có cuốc?
+Đáp: Kiểm tra: hồ sơ đã APPROVED chưa, ví có canAcceptRide không, có nợ/ký quỹ cần xử lý không, GPS có quyền vị trí và đang gửi tọa độ không, mạng/socket có ổn không, khu vực có nhu cầu không. Nếu vẫn không có cuốc, gửi driver-support ảnh dashboard và vị trí/khoảng thời gian.
 
 ---
-Hỏi: Tôi đăng ký 2 xe được không?
-Đáp: Mỗi tài khoản tài xế chỉ đăng ký được 1 phương tiện. Nếu muốn đổi xe (ví dụ mua xe mới), liên hệ support để cập nhật thông tin — không tự sửa được trong app.
+Hỏi: Tài xế nhận cuốc như thế nào?
+Đáp: Khi online và phù hợp, app nhận `NEW_RIDE_AVAILABLE` qua socket. Dashboard hiển thị yêu cầu cuốc; tài xế bấm nhận thì app gọi API accept. Nếu cuốc đã được tài xế khác nhận hoặc timeout, app nhận sự kiện taken/timeout.
 
 ---
-Hỏi: Tài khoản tài xế bị khóa phải làm gì?
-Đáp: Liên hệ support@foxgo.vn hoặc hotline 1900-1234 kèm số điện thoại đăng ký. Đội hỗ trợ sẽ xem xét lý do và hướng dẫn cách mở khóa. Thường gặp: vi phạm tỉ lệ hủy chuyến, khiếu nại từ khách, hoặc số dư ví âm quá lâu.
+Hỏi: Driver chuyển trạng thái chuyến như thế nào?
+Đáp: Trong ActiveRide, tài xế có các action theo trạng thái: đến điểm đón/PICKING_UP, bắt đầu chuyến/IN_PROGRESS, hoàn tất chuyến/COMPLETED. App gọi các endpoint pickup/start/complete và gateway phát trạng thái cho customer.
+
+---
+Hỏi: Ví tài xế liên quan gì đến nhận cuốc?
+Đáp: Wallet API trả canAcceptRide, activationRequired, debt, debtLimit, status và các số dư. Nếu app báo ví chưa đủ điều kiện hoặc nợ vượt ngưỡng, tài xế cần xử lý trong mục Ví trước khi nhận cuốc.
+
+---
+Hỏi: Hoa hồng tài xế là bao nhiêu?
+Đáp: Tỷ lệ commission phụ thuộc Commission Service/app/hợp đồng hiện hành. Nếu app hoặc hợp đồng hiển thị tỷ lệ thì đọc theo đó. Mia không nên cam kết một tỷ lệ cố định nếu người dùng cần thông tin pháp lý/chính sách.
+
+---
+Hỏi: Tài khoản tài xế bị khóa/rejected/suspended thì sao?
+Đáp: Xem trạng thái và lý do nếu app hiển thị. Liên hệ driver-support@foxgo.vn hoặc hotline kèm số điện thoại, ảnh lỗi và thông tin hồ sơ để được kiểm tra.
+

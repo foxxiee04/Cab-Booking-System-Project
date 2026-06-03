@@ -1,176 +1,118 @@
-TIÊU ĐỀ: Kịch bản khách hàng — đóng vai người đi xe FoxGo
-DANH MỤC: khách hàng, customer-app, đặt xe, an toàn, thanh toán, hủy chuyến, khiếu nại, ví voucher, chia sẻ chuyến, Mia, hành khách
+TIÊU ĐỀ: Kịch bản khách hàng - trả lời khéo theo chức năng thật của FoxGo
+DANH MỤC: khách hàng, customer-app, đặt xe, an toàn, thanh toán, voucher, chia sẻ chuyến, chatbot, chức năng giới hạn
 
-Tài liệu này viết theo **giọng khách** (người đi xe). Mia trả lời phải giả định đối tượng là **khách** khi câu hỏi chứa cụm như “mình là khách”, “tôi đặt xe”, “bên passenger”. Hotline **1900-1234** (8h–22h). Email **support@foxgo.vn**.
+Tài liệu này viết theo giọng khách hàng. Khi khách hỏi một chức năng chưa thấy trong hệ thống, Mia không được bịa nút, màn hình hoặc quy trình. Cách trả lời đúng là: xác nhận nhu cầu, nói nhẹ rằng app hiện chưa có/không thấy tính năng riêng cho việc đó, rồi đưa cách xử lý thực tế bằng chức năng đang có hoặc kênh hỗ trợ.
+
+Kênh hỗ trợ khách hàng: hotline 1900-1234 trong khung giờ hỗ trợ, email support@foxgo.vn. Khi cần hỗ trợ thủ công, luôn xin mã chuyến, thời gian chuyến, số điện thoại tài khoản, ảnh màn hình hoặc bằng chứng liên quan.
 
 ---
 Hỏi: [Khách] Mình mới tải FoxGo, trước khi đặt xe lần đầu cần làm gì?
-Đáp: Bạn đăng ký/đăng nhập, bật **quyền vị trí** và **thông báo**, thêm phương thức thanh toán (tiền mặt hoặc ví điện tử nếu dùng). Sau đó mở bản đồ, chỉnh **ghim điểm đón** cho khớp thực tế, nhập **điểm đến**, chọn loại xe rồi mới bấm đặt. Đọc giá ước tính hiển thị trước khi xác nhận.
+Đáp: Bạn đăng ký hoặc đăng nhập, bật quyền vị trí và thông báo, kiểm tra số điện thoại/email tài khoản, rồi mở màn hình đặt xe. Trước khi bấm đặt, hãy chỉnh đúng điểm đón, nhập điểm đến, chọn loại xe, chọn phương thức thanh toán và đọc giá ước tính trên app.
 
 ---
-Hỏi: [Khách] Mình là khách, app báo sai vị trí điểm đón thì sửa thế nào cho nhanh?
-Đáp: Bạn **kéo ghim** trên bản đồ hoặc gõ địa chỉ/POI chính xác hơn (số nhà + đường). Đứng **chỗ thoáng** giúp GPS ổn định. Nếu tài xế đã nhận chuyến, nhắn trong app để họ biết điểm đón thật — đừng im lặng.
+Hỏi: [Khách] App báo sai vị trí điểm đón thì sửa thế nào?
+Đáp: Bạn kéo ghim trên bản đồ hoặc nhập lại địa chỉ cụ thể hơn. Nếu đã có tài xế nhận chuyến, hãy nhắn/gọi trong màn hình chuyến đang diễn ra để báo điểm đứng thực tế. Nếu lệch quá xa, cách sạch nhất là hủy theo thông báo trên app rồi đặt lại đúng điểm.
 
 ---
-Hỏi: [Khách] Tôi đặt xe cho mẹ già / cho sếp — có được không, cần lưu ý gì?
-Đáp: **Được.** Bạn đặt với **điểm đón/điểm đến của người đó**; thanh toán vẫn có thể tính qua tài khoản bạn. Bạn gửi **link theo dõi chuyến** (nếu app hỗ trợ chia sẻ) hoặc chuyển **SĐT tài xế** cho người đi (khi app hiển thị). Nhắc họ mang điện thoại để liên lạc.
+Hỏi: [Khách] Tôi đặt xe cho người khác được không?
+Đáp: Được, miễn là bạn nhập đúng điểm đón và điểm đến của người đi. Sau khi có tài xế, bạn có thể chia sẻ link theo dõi hành trình nếu màn hình chuyến có nút chia sẻ. Nếu cần, gửi thêm biển số, loại xe và tên tài xế cho người đi qua Zalo/SMS.
 
 ---
-Hỏi: [Khách] Tài xế đến trễ hơn ETA trên app — mình có được đổi tài xế không?
-Đáp: ETA là **ước tính**; kẹt xe/mưa/GPS có thể lệch. Bạn có thể **chat/gọi** để xác nhận. Nếu quá trễ **và** tình huống không thể chấp nhận, bạn **hủy chuyến** theo chính sách hiện hành (có thể tính phí nếu tài xế đã quá gần/đã bắt đầu). Tranh chấp phí hoặc hành vi xấu — gọi **1900-1234** hoặc **support@foxgo.vn**.
+Hỏi: [Khách] Tài xế đến trễ hơn ETA thì sao?
+Đáp: ETA là ước tính nên có thể lệch vì kẹt xe, mưa hoặc GPS. Bạn nên nhắn/gọi tài xế trong chuyến để xác nhận. Nếu không thể chờ, hãy hủy theo thông báo trên app. Nếu có tranh chấp phí hoặc tài xế có thái độ không đúng, gửi mã chuyến cho support@foxgo.vn.
 
 ---
-Hỏi: [Khách] Tài xế đi sai đường cố tình cho cước tăng — làm gì?
-Đáp: Bạn **nhắc nhẹ** trong chat “xin đi lộ trình hợp lý theo bản đồ”. Giữ **bằng chứng** (ảnh màn hình bản đồ, thời điểm). Kết thúc chuyến: kiểm tra **tổng phí** và **mô tả lộ trình**; nếu bất thường → **khiếu nại** trong app (nếu có) hoặc email **support@foxgo.vn** kèm mã chuyến.
+Hỏi: [Khách] Tài xế đi sai đường làm cước tăng?
+Đáp: Bạn nhắc tài xế đi theo lộ trình hợp lý trên bản đồ, giữ ảnh màn hình lộ trình và thời điểm. Sau chuyến, nếu tổng phí bất thường, gửi mã chuyến, ảnh bản đồ và mô tả ngắn cho support@foxgo.vn để kiểm tra log hệ thống.
 
 ---
-Hỏi: [Khách] Tài xế hủy chuyến sát giờ — mình bực quá, FoxGo xử lý thế nào?
-Đáp: Hệ thống thường **ghép lại** cuốc khác. Nếu bạn **đã thanh toán trước** mà tiền bị kẹt/hoàn chậm, làm theo hướng dẫn màn hình thanh toán hoặc liên hệ **support@foxgo.vn** với mã giao dịch.
+Hỏi: [Khách] Tài xế hủy sát giờ, FoxGo xử lý thế nào?
+Đáp: Hệ thống sẽ cố gắng đưa bạn về trạng thái có thể đặt/ghép lại chuyến khác. Nếu bạn đã thanh toán online và thấy tiền bị giữ, hãy chờ trạng thái thanh toán cập nhật; nếu vẫn bất thường, gửi mã giao dịch và mã chuyến cho support@foxgo.vn.
 
 ---
-Hỏi: [Khách] Mình cần hóa đơn VAT cho công ty sau chuyến FoxGo?
-Đáp: Quy trình xuất hóa đơn **phụ thuộc chính sách merchant** từng thời kỳ. Trong app: tìm mục **hóa đơn/hỗ trợ** hoặc sau chuyến chọn **yêu cầu xuất hoá đơn** (nếu có). Không thấy mục này → email **support@foxgo.vn** kèm **mã chuyến + công ty + MST**.
+Hỏi: [Khách] Tôi cần hóa đơn VAT cho công ty?
+Đáp: Hiện không nên khẳng định app có nút xuất VAT riêng. Bạn hãy gửi yêu cầu qua support@foxgo.vn kèm mã chuyến, tên công ty, mã số thuế, email nhận hóa đơn và thông tin cần xuất. Bộ phận hỗ trợ sẽ kiểm tra chính sách và khả năng xuất chứng từ tại thời điểm đó.
 
 ---
-Hỏi: [Khách] Chuyến tiền mặt — tài xế không mang tiền thối?
-Đáp: Khách chuẩn bị **mệnh giề nhỏ** khi chọn tiền mặt. Nếu không thối được, thử chuyển **mã QR/ chuyển khoản** theo thỏa thuận — nhưng **ưu tiên cách an toàn có biên lai**; mọi thỏa thuận ngoài app là **rủi ro** của hai bên.
+Hỏi: [Khách] Chuyến tiền mặt mà tài xế không có tiền thối?
+Đáp: Bạn nên chuẩn bị mệnh giá nhỏ khi chọn tiền mặt. Nếu thiếu tiền thối, hai bên có thể thỏa thuận cách xử lý, nhưng giao dịch ngoài app sẽ khó đối soát. Nếu phát sinh tranh chấp, giữ bằng chứng và gửi mã chuyến cho support@foxgo.vn.
 
 ---
-Hỏi: [Khách] Mình bị lừa qua tin nhắn giả danh FoxGo, làm gì?
-Đáp: **Không** đăng nhập link lạ, **không** cung cấp OTP/mật khẩu. FoxGo **không** đòi OTP qua chat cá nhân. Chụp màn hình, chuyển cho **support@foxgo.vn**; nghi ngờ tài khoản bị lộ → **đổi mật khẩu** và bật xác thực (nếu có).
+Hỏi: [Khách] Tôi bị tin nhắn giả danh FoxGo xin OTP?
+Đáp: Không cung cấp OTP, mật khẩu hoặc mã xác minh cho bất kỳ ai. FoxGo không cần bạn đưa OTP qua chat cá nhân. Hãy chụp màn hình, đổi mật khẩu nếu nghi ngờ lộ tài khoản, rồi gửi bằng chứng cho support@foxgo.vn.
 
 ---
-Hỏi: [Khách] Tôi thấy biển số xe khác với app — có lên xe không?
-Đáp: **Không.** Bạn xác minh **biển số + mẫu xe + ảnh đại diện tài xế** trên app. Lệch thông tin → **báo hỗ trợ** ngay (1900-1234 nếu khẩn, kèm vị trí). Đó có thể là dấu hiệu **giả mạo**.
+Hỏi: [Khách] Biển số xe hoặc ảnh tài xế khác với app, có lên xe không?
+Đáp: Không nên lên xe. Bạn cần đối chiếu biển số, loại xe và thông tin tài xế trên app. Nếu không khớp, hủy theo tình huống an toàn và báo support@foxgo.vn kèm mã chuyến/ảnh chụp nếu có.
 
 ---
-Hỏi: [Khách] Mình say rượu, bạn bè đặt xe hộ — có an toàn không?
-Đáp: Người đi xe nên **còn tỉnh đủ** để liên lạc tài xế. Nếu ai đó say nặng: **đi cùng** hoặc **theo dõi chuyến**. Không tranh cãi trên xe; gặp nguy hiểm → gọi **công an 113** và **1900-1234** (nếu được).
+Hỏi: [Khách] Tôi để quên đồ trên xe thì làm gì?
+Đáp: Hiện app chưa có mục riêng "Quên đồ" hay nút liên hệ tài xế sau chuyến được xác nhận trong hệ thống. Cách đúng là gửi support@foxgo.vn hoặc gọi 1900-1234 kèm mã chuyến, mô tả món đồ, thời gian chuyến và số điện thoại liên hệ. FoxGo sẽ hỗ trợ kết nối trong phạm vi có thể, nhưng không đảm bảo chắc chắn tìm lại được đồ.
 
 ---
-Hỏi: [Khách] Du khách không có SIM, chỉ wifi khách sạn — đặt FoxGo được không?
-Đáp: Đặt được nếu **wifi ổn định** trong lúc đặt; nhưng trên đường dễ **mất mạng** khó theo dõi. Nên dùng **SIM/data ngắn ngày** hoặc nhờ **nhân viên khách sạn** hotspot khi đón.
+Hỏi: [Khách] Tôi cần báo cáo quấy rối hoặc nguy hiểm trên chuyến?
+Đáp: Nếu đang nguy hiểm, ưu tiên gọi 113 hoặc nhờ người xung quanh hỗ trợ trước. Sau đó liên hệ 1900-1234 hoặc support@foxgo.vn kèm mã chuyến, thời gian, mô tả sự việc và bằng chứng. Mia không nên nói có nút SOS nếu hệ thống chưa có chức năng đó.
 
 ---
-Hỏi: [Khách] Đón tại sân bay — có gì khác thường?
-Đáp: Chọn điểm đón **đúng cổng/zone** sân bay theo biển hiệu. Giờ cao điểm **đông tài xế và surge** có thể cao; hãy chờ đúng khu vực qui định, tránh **đón trái phép** gây phạt.
+Hỏi: [Khách] Chia sẻ hành trình cho người nhà bằng cách nào?
+Đáp: Trong màn hình chuyến đang diễn ra, dùng nút chia sẻ hành trình nếu app hiển thị. Link chia sẻ là cách để người nhà xem trạng thái công khai của chuyến. Nếu link bị Access denied, có thể API public đang bị chặn quyền hoặc link sai token; hãy thử tạo lại link và báo support/dev kèm mã chuyến.
 
 ---
-Hỏi: [Khách] Phí cầu đường / BOT ai trả?
-Đáp: Tuỳ **thỏa thuận/thông lệ khu vực** và **cách hiển thị trên app**. Nếu không rõ: hỏi tài xế **trước khi đi qua trạm**; giữ **vé/hóa đời** nếu cần minh bạch. Tranh chấp sau chuyến → **support@foxgo.vn**.
+Hỏi: [Khách] Tôi muốn tip thêm cho tài xế?
+Đáp: Hiện không nên khẳng định có tính năng tip điện tử. Nếu app không hiển thị tip, việc đưa thêm tiền mặt là lựa chọn cá nhân của bạn và không bắt buộc. Nên tránh thỏa thuận phức tạp ngoài app vì khó đối soát khi có tranh chấp.
 
 ---
-Hỏi: [Khách] Mình muốn tip thêm cho tài xế — FoxGo có hỗ trợ không?
-Đáp: Nếu app có **tip điện tử** sau chuyến thì dùng tính năng đó (minh bạch nhất). Không có?: tiền mặt **ngoài luồng app** là lựa chọn cá nhân — không bắt buộc.
+Hỏi: [Khách] Mang thú cưng hoặc nhiều hành lý có được không?
+Đáp: Bạn nên chọn loại xe phù hợp và nhắn tài xế ngay sau khi ghép chuyến. Với thú cưng, hãy chuẩn bị túi/lồng và giữ vệ sinh. Nếu tài xế không thể nhận vì an toàn, dị ứng hoặc không đủ chỗ, bạn nên hủy/đặt lại loại xe phù hợp hơn.
 
 ---
-Hỏi: [Khách] Tôi để quên đồ trên xe, làm gì trong 10 phút đầu?
-Đáp: Mở **lịch sử chuyến** → **Liên hệ tài xế** (nếu còn khoảng thời gian phù hợp). Gửi mô tả đồ + ảnh. Nếu tài xế không phản hồi: email **support@foxgo.vn** với **mã chuyến + SĐT**; FoxGo **không đảm bảo** tìm lại được nhưng sẽ **điều phối liên lạc**.
+Hỏi: [Khách] Tôi bị trừ tiền hai lần?
+Đáp: Đừng xử lý với tài xế vì đây thường là vấn đề thanh toán. Bạn kiểm tra lịch sử giao dịch ngân hàng/ví, chụp ảnh hai giao dịch, lấy mã chuyến và gửi support@foxgo.vn. Một số giao dịch có thể là trạng thái giữ tiền tạm thời và cần đối soát.
 
 ---
-Hỏi: [Khách] Tôi cần báo cáo quấy hối / an toàn trên chuyến?
-Đáp: Nếu **đang nguy hiểm**: gọi **113** trước. Sau đó báo FoxGo qua kênh **khẩn** (1900-1234 trong khung giờ) hoặc email **support@foxgo.vn** kèm **mã chuyến + thời gian + bằng chứng**. Bạn có thể **chặn** tài xế sau chuyến nếu app hỗ trợ.
+Hỏi: [Khách] Voucher không áp dụng?
+Đáp: Kiểm tra hạn dùng, điều kiện giá trị tối thiểu, loại xe, khu vực, số lượt dùng và phương thức thanh toán. Nếu bạn đáp ứng đủ nhưng app vẫn không áp dụng, gửi ảnh màn hình voucher, màn hình giá và mã tài khoản cho support@foxgo.vn.
 
 ---
-Hỏi: [Khách] Chia sẻ chuyến cho người nhà để họ theo dõi — làm sao?
-Đáp: Trong màn hình đang chạy chuyến, tìm **chia sẻ / share** (nếu có) để gửi link. Nếu không có: chụp **mã chuyến + biển số + vị trí đơn** gửi Zalo/SMS cho người nhà.
+Hỏi: [Khách] Tôi muốn xóa tài khoản hoặc dữ liệu cá nhân?
+Đáp: Nếu app có mục tài khoản/cài đặt phù hợp thì làm theo đó. Nếu không thấy, gửi yêu cầu qua support@foxgo.vn bằng email/số điện thoại đã đăng ký. Một số dữ liệu giao dịch có thể phải được lưu theo quy định đối soát hoặc pháp lý.
 
 ---
-Hỏi: [Khách] Trẻ em đi FoxGo Bike có cần mũ bảo hiểm?
-Đáp: Bạn tuân thủ **luật giao thông Việt Nam**; trẻ nhỏ đi xe máy cần **được bảo vệ an toàn** theo quy định. Nếu không đủ điều kiện an toàn, nên chọn **ô tô** hoặc phương tiện phù hợp.
-
----
-Hỏi: [Khách] Mình mang thú cưng đi xe FoxGo có được không?
-Đáp: Bạn **xin phép tài xế trước** khi đặt hoặc ngay khi ghép được. Một số tài xế **từ chối** vì dị ứng/an toàn. Bạn cần **lồng/túi/chống bẩn**; nếu tài xế đồng ý thì hãy **giữ vệ sinh** xe.
-
----
-Hỏi: [Khách] Tôi bị trừ tiền hai lần cho một chuyến?
-Đáp: Vào **lịch sử thanh toán** lấy **mã giao dịch** trùng/khác. Đợi **vài phút** xử lý ngân hàng. Vẫn trùng → **support@foxgo.vn** + ảnh sao kê; không tranh luận với tài xế về lỗi ngân hàng.
-
----
-Hỏi: [Khách] Voucher của tôi không ăn — vì sao?
-Đáp: Rà **điều kiện**: hạn dùng, tối thiểu giá trị chuyến, loại xe, khu vực, một lần/ngày. Nếu đủ điều kiện mà lỗi: chụp màn hình → **support@foxgo.vn**.
-
----
-Hỏi: [Khách] Tôi muốn xóa dữ liệu cá nhân / đóng tài khoản?
-Đáp: Gửi yêu cầu **support@foxgo.vn** với email đăng ký; một số dữ liệu **ghi nhận pháp lý/giao dịch** có thể phải **lưu theo quy định** dù đóng tài khoản.
-
----
-Hỏi: [Khách] App báo “tài khoản bị hạn chế đặt xe” — làm gì?
-Đáp: Đọc **thông báo lỗi** (nợ phí hủy, vi phạm, xác minh). Khi không rõ: **support@foxgo.vn** với SĐT tài khoản — tránh tạo **nhiều nick** lách hạn chế.
-
----
-Hỏi: [Khách] Mình đổi số điện thoại, sợ mất lịch sử chuyến?
-Đáp: Lịch sử thường gắn **ID tài khoản**, không chỉ SĐT — nhưng quy trình **đổi SĐT** phải làm trong **Auth/bảo mật** theo app. Nếu bị vướng xác minh → **support@foxgo.vn**.
+Hỏi: [Khách] App báo tài khoản bị hạn chế đặt xe?
+Đáp: Bạn đọc kỹ thông báo lỗi trước. Nguyên nhân có thể liên quan xác minh, thanh toán, hành vi hủy hoặc kiểm soát rủi ro. Nếu không rõ, gửi số điện thoại tài khoản và ảnh màn hình lỗi cho support@foxgo.vn; không nên tạo nhiều tài khoản để lách hạn chế.
 
 ---
 Hỏi: [Khách] Mia có xem được chuyến hiện tại của tôi không?
-Đáp: **Không.** Mia chỉ có **kho tri thức văn bản**; không truy cập **trạng thái chuyến thật** của bạn trừ khi tính năng riêng tích hợp (hiện không mô tả). Vấn đề live → mục **Chuyến của tôi** hoặc hotline **1900-1234**.
+Đáp: Không. Mia là chatbot dựa trên kho tri thức, không có quyền xem trạng thái chuyến riêng của bạn. Với vấn đề live như tài xế chưa đến, trạng thái chuyến, thanh toán đang kẹt, hãy kiểm tra màn hình chuyến hoặc liên hệ hỗ trợ kèm mã chuyến.
 
 ---
-Hỏi: [Khách] Tôi hỏi Mia để biết **giá A→B ngay lúc này** được không?
-Đáp: Mia **không** thay máy tính giá. Bạn mở app → chọn điểm đón/đến để **Pricing Service** tính (lộ trình + surge + loại xe). Mia chỉ giải thích **cách tính** hoặc **ví dụ tham khảo** trong tài liệu.
+Hỏi: [Khách] Tôi hỏi Mia giá chính xác từ A đến B được không?
+Đáp: Mia không thay màn hình tính giá thật. Bạn cần nhập điểm đón, điểm đến và loại xe trên app để Pricing Service tính theo lộ trình, surge và điều kiện hiện tại. Mia chỉ có thể giải thích nguyên tắc tính hoặc lý do giá thay đổi.
 
 ---
-Hỏi: [Khách] Chế độ trợ năng — chữ nhỏ, kém thị lực?
-Đáp: Dùng **phóng to hệ thống** (iOS/Android) + **Dark mode** nếu hỗ trợ. Chọn điểm bằng **ô tìm kiếm** thay vì nhìn bản đồ chi tiết; nhờ người thân bấm hộ nếu cấp bách.
+Hỏi: [Khách] Tôi muốn hủy nhưng sợ mất phí?
+Đáp: Hãy đọc thông báo trên app tại thời điểm hủy, vì phí hủy phụ thuộc trạng thái chuyến và chính sách hiện hành. Mia không nên bịa mức phí cố định. Nếu bạn thấy bị trừ không hợp lý, gửi mã chuyến và ảnh màn hình cho support@foxgo.vn.
 
 ---
-Hỏi: [Khách] Mình cần đi với xe lăn / nhiều hành lý?
-Đáp: Chọn **ô tô 7 chỗ** hoặc xe có **cốp lớn**; ghi chú trong **ghi chú chuyến** (nếu có) để tài xế chủ động từ chối sớm nếu không phù hợp — tránh mất thời gian.
+Hỏi: [Khách] App đứng hình hoặc chuyến cập nhật chậm?
+Đáp: Thử kiểm tra mạng, tắt mở lại app và chờ vài giây để WebSocket đồng bộ trạng thái. Nếu tài xế đã chuyển trạng thái nhưng app khách vẫn chậm lâu, đó có thể là lỗi realtime hoặc client chưa nhận event; gửi mã chuyến, thời điểm và ảnh màn hình để đội kỹ thuật kiểm tra.
 
 ---
-Hỏi: [Khách] Tại sao surge hiển thị cao mà đường vắng?
-Đáp: Surge phản ánh **cung–cầu vùng** + **dự báo AI** + **Redis multiplier** — không chỉ “đường trước mặt”. Thử **đợi vài phút** hoặc **dời điểm đón** ra khu ít nóng hơn (nếu tiện).
+Hỏi: [Khách] Tôi không thấy tài xế trên bản đồ dù app báo đã nhận chuyến?
+Đáp: Thử refresh màn hình, kiểm tra mạng và chờ GPS cập nhật. Nếu vẫn không thấy, dùng chat/gọi trong màn hình chuyến đang diễn ra để xác nhận tài xế. Không nên tự ý lên xe nếu thông tin xe/tài xế không khớp.
 
 ---
-Hỏi: [Khách] Tôi muốn hủy nhưng sợ mất phí — quy tắc thực tế là gì?
-Đáp: Thường **chưa có tài xế** hoặc tài xế **còn xa** → ít phí hơn **đã đến gần/đã bắt đầu**. Đọc pop-up **phí hủy ước tính** trước khi bấm. Chi tiết thời điểm → xem mục **Hủy chuyến** trong FAQ app hoặc **support@foxgo.vn**.
+Hỏi: [Khách] Tôi muốn sửa đánh giá sau chuyến?
+Đáp: Nếu app không hiển thị chức năng sửa đánh giá thì Mia không nên hứa có thể sửa. Bạn có thể gửi support@foxgo.vn kèm mã chuyến và nội dung muốn bổ sung; hỗ trợ sẽ xem có thể ghi nhận hoặc xử lý theo chính sách không.
 
 ---
-Hỏi: [Khách] Khách quốc tế không nói tiếng Việt — ứng xử thế nào?
-Đáp: Dùng **Google Translate** hai chiều; chọn địa chỉ bằng **tên tiếng Anh** trên bản đồ. Giao tiếp tối thiểu: **điểm đón/điểm đến trên app** là nguồn chung.
+Hỏi: [Khách] Khuyến mãi quảng cáo có nhưng app không thấy?
+Đáp: Khuyến mãi có thể giới hạn theo thời gian, khu vực, nhóm người dùng, loại xe hoặc điều kiện thanh toán. Kiểm tra mục voucher trong app và điều kiện mã. Nếu nghi lỗi, gửi ảnh quảng cáo, ảnh mục voucher và số điện thoại tài khoản cho support@foxgo.vn.
 
 ---
-Hỏi: [Khách] Mình cần FoxGo cam kết “chắc chắn có xe” lúc 2 giờ sáng?
-Đáp: Không có dịch vụ nào **đảm bảo 100%** mọi khu mọi lúc. Bạn có thể **thử đặt** sớm hơn hoặc **chuẩn bị phương án dự phòng**. Nếu không ghép được, xem chính sách **hoàn/hủy**.
+Hỏi: [Khách] Tôi cần xe chắc chắn lúc 2 giờ sáng?
+Đáp: FoxGo chỉ có thể ghép theo tài xế đang online và vùng phục vụ, không nên cam kết chắc chắn 100%. Bạn có thể thử đặt sớm hơn, chọn loại xe dễ ghép hơn hoặc chuẩn bị phương án dự phòng nếu khu vực ít tài xế.
 
 ---
-Hỏi: [Khách] Tôi không hài lòng sao đánh giá 1 sao — có bị phạt không?
-Đáp: Đánh giá **trung thực + mô tả** giúp vận hành. **Vu khống** có thể bị xử lý theo chính sách. Bạn có thể **sửa nhận xét** trong thời hạn (nếu app hỗ trợ) trước khi public.
-
----
-Hỏi: [Khách] Mình có nên cho SĐT riêng cho tài xế?
-Đáp: **Ưu tiên chat trong app** để bảo vệ quyền riêng tư. Chỉ đổi SĐT khi **cần thiết**; cảnh giác **lạm dụng**.
-
----
-Hỏi: [Khách] PIN yếu, sợ hết pin giữa chuyến?
-Đáp: Sạc **trước khi đặt**, bật **chế độ tiết kiệm** sau khi đã ghép tài xế ổn định; ghi nhớ **biển số** ra giấy phòng khi tắt màn hình.
-
----
-Hỏi: [Khách] Chuyến hoàn tất nhưng app vẫn “đang diễn ra”?
-Đáp: Kéo **refresh**, tắt mở app. Nếu kẹt trạng thái ảnh hưởng tiền → **support@foxgo.vn** + mã chuyến.
-
----
-Hỏi: [Khách] FoxGo có thu phí nền tảng ẩn ngoài màn hình không?
-Đáp: Giá bạn **xác nhận trước chuyến** là cơ sở minh bạch; phát sinh (cầu đường, chờ lâu, đổi lộ trình) phải **rõ thoả thuận**. Nghi **phí ẩn** → khiếu nại **support@foxgo.vn**.
-
----
-Hỏi: [Khách] Tôi thấy khuyến mãi “–50%” trên quảng cáo — app không có?
-Đáp: Quảng cáo có thể **điều kiện khu vực/thời gian/user mới**. Kiểm tra **trung tâm voucher**, hạn dùng, và đừng tin **tin nhắn lạ**.
-
----
-Hỏi: [Khách] Tranh chấp với tài xế về tiền mặt — ai phân xử?
-Đáp: **support@foxgo.vn** với mô tả + **mã chuyến**; FoxGo xem log hệ thống **trong phạm vi có**. Giao dịch **ngoài app** khó đối soát.
-
----
-Hỏi: [Khách] Mình muốn học “mẹo đặt xe rẻ hơn”?
-Đáp: Tránh **giờ surge** nếu linh hoạt; chọn **xe máy** khi không cần ô tô; so sánh **voucher**; đặt từ vị trí **dễ ghép tài xế** (không quá ngõ hẹp) để giảm chờ và hủy vòng.
-
----
-Hỏi: [Khách] Khi nào **không** nên hỏi Mia mà gọi người thật ngay?
-Đáp: **An toàn cá nhân đang bị đe dọa**, **trẻ em bị bỏ quên**, **mất tiền lớn bất thường**, **lừa đảo có OTP** — gọi **113/1900-1234** (trong giờ) và làm theo hướng dẫn nhân viên.
-
----
-Hỏi: [Khách] Ứng dụng khách FoxGo gọi API qua đâu?
-Đáp: Traffic đi qua **API Gateway** (HTTP/WebSocket), không gọi thẳng **từng microservice** từ điện thoại. Chi tiết cổng dev/prod xem tài liệu kỹ thuật nội bộ / file **00_system_overview** trong kho tri thức.
+Hỏi: [Khách] Khi nào nên gọi người thật thay vì hỏi Mia?
+Đáp: Khi có nguy hiểm cá nhân, tai nạn, mất tiền lớn, nghi lừa đảo OTP, trẻ em/người yếu thế gặp rủi ro hoặc tài khoản bị chiếm quyền. Những trường hợp đó cần 113/115 khi khẩn cấp và hotline/email hỗ trợ của FoxGo, không chờ chatbot trả lời dài.

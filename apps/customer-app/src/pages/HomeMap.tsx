@@ -22,7 +22,7 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { setPickupLocation, setDropoffLocation, setCurrentRide, setDriver, clearRide } from '../store/ride.slice';
 import { setCurrentLocation } from '../store/location.slice';
 import RideBookingFlow from '../components/booking/RideBookingFlow';
-import { getCurrentLocation, hasPromptedForLocationPermission, reverseGeocode } from '../utils/map.utils';
+import { getCurrentLocation, reverseGeocode } from '../utils/map.utils';
 import { driverApi } from '../api/driver.api';
 import { rideApi } from '../api/ride.api';
 import { BookingMap, BookingMapLocation, NearbyDriver, RouteSummary } from '../features/booking';
@@ -151,7 +151,7 @@ const HomeMap: React.FC = () => {
     }
     locationBootstrappedRef.current = true;
 
-    void syncCurrentLocation(true, true, !hasPromptedForLocationPermission());
+    void syncCurrentLocation(true, true, true);
   }, [syncCurrentLocation]);
 
   useEffect(() => {

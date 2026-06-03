@@ -1,82 +1,65 @@
-TIÊU ĐỀ: Thanh toán và hoàn tiền FoxGo
-DANH MỤC: thanh toán, MoMo, VNPay, tiền mặt, ví điện tử, payment, trả tiền, hoàn tiền, refund, bị trừ tiền, thanh toán lỗi, đổi phương thức thanh toán, hóa đơn, biên lai, giá cước, phụ phí, ví FoxGo, thanh toán thất bại, tiền về bao giờ
+TIÊU ĐỀ: Thanh toán, biên lai và hoàn tiền FoxGo
+DANH MỤC: thanh toán, MoMo, VNPay, tiền mặt, payment, online payment, QR, deeplink, callback, hoàn tiền, refund, biên lai, lịch sử thanh toán, retry payment, voucher payment
 
-FoxGo hỗ trợ 3 cách thanh toán: tiền mặt, ví MoMo, và VNPay. Bạn chọn ở bước xác nhận khi đặt xe. Với tiền mặt thì đơn giản — trả trực tiếp cho tài xế sau chuyến, tài xế thối lại tiền thừa. Với MoMo và VNPay thì thanh toán diễn ra qua cổng điện tử, chuyến chỉ được tạo sau khi thanh toán thành công.
-
-Điều quan trọng với thanh toán online: bạn phải hoàn tất trong 15 phút, quá thời gian thì chuyến tự hủy. Lịch sử giao dịch xem trong mục "Ví của tôi" trong app.
+FoxGo hiện hỗ trợ thanh toán tiền mặt, MoMo và VNPay trong customer app. Thanh toán online có màn `/payment/online/:rideId`, tạo URL/deeplink/QR qua Payment Service, sau đó quay về `/payment/callback`. Lịch sử chuyến và màn theo dõi chuyến hiển thị thông tin payment nếu backend có dữ liệu. Không thấy chức năng retry payment theo paymentId, tự gửi biên lai email, chia hóa đơn tự động, hay xuất hóa đơn VAT trong app.
 
 ---
-Hỏi: Tôi muốn đổi phương thức thanh toán sau khi đặt xe được không?
-Đáp: Sau khi xác nhận đặt xe rồi thì không đổi được nữa bạn ơi. Cách duy nhất là hủy chuyến (miễn phí nếu tài xế chưa nhận) rồi đặt lại với phương thức khác.
+Hỏi: FoxGo hỗ trợ những phương thức thanh toán nào?
+Đáp: Hiện app hỗ trợ CASH, MOMO và VNPAY. Tiền mặt trả trực tiếp cho tài xế. MoMo/VNPay đi qua cổng thanh toán online; app có thể mở payUrl/deeplink/QR và nhận callback để cập nhật trạng thái.
 
 ---
-Hỏi: Thanh toán MoMo hoặc VNPay bị lỗi thì sao?
-Đáp: Nếu thanh toán thất bại, chuyến xe không được tạo. Nếu tiền đã bị trừ khỏi ví/tài khoản thì sẽ tự hoàn về trong 3–5 ngày làm việc — đây là quy trình chuẩn của cổng thanh toán, không phải FoxGo giữ tiền. Bạn có thể thử lại hoặc chọn phương thức khác.
+Hỏi: Thanh toán online trong app diễn ra thế nào?
+Đáp: Khi chuyến chọn MoMo hoặc VNPay, customer app đi tới màn thanh toán online, gọi API tạo giao dịch (`/payments/momo/create` hoặc `/payments/vnpay/create`), nhận paymentUrl/payUrl/deeplink/QR nếu có, rồi người dùng hoàn tất ở cổng thanh toán. Sau khi quay lại app, callback kiểm tra kết quả và màn ride/payment cập nhật trạng thái.
 
 ---
-Hỏi: Tôi bị trừ tiền nhưng không có chuyến nào được tạo?
-Đáp: Trường hợp này rất hiếm, thường do lỗi mạng giữa bước xác nhận. Bạn chờ khoảng 10–15 phút xem app có cập nhật không. Nếu vẫn không thấy chuyến, liên hệ support@foxgo.vn với mã giao dịch MoMo/VNPay và số điện thoại — đội kỹ thuật sẽ kiểm tra và hoàn tiền trong 3–5 ngày làm việc.
+Hỏi: Tôi thanh toán MoMo/VNPay lỗi thì làm gì?
+Đáp: Kiểm tra mạng, số dư/tài khoản, thử quay lại màn thanh toán của chuyến nếu app còn hiển thị nút tiếp tục thanh toán. Nếu tiền đã bị trừ nhưng app chưa cập nhật, chờ một lúc rồi kiểm tra lại lịch sử chuyến/thanh toán. Nếu vẫn lỗi, gửi support@foxgo.vn mã chuyến, mã giao dịch, ảnh màn hình và thời gian thanh toán.
 
 ---
-Hỏi: Hoàn tiền mất bao lâu?
-Đáp: Tùy trường hợp bạn nhé. Hoàn tiền tự động (lỗi thanh toán, không tìm được tài xế): 3–5 ngày làm việc. Hoàn tiền do khiếu nại, hủy chuyến: 5–7 ngày làm việc sau khi FoxGo xử lý xong. Tiền về đúng phương thức đã thanh toán — MoMo về ví MoMo, VNPay về tài khoản ngân hàng.
+Hỏi: App có nút retry payment không?
+Đáp: Backend hiện chưa có endpoint retry payment theo paymentId. Code customer ghi rõ `retryPayment` chưa được hỗ trợ. Nếu thanh toán thất bại, dùng lại luồng thanh toán của ride nếu UI còn cho phép, hoặc liên hệ support@foxgo.vn.
+
+---
+Hỏi: Tôi bị trừ tiền nhưng không thấy chuyến?
+Đáp: Đây là tình huống cần đối soát. Không hứa chắc thời gian hoàn nếu chưa kiểm tra giao dịch. Hãy gửi support@foxgo.vn số điện thoại tài khoản, mã giao dịch MoMo/VNPay, thời gian, số tiền và ảnh màn hình. Đội kỹ thuật cần kiểm tra Payment Service và trạng thái ride/payment.
+
+---
+Hỏi: Hoàn tiền online khi hủy chuyến như thế nào?
+Đáp: Nếu chuyến online bị hủy và backend tạo refund, customer app sẽ hiển thị trạng thái REFUNDED/refund trong RideTracking hoặc RideHistory. UI đang mô tả ước tính: MoMo có thể từ vài phút đến khoảng 1 giờ; VNPay thường qua ngân hàng nên có thể 3-5 ngày làm việc. Đây là ước tính hiển thị trong app, không phải cam kết tuyệt đối cho mọi giao dịch.
+
+---
+Hỏi: Hoàn tiền về đâu?
+Đáp: Thông thường hoàn về nguồn thanh toán ban đầu: MoMo về ví MoMo, VNPay về kênh ngân hàng/thẻ đã thanh toán. Nếu thông tin refund trong app có mã giao dịch/refund id, giữ lại để đối soát khi cần hỗ trợ.
+
+---
+Hỏi: Tôi xem trạng thái thanh toán ở đâu?
+Đáp: Màn RideTracking có phần receipt/hoá đơn chuyến, hiển thị phương thức thanh toán, trạng thái payment, số tiền, voucher/discount nếu có, transactionId nếu backend trả. RideHistory cũng nạp payment history để gắn trạng thái thanh toán/hoàn tiền vào từng chuyến.
+
+---
+Hỏi: Xem biên lai chuyến xe ở đâu?
+Đáp: Vào lịch sử chuyến hoặc màn chi tiết chuyến để xem thông tin cước, quãng đường, phương thức thanh toán, mã giao dịch nếu có. Không thấy chức năng tự gửi biên lai email trong code. Nếu cần giấy tờ/hóa đơn chính thức cho công ty, email support@foxgo.vn kèm mã chuyến và thông tin xuất hóa đơn.
+
+---
+Hỏi: App có xuất hóa đơn VAT không?
+Đáp: Chưa thấy route/nút xuất hóa đơn VAT trong customer app. Mia không nên nói có nút "Yêu cầu hóa đơn" trong app. Cách đúng là liên hệ support@foxgo.vn với mã chuyến, tên công ty, mã số thuế và email nhận hóa đơn nếu FoxGo hỗ trợ thủ công.
 
 ---
 Hỏi: Tài xế yêu cầu trả thêm tiền ngoài app thì sao?
-Đáp: FoxGo tuyệt đối không cho phép điều này. Giá hiển thị trên app là giá cuối cùng, tài xế không được thu thêm bất kỳ khoản nào. Nếu gặp tình huống này, bạn từ chối và báo cáo ngay qua "Lịch sử chuyến" → chọn chuyến → "Báo cáo vấn đề". FoxGo sẽ xử lý nghiêm.
+Đáp: Đối chiếu số tiền app hiển thị. Nếu tài xế yêu cầu khoản ngoài app không rõ lý do, hãy từ chối khi an toàn và liên hệ support@foxgo.vn/hotline kèm mã chuyến, số tiền, thời gian và bằng chứng. Không hứa chắc hoàn tiền hoặc xử lý kỷ luật nếu chưa có kết quả kiểm tra.
 
 ---
-Hỏi: Thanh toán MoMo thì cần điều kiện gì?
-Đáp: Bạn cần có tài khoản MoMo đã xác minh số điện thoại và đủ số dư trong ví. Khi thanh toán, app chuyển sang MoMo để xác nhận rồi quay về FoxGo — tất cả tự động, bạn chỉ cần xác nhận trên MoMo là xong.
-
----
-Hỏi: VNPay thanh toán như thế nào?
-Đáp: VNPay hỗ trợ hầu hết các ngân hàng tại Việt Nam. Bạn có thể quét QR bằng app ngân hàng hoặc dùng thẻ ATM/Visa/Mastercard liên kết VNPay. Sau khi thanh toán thành công, chuyến được tạo tự động.
-
----
-Hỏi: Tiền mặt thì tài xế có thối tiền không?
-Đáp: Có bạn nhé. Khi thanh toán tiền mặt, tài xế sẽ thối lại tiền thừa cho bạn. Giá trên app là giá chính xác, bạn cứ đưa và tài xế thối lại — không có thu thêm gì.
+Hỏi: Tiền mặt hoạt động như thế nào?
+Đáp: Với CASH, khách trả trực tiếp cho tài xế theo số tiền app hiển thị khi chuyến kết thúc. Nếu phát sinh tranh chấp tiền mặt, nên lưu mã chuyến, số tiền đã trả và liên hệ support/driver-support để đối soát.
 
 ---
 Hỏi: Tôi quên trả tiền mặt cho tài xế thì sao?
-Đáp: Nếu bạn quên trả, tài xế có thể liên hệ FoxGo để xử lý. Bạn nên chủ động liên hệ tài xế qua lịch sử chuyến hoặc email support@foxgo.vn để giải quyết. Đây là trường hợp hiếm gặp nhưng cứ liên hệ hỗ trợ — đội mình sẽ giúp.
+Đáp: Chủ động liên hệ support@foxgo.vn kèm mã chuyến và số điện thoại tài khoản để được hướng dẫn. Không nên tự ý chuyển khoản ngoài app nếu chưa xác minh đúng người nhận.
 
 ---
-Hỏi: Xem hóa đơn, biên lai chuyến xe ở đâu?
-Đáp: Vào "Lịch sử chuyến" → chọn chuyến muốn xem → thấy đầy đủ thông tin: quãng đường, giá cước, phương thức thanh toán. Nếu cần file hóa đơn chính thức để thanh toán công tác phí, liên hệ support@foxgo.vn để yêu cầu.
+Hỏi: Giá trên app có thể khác giá cuối không?
+Đáp: Giá trước khi đặt là giá ước tính/giá hiển thị theo dữ liệu lúc đặt, loại xe, lộ trình, voucher và surge. Nếu lộ trình hoặc trạng thái thanh toán/hủy thay đổi, thông tin cuối cùng nên xem trong chi tiết chuyến/payment. Nếu chênh lệch bất thường, gửi support kèm mã chuyến và ảnh màn hình.
 
 ---
-Hỏi: Giá trên app có khớp với giá thực tế trả không?
-Đáp: Hoàn toàn khớp bạn ơi! Giá hiển thị khi xác nhận đặt xe là giá cuối cùng bạn trả. FoxGo không có phụ phí ẩn. Trường hợp duy nhất giá có thể thay đổi là nếu lộ trình thay đổi đáng kể trong chuyến.
+Hỏi: Có chia hóa đơn tự động không?
+Đáp: Chưa thấy tính năng chia hóa đơn tự động. Người dùng có thể tự chia ngoài app và dùng thông tin chuyến/payment trong lịch sử làm bằng chứng tham khảo.
 
----
-Hỏi: MoMo báo lỗi không thể thanh toán thì xử lý sao?
-Đáp: Thử lần lượt: (1) Kiểm tra số dư MoMo có đủ không. (2) Kiểm tra kết nối mạng. (3) Đóng app MoMo rồi thử lại. (4) Nếu vẫn lỗi, chọn VNPay hoặc tiền mặt thay thế. Nếu tiền đã bị trừ mà chuyến không tạo, liên hệ support@foxgo.vn.
-
----
-Hỏi: Tôi trả tiền rồi nhưng app vẫn báo chưa thanh toán?
-Đáp: Thử refresh lại app (kéo màn hình xuống để làm mới hoặc tắt và mở lại). Đôi khi hệ thống cần 30–60 giây để cập nhật. Nếu sau 5 phút vẫn hiện "chưa thanh toán" mà ví/ngân hàng đã bị trừ tiền, liên hệ support@foxgo.vn kèm mã giao dịch.
-
----
-Hỏi: Tiền hoàn về ví MoMo hay về ngân hàng?
-Đáp: Tiền hoàn về đúng nguồn bạn đã thanh toán: thanh toán qua MoMo thì hoàn về ví MoMo, thanh toán qua VNPay thì hoàn về tài khoản ngân hàng liên kết. Không hoàn chéo sang phương thức khác được.
-
----
-Hỏi: Tôi có thể thanh toán bằng thẻ tín dụng không?
-Đáp: Thẻ tín dụng Visa/Mastercard được hỗ trợ qua cổng VNPay bạn nhé. Khi chọn VNPay, bạn có thể chọn thanh toán bằng thẻ quốc tế thay vì QR code ngân hàng.
-
----
-Hỏi: Tôi đã hủy chuyến, tiền hoàn về chưa?
-Đáp: Nếu bạn hủy chuyến và đã thanh toán online, tiền sẽ được hoàn trong 3–5 ngày làm việc. Kiểm tra trong "Lịch sử chuyến" → chọn chuyến đã hủy để xem trạng thái hoàn tiền. Nếu sau 7 ngày vẫn chưa thấy tiền, liên hệ support@foxgo.vn kèm mã giao dịch.
-
----
-Hỏi: Giá FoxGo tính như thế nào?
-Đáp: Giá cước = phí mở cửa + phí theo km + phí theo thời gian chờ (nếu có). Giá ước tính hiển thị trước khi đặt đã bao gồm tất cả. Nếu đang giờ cao điểm, hệ số surge được áp dụng và hiển thị rõ trong app trước khi bạn xác nhận.
-
----
-Hỏi: Đặt xe qua app có an toàn về thông tin thanh toán không?
-Đáp: Hoàn toàn an toàn! FoxGo không lưu trực tiếp thông tin thẻ hay tài khoản ngân hàng của bạn. Tất cả giao dịch đều qua cổng thanh toán bảo mật của MoMo và VNPay — hai đơn vị được cấp phép và kiểm soát bởi Ngân hàng Nhà nước Việt Nam.
-
----
-Hỏi: Tôi muốn chia hóa đơn cho bạn bè cùng chuyến thì sao?
-Đáp: App hiện chưa có tính năng chia hóa đơn tự động bạn ơi. Bạn có thể tự tính và chia tay nhau ngoài app. Nếu cần bằng chứng để chia, vào "Lịch sử chuyến" chụp màn hình thông tin chuyến là được.

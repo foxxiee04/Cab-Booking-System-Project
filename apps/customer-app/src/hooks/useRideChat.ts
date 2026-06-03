@@ -82,7 +82,7 @@ export function useRideChat(
 
     const socket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
       upgrade: true,
     });
     socketRef.current = socket;

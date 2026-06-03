@@ -83,7 +83,7 @@ class DriverSocketService {
 
     this.socket = io(SOCKET_URL, {
       auth: { token: accessToken },
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
       upgrade: true,
       reconnection: true,
       reconnectionDelay: 1000,
