@@ -254,6 +254,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     strategy:
       fail-fast: false
+      max-parallel: 3
       matrix:
         include:
           - service: bootstrap-runner
@@ -366,17 +367,20 @@ jobs:
         run: |
           set -e
 
-          for attempt in 1 2 3 4 5; do
+          for attempt in 1 2 3 4 5 6 7 8; do
             if echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin; then
               exit 0
             fi
 
+            if [ "$attempt" = "8" ]; then
+              echo "::error::Docker Hub login failed after 8 attempts."
+              exit 1
+            fi
+
             wait_seconds=$((attempt * 20))
-            echo "::warning::Docker Hub login failed (attempt ${attempt}/5), retrying in ${wait_seconds}s..."
+            echo "::warning::Docker Hub login failed (attempt ${attempt}/8), retrying in ${wait_seconds}s..."
             sleep "$wait_seconds"
           done
-
-          echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
 
       - name: Set up Docker Buildx
         env:
@@ -562,18 +566,18 @@ jobs:
             # Authenticate to Docker Hub (prevents anonymous pull rate-limits
             # and lets --resolve-image always read digests for postgres etc.).
             if [ -n "$DOCKERHUB_TOKEN" ] && [ -n "$DOCKERHUB_USERNAME" ]; then
-              for attempt in 1 2 3 4 5; do
+              for attempt in 1 2 3 4 5 6 7 8; do
                 if echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin; then
                   break
                 fi
 
-                if [ "$attempt" = "5" ]; then
-                  echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
-                  break
+                if [ "$attempt" = "8" ]; then
+                  echo "Docker Hub login failed after 8 attempts."
+                  exit 1
                 fi
 
                 wait_seconds=$((attempt * 20))
-                echo "Docker Hub login failed (attempt ${attempt}/5), retrying in ${wait_seconds}s..."
+                echo "Docker Hub login failed (attempt ${attempt}/8), retrying in ${wait_seconds}s..."
                 sleep "$wait_seconds"
               done
             else
