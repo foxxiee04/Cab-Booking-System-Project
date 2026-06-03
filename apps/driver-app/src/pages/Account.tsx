@@ -25,6 +25,7 @@ import {
   NotificationsRounded,
   PersonRounded,
   ShieldRounded,
+  StarRounded,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
@@ -329,10 +330,20 @@ secondary={profile?.licensePlate ? `Biển số ${profile.licensePlate}` : 'Bổ
                   secondary={profile?.vehicleType ? `Loại xe: ${getVehicleTypeLabel(profile.vehicleType)}` : 'Theo dõi trạng thái hồ sơ và ví tài xế.'}
                 />
               </ListItem>
+              <ListItem disableGutters>
+                <ListItemIcon><StarRounded color="warning" /></ListItemIcon>
+                <ListItemText
+                  primary="Đánh giá của khách hàng"
+                  secondary={profile?.reviewCount ? `${profile.reviewCount} lượt đánh giá, trung bình ${profile.rating.toFixed(1)} sao` : 'Xem nhận xét sau từng chuyến xe.'}
+                />
+              </ListItem>
             </List>
-            <Stack direction="row" justifyContent="center" sx={{ mt: 1.5 }}>
+            <Stack direction="row" justifyContent="center" spacing={1.25} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
               <Button variant="outlined" sx={{ borderRadius: 3, minWidth: 220 }} onClick={() => navigate('/profile')}>
                 Mở hồ sơ tài xế
+              </Button>
+              <Button variant="contained" sx={{ borderRadius: 3, minWidth: 220 }} onClick={() => navigate('/reviews')}>
+                Xem đánh giá
               </Button>
             </Stack>
           </CardContent>

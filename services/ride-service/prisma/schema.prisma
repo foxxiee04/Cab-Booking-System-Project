@@ -75,11 +75,28 @@ model Ride {
   // Relations
   transitions   RideStateTransition[]
   messages      RideChatMessage[]
+  shares        RideShare[]
   
   @@index([customerId, createdAt(sort: Desc)])
   @@index([driverId, createdAt(sort: Desc)])
   @@index([status])
   @@index([voucherCode])
+}
+
+model RideShare {
+  id          String   @id @default(uuid())
+  rideId      String
+  ride        Ride     @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  tokenHash   String   @unique
+  createdById String
+  createdByRole String
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([rideId, createdAt(sort: Desc)])
+  @@index([expiresAt])
 }
 
 model RideChatMessage {

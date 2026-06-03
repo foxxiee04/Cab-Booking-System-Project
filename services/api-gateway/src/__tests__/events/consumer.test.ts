@@ -25,6 +25,7 @@ describe('EventConsumer', () => {
     mockSocketServer = {
       emitToCustomer: jest.fn(),
       emitToDriver: jest.fn(),
+      emitToPublicRide: jest.fn(),
       emitToDrivers: jest.fn(),
       isUserOnline: jest.fn(),
       isUserOnlineRedis: jest.fn(),

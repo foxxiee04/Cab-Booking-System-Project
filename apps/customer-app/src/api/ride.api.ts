@@ -26,6 +26,24 @@ export interface RidesResponse {
   };
 }
 
+export interface RideShareResponse {
+  success: boolean;
+  data: {
+    token: string;
+    expiresAt: string;
+    ride: Ride;
+  };
+}
+
+export interface PublicRideShareResponse {
+  success: boolean;
+  data: {
+    rideId: string;
+    expiresAt: string;
+    ride: Ride;
+  };
+}
+
 const normalizeDistanceMeters = (distance: unknown, fallbackDistance?: unknown): number | null => {
   const raw = typeof distance === 'number' && Number.isFinite(distance)
     ? distance
@@ -197,5 +215,22 @@ export const rideApi = {
     const payload = response.data?.data || response.data;
     const ride = await hydrateRideDriver(normalizeRide(payload.ride));
     return { ...response.data, data: { ride } };
+  },
+
+  createRideShare: async (rideId: string): Promise<RideShareResponse> => {
+    const response = await axiosInstance.post(`/rides/${rideId}/share`);
+    return response.data;
+  },
+
+  getPublicRideShare: async (token: string): Promise<PublicRideShareResponse> => {
+    const response = await axiosInstance.get(`/public/ride-shares/${token}`);
+    const payload = response.data?.data || response.data;
+    return {
+      ...response.data,
+      data: {
+        ...payload,
+        ride: normalizeRide(payload.ride),
+      },
+    };
   },
 };

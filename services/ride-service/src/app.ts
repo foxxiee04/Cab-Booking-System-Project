@@ -59,6 +59,26 @@ export function createApp({ rideService, getReadiness }: RideAppOptions) {
 
   app.use('/internal', requireInternalServiceAuth);
 
+  app.get('/internal/ride-shares/:token', async (req, res) => {
+    try {
+      const share = await rideService.getRideShareByToken(req.params.token);
+      return res.json({
+        success: true,
+        data: {
+          rideId: share.rideId,
+          expiresAt: share.expiresAt,
+          ride: share.ride,
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Share link is invalid or expired';
+      return res.status(404).json({
+        success: false,
+        error: { code: 'SHARE_NOT_FOUND', message },
+      });
+    }
+  });
+
   app.get('/internal/rides/:rideId', async (req, res) => {
     try {
       const ride = await rideService.getRideById(req.params.rideId);

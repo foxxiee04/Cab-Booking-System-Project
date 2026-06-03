@@ -78,13 +78,13 @@ const RideDetailDialog: React.FC<{ ride: Ride | null; onClose: () => void }> = (
 
   const customerName = ride.customer
     ? `${ride.customer.firstName} ${ride.customer.lastName}`.trim()
-    : ride.customerId?.slice(0, 8).toUpperCase();
+    : 'Chưa có tên khách hàng';
 
   const driverName = ride.driver
     ? `${ride.driver.firstName} ${ride.driver.lastName}`.trim()
     : ride.driverId
-      ? ride.driverId.slice(0, 8).toUpperCase()
-      : '—';
+      ? 'Chưa có tên tài xế'
+      : 'Chưa có tài xế';
 
   const vehicleInfo = ride.driver
     ? `${ride.driver.vehicleMake || ''} ${ride.driver.vehicleModel || ''} · ${ride.driver.licensePlate || ''}`.trim()
@@ -265,7 +265,7 @@ const Rides: React.FC = () => {
     return rows.filter((ride) => {
       const customerName = `${ride.customer?.firstName || ''} ${ride.customer?.lastName || ''}`.trim();
       const driverName = `${ride.driver?.firstName || ''} ${ride.driver?.lastName || ''}`.trim();
-      return [ride.id, customerName, driverName, ride.customerId, ride.driverId]
+      return [ride.id, customerName, driverName]
         .filter(Boolean).join(' ').toLowerCase().includes(kw);
     });
   }, [keyword, rows]);
@@ -317,11 +317,9 @@ const Rides: React.FC = () => {
         return name ? (
           <Typography variant="body2" fontWeight={600}>{name}</Typography>
         ) : (
-          <Tooltip title={params.row.customerId} placement="top">
-            <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-              {params.row.customerId?.slice(0, 8).toUpperCase() || '—'}
-            </Typography>
-          </Tooltip>
+          <Typography variant="caption" color="text.secondary">
+            Chưa có tên
+          </Typography>
         );
       },
     },
@@ -338,11 +336,9 @@ const Rides: React.FC = () => {
         return name ? (
           <Typography variant="body2">{name}</Typography>
         ) : (
-          <Tooltip title={params.row.driverId} placement="top">
-            <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-              {params.row.driverId.slice(0, 8).toUpperCase()}
-            </Typography>
-          </Tooltip>
+          <Typography variant="caption" color="text.secondary">
+            Chưa có tên
+          </Typography>
         );
       },
     },
@@ -441,7 +437,7 @@ const Rides: React.FC = () => {
               size="small"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder="Tìm theo mã, tên khách, tên tài xế"
+              placeholder="Tìm theo chuyến, tên khách, tên tài xế"
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">

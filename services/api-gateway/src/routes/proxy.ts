@@ -83,6 +83,10 @@ const shouldForwardOverHttp = (
     return true;
   }
 
+  if (service === 'ride' && /^\/api\/rides\/[^/]+\/share$/.test(normalizedPath)) {
+    return true;
+  }
+
   if (service !== 'driver') {
     return false;
   }

@@ -630,18 +630,33 @@ export class AuthService {
     return user ? this.toUserResponse(user) : null;
   }
 
-  async getUsers(page = 1, limit = 20, role?: UserRole): Promise<{ users: UserResponse[]; total: number }> {
+  async getUsers(
+    page = 1,
+    limit = 20,
+    role?: UserRole,
+    dateRange?: { createdFrom?: Date; createdTo?: Date },
+  ): Promise<{ users: UserResponse[]; total: number }> {
     const skip = (page - 1) * limit;
-    const where = role ? { role } : undefined;
+    const where = {
+      ...(role ? { role } : {}),
+      ...(dateRange?.createdFrom || dateRange?.createdTo
+        ? {
+            createdAt: {
+              gte: dateRange?.createdFrom,
+              lte: dateRange?.createdTo,
+            },
+          }
+        : {}),
+    };
     
     const [users, total] = await Promise.all([
       prisma.user.findMany({
-        where,
+        where: Object.keys(where).length > 0 ? where : undefined,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
-      prisma.user.count({ where }),
+      prisma.user.count({ where: Object.keys(where).length > 0 ? where : undefined }),
     ]);
 
     return {

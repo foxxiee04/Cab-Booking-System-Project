@@ -12,6 +12,7 @@ import Account from './pages/Account';
 import Earnings from './pages/Earnings';
 import History from './pages/History';
 import Profile from './pages/Profile';
+import Reviews from './pages/Reviews';
 import DriverMobileShell from './components/layout/DriverMobileShell';
 import Wallet from './pages/Wallet';
 import WalletTopUpReturn from './pages/WalletTopUpReturn';
@@ -101,6 +102,7 @@ const App: React.FC = () => {
           <Route path="account" element={<Account />} />
           <Route path="earnings" element={<Earnings />} />
           <Route path="history" element={<History />} />
+          <Route path="reviews" element={<Reviews />} />
           <Route path="profile" element={<Profile />} />
           <Route path="wallet" element={<Wallet />} />
         </Route>

@@ -1030,6 +1030,12 @@ export class EventConsumer {
       status: 'CANCELLED',
       message: 'Không tìm thấy tài xế phù hợp. Cuốc xe đã được hủy tự động.',
     });
+    this.socketServer.emitToPublicRide(payload.rideId, 'RIDE_STATUS_UPDATE', {
+      rideId: payload.rideId,
+      status: 'CANCELLED',
+      message: 'Không tìm thấy tài xế phù hợp. Cuốc xe đã được hủy tự động.',
+      cancelledBy: 'SYSTEM',
+    });
   }
 
   /**
@@ -1170,10 +1176,15 @@ export class EventConsumer {
     };
 
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
+    this.socketServer.emitToPublicRide(payload.rideId, 'RIDE_STATUS_UPDATE', data);
 
     // Emit legacy ride:assigned event with driver profile for the tracking page
     if (payload.driverId && realtimeDriverProfile) {
         this.socketServer.emitToCustomer(payload.customerId, 'ride:assigned', {
+          ride: { id: payload.rideId, status: 'ASSIGNED', driverId: payload.driverId },
+          driver: realtimeDriverProfile,
+        });
+        this.socketServer.emitToPublicRide(payload.rideId, 'ride:assigned', {
           ride: { id: payload.rideId, status: 'ASSIGNED', driverId: payload.driverId },
           driver: realtimeDriverProfile,
         });
@@ -1212,6 +1223,11 @@ export class EventConsumer {
       status: 'FINDING_DRIVER',
       message: 'Looking for another driver',
     });
+    this.socketServer.emitToPublicRide(payload.rideId, 'RIDE_STATUS_UPDATE', {
+      rideId: payload.rideId,
+      status: 'FINDING_DRIVER',
+      message: 'Looking for another driver',
+    });
   }
 
   private async handleRideAccepted(payload: RideEventPayload): Promise<void> {
@@ -1231,10 +1247,15 @@ export class EventConsumer {
 
     // Notify customer
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
+    this.socketServer.emitToPublicRide(payload.rideId, 'RIDE_STATUS_UPDATE', data);
 
     // Emit legacy ride:assigned event with driver profile so the tracking page can show driver card
     if (payload.driverId && realtimeDriverProfile) {
         this.socketServer.emitToCustomer(payload.customerId, 'ride:assigned', {
+          ride: { id: payload.rideId, status: 'ACCEPTED', driverId: payload.driverId },
+          driver: realtimeDriverProfile,
+        });
+        this.socketServer.emitToPublicRide(payload.rideId, 'ride:assigned', {
           ride: { id: payload.rideId, status: 'ACCEPTED', driverId: payload.driverId },
           driver: realtimeDriverProfile,
         });
@@ -1268,6 +1289,7 @@ export class EventConsumer {
     };
 
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
+    this.socketServer.emitToPublicRide(payload.rideId, 'RIDE_STATUS_UPDATE', data);
 
     const driverUserId = await this.resolveDriverUserId(payload.driverId);
     if (driverUserId) {
@@ -1289,6 +1311,7 @@ export class EventConsumer {
     };
 
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
+    this.socketServer.emitToPublicRide(payload.rideId, 'RIDE_STATUS_UPDATE', data);
 
     const driverUserId = await this.resolveDriverUserId(payload.driverId);
     if (driverUserId) {
@@ -1312,6 +1335,11 @@ export class EventConsumer {
     };
 
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_COMPLETED', data);
+    this.socketServer.emitToPublicRide(payload.rideId, 'RIDE_COMPLETED', data);
+    this.socketServer.emitToPublicRide(payload.rideId, 'RIDE_STATUS_UPDATE', {
+      ...data,
+      status: 'COMPLETED',
+    });
 
     const driverUserId = await this.resolveDriverUserId(payload.driverId);
     if (driverUserId) {
@@ -1363,6 +1391,7 @@ export class EventConsumer {
 
     // Notify customer
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', data);
+    this.socketServer.emitToPublicRide(payload.rideId, 'RIDE_STATUS_UPDATE', data);
 
     void this.fanOutRideClosedToOfferedDrivers(payload.rideId, null, {
       reason: 'CANCELLED',
@@ -1389,6 +1418,12 @@ export class EventConsumer {
 
     // Notify customer that driver cancelled but system is finding a new driver
     this.socketServer.emitToCustomer(payload.customerId, 'RIDE_STATUS_UPDATE', {
+      rideId: payload.rideId,
+      status: 'FINDING_DRIVER',
+      message: 'Tài xế đã hủy chuyến. Hệ thống đang tìm tài xế mới cho bạn...',
+      cancelledBy: 'DRIVER',
+    });
+    this.socketServer.emitToPublicRide(payload.rideId, 'RIDE_STATUS_UPDATE', {
       rideId: payload.rideId,
       status: 'FINDING_DRIVER',
       message: 'Tài xế đã hủy chuyến. Hệ thống đang tìm tài xế mới cho bạn...',

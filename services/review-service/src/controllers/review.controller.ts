@@ -2,6 +2,24 @@ import { Request, Response } from 'express';
 import { reviewService } from '../services/review.service';
 import { ReviewType } from '../models/review.model';
 
+const serializeReview = (review: any) => (
+  typeof review?.toObject === 'function' ? review.toObject() : { ...review }
+);
+
+const sanitizeReceivedReview = (review: any) => {
+  const plainReview = serializeReview(review);
+
+  if (plainReview.type !== ReviewType.CUSTOMER_TO_DRIVER) {
+    return plainReview;
+  }
+
+  const { reviewerId: _reviewerId, reviewerName: _reviewerName, ...safeReview } = plainReview;
+  return {
+    ...safeReview,
+    reviewerName: 'Khách hàng',
+  };
+};
+
 export const reviewController = {
   // Create a review
   async createReview(req: Request, res: Response) {
@@ -64,11 +82,12 @@ export const reviewController = {
       const limit = parseInt(req.query.limit as string) || 50;
 
       const reviews = await reviewService.getReviewsByReviewee(userId, limit);
+      const safeReviews = reviews.map(sanitizeReceivedReview);
 
       res.json({
         success: true,
-        count: reviews.length,
-        reviews,
+        count: safeReviews.length,
+        reviews: safeReviews,
       });
     } catch (error: any) {
       console.error('Error fetching received reviews:', error);

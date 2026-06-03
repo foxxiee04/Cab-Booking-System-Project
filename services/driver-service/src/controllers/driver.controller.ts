@@ -8,6 +8,12 @@ interface AuthRequest extends Request {
   user?: { userId: string; role: string };
 }
 
+const parseQueryDate = (value: unknown): Date | undefined => {
+  if (typeof value !== 'string' || value.trim() === '') return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+};
+
 export class DriverController {
   constructor(private readonly driverService: DriverService) {}
 
@@ -278,8 +284,14 @@ export class DriverController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
       const status = req.query.status as string;
+      const createdFrom = parseQueryDate(req.query.createdFrom);
+      const createdTo = parseQueryDate(req.query.createdTo);
 
-      const result = await this.driverService.getDrivers(status ? { status: status as any } : undefined);
+      const result = await this.driverService.getDrivers({
+        ...(status ? { status: status as any } : {}),
+        ...(createdFrom ? { createdFrom } : {}),
+        ...(createdTo ? { createdTo } : {}),
+      });
       const drivers = Array.isArray(result) ? result : [];
       const total = drivers.length;
       

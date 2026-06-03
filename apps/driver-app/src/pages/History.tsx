@@ -19,8 +19,6 @@ import {
   DialogActions,
   Divider,
   Stack,
-  IconButton,
-  Skeleton,
 } from '@mui/material';
 import {
   SearchRounded,
@@ -33,7 +31,7 @@ import {
   DirectionsBikeRounded,
   EventRounded,
   TagRounded,
-  DriveEtaRounded,
+  ReceiptLongRounded,
 } from '@mui/icons-material';
 import { driverApi } from '../api/driver.api';
 import { rideApi } from '../api/ride.api';
@@ -50,6 +48,7 @@ import { calculateDistance, formatDistance, formatDuration } from '../utils/map.
 import { useTranslation } from 'react-i18next';
 import ContactBox from '../components/ContactBox';
 import { useAppSelector } from '../store/hooks';
+import DriverTripMap from '../features/trip/components/DriverTripMap';
 
 const PAGE_SIZE = 10;
 
@@ -108,6 +107,13 @@ const getLocationText = (location?: { address?: string; lat?: number; lng?: numb
 
   return 'Không có dữ liệu vị trí';
 };
+
+const hasLocationCoordinates = (location?: { lat?: number; lng?: number } | null) => (
+  typeof location?.lat === 'number'
+  && typeof location?.lng === 'number'
+  && !Number.isNaN(location.lat)
+  && !Number.isNaN(location.lng)
+);
 
 const getCustomerName = (ride: Ride) => {
   const fullName = `${ride.customer?.firstName || ''} ${ride.customer?.lastName || ''}`.trim();
@@ -212,12 +218,12 @@ const History: React.FC = () => {
       >
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
           <Box sx={{ p: 1.25, borderRadius: 3, bgcolor: 'rgba(37,99,235,0.10)', display: 'flex' }}>
-            <DriveEtaRounded sx={{ color: '#2563eb', fontSize: 26 }} />
+            <ReceiptLongRounded sx={{ color: '#2563eb', fontSize: 26 }} />
           </Box>
           <Box>
-            <Typography variant="h6" fontWeight={800}>Chuyến đi</Typography>
+            <Typography variant="h6" fontWeight={800}>Lịch sử chuyến đi</Typography>
             <Typography variant="body2" color="text.secondary">
-              {total > 0 ? `${total} chuyến` : 'Lịch sử hành trình'}
+              {total > 0 ? `${total} chuyến đã chạy` : 'Lịch sử hành trình'}
             </Typography>
           </Box>
         </Stack>
@@ -226,7 +232,7 @@ const History: React.FC = () => {
         <TextField
           size="small"
           fullWidth
-          placeholder="Tìm theo mã hoặc địa chỉ"
+          placeholder="Tìm theo mã chuyến, điểm đón, điểm đến"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           InputProps={{
@@ -246,10 +252,11 @@ const History: React.FC = () => {
           sx={{ minWidth: 130, '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
         >
           <MenuItem value="ALL">Tất cả</MenuItem>
+          <MenuItem value="ACCEPTED">Đã nhận</MenuItem>
+          <MenuItem value="PICKING_UP">Đang đón khách</MenuItem>
+          <MenuItem value="IN_PROGRESS">Đang chạy</MenuItem>
           <MenuItem value="COMPLETED">Hoàn tất</MenuItem>
           <MenuItem value="CANCELLED">Đã hủy</MenuItem>
-          <MenuItem value="IN_PROGRESS">Đang chạy</MenuItem>
-          <MenuItem value="ACCEPTED">Đã nhận</MenuItem>
           <MenuItem value="PENDING">Đang chờ</MenuItem>
         </TextField>
         </Stack>
@@ -258,15 +265,15 @@ const History: React.FC = () => {
       {error && <Alert severity="error" sx={{ borderRadius: 2 }}>{error}</Alert>}
 
       {loading && (
-        <Stack spacing={1.5}>
-          {[1, 2, 3].map((k) => <Skeleton key={k} variant="rounded" height={90} sx={{ borderRadius: 3 }} />)}
-        </Stack>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+          <CircularProgress size={28} />
+        </Box>
       )}
 
       {!loading && filteredRides.length === 0 && (
         <Box sx={{ py: 6, textAlign: 'center', bgcolor: '#f8fafc', borderRadius: 4, border: '1px solid #e2e8f0' }}>
           <Box sx={{ width: 64, height: 64, borderRadius: '50%', bgcolor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 2 }}>
-            <DriveEtaRounded sx={{ fontSize: 32, color: 'text.disabled' }} />
+            <ReceiptLongRounded sx={{ fontSize: 32, color: 'text.disabled' }} />
           </Box>
           <Typography variant="subtitle2" fontWeight={700} gutterBottom>{t('history.noRides', 'Chưa có chuyến nào')}</Typography>
           <Typography variant="body2" color="text.secondary">
@@ -285,68 +292,87 @@ const History: React.FC = () => {
               onClick={() => void handleOpenRideDetails(ride)}
               sx={{
                 cursor: 'pointer',
-                borderRadius: 3,
+                borderRadius: 4,
                 transition: 'all 0.15s',
                 borderLeft: `3px solid`,
                 borderLeftColor: ride.status === 'COMPLETED' ? 'success.main' : ride.status === 'CANCELLED' ? 'error.main' : 'primary.main',
-                '&:hover': { boxShadow: 3, transform: 'translateX(2px)' },
+                '&:hover': { boxShadow: 3, transform: 'translateY(-1px)' },
               }}
             >
-              <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-                <Stack direction="row" alignItems="flex-start" justifyContent="space-between" mb={0.75}>
+              <CardContent>
+                <Stack direction="row" alignItems="flex-start" justifyContent="space-between" sx={{ mb: 1 }}>
                   <Box>
-                    <Typography variant="body2" fontWeight={700}>{getVehicleTypeLabel(ride.vehicleType)}</Typography>
-                    <Typography variant="caption" color="text.disabled" sx={{ fontFamily: 'monospace' }}>
-                      #{ride.id.slice(0, 8).toUpperCase()}
+                    <Typography variant="subtitle1" fontWeight={800}>{getVehicleTypeLabel(ride.vehicleType)}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {ride.createdAt ? formatDate(ride.createdAt) : ''}
                     </Typography>
                   </Box>
                   <Stack alignItems="flex-end" spacing={0.5}>
                     <Chip label={getRideStatusLabel(ride.status)} color={getRideStatusColor(ride.status)} size="small" />
-                    <Typography variant="caption" color="text.secondary">
-                      {ride.createdAt ? formatDate(ride.createdAt) : ''}
+                    <Typography variant="caption" color="text.disabled" sx={{ fontFamily: 'monospace' }}>
+                      #{ride.id.slice(0, 8).toUpperCase()}
                     </Typography>
                   </Stack>
                 </Stack>
 
+                <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 1.25 }}>
+                  <Avatar src={ride.customer?.avatar || undefined} sx={{ width: 36, height: 36, bgcolor: '#1d4ed8' }}>
+                    {ride.customer?.firstName?.[0] || 'K'}
+                  </Avatar>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" fontWeight={800} noWrap>
+                      {getCustomerName(ride)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap>
+                      {ride.customer?.phoneNumber || 'Đang cập nhật số điện thoại'}
+                    </Typography>
+                  </Box>
+                </Stack>
+
                 {/* Locations */}
-                <Stack spacing={0.25} mb={0.75}>
+                <Stack spacing={0.5} sx={{ mb: 1 }}>
                   {ride.pickupLocation?.address && (
-                    <Stack direction="row" spacing={0.75} alignItems="flex-start">
-                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'success.main', mt: '5px', flexShrink: 0 }} />
-                      <Typography variant="caption" color="text.secondary" noWrap>{ride.pickupLocation.address}</Typography>
+                    <Stack direction="row" spacing={1} alignItems="flex-start">
+                      <LocationOnRounded sx={{ fontSize: 16, color: '#16a34a', mt: 0.25, flexShrink: 0 }} />
+                      <Typography variant="body2">{ride.pickupLocation.address}</Typography>
                     </Stack>
                   )}
                   {ride.dropoffLocation?.address && (
-                    <Stack direction="row" spacing={0.75} alignItems="flex-start">
-                      <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: 'error.main', mt: '5px', flexShrink: 0 }} />
-                      <Typography variant="caption" color="text.secondary" noWrap>{ride.dropoffLocation.address}</Typography>
+                    <Stack direction="row" spacing={1} alignItems="flex-start">
+                      <FlagRounded sx={{ fontSize: 16, color: '#dc2626', mt: 0.25, flexShrink: 0 }} />
+                      <Typography variant="body2">{ride.dropoffLocation.address}</Typography>
                     </Stack>
                   )}
                 </Stack>
 
                 {/* Metrics row */}
-                <Stack direction="row" spacing={1.5} flexWrap="wrap">
-                  <Typography variant="caption" color="text.secondary">
-                    {getCustomerName(ride)}
+                <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                  <Typography variant="subtitle2" fontWeight={800} color="primary.main">
+                    {ride.fare ? formatCurrency(ride.fare) : '—'}
                   </Typography>
-                  <Typography variant="caption" fontWeight={700} color="primary.main">
-                    {ride.fare ? `Cước: ${formatCurrency(ride.fare)}` : '—'}
-                  </Typography>
-                  {metrics.distanceMeters && (
-                    <Typography variant="caption" color="text.secondary">{formatDistance(metrics.distanceMeters)}</Typography>
-                  )}
-                  {metrics.durationSeconds && (
-                    <Typography variant="caption" color="text.secondary">{formatDuration(metrics.durationSeconds)}</Typography>
-                  )}
-                  {ride.paymentMethod && (
-                    <Typography variant="caption" color="text.secondary">{getPaymentMethodLabel(ride.paymentMethod)}</Typography>
-                  )}
+                  <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap justifyContent="flex-end">
+                    {metrics.distanceMeters && (
+                      <Typography variant="caption" color="text.secondary">{formatDistance(metrics.distanceMeters)}</Typography>
+                    )}
+                    {metrics.durationSeconds && (
+                      <Typography variant="caption" color="text.secondary">{formatDuration(metrics.durationSeconds)}</Typography>
+                    )}
+                    {ride.paymentMethod && (
+                      <Typography variant="caption" color="text.secondary">{getPaymentMethodLabel(ride.paymentMethod)}</Typography>
+                    )}
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      sx={{ borderRadius: 2 }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleOpenRideDetails(ride);
+                      }}
+                    >
+                      Xem chi tiết
+                    </Button>
+                  </Stack>
                 </Stack>
-                {ride.customer?.phoneNumber && (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                    {ride.customer.phoneNumber}
-                  </Typography>
-                )}
               </CardContent>
             </Card>
           );
@@ -390,25 +416,20 @@ const History: React.FC = () => {
         {selectedRide && (
           (() => {
             const metrics = getRideDistanceAndDuration(selectedRide);
+            const hasRouteMap = hasLocationCoordinates(selectedRide.pickupLocation)
+              && hasLocationCoordinates(selectedRide.dropoffLocation);
             return (
           <>
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
               <Box>
                 <Typography variant="h6" fontWeight={800}>Chi tiết chuyến đi</Typography>
                 <Typography variant="caption" color="text.disabled" sx={{ fontFamily: 'monospace' }}>
-                  #{selectedRide.id.toUpperCase()}
+                  #{selectedRide.id.slice(0, 8).toUpperCase()}
                 </Typography>
               </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Chip
-                  label={getRideStatusLabel(selectedRide.status)}
-                  color={getRideStatusColor(selectedRide.status)}
-                  size="small"
-                />
-                <IconButton size="small" onClick={() => setSelectedRide(null)}>
-                  <CloseRounded fontSize="small" />
-                </IconButton>
-              </Box>
+              <Button size="small" onClick={() => setSelectedRide(null)} startIcon={<CloseRounded fontSize="small" />}>
+                Đóng
+              </Button>
             </DialogTitle>
 
             <DialogContent dividers>
@@ -420,6 +441,30 @@ const History: React.FC = () => {
                       Đang tải đầy đủ thông tin chuyến đi...
                     </Typography>
                   </Stack>
+                )}
+
+                {hasRouteMap && (
+                  <Box>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                      <Stack direction="row" spacing={0.75} alignItems="center">
+                        <RouteRounded sx={{ fontSize: 18, color: '#2563eb' }} />
+                        <Typography variant="subtitle2" fontWeight={800}>
+                          Lộ trình chuyến đi
+                        </Typography>
+                      </Stack>
+                      {metrics.distanceMeters && (
+                        <Chip size="small" label={formatDistance(metrics.distanceMeters)} variant="outlined" sx={{ fontWeight: 700 }} />
+                      )}
+                    </Stack>
+                    <DriverTripMap
+                      currentLocation={selectedRide.pickupLocation}
+                      pickupLocation={selectedRide.pickupLocation}
+                      dropoffLocation={selectedRide.dropoffLocation}
+                      mode="trip"
+                      height="clamp(240px, 42vh, 320px)"
+                      colorMode="light"
+                    />
+                  </Box>
                 )}
 
                 {selectedRide.customer && (

@@ -10,7 +10,9 @@ import { JwtPayload } from '../middleware/auth';
 
 export interface AuthenticatedSocket extends Socket {
   userId?: string;
-  role?: 'CUSTOMER' | 'DRIVER' | 'ADMIN';
+  role?: 'CUSTOMER' | 'DRIVER' | 'ADMIN' | 'PUBLIC';
+  shareToken?: string;
+  shareRideId?: string;
 }
 
 interface RideSubscriptionPayload {
@@ -66,6 +68,10 @@ export class SocketServer {
     return `trip_${rideId}`;
   }
 
+  private buildPublicRideRoomId(rideId: string): string {
+    return `ride-public:${rideId}`;
+  }
+
   private resolveRideIdFromChatPayload(payload: ChatRoomPayload | ChatSendPayload): string | null {
     const directRideId = payload?.rideId?.trim();
     if (directRideId) {
@@ -101,6 +107,30 @@ export class SocketServer {
       return response.data?.data?.ride ?? null;
     } catch (error) {
       logger.warn(`Failed to authorize chat room for ride ${rideId}:`, error);
+      return null;
+    }
+  }
+
+  private async validateRideShareToken(token: string): Promise<{ rideId: string; expiresAt?: string } | null> {
+    try {
+      const response = await axios.get(`${config.services.ride}/internal/ride-shares/${token}`, {
+        timeout: 3000,
+        headers: { 'x-internal-token': config.internalServiceToken },
+      });
+
+      const rideId = response.data?.data?.rideId;
+      if (!rideId) {
+        return null;
+      }
+
+      return {
+        rideId,
+        expiresAt: response.data?.data?.expiresAt,
+      };
+    } catch (error) {
+      logger.warn('Socket share token rejected', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return null;
     }
   }
@@ -159,6 +189,27 @@ export class SocketServer {
   private setupAuthentication(): void {
     this.io.use((socket: AuthenticatedSocket, next) => {
       const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '');
+      const shareToken = typeof socket.handshake.auth.shareToken === 'string'
+        ? socket.handshake.auth.shareToken.trim()
+        : typeof socket.handshake.query.shareToken === 'string'
+          ? socket.handshake.query.shareToken.trim()
+          : '';
+
+      if (!token && shareToken) {
+        void (async () => {
+          const share = await this.validateRideShareToken(shareToken);
+          if (!share) {
+            return next(new Error('Invalid or expired share token'));
+          }
+
+          socket.role = 'PUBLIC';
+          socket.shareToken = shareToken;
+          socket.shareRideId = share.rideId;
+          logger.info(`Public tracking socket authenticated: rideId=${share.rideId}`);
+          return next();
+        })();
+        return;
+      }
 
       if (!token) {
         logger.warn('Socket connection rejected: No token provided');
@@ -187,6 +238,31 @@ export class SocketServer {
 
   private setupConnectionHandlers(): void {
     this.io.on('connection', (socket: AuthenticatedSocket) => {
+      if (socket.role === 'PUBLIC') {
+        const rideId = socket.shareRideId;
+        if (!rideId) {
+          socket.disconnect(true);
+          return;
+        }
+
+        const publicRoom = this.buildPublicRideRoomId(rideId);
+        socket.join(publicRoom);
+        if (socket.shareToken) {
+          socket.join(`share:${socket.shareToken}`);
+        }
+        logger.info(`Public tracking socket ${socket.id} joined room: ${publicRoom}`);
+
+        socket.on('share:subscribe', () => {
+          socket.join(publicRoom);
+        });
+
+        socket.on('disconnect', () => {
+          logger.info(`Public tracking socket disconnected: ${socket.id}, rideId=${rideId}`);
+        });
+
+        return;
+      }
+
       const userId = socket.userId!;
       const role = socket.role!;
 
@@ -398,6 +474,8 @@ export class SocketServer {
         const rideRoom = `ride:${rideId}`;
         this.io.to(rideRoom).emit('driver_location_update', eventPayload);
         this.io.to(rideRoom).emit('driver:location', eventPayload);
+        this.io.to(this.buildPublicRideRoomId(rideId)).emit('driver_location_update', eventPayload);
+        this.io.to(this.buildPublicRideRoomId(rideId)).emit('driver:location', eventPayload);
       });
     });
   }
@@ -466,6 +544,12 @@ export class SocketServer {
     const room = `driver:${driverId}`;
     this.io.to(room).emit(event, data);
     logger.debug(`Emitted ${event} to driver ${driverId}`);
+  }
+
+  public emitToPublicRide(rideId: string, event: string, data: any): void {
+    const room = this.buildPublicRideRoomId(rideId);
+    this.io.to(room).emit(event, data);
+    logger.debug(`Emitted ${event} to public ride ${rideId}`);
   }
 
   /**

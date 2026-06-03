@@ -297,6 +297,47 @@ export class RideController {
     }
   };
 
+  createRideShare = async (req: AuthRequest, res: Response) => {
+    try {
+      const ride = await this.rideService.getRideById(req.params.rideId);
+      if (!ride) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Ride not found' },
+        });
+      }
+
+      if (!(await this.canAccessRide(req, ride))) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Access denied' },
+        });
+      }
+
+      const actorId = req.user!.role === UserRole.DRIVER
+        ? await this.resolveDriverActorId(req.user!.userId)
+        : req.user!.userId;
+      const share = await this.rideService.createRideShare(req.params.rideId, actorId, req.user!.role);
+
+      return res.status(201).json({
+        success: true,
+        data: {
+          token: share.token,
+          expiresAt: share.expiresAt,
+          ride: share.ride,
+        },
+      });
+    } catch (err) {
+      logger.error('Create ride share error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to create share link';
+      const statusCode = /denied/i.test(message) ? 403 : /active|shared/i.test(message) ? 400 : 500;
+      return res.status(statusCode).json({
+        success: false,
+        error: { code: 'CREATE_SHARE_FAILED', message },
+      });
+    }
+  };
+
   getRideMessages = async (req: AuthRequest, res: Response) => {
     try {
       const ride = await this.rideService.getRideById(req.params.rideId);

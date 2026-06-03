@@ -24,7 +24,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { ArrowBack, AutorenewRounded, Cancel, CheckCircleRounded, HourglassTopRounded, PaymentRounded, StarRate } from '@mui/icons-material';
+import { ArrowBack, AutorenewRounded, Cancel, CheckCircleRounded, HourglassTopRounded, PaymentRounded, ShareRounded, StarRate } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { BookingMap, useSocket } from '../features/booking';
 import ContactBox from '../components/ContactBox';
@@ -132,6 +132,7 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
 const AWAITING_PAYMENT_STATUSES = new Set(['CREATED']);
 const SEARCHING_DRIVER_STATUSES = new Set(['PENDING', 'FINDING_DRIVER']);
 const RECEIPT_READY_STATUSES = new Set(['COMPLETED', 'CANCELLED', 'NO_DRIVER_AVAILABLE']);
+const SHAREABLE_STATUSES = new Set(['ASSIGNED', 'ACCEPTED', 'PICKING_UP', 'IN_PROGRESS']);
 const MATCHING_MAX_WAIT_MINUTES = 3;
 
 const CANCEL_REASONS = [
@@ -226,6 +227,8 @@ const RideTracking: React.FC = () => {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [sharingRide, setSharingRide] = useState(false);
+  const [shareMessage, setShareMessage] = useState('');
   const [rating, setRating] = useState<number | null>(5);
   const [comment, setComment] = useState('');
   const [retryMethod, setRetryMethod] = useState<'CASH' | 'MOMO' | 'VNPAY'>('CASH');
@@ -497,6 +500,41 @@ const RideTracking: React.FC = () => {
       setSubmittingReview(false);
     }
   }, [comment, currentRide, driver, rating]);
+
+  const handleShareRide = useCallback(async () => {
+    if (!currentRide?.id) {
+      return;
+    }
+
+    setSharingRide(true);
+    setError('');
+    setShareMessage('');
+    try {
+      const response = await rideApi.createRideShare(currentRide.id);
+      const shareUrl = `${window.location.origin}/track/${response.data.token}`;
+      const shareText = `Theo dõi chuyến đi FoxGo: ${shareUrl}`;
+
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Theo dõi chuyến đi FoxGo',
+          text: 'Mình đang đi chuyến FoxGo, bạn có thể theo dõi tại link này.',
+          url: shareUrl,
+        });
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        setShareMessage('Đã sao chép link theo dõi chuyến đi.');
+      } else {
+        window.prompt('Sao chép link theo dõi chuyến đi', shareText);
+        setShareMessage('Link theo dõi đã được tạo.');
+      }
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        setError(err.response?.data?.error?.message || 'Không thể tạo link chia sẻ hành trình.');
+      }
+    } finally {
+      setSharingRide(false);
+    }
+  }, [currentRide?.id]);
 
   const handleRetryPayment = useCallback(async () => {
     if (!rideId) {
@@ -775,6 +813,11 @@ const RideTracking: React.FC = () => {
             {error}
           </Alert>
         )}
+        {shareMessage && !error && (
+          <Alert severity="info" onClose={() => setShareMessage('')} sx={{ position: 'absolute', top: 16, left: 16, right: 16, zIndex: 1200, borderRadius: 3 }}>
+            {shareMessage}
+          </Alert>
+        )}
       </Box>
 
       <Card sx={{ borderRadius: 5, boxShadow: '0 18px 45px rgba(15,23,42,0.12)', backgroundColor: 'rgba(255,255,255,0.96)', border: '1px solid rgba(148,163,184,0.14)' }}>
@@ -828,6 +871,23 @@ const RideTracking: React.FC = () => {
               <Chip label={statusMeta.label} size="small" sx={{ bgcolor: `${statusMeta.color}18`, color: statusMeta.color, fontWeight: 700 }} />
             )}
           </Stack>
+
+          {currentRide?.driverId && SHAREABLE_STATUSES.has(status) && (
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ mb: 2.5 }}>
+              <Button
+                variant="outlined"
+                startIcon={<ShareRounded />}
+                onClick={handleShareRide}
+                disabled={sharingRide}
+                sx={{ borderRadius: 3, fontWeight: 800 }}
+              >
+                {sharingRide ? 'Đang tạo link...' : 'Chia sẻ hành trình'}
+              </Button>
+              <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>
+                Link hết hạn sau 24 giờ hoặc 30 phút sau khi chuyến kết thúc.
+              </Typography>
+            </Stack>
+          )}
 
           {/* Cancelled/refunding styled card */}
           {(status === 'CANCELLED' || status === 'NO_DRIVER_AVAILABLE') && isRefundPending && (

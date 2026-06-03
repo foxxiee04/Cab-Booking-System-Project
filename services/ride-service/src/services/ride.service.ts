@@ -1,5 +1,6 @@
 import { PrismaClient, Ride, RideStatus } from '../generated/prisma-client';
 import { v4 as uuidv4 } from 'uuid';
+import { createHash, randomBytes } from 'crypto';
 import axios from 'axios';
 import { config } from '../config';
 import { RideStateMachine } from '../domain/ride-state-machine';
@@ -41,10 +42,129 @@ interface RideUserProfile {
 
 type VehicleTypeStr = 'MOTORBIKE' | 'SCOOTER' | 'CAR_4' | 'CAR_7';
 
+const SHARE_TOKEN_BYTES = 24;
+const SHARE_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const SHARE_TERMINAL_GRACE_MS = 30 * 60 * 1000;
+const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000;
+const PROFILE_MISS_CACHE_TTL_MS = 60 * 1000;
+const PROFILE_HYDRATION_CONCURRENCY = 8;
+const SHAREABLE_STATUSES = new Set<RideStatus>([
+  RideStatus.ASSIGNED,
+  RideStatus.ACCEPTED,
+  RideStatus.PICKING_UP,
+  RideStatus.IN_PROGRESS,
+]);
+const TERMINAL_STATUSES = new Set<RideStatus>([RideStatus.COMPLETED, RideStatus.CANCELLED]);
+
+const getTerminalShareExpiry = (ride: Ride): Date | null => {
+  if (ride.status === RideStatus.COMPLETED) {
+    return new Date((ride.completedAt || ride.updatedAt).getTime() + SHARE_TERMINAL_GRACE_MS);
+  }
+
+  if (ride.status === RideStatus.CANCELLED) {
+    return new Date((ride.cancelledAt || ride.updatedAt).getTime() + SHARE_TERMINAL_GRACE_MS);
+  }
+
+  return null;
+};
+
+const hashShareToken = (token: string): string =>
+  createHash('sha256').update(token).digest('hex');
+
+type CachedRideUserProfile = {
+  expiresAt: number;
+  profile: RideUserProfile | null;
+};
+
+function toLoggableError(error: unknown) {
+  if (axios.isAxiosError(error)) {
+    return {
+      message: error.message,
+      code: error.code,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      url: error.config?.url,
+      method: error.config?.method,
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return { message: String(error) };
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
+const normalizeRideForPublicTracking = (ride: Ride, driver: any | null, shareExpiresAt?: Date | string | null) => ({
+  id: ride.id,
+  status: ride.status,
+  vehicleType: ride.vehicleType,
+  paymentMethod: ride.paymentMethod,
+  pickup: {
+    lat: ride.pickupLat,
+    lng: ride.pickupLng,
+    address: ride.pickupAddress,
+  },
+  dropoff: {
+    lat: ride.dropoffLat,
+    lng: ride.dropoffLng,
+    address: ride.dropoffAddress,
+  },
+  distance: ride.distance ? Math.round(ride.distance * 1000) : null,
+  duration: ride.duration ?? null,
+  fare: ride.fare ?? null,
+  requestedAt: ride.requestedAt,
+  assignedAt: ride.assignedAt,
+  acceptedAt: ride.acceptedAt,
+  startedAt: ride.startedAt,
+  completedAt: ride.completedAt,
+  cancelledAt: ride.cancelledAt,
+  updatedAt: ride.updatedAt,
+  shareExpiresAt: shareExpiresAt || null,
+  driver: driver ? {
+    id: driver.id,
+    firstName: driver.firstName || '',
+    lastName: driver.lastName || '',
+    vehicleMake: driver.vehicleMake || driver.vehicleBrand || '',
+    vehicleModel: driver.vehicleModel || '',
+    vehicleColor: driver.vehicleColor || '',
+    licensePlate: driver.licensePlate || driver.vehiclePlate || '',
+    rating: driver.ratingAverage ?? driver.rating ?? 0,
+    totalRides: driver.totalRides ?? driver.ratingCount ?? 0,
+    currentLocation: driver.lastLocationLat != null && driver.lastLocationLng != null
+      ? { lat: driver.lastLocationLat, lng: driver.lastLocationLng }
+      : undefined,
+  } : null,
+});
+
 export class RideService {
   private prisma: PrismaClient;
   private eventPublisher: EventPublisher;
   private offerManager: DriverOfferManager;
+  private userProfileCache = new Map<string, CachedRideUserProfile>();
 
   constructor(prisma: PrismaClient, eventPublisher: EventPublisher, offerManager?: DriverOfferManager) {
     this.prisma = prisma;
@@ -65,7 +185,12 @@ export class RideService {
 
       return response.data?.data?.user ?? null;
     } catch (error) {
-      logger.warn(`Failed to hydrate ride profile from user-service for ${userId}:`, error);
+      const payload = { userId, service: 'user-service', error: toLoggableError(error) };
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        logger.debug('Ride profile not found in user-service', payload);
+      } else {
+        logger.warn('Failed to hydrate ride profile from user-service', payload);
+      }
       return null;
     }
   }
@@ -79,7 +204,11 @@ export class RideService {
 
       return response.data?.data?.user ?? null;
     } catch (error) {
-      logger.warn(`Failed to hydrate ride profile from auth-service for ${userId}:`, error);
+      logger.warn('Failed to hydrate ride profile from auth-service', {
+        userId,
+        service: 'auth-service',
+        error: toLoggableError(error),
+      });
       return null;
     }
   }
@@ -89,12 +218,29 @@ export class RideService {
       return null;
     }
 
-    const userProfile = await this.fetchUserProfileFromUserService(userId);
-    if (userProfile) {
-      return userProfile;
+    const cached = this.userProfileCache.get(userId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.profile;
     }
 
-    return this.fetchUserProfileFromAuthService(userId);
+    const userProfile = await this.fetchUserProfileFromAuthService(userId)
+      || await this.fetchUserProfileFromUserService(userId);
+
+    this.userProfileCache.set(userId, {
+      profile: userProfile,
+      expiresAt: Date.now() + (userProfile ? PROFILE_CACHE_TTL_MS : PROFILE_MISS_CACHE_TTL_MS),
+    });
+
+    if (this.userProfileCache.size > 1000) {
+      const now = Date.now();
+      for (const [cacheKey, value] of this.userProfileCache.entries()) {
+        if (value.expiresAt <= now || this.userProfileCache.size > 800) {
+          this.userProfileCache.delete(cacheKey);
+        }
+      }
+    }
+
+    return userProfile;
   }
 
   private mapCustomerProfile(profile: RideUserProfile | null) {
@@ -107,6 +253,29 @@ export class RideService {
       lastName: profile.lastName || '',
       phoneNumber: profile.phoneNumber || profile.phone || undefined,
       avatar: profile.avatar || undefined,
+    };
+  }
+
+  private mapDriverProfile(driver: any | null) {
+    if (!driver) {
+      return undefined;
+    }
+
+    return {
+      id: driver.id,
+      firstName: driver.firstName || '',
+      lastName: driver.lastName || '',
+      phoneNumber: driver.phoneNumber || driver.phone || undefined,
+      avatar: driver.avatar || driver.avatarUrl || undefined,
+      vehicleMake: driver.vehicleMake || driver.vehicleBrand || '',
+      vehicleModel: driver.vehicleModel || '',
+      vehicleColor: driver.vehicleColor || '',
+      licensePlate: driver.licensePlate || driver.vehiclePlate || '',
+      rating: driver.ratingAverage ?? driver.rating ?? 0,
+      totalRides: driver.totalRides ?? driver.ratingCount ?? 0,
+      currentLocation: driver.lastLocationLat != null && driver.lastLocationLng != null
+        ? { lat: driver.lastLocationLat, lng: driver.lastLocationLng }
+        : driver.currentLocation || null,
     };
   }
 
@@ -129,7 +298,7 @@ export class RideService {
   private async enrichRideCustomers<T extends Ride>(rides: T[]): Promise<T[]> {
     const profileCache = new Map<string, Promise<RideUserProfile | null>>();
 
-    return Promise.all(rides.map(async (ride) => {
+    return mapWithConcurrency(rides, PROFILE_HYDRATION_CONCURRENCY, async (ride) => {
       if (!ride.customerId) {
         return ride;
       }
@@ -149,7 +318,43 @@ export class RideService {
         ...ride,
         customer: this.mapCustomerProfile(customerProfile),
       } as T;
-    }));
+    });
+  }
+
+  private async enrichRideParticipants<T extends Ride>(rides: T[]): Promise<T[]> {
+    const customerCache = new Map<string, Promise<RideUserProfile | null>>();
+    const driverCache = new Map<string, Promise<any | null>>();
+
+    return mapWithConcurrency(rides, PROFILE_HYDRATION_CONCURRENCY, async (ride) => {
+      const [customerProfile, driverProfile] = await Promise.all([
+        ride.customerId
+          ? (() => {
+              let profilePromise = customerCache.get(ride.customerId);
+              if (!profilePromise) {
+                profilePromise = this.getUserProfile(ride.customerId);
+                customerCache.set(ride.customerId, profilePromise);
+              }
+              return profilePromise;
+            })()
+          : Promise.resolve(null),
+        ride.driverId
+          ? (() => {
+              let driverPromise = driverCache.get(ride.driverId);
+              if (!driverPromise) {
+                driverPromise = this.getDriverPublicSnapshot(ride.driverId);
+                driverCache.set(ride.driverId, driverPromise);
+              }
+              return driverPromise;
+            })()
+          : Promise.resolve(null),
+      ]);
+
+      return {
+        ...ride,
+        ...(customerProfile ? { customer: this.mapCustomerProfile(customerProfile) } : {}),
+        ...(driverProfile ? { driver: this.mapDriverProfile(driverProfile) } : {}),
+      } as T;
+    });
   }
 
   private normalizeVoucherCode(voucherCode?: string | null): string | null {
@@ -801,6 +1006,99 @@ export class RideService {
     return this.enrichRideCustomer(ride as Ride | null);
   }
 
+  private async getDriverPublicSnapshot(driverId?: string | null): Promise<any | null> {
+    if (!driverId) {
+      return null;
+    }
+
+    try {
+      const response = await axios.get(`${config.services.driver}/internal/drivers/${driverId}`, {
+        timeout: 3000,
+        headers: { 'x-internal-token': config.internalServiceToken },
+      });
+
+      return response.data?.data?.driver ?? null;
+    } catch (error) {
+      logger.warn('Failed to hydrate public tracking driver', {
+        driverId,
+        error: toLoggableError(error),
+      });
+      return null;
+    }
+  }
+
+  async createRideShare(rideId: string, actorId: string, actorRole: string): Promise<{ token: string; expiresAt: Date; ride: any }> {
+    const ride = await this.prisma.ride.findUnique({ where: { id: rideId } });
+    if (!ride) {
+      throw new Error('Ride not found');
+    }
+
+    const isCustomer = actorRole === 'CUSTOMER' && ride.customerId === actorId;
+    if (!isCustomer) {
+      throw new Error('Access denied');
+    }
+
+    if (!SHAREABLE_STATUSES.has(ride.status)) {
+      throw new Error('Only active assigned rides can be shared');
+    }
+
+    const token = randomBytes(SHARE_TOKEN_BYTES).toString('base64url');
+    const expiresAt = new Date(Date.now() + SHARE_TOKEN_TTL_MS);
+
+    await (this.prisma as any).rideShare.create({
+      data: {
+        rideId,
+        tokenHash: hashShareToken(token),
+        createdById: actorId,
+        createdByRole: actorRole,
+        expiresAt,
+      },
+    });
+
+    const driver = await this.getDriverPublicSnapshot(ride.driverId);
+    return {
+      token,
+      expiresAt,
+      ride: normalizeRideForPublicTracking(ride, driver, expiresAt),
+    };
+  }
+
+  async getRideShareByToken(token: string): Promise<{ rideId: string; ride: any; expiresAt: Date }> {
+    const tokenHash = hashShareToken(token.trim());
+    const share = await (this.prisma as any).rideShare.findUnique({
+      where: { tokenHash },
+      include: { ride: true },
+    });
+
+    if (!share || share.revokedAt || share.expiresAt.getTime() <= Date.now()) {
+      throw new Error('Share link is invalid or expired');
+    }
+
+    const ride = share.ride as Ride;
+    if (!ride) {
+      throw new Error('Ride tracking has ended');
+    }
+
+    let effectiveExpiresAt = share.expiresAt as Date;
+    if (TERMINAL_STATUSES.has(ride.status)) {
+      const terminalExpiry = getTerminalShareExpiry(ride);
+      if (!terminalExpiry || terminalExpiry.getTime() <= Date.now()) {
+        throw new Error('Ride tracking has ended');
+      }
+
+      if (terminalExpiry.getTime() < effectiveExpiresAt.getTime()) {
+        effectiveExpiresAt = terminalExpiry;
+      }
+    }
+
+    const driver = await this.getDriverPublicSnapshot(ride.driverId);
+    return {
+      rideId: ride.id,
+      expiresAt: effectiveExpiresAt,
+      ride: normalizeRideForPublicTracking(ride, driver, effectiveExpiresAt),
+    };
+  }
+
   async getRideMessages(rideId: string, limit = 100): Promise<any[]> {
     const normalizedLimit = Math.min(Math.max(limit, 1), 200);
 
@@ -915,7 +1213,7 @@ export class RideService {
       this.prisma.ride.count({ where }),
     ]);
 
-    return { rides, total };
+    return { rides: await this.enrichRideParticipants(rides), total };
   }
 
   async getRideStats(): Promise<{

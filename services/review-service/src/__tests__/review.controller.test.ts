@@ -160,6 +160,58 @@ describe('ReviewController', () => {
         reviews,
       });
     });
+
+    it('should hide customer identity in customer-to-driver reviews', async () => {
+      const reviews = [
+        {
+          _id: 'r1',
+          type: 'CUSTOMER_TO_DRIVER',
+          reviewerId: 'customer-1',
+          reviewerName: 'John Doe',
+          rideId: 'ride-1',
+          rating: 5,
+        },
+        {
+          _id: 'r2',
+          type: 'DRIVER_TO_CUSTOMER',
+          reviewerId: 'driver-1',
+          reviewerName: 'Driver Name',
+          rideId: 'ride-2',
+          rating: 4,
+        },
+      ];
+      mockGetReviewsByReviewee.mockResolvedValue(reviews);
+
+      const req = mockReq({
+        params: { userId: 'driver-1' },
+        query: {},
+      });
+      const res = mockRes();
+
+      await reviewController.getReceivedReviews(req, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        count: 2,
+        reviews: [
+          {
+            _id: 'r1',
+            type: 'CUSTOMER_TO_DRIVER',
+            reviewerName: 'Khách hàng',
+            rideId: 'ride-1',
+            rating: 5,
+          },
+          {
+            _id: 'r2',
+            type: 'DRIVER_TO_CUSTOMER',
+            reviewerId: 'driver-1',
+            reviewerName: 'Driver Name',
+            rideId: 'ride-2',
+            rating: 4,
+          },
+        ],
+      });
+    });
   });
 
   describe('getGivenReviews', () => {

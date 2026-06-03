@@ -28,6 +28,12 @@ function extractBypassToken(req: Request): string | null {
   return typeof v === 'string' && v ? v : null;
 }
 
+function parseQueryDate(value: unknown): Date | undefined {
+  if (typeof value !== 'string' || value.trim() === '') return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -495,8 +501,10 @@ export class AuthController {
       const role = roleParam === 'CUSTOMER' || roleParam === 'DRIVER' || roleParam === 'ADMIN'
         ? roleParam as UserRole
         : undefined;
+      const createdFrom = parseQueryDate(req.query.createdFrom);
+      const createdTo = parseQueryDate(req.query.createdTo);
 
-      const { users, total } = await this.authService.getUsers(page, limit, role);
+      const { users, total } = await this.authService.getUsers(page, limit, role, { createdFrom, createdTo });
 
       res.json({
         success: true,

@@ -40,6 +40,9 @@ export const createRideRouter = (rideService: RideService): Router => {
   // Get driver's rides
   router.get('/driver/history', controller.getDriverRides);
 
+  // Create public realtime tracking share link
+  router.post('/:rideId/share', controller.createRideShare);
+
   // Get ride by ID
   router.get('/:rideId', controller.getRideById);
 

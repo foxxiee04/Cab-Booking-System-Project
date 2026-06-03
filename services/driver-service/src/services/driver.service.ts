@@ -569,11 +569,19 @@ export class DriverService {
   async getDrivers(filters?: {
     status?: DriverStatus;
     availabilityStatus?: AvailabilityStatus;
+    createdFrom?: Date;
+    createdTo?: Date;
   }): Promise<any[]> {
     const drivers = await prisma.driver.findMany({
       where: {
         status: filters?.status,
         availabilityStatus: filters?.availabilityStatus,
+        createdAt: filters?.createdFrom || filters?.createdTo
+          ? {
+              gte: filters?.createdFrom,
+              lte: filters?.createdTo,
+            }
+          : undefined,
       },
       orderBy: { createdAt: 'desc' },
     });

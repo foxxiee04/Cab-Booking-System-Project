@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -23,7 +23,7 @@ import {
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { SearchRounded, TrendingUp } from '@mui/icons-material';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
 import { adminApi } from '../api/admin.api';
 import { Customer } from '../types';
 import { formatDate, formatNumber } from '../utils/format.utils';
@@ -36,6 +36,7 @@ import {
 } from '../constants/adminPeriods';
 
 const PAGE_SIZE = 10;
+const TOP_CUSTOMER_PALETTE = ['#5a7fb8', '#5ca38a', '#f59e0b', '#06b6d4', '#8b5cf6', '#ef4444', '#84cc16', '#ec4899', '#f97316', '#2563eb'];
 
 const Customers: React.FC = () => {
   const [rows, setRows] = useState<Customer[]>([]);
@@ -44,9 +45,12 @@ const Customers: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [keyword, setKeyword] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [sortBy, setSortBy] = useState<'rides' | 'created'>('rides');
   const [statsPeriod, setStatsPeriod] = useState<AdminStatsPeriod>(30);
   const [topCustomers, setTopCustomers] = useState<Array<{ id: string; name: string; totalRides: number }>>([]);
+  const [topCustomersLoading, setTopCustomersLoading] = useState(false);
   const [statusTarget, setStatusTarget] = useState<Customer | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const [snackbar, setSnackbar] = useState('');
@@ -55,6 +59,7 @@ const Customers: React.FC = () => {
     customers: number;
     completedRides: number;
   } | null>(null);
+  const topCustomersRequestId = useRef(0);
   const { t } = useTranslation();
   const statsDays = periodToQueryDays(statsPeriod);
 
@@ -65,6 +70,8 @@ const Customers: React.FC = () => {
       const response = await adminApi.getCustomers({
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined,
         ...(statsDays ? { days: statsDays } : {}),
       });
       setRows(response.data?.customers || []);
@@ -74,19 +81,25 @@ const Customers: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, statsDays, t]);
+  }, [fromDate, page, statsDays, t, toDate]);
 
   useEffect(() => {
     void fetchCustomers();
   }, [fetchCustomers]);
 
   useEffect(() => {
+    const requestId = topCustomersRequestId.current + 1;
+    topCustomersRequestId.current = requestId;
+
     const fetchAggregates = async () => {
+      setTopCustomersLoading(true);
+      setTopCustomers([]);
       try {
         const [statsRes, topRes] = await Promise.all([
           adminApi.getStats(),
           adminApi.getTopCustomers(10, statsDays ? { days: statsDays } : {}),
         ]);
+        if (topCustomersRequestId.current !== requestId) return;
         const stats = statsRes.data?.stats;
         if (stats) {
           setGlobalStats({
@@ -97,6 +110,10 @@ const Customers: React.FC = () => {
         setTopCustomers(topRes.data?.customers || []);
       } catch {
         /* non-critical */
+      } finally {
+        if (topCustomersRequestId.current === requestId) {
+          setTopCustomersLoading(false);
+        }
       }
     };
     fetchAggregates();
@@ -261,17 +278,25 @@ const Customers: React.FC = () => {
                 ))}
               </TextField>
             </Stack>
-            {topCustomers.length === 0 ? (
+            {topCustomersLoading ? (
+              <Box sx={{ height: 360, mt: 2, display: 'grid', placeItems: 'center' }}>
+                <CircularProgress size={28} />
+              </Box>
+            ) : topCustomers.length === 0 ? (
               <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>Chưa có dữ liệu</Typography>
             ) : (
-              <Box sx={{ height: 280, mt: 2 }}>
+              <Box sx={{ height: 360, mt: 2 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={topCustomers} layout="vertical" margin={{ top: 0, right: 24, left: 16, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" horizontal={false} />
                     <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
-                    <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11, fill: '#334155' }} tickLine={false} axisLine={false} />
+                    <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 11, fill: '#334155' }} tickLine={false} axisLine={false} />
                     <RechartsTooltip formatter={(v: number) => [formatNumber(v), 'Số chuyến']} />
-                    <Bar dataKey="totalRides" name="Số chuyến" radius={[0, 4, 4, 0]} fill="#0f766e" />
+                    <Bar dataKey="totalRides" name="Số chuyến" radius={[0, 4, 4, 0]}>
+                      {topCustomers.map((_, index) => (
+                        <Cell key={index} fill={TOP_CUSTOMER_PALETTE[index % TOP_CUSTOMER_PALETTE.length]} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </Box>
@@ -281,7 +306,7 @@ const Customers: React.FC = () => {
 
       <Card elevation={0} sx={{ mt: 2, borderRadius: 4, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.06)' }}>
         <CardContent sx={{ p: 2 }}>
-          <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: '1fr 140px auto' } }}>
+          <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: '1fr 140px 150px 150px auto auto' } }}>
             <TextField
               fullWidth
               size="small"
@@ -307,6 +332,24 @@ const Customers: React.FC = () => {
                 <MenuItem key={String(o.value)} value={o.value}>{o.label}</MenuItem>
               ))}
             </TextField>
+            <TextField
+              size="small"
+              label="Từ ngày"
+              type="date"
+              value={fromDate}
+              onChange={(e) => { setPage(0); setFromDate(e.target.value); }}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ max: toDate || undefined }}
+            />
+            <TextField
+              size="small"
+              label="Đến ngày"
+              type="date"
+              value={toDate}
+              onChange={(e) => { setPage(0); setToDate(e.target.value); }}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ min: fromDate || undefined }}
+            />
             <ToggleButtonGroup
               value={sortBy}
               exclusive
@@ -320,6 +363,20 @@ const Customers: React.FC = () => {
                 Mới nhất
               </ToggleButton>
             </ToggleButtonGroup>
+            {(fromDate || toDate) && (
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => {
+                  setPage(0);
+                  setFromDate('');
+                  setToDate('');
+                }}
+                sx={{ borderRadius: 2, textTransform: 'none' }}
+              >
+                Xóa ngày
+              </Button>
+            )}
           </Box>
         </CardContent>
       </Card>
@@ -339,7 +396,7 @@ const Customers: React.FC = () => {
               getRowId={(row) => row.id}
               disableRowSelectionOnClick
               localeText={{
-                noRowsLabel: keyword.trim()
+                noRowsLabel: keyword.trim() || fromDate || toDate
                   ? 'Không có khách hàng phù hợp với bộ lọc'
                   : 'Chưa có khách hàng nào',
               }}
@@ -349,10 +406,10 @@ const Customers: React.FC = () => {
         </CardContent>
       </Card>
 
-      {keyword.trim() && (
+      {(keyword.trim() || fromDate || toDate) && (
         <Stack direction="row" justifyContent="space-between" sx={{ mt: 1.25 }}>
           <Typography variant="caption" color="text.secondary">
-            Bộ lọc tìm kiếm đang áp dụng trên tập bản ghi hiện tại.
+            Bộ lọc tìm kiếm áp dụng trên tập bản ghi hiện tại; lọc ngày áp dụng theo ngày đăng ký khách hàng.
           </Typography>
           <Chip size="small" label={`${filteredRows.length} kết quả`} variant="outlined" />
         </Stack>

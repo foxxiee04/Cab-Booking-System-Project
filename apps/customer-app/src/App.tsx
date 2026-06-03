@@ -13,6 +13,7 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import HomeMap from './pages/HomeMap';
 import RideTracking from './pages/RideTracking';
+import PublicRideTracking from './pages/PublicRideTracking';
 import RideDemoPage from './pages/RideDemoPage';
 import PaymentCallback from './pages/PaymentCallback';
 import PaymentMockGateway from './pages/PaymentMockGateway';
@@ -209,6 +210,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/track/:token" element={<PublicRideTracking />} />
         <Route path="/payment/sandbox-gateway" element={<PaymentMockGateway />} />
         <Route path="/payment/mock-gateway" element={<PaymentMockGateway />} />
         <Route path="/demo" element={<RideDemoPage />} />

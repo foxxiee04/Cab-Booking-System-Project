@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -56,6 +56,8 @@ const Drivers: React.FC = () => {
   const [error, setError] = useState('');
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [sortBy, setSortBy] = useState<'rides' | 'rating' | 'earnings'>('rides');
   const [statsPeriod, setStatsPeriod] = useState<AdminStatsPeriod>(30);
   const [onlineOnly, setOnlineOnly] = useState(false);
@@ -68,7 +70,9 @@ const Drivers: React.FC = () => {
     total: number; online: number; busy: number; offline: number;
   } | null>(null);
   const [topDrivers, setTopDrivers] = useState<TopDriverRow[]>([]);
+  const [topDriversLoading, setTopDriversLoading] = useState(false);
   const [topMetric, setTopMetric] = useState<'rides' | 'rating' | 'earnings'>('rides');
+  const topDriversRequestId = useRef(0);
   const { t } = useTranslation();
 
   const statsDays = periodToQueryDays(statsPeriod);
@@ -81,6 +85,8 @@ const Drivers: React.FC = () => {
         status: statusFilter === 'ALL' ? undefined : statusFilter,
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined,
         ...(statsDays ? { days: statsDays } : {}),
       });
       setRows(response.data?.drivers || []);
@@ -90,7 +96,7 @@ const Drivers: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, statsDays, t]);
+  }, [fromDate, page, statusFilter, statsDays, t, toDate]);
 
   useEffect(() => {
     void fetchDrivers();
@@ -98,7 +104,12 @@ const Drivers: React.FC = () => {
 
   // One-shot fetch for full-system aggregates and top-10 charts.
   useEffect(() => {
+    const requestId = topDriversRequestId.current + 1;
+    topDriversRequestId.current = requestId;
+
     const fetchAggregates = async () => {
+      setTopDriversLoading(true);
+      setTopDrivers([]);
       try {
         const [statsRes, topRes] = await Promise.all([
           adminApi.getStats(),
@@ -107,6 +118,7 @@ const Drivers: React.FC = () => {
             sortBy: topMetric,
           }),
         ]);
+        if (topDriversRequestId.current !== requestId) return;
         const stats = statsRes.data?.stats?.drivers;
         if (stats) {
           setGlobalStats({
@@ -119,6 +131,10 @@ const Drivers: React.FC = () => {
         setTopDrivers(topRes.data?.drivers || []);
       } catch {
         /* non-critical */
+      } finally {
+        if (topDriversRequestId.current === requestId) {
+          setTopDriversLoading(false);
+        }
       }
     };
     fetchAggregates();
@@ -289,6 +305,12 @@ const Drivers: React.FC = () => {
       ),
     },
     {
+      field: 'createdAt',
+      headerName: 'Ngày đăng ký',
+      width: 150,
+      valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString('vi-VN') : t('labels.na'),
+    },
+    {
       field: 'actions',
       headerName: 'Hành động',
       width: 150,
@@ -383,7 +405,11 @@ const Drivers: React.FC = () => {
               </ToggleButtonGroup>
             </Stack>
           </Stack>
-          {topDriversSorted.length === 0 ? (
+          {topDriversLoading ? (
+            <Box sx={{ height: 360, mt: 2, display: 'grid', placeItems: 'center' }}>
+              <CircularProgress size={28} />
+            </Box>
+          ) : topDriversSorted.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>Chưa có dữ liệu</Typography>
           ) : (
             <Box sx={{ height: 360, mt: 2 }}>
@@ -420,7 +446,7 @@ const Drivers: React.FC = () => {
 
       <Card elevation={0} sx={{ mt: 2, borderRadius: 4, border: '1px solid rgba(148,163,184,0.16)', boxShadow: '0 18px 40px rgba(15,23,42,0.06)' }}>
         <CardContent sx={{ p: 2 }}>
-          <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: '1fr 140px 120px auto auto' } }}>
+          <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: '1fr 140px 120px 150px 150px auto auto' } }}>
             <TextField
               fullWidth
               size="small"
@@ -459,6 +485,24 @@ const Drivers: React.FC = () => {
               <MenuItem value="REJECTED">Từ chối</MenuItem>
               <MenuItem value="SUSPENDED">Tạm khóa</MenuItem>
             </TextField>
+            <TextField
+              size="small"
+              label="Từ ngày"
+              type="date"
+              value={fromDate}
+              onChange={(e) => { setPage(0); setFromDate(e.target.value); }}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ max: toDate || undefined }}
+            />
+            <TextField
+              size="small"
+              label="Đến ngày"
+              type="date"
+              value={toDate}
+              onChange={(e) => { setPage(0); setToDate(e.target.value); }}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ min: fromDate || undefined }}
+            />
             <ToggleButtonGroup
               value={onlineOnly ? 'online' : 'all'}
               exclusive
@@ -479,6 +523,20 @@ const Drivers: React.FC = () => {
                 <AttachMoney sx={{ mr: 0.5, fontSize: 14 }} />Thu nhập
               </ToggleButton>
             </ToggleButtonGroup>
+            {(fromDate || toDate) && (
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => {
+                  setPage(0);
+                  setFromDate('');
+                  setToDate('');
+                }}
+                sx={{ borderRadius: 2, textTransform: 'none' }}
+              >
+                Xóa ngày
+              </Button>
+            )}
           </Box>
         </CardContent>
       </Card>
@@ -498,7 +556,7 @@ const Drivers: React.FC = () => {
               getRowId={(row) => row.id}
               disableRowSelectionOnClick
               localeText={{
-                noRowsLabel: keyword.trim() || statusFilter !== 'ALL'
+                noRowsLabel: keyword.trim() || statusFilter !== 'ALL' || fromDate || toDate
                   ? 'Không có tài xế phù hợp với bộ lọc'
                   : 'Chưa có tài xế nào',
               }}
@@ -508,10 +566,10 @@ const Drivers: React.FC = () => {
         </CardContent>
       </Card>
 
-      {keyword.trim() && (
+      {(keyword.trim() || fromDate || toDate) && (
         <Stack direction="row" justifyContent="space-between" sx={{ mt: 1.25 }}>
           <Typography variant="caption" color="text.secondary">
-            Bộ lọc tìm kiếm đang áp dụng trên tập bản ghi hiện tại.
+            Bộ lọc tìm kiếm áp dụng trên tập bản ghi hiện tại; lọc ngày áp dụng theo ngày đăng ký tài xế.
           </Typography>
           <Chip size="small" label={`${filteredRows.length} kết quả`} variant="outlined" />
         </Stack>

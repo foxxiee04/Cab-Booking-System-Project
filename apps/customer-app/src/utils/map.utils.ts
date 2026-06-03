@@ -8,9 +8,26 @@ const reverseGeocodeCache = new Map<string, { address: string; timestamp: number
 const routeCache = new Map<string, { route: RouteData; timestamp: number }>();
 
 const LAST_LOCATION_STORAGE_KEY = 'customer:lastKnownLocation';
+const LOCATION_PROMPTED_STORAGE_KEY = 'customer:locationPermissionPrompted';
 const GEO_HIGH_ACCURACY_TIMEOUT_MS = Number(process.env.REACT_APP_GEO_HIGH_ACCURACY_TIMEOUT_MS || 8000);
 const GEO_LOW_ACCURACY_TIMEOUT_MS = Number(process.env.REACT_APP_GEO_LOW_ACCURACY_TIMEOUT_MS || 15000);
 let hasLoggedGeoTimeout = false;
+
+export const hasPromptedForLocationPermission = (): boolean => {
+  try {
+    return window.localStorage.getItem(LOCATION_PROMPTED_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const markLocationPermissionPrompted = () => {
+  try {
+    window.localStorage.setItem(LOCATION_PROMPTED_STORAGE_KEY, '1');
+  } catch {
+    // Ignore localStorage write failures.
+  }
+};
 
 export const sanitizeDisplayAddress = (value: string): string => {
   if (!value) {
@@ -385,14 +402,6 @@ export const getCurrentLocation = (options?: { preferFresh?: boolean; allowPromp
       return;
     }
 
-    if (!allowPermissionPrompt) {
-      reject({
-        code: 2,
-        message: 'Bấm nút định vị trên bản đồ để cho phép lấy vị trí hiện tại.',
-      } as GeolocationPositionError);
-      return;
-    }
-
     if (!navigator.geolocation) {
       reject(new Error('Geolocation is not supported'));
       return;
@@ -463,18 +472,49 @@ export const getCurrentLocation = (options?: { preferFresh?: boolean; allowPromp
             return;
           }
           if (result.state === 'prompt' && !allowPermissionPrompt) {
+            if (resolveFromLastKnownLocation()) {
+              return;
+            }
             reject({
               code: 2,
               message: 'Bấm nút định vị trên bản đồ để cho phép lấy vị trí hiện tại.',
             } as GeolocationPositionError);
             return;
           }
+          if (result.state === 'prompt') {
+            markLocationPermissionPrompted();
+          }
           runGeolocation();
         })
-        .catch(() => runGeolocation());
+        .catch(() => {
+          if (!allowPermissionPrompt) {
+            if (resolveFromLastKnownLocation()) {
+              return;
+            }
+            reject({
+              code: 2,
+              message: 'Bấm nút định vị trên bản đồ để cho phép lấy vị trí hiện tại.',
+            } as GeolocationPositionError);
+            return;
+          }
+          markLocationPermissionPrompted();
+          runGeolocation();
+        });
       return;
     }
 
+    if (!allowPermissionPrompt) {
+      if (resolveFromLastKnownLocation()) {
+        return;
+      }
+      reject({
+        code: 2,
+        message: 'Bấm nút định vị trên bản đồ để cho phép lấy vị trí hiện tại.',
+      } as GeolocationPositionError);
+      return;
+    }
+
+    markLocationPermissionPrompted();
     runGeolocation();
   });
 };

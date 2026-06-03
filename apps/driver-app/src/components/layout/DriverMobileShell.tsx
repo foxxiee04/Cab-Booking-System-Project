@@ -35,6 +35,7 @@ import {
   LogoutRounded,
   NotificationsRounded,
   PersonRounded,
+  StarRounded,
   TranslateRounded,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -706,6 +707,10 @@ const DriverMobileShell: React.FC<DriverMobileShellProps> = ({ children }) => {
         <MenuItem onClick={() => { navigate('/profile'); setProfileAnchorEl(null); }}>
           <PersonRounded fontSize="small" style={{ marginRight: 8 }} />
           {t('shell.accountCenter', 'Hồ sơ tài xế')}
+        </MenuItem>
+        <MenuItem onClick={() => { navigate('/reviews'); setProfileAnchorEl(null); }}>
+          <StarRounded fontSize="small" style={{ marginRight: 8 }} />
+          Đánh giá của tôi
         </MenuItem>
         <MenuItem onClick={handleLogout}>
           <LogoutRounded fontSize="small" style={{ marginRight: 8 }} />

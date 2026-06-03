@@ -22,6 +22,28 @@ const parseStatsDays = (req: Request): number | undefined => {
   return Math.min(n, 730);
 };
 
+const parseDateRange = (req: Request): { createdFrom?: string; createdTo?: string } => {
+  const parseDateOnly = (value: unknown, endOfDay = false): string | undefined => {
+    if (typeof value !== 'string' || value.trim() === '') return undefined;
+    const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return undefined;
+
+    const [, year, month, day] = match;
+    const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+    if (Number.isNaN(date.getTime())) return undefined;
+    if (endOfDay) {
+      date.setUTCDate(date.getUTCDate() + 1);
+      date.setUTCMilliseconds(date.getUTCMilliseconds() - 1);
+    }
+    return date.toISOString();
+  };
+
+  return {
+    createdFrom: parseDateOnly(req.query.fromDate),
+    createdTo: parseDateOnly(req.query.toDate, true),
+  };
+};
+
 const driverRideCount = (
   rideCounts: Record<string, number>,
   profileId: string,
@@ -221,8 +243,9 @@ router.get('/drivers', async (req: Request, res: Response) => {
     const { limit, page } = getPaging(req);
     const status = req.query.status as string | undefined;
     const days = parseStatsDays(req);
+    const dateRange = parseDateRange(req);
 
-    const driverResponse = await callHttpService<any>('driver', req, '/api/drivers', { page, limit, status });
+    const driverResponse = await callHttpService<any>('driver', req, '/api/drivers', { page, limit, status, ...dateRange });
 
     const payload = unwrapPayload<any>(driverResponse);
     let rawDrivers = Array.isArray(payload.drivers) ? payload.drivers : [];
@@ -381,8 +404,9 @@ router.get('/customers', async (req: Request, res: Response) => {
   try {
     const { limit, page } = getPaging(req);
     const days = parseStatsDays(req);
+    const dateRange = parseDateRange(req);
 
-    const response = await callHttpService<any>('auth', req, '/api/auth/users', { page, limit, role: 'CUSTOMER' });
+    const response = await callHttpService<any>('auth', req, '/api/auth/users', { page, limit, role: 'CUSTOMER', ...dateRange });
 
     const payload = unwrapPayload<any>(response);
     const users = payload.users || [];

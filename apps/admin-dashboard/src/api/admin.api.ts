@@ -39,6 +39,8 @@ export const adminApi = {
     status?: string;
     limit?: number;
     offset?: number;
+    fromDate?: string;
+    toDate?: string;
     /** Last N days for ride/earnings stats; omit = lifetime */
     days?: number;
   }): Promise<ApiResponse<{ drivers: Driver[]; total: number; statsDays?: number | null }>> => {
@@ -60,6 +62,8 @@ export const adminApi = {
   getCustomers: async (params?: {
     limit?: number;
     offset?: number;
+    fromDate?: string;
+    toDate?: string;
     days?: number;
   }): Promise<ApiResponse<{ customers: Customer[]; total: number; statsDays?: number | null }>> => {
     const response = await axiosInstance.get('/admin/customers', { params });

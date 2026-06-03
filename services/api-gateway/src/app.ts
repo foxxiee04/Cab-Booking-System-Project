@@ -13,6 +13,7 @@ import { sanitizeBody } from './middleware/sanitize';
 import proxyRoutes from './routes/proxy';
 import mapRoutes from './routes/map';
 import adminRoutes from './routes/admin';
+import publicRoutes from './routes/public';
 import locationRoutes from './location/location.controller';
 import { logger } from './utils/logger';
 import { swaggerSpec } from './swagger';
@@ -128,6 +129,7 @@ export function createApp({
 
   app.use('/api/location', locationRoutes);
   app.use('/api/map', mapRoutes);
+  app.use(publicRoutes);
   app.use(authMiddleware);
   app.use('/api/admin', adminRoutes);
   app.use(proxyRoutes);
